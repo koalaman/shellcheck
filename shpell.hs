@@ -9,6 +9,7 @@ import Debug.Trace
 import Control.Monad
 import Data.Char
 import Data.List (isInfixOf, partition, sortBy, intercalate)
+import qualified Data.Map as Map
 import qualified Control.Monad.State as Ms
 import Data.Maybe
 import Prelude hiding (readList)
@@ -28,7 +29,9 @@ quotable = oneOf "#|&;<>()$`\\ \"'\t\n"
 doubleQuotable = oneOf "\"$`"
 whitespace = oneOf " \t\n"
 linewhitespace = oneOf " \t"
+glob="?*"
 
+prop_spacing = isOk spacing "  \\\n # Comment"
 spacing = do
     x <- many (many1 linewhitespace <|> (try $ string "\\\n"))
     optional readComment
@@ -43,29 +46,51 @@ carriageReturn = do
     parseNote ErrorC "Literal carriage return. Run script through tr -d '\\r' "
     char '\r'
 
+isGlob str = any (`elem` str) glob
 
 --------- Message/position annotation on top of user state
-data Annotated a = Annotated SourcePos [Note] a deriving (Show, Eq)
-data Note = ParseNote SourcePos Severity String | Note Severity String deriving (Show, Eq)
-data MessageStack = StackNode Note MessageStack | StackMark String SourcePos MessageStack | StackEmpty
-data ParseProblem = ParseProblem SourcePos Severity String deriving (Show, Eq)
-data OutputNote = OutputNote SourcePos Severity String deriving (Show, Eq)
+data Id = Id Int deriving (Show, Eq, Ord)
+data Note = Note Severity String deriving (Show, Eq)
+data ParseNote = ParseNote SourcePos Severity String deriving (Show, Eq)
 data Severity = ErrorC | WarningC | InfoC | StyleC deriving (Show, Eq, Ord)
+data Metadata = Metadata SourcePos [Note]
 
-instance Functor Annotated where
-    fmap f (Annotated p n a) = Annotated p n (f a)
+initialState = (Id $ -1, Map.empty, [])
 
-markStack msg = do
+getInitialMeta pos = Metadata pos []
+
+getLastId = do
+    (id, _, _) <- getState
+    return id
+
+getNextIdAt sourcepos = do
+    (id, map, notes) <- getState
+    let newId = incId id
+    let newMap = Map.insert newId (getInitialMeta sourcepos) map
+    putState (newId, newMap, notes)
+    return newId
+  where incId (Id n) = (Id $ n+1)
+
+getNextId = do
     pos <- getPosition
-    modifyState (StackMark msg pos)
+    getNextIdAt pos
 
-getMessages r (StackMark _ _ s) = (r, s)
-getMessages r (StackNode n s) = getMessages (n:r) s
-popStack = do
-    f <- getState
-    let (notes, stack) = getMessages [] f
-    putState stack
+modifyMap f = do
+    (id, map, parsenotes) <- getState
+    putState (id, f map, parsenotes)
+
+getMap = do
+    (_, map, _) <- getState
+    return map
+
+getParseNotes = do
+    (_, _, notes) <- getState
     return notes
+
+addParseNote n = do
+    (a, b, notes) <- getState
+    putState (a, b, n:notes)
+
 
 -- Store potential parse problems outside of parsec
 parseProblem level msg = do
@@ -73,40 +98,22 @@ parseProblem level msg = do
     parseProblemAt pos level msg
 
 parseProblemAt pos level msg = do
-    Ms.modify ((ParseProblem pos level msg):)
+    Ms.modify ((ParseNote pos level msg):)
 
-pushNote n = modifyState (StackNode n)
+-- Store non-parse problems inside
+addNoteFor id note = modifyMap $ Map.adjust (\(Metadata pos notes) -> Metadata pos (note:notes)) id
+
+addNote note = do
+    id <- getLastId
+    addNoteFor id note
 
 parseNote l a = do
     pos <- getPosition
     parseNoteAt pos l a
 
-parseNoteAt pos l a = pushNote $ ParseNote pos l a
-
-
-annotated msg parser = do
-    pos <- getPosition
-    markStack msg
-    result <- parser
-    messages <- popStack
-    return $ Annotated pos messages result
-
-dropAnnotation (Annotated _ _ s) = s
-blankAnnotation pos t = Annotated pos [] t
-
-merge (Annotated pos messages result) = do
-    mapM pushNote messages
-    return result
-
-merging p = p >>= merge
-
-getOutputNotes (Annotated p notes _) = map (makeOutputNote p) notes
-
-makeOutputNote _ (ParseNote p l s) = OutputNote p l s
-makeOutputNote p (Note l s) = OutputNote p l s
+parseNoteAt pos l a = addParseNote $ ParseNote pos l a
 
 --------- Convenient combinators
-
 thenSkip main follow = do
     r <- main
     optional follow
@@ -114,7 +121,7 @@ thenSkip main follow = do
 
 disregard x = x >> return ()
 
-reluctantlyTill p end = do -- parse p until end <|> eof matches ahead
+reluctantlyTill p end = do
     (lookAhead ((disregard $ try end) <|> eof) >> return []) <|> do
         x <- p
         more <- reluctantlyTill p end
@@ -133,118 +140,93 @@ attempting rest branch = do
 wasIncluded p = option False (p >> return True)
 
 -- Horrifying AST
-data Token = T_AND_IF | T_OR_IF | T_DSEMI | T_Semi | T_DLESS | T_DGREAT | T_LESSAND | T_GREATAND | T_LESSGREAT | T_DLESSDASH | T_CLOBBER | T_If | T_Then | T_Else | T_Elif | T_Fi | T_Do | T_Done | T_Case | T_Esac | T_While | T_Until | T_For | T_Lbrace | T_Rbrace | T_Lparen | T_Rparen | T_Bang | T_In  | T_NEWLINE | T_EOF | T_Less | T_Greater | T_SingleQuoted String | T_Literal String | T_NormalWord [Annotated Token] | T_DoubleQuoted [Annotated Token] | T_DollarExpansion [Token] | T_DollarBraced String | T_DollarVariable String | T_DollarArithmetic String | T_BraceExpansion String | T_IoFile Token Token | T_HereDoc Bool Bool String | T_HereString Token | T_FdRedirect String Token | T_Assignment String Token | T_Redirecting [Annotated Token] Token | T_SimpleCommand [Annotated Token] [Annotated Token] | T_Pipeline [Annotated Token] | T_Banged Token | T_AndIf (Annotated Token) (Annotated Token) | T_OrIf (Annotated Token) (Annotated Token) | T_Backgrounded Token | T_IfExpression [([Token],[Token])] [Token] | T_Subshell [Token] | T_BraceGroup [Token] | T_WhileExpression [Token] [Token] | T_UntilExpression [Token] [Token] | T_ForIn String [Token] [Token] | T_CaseExpression Token [([Token],[Token])] |T_Function String Token | T_Command (Annotated Token) | T_Script [Token]
-    deriving (Show)
-
-extractNotes' list = modifyFlag ((++) $ concatMap getOutputNotes list) >> return ()
-extractNotes (T_NormalWord list) = extractNotes' list
-extractNotes (T_DoubleQuoted list) = extractNotes' list
-extractNotes (T_Redirecting list f) = extractNotes' list
-extractNotes (T_Pipeline list) = extractNotes' list
-extractNotes (T_Command list) = extractNotes' [list]
-extractNotes (T_SimpleCommand list1 list2) = do
-    extractNotes' list1
-    extractNotes' list2
-extractNotes t = return ()
+data Token = T_AND_IF Id | T_OR_IF Id | T_DSEMI Id | T_Semi Id | T_DLESS Id | T_DGREAT Id | T_LESSAND Id | T_GREATAND Id | T_LESSGREAT Id | T_DLESSDASH Id | T_CLOBBER Id | T_If Id | T_Then Id | T_Else Id | T_Elif Id | T_Fi Id | T_Do Id | T_Done Id | T_Case Id | T_Esac Id | T_While Id | T_Until Id | T_For Id | T_Lbrace Id | T_Rbrace Id | T_Lparen Id | T_Rparen Id | T_Bang Id | T_In  Id | T_NEWLINE Id | T_EOF Id | T_Less Id | T_Greater Id | T_SingleQuoted Id String | T_Literal Id String | T_NormalWord Id [Token] | T_DoubleQuoted Id [Token] | T_DollarExpansion Id [Token] | T_DollarBraced Id String | T_DollarVariable Id String | T_DollarArithmetic Id String | T_BraceExpansion Id String | T_IoFile Id Token Token | T_HereDoc Id Bool Bool String | T_HereString Id Token | T_FdRedirect Id String Token | T_Assignment Id String Token | T_Array Id [Token] | T_Redirecting Id [Token] Token | T_SimpleCommand Id [Token] [Token] | T_Pipeline Id [Token] | T_Banged Id Token | T_AndIf Id (Token) (Token) | T_OrIf Id (Token) (Token) | T_Backgrounded Id Token | T_IfExpression Id [([Token],[Token])] [Token] | T_Subshell Id [Token] | T_BraceGroup Id [Token] | T_WhileExpression Id [Token] [Token] | T_UntilExpression Id [Token] [Token] | T_ForIn Id String [Token] [Token] | T_CaseExpression Id Token [([Token],[Token])] | T_Function Id String Token | T_Arithmetic Id String | T_Script Id [Token]
+    deriving (Show, Eq)
 
 
-postMessage level s = Ms.modify $ \(x, l) -> (x, Note level s : l)
-warn s = postMessage WarningC s
-inform s = postMessage InfoC s
-style s = postMessage StyleC s
+analyzeScopes f i = mapM (analyze f i)
 
-
-putFlag v = modifyFlag (const v) >> return ()
-getFlag = modifyFlag id
-modifyFlag f = do
-    Ms.modify $ \(x, l) -> (f x, l)
-    v <- Ms.get
-    return $ fst v
-
-
-analyzeScopes f i = mapM (analyzeScope f i)
-analyzeScope f i (Annotated pos notes t) = do
-    v <- getFlag
-    let (ret, (flag, list)) = Ms.runState (analyze f i t) (v, [])
-    putFlag flag
-    return $ Annotated pos (notes++list) ret
-
-analyze f i s@(T_NormalWord list) = do
+analyze f i s@(T_NormalWord id list) = do
     f s
     a <- analyzeScopes f i list
-    return . i $ T_NormalWord a
+    return . i $ T_NormalWord id a
 
-analyze f i s@(T_DoubleQuoted list) = do
+analyze f i s@(T_DoubleQuoted id list) = do
     f s
     a <- analyzeScopes f i list
-    return . i $ T_DoubleQuoted a
+    return . i $ T_DoubleQuoted id a
 
-analyze f i s@(T_DollarExpansion l) = do
+analyze f i s@(T_DollarExpansion id l) = do
     f s
     nl <- mapM (analyze f i) l
-    return . i $ T_DollarExpansion nl
+    return . i $ T_DollarExpansion id nl
 
-analyze f i s@(T_IoFile op file) = do
+analyze f i s@(T_IoFile id op file) = do
     f s
     a <- analyze f i op
     b <- analyze f i file
-    return . i $ T_IoFile a b
+    return . i $ T_IoFile id a b
 
-analyze f i s@(T_HereString word) = do
+analyze f i s@(T_HereString id word) = do
     f s
     a <- analyze f i word
-    return . i $ T_HereString a
+    return . i $ T_HereString id a
 
-analyze f i s@(T_FdRedirect v t) = do
+analyze f i s@(T_FdRedirect id v t) = do
     f s
     a <- analyze f i t
-    return . i $ T_FdRedirect v a
+    return . i $ T_FdRedirect id v a
 
-analyze f i s@(T_Assignment v t) = do
+analyze f i s@(T_Assignment id v t) = do
     f s
     a <- analyze f i t
-    return . i $ T_Assignment v a
+    return . i $ T_Assignment id v a
 
-analyze f i s@(T_Redirecting redirs cmd) = do
+analyze f i s@(T_Array id t) = do
+    f s
+    a <- analyzeScopes f i t
+    return . i $ T_Array id a
+
+analyze f i s@(T_Redirecting id redirs cmd) = do
     f s
     newRedirs <- analyzeScopes f i redirs
     newCmd <- analyze f i $ cmd
-    return . i $ (T_Redirecting newRedirs newCmd)
+    return . i $ (T_Redirecting id newRedirs newCmd)
 
-analyze f i s@(T_SimpleCommand vars cmds) = do
+analyze f i s@(T_SimpleCommand id vars cmds) = do
     f s
     a <- analyzeScopes f i vars
     b <- analyzeScopes f i cmds
-    return . i $ T_SimpleCommand a b
+    return . i $ T_SimpleCommand id a b
 
-analyze f i s@(T_Pipeline l) = do
+analyze f i s@(T_Pipeline id l) = do
     f s
     a <- analyzeScopes f i l
-    return . i $ T_Pipeline a
+    return . i $ T_Pipeline id a
 
-analyze f i s@(T_Banged l) = do
+analyze f i s@(T_Banged id l) = do
     f s
     a <- analyze f i l
-    return . i $ T_Banged a
+    return . i $ T_Banged id a
 
-analyze f i s@(T_AndIf t u) = do
+analyze f i s@(T_AndIf id t u) = do
     f s
-    a <- analyzeScope f i t
-    b <- analyzeScope f i u
-    return . i $ T_AndIf a b
+    a <- analyze f i t
+    b <- analyze f i u
+    return . i $ T_AndIf id a b
 
-analyze f i s@(T_OrIf t u) = do
+analyze f i s@(T_OrIf id t u) = do
     f s
-    a <- analyzeScope f i t
-    b <- analyzeScope f i u
-    return . i $ T_OrIf a b
+    a <- analyze f i t
+    b <- analyze f i u
+    return . i $ T_OrIf id a b
 
-analyze f i s@(T_Backgrounded l) = do
+analyze f i s@(T_Backgrounded id l) = do
     f s
     a <- analyze f i l
-    return . i $ T_Backgrounded a
+    return . i $ T_Backgrounded id a
 
-analyze f i s@(T_IfExpression conditions elses) = do
+analyze f i s@(T_IfExpression id conditions elses) = do
     f s
     newConds <- mapM (\(c, t) -> do
                 x <- mapM (analyze f i) c
@@ -252,37 +234,37 @@ analyze f i s@(T_IfExpression conditions elses) = do
                 return (x, y)
              ) conditions
     newElses <- mapM (analyze f i) elses
-    return . i $ T_IfExpression newConds newElses
+    return . i $ T_IfExpression id newConds newElses
 
-analyze f i s@(T_Subshell l) = do
+analyze f i s@(T_Subshell id l) = do
     f s
     a <- mapM (analyze f i) l
-    return . i $ T_Subshell a
+    return . i $ T_Subshell id a
 
-analyze f i s@(T_BraceGroup l) = do
+analyze f i s@(T_BraceGroup id l) = do
     f s
     a <- mapM (analyze f i) l
-    return . i $ T_BraceGroup a
+    return . i $ T_BraceGroup id a
 
-analyze f i s@(T_WhileExpression c l) = do
+analyze f i s@(T_WhileExpression id c l) = do
     f s
     a <- mapM (analyze f i) c
     b <- mapM (analyze f i) l
-    return . i $ T_WhileExpression a b
+    return . i $ T_WhileExpression id a b
 
-analyze f i s@(T_UntilExpression c l) = do
+analyze f i s@(T_UntilExpression id c l) = do
     f s
     a <- mapM (analyze f i) c
     b <- mapM (analyze f i) l
-    return . i $ T_UntilExpression a b
+    return . i $ T_UntilExpression id a b
 
-analyze f i s@(T_ForIn v w l) = do
+analyze f i s@(T_ForIn id v w l) = do
     f s
     a <- mapM (analyze f i) w
     b <- mapM (analyze f i) l
-    return . i $ T_ForIn v a b
+    return . i $ T_ForIn id v a b
 
-analyze f i s@(T_CaseExpression word cases) = do
+analyze f i s@(T_CaseExpression id word cases) = do
     f s
     newWord <- analyze f i word
     newCases <- mapM (\(c, t) -> do
@@ -290,59 +272,47 @@ analyze f i s@(T_CaseExpression word cases) = do
                 y <- mapM (analyze f i) t
                 return (x, y)
              ) cases
-    return . i $ T_CaseExpression newWord newCases
+    return . i $ T_CaseExpression id newWord newCases
 
-analyze f i s@(T_Script l) = do
+analyze f i s@(T_Script id l) = do
     f s
     a <- mapM (analyze f i) l
-    return . i $ T_Script a
+    return . i $ T_Script id a
 
-analyze f i s@(T_Function name body) = do
+analyze f i s@(T_Function id name body) = do
     f s
     a <- analyze f i body
-    return . i $ T_Function name a
-
-analyze f i s@(T_Command c) = do
-    f s
-    a <- analyzeScope f i c
-    return . i $ T_Command a
+    return . i $ T_Function id name a
 
 analyze f i t = do
     f t
     return . i $ t
 
-doAnalysis f t = fst $ Ms.runState (analyze f id t) ((), [])
-explore f d t = fst . snd $ Ms.runState (analyze f id t) (d, [])
-transform i t = fst $ Ms.runState (analyze (const $ return ()) i t) ((), [])
-
-findNotes t = explore extractNotes [] t
-sortNotes l = sortBy compareNotes l
-compareNotes (OutputNote pos1 level1 _) (OutputNote pos2 level2 _) = compare (pos1, level1) (pos2, level2)
-findParseNotes l = map (\(ParseProblem p level s) -> OutputNote p level s) l
---   T_UntilExpression [Token] [Token] | T_ForIn String [Token] [Token]
-
-getNotes s =
-    case rp readScript s of
-        (Right x, p) -> sortNotes $ (findNotes $ doAllAnalysis x) ++ (findParseNotes p)
-        (Left _, p) -> sortNotes $ (OutputNote (initialPos "-") ErrorC "Parsing failed"):(findParseNotes p)
+doAnalysis f t = analyze f id t 
+transform i t = analyze (const $ return ()) i t
 
 readComment = do
     char '#'
     anyChar `reluctantlyTill` linefeed
 
+prop_readNormalWord = isOk readNormalWord "'foo'\"bar\"{1..3}baz$(lol)"
 readNormalWord = do
+    id <- getNextId
     x <- many1 readNormalWordPart
-    return $ T_NormalWord x
+    return $ T_NormalWord id x
 
-readNormalWordPart = readSingleQuoted <|> readDoubleQuoted <|> readDollar <|> readBraced <|> readBackTicked <|> (annotated "normal literal" $ readNormalLiteral)
+readNormalWordPart = readSingleQuoted <|> readDoubleQuoted <|> readDollar <|> readBraced <|> readBackTicked <|> (readNormalLiteral)
 
-readSingleQuoted = annotated "single quoted string" $ do
+prop_readSingleQuoted = isOk readSingleQuoted "'foo bar'"
+prop_readSingleQuoted2 = isWarning readSingleQuoted "'foo bar\\'"
+readSingleQuoted = do
+    id <- getNextId
     singleQuote
     s <- readSingleQuotedPart `reluctantlyTill` singleQuote
     singleQuote <?> "End single quoted string"
 
     let string = concat s
-    return (T_SingleQuoted string) `attempting` do
+    return (T_SingleQuoted id string) `attempting` do
         x <- lookAhead anyChar
         when (isAlpha x && isAlpha (last string)) $ parseProblem WarningC "This apostrophe terminated the single quoted string."
 
@@ -356,20 +326,24 @@ readSingleQuotedPart =
     readSingleEscaped
     <|> anyChar `reluctantlyTill1` (singleQuote <|> backslash)
 
-readBackTicked = annotated "backtick expansion" $ do
+prop_readBackTicked = isWarning readBackTicked "`ls *.mp3`"
+readBackTicked = do
+    id <- getNextId
     parseNote StyleC "`..` style expansion is deprecated, use $(..) instead if you want my help"
     pos <- getPosition
     char '`'
     f <- readGenericLiteral (char '`')
     char '`' `attempting` (eof >> parseProblemAt pos ErrorC "Can't find terminating backtick for this one")
-    return $ T_Literal f
+    return $ T_Literal id f
 
 
-readDoubleQuoted = annotated "double quoted string" $ do
+prop_readDoubleQuoted = isOk readDoubleQuoted "\"Hello $FOO\""
+readDoubleQuoted = do
+    id <- getNextId
     doubleQuote
     x <- many doubleQuotedPart
     doubleQuote <?> "End double quoted"
-    return $ T_DoubleQuoted x
+    return $ T_DoubleQuoted id x
 
 doubleQuotedPart = readDoubleLiteral <|> readDollar <|> readBackTicked
 
@@ -377,19 +351,22 @@ readDoubleQuotedLiteral = do
     doubleQuote
     x <- readDoubleLiteral
     doubleQuote
-    return $ dropAnnotation x
+    return x
 
-readDoubleLiteral = annotated "double literal" $ do
+readDoubleLiteral = do
+    id <- getNextId
     s <- many1 readDoubleLiteralPart
-    return $ T_Literal (concat s)
+    return $ T_Literal id (concat s)
 
 readDoubleLiteralPart = do
     x <- (readDoubleEscaped <|> (anyChar >>= \x -> return [x])) `reluctantlyTill1` doubleQuotable
     return $ concat x
 
+prop_readNormalLiteral = isOk readNormalLiteral "hello\\ world"
 readNormalLiteral = do
+    id <- getNextId
     s <- many1 readNormalLiteralPart
-    return $ T_Literal (concat s)
+    return $ T_Literal id (concat s)
 
 readNormalLiteralPart = do
     readNormalEscaped <|> (anyChar `reluctantlyTill1` quotable)
@@ -411,9 +388,9 @@ readSingleEscaped = do
     let attempt level p msg = do { try $ parseNote level msg; x <- p; return [s,x]; }
 
     do {
-        x <- singleQuote;
-        parseProblem InfoC "Are you trying to escape a single quote? echo 'You'\\''re doing it wrong'.";
-        return [s,x];
+        x <- lookAhead singleQuote;
+        parseProblem InfoC "Are you trying to escape that single quote? echo 'You'\\''re doing it wrong'.";
+        return [s];
     }
         <|> attempt InfoC linefeed "You don't break lines with \\ in single quotes, it results in literal backslash-linefeed."
         <|> do
@@ -441,50 +418,70 @@ readGenericEscaped = do
     x <- anyChar
     return $ if x == '\n' then [] else [x]
 
-readBraced = annotated "{1,2..3} expression" $ try $ do
-    let strip (T_Literal s) = return ("\"" ++ s ++ "\"")
+prop_readBraced = isOk readBraced "{1..4}"
+prop_readBraced2 = isOk readBraced "{foo,bar,\"baz lol\"}"
+readBraced = try $ do
+    let strip (T_Literal _ s) = return ("\"" ++ s ++ "\"")
+    id <- getNextId
     char '{'
-    str <- many1 ((readDoubleQuotedLiteral >>= (strip )) <|> readGenericLiteral1 (oneOf "}" <|> whitespace))
+    str <- many1 ((readDoubleQuotedLiteral >>= (strip)) <|> readGenericLiteral1 (oneOf "}\"" <|> whitespace))
     char '}'
-    return $ T_BraceExpansion $ concat str
+    return $ T_BraceExpansion id $ concat str
 
 readDollar = readDollarArithmetic <|> readDollarBraced <|> readDollarExpansion <|> readDollarVariable <|> readDollarLonely
 
 
 readParenLiteralHack = do
-    strs <- ((anyChar >>= \x -> return [x]) <|> readParenHack) `reluctantlyTill1` (string "))")
+    strs <- (readParenHack <|> (anyChar >>= \x -> return [x])) `reluctantlyTill1` (string "))")
     return $ concat strs
 
 readParenHack = do
     char '('
-    x <- many anyChar
+    x <- (readParenHack <|> (anyChar >>= (\x -> return [x]))) `reluctantlyTill` (oneOf ")")
     char ')'
-    return $ "(" ++ x ++ ")"
+    return $ "(" ++ (concat x) ++ ")"
 
-readDollarArithmetic = annotated "$(( )) expression" $ do
+prop_readDollarArithmetic = isOk readDollarArithmetic "$(( 3 * 4 +5))"
+prop_readDollarArithmetic2 = isOk readDollarArithmetic "$(((3*4)+(1*2+(3-1))))"
+readDollarArithmetic = do
+    id <- getNextId
     try (string "$((")
     -- TODO
     str <- readParenLiteralHack
     string "))"
-    return (T_DollarArithmetic str)
+    return (T_DollarArithmetic id str)
 
-readDollarBraced = annotated "${ } expression" $ do
+readArithmeticExpression = do
+    id <- getNextId
+    try (string "((")
+    -- TODO
+    str <- readParenLiteralHack
+    string "))"
+    return (T_Arithmetic id str)
+
+prop_readDollarBraced = isOk readDollarBraced "${foo//bar/baz}"
+readDollarBraced = do
+    id <- getNextId
     try (string "${")
     -- TODO
     str <- readGenericLiteral (char '}')
     char '}' <?> "matching }"
-    return $ (T_DollarBraced str)
+    return $ (T_DollarBraced id str)
 
-readDollarExpansion = annotated "$( )" $ do
+prop_readDollarExpansion = isOk readDollarExpansion "$(echo foo; ls\n)"
+readDollarExpansion = do
+    id <- getNextId
     try (string "$(")
     cmds <- readCompoundList
     char ')'
-    return $ (T_DollarExpansion cmds)
+    return $ (T_DollarExpansion id cmds)
 
-readDollarVariable = annotated "$variable" $ do
+prop_readDollarVariable = isOk readDollarVariable "$@"
+readDollarVariable = do
+    id <- getNextId
     let singleCharred p = do
         n <- p
-        return (T_DollarVariable [n]) `attempting` do
+        return (T_DollarVariable id [n]) `attempting` do
             pos <- getPosition
             num <- lookAhead $ many1 p
             parseNoteAt pos ErrorC $ "$" ++ (n:num) ++ " is equivalent to ${" ++ [n] ++ "}"++ num
@@ -494,7 +491,7 @@ readDollarVariable = annotated "$variable" $ do
 
     let regular = do
         name <- readVariableName
-        return $ T_DollarVariable (name)
+        return $ T_DollarVariable id (name)
 
     char '$'
     positional <|> special <|> regular
@@ -504,18 +501,23 @@ readVariableName = do
     rest <- many variableChars
     return (f:rest)
 
-readDollarLonely = annotated "lonely $" $ do
+readDollarLonely = do
+    id <- getNextId
     parseNote ErrorC "$ is not used specially and should therefore be escaped"
     char '$'
-    return $ T_Literal "$"
+    return $ T_Literal id "$"
 
-readHereDoc = annotated "here document" $ do
-    let stripLiteral (T_Literal x) = x
-        stripLiteral (T_SingleQuoted x) = x
+prop_readHereDoc = isOk readHereDoc "<< foo\nlol\ncow\nfoo"
+prop_readHereDoc2 = isWarning readHereDoc "<<- EOF\n  cow\n  EOF"
+readHereDoc = do
+    let stripLiteral (T_Literal _ x) = x
+        stripLiteral (T_SingleQuoted _ x) = x
+    fid <- getNextId
     try $ string "<<"
     dashed <- (char '-' >> return True) <|> return False
     tokenPosition <- getPosition
     spacing
+    hid <- getNextId
     (quoted, endToken) <- (readNormalLiteral >>= (\x -> return (False, stripLiteral x)) )
                             <|> (readDoubleQuotedLiteral >>= return . (\x -> (True, stripLiteral x)))
                             <|> (readSingleQuotedLiteral >>= return . (\x -> (True, x)))
@@ -528,7 +530,7 @@ readHereDoc = annotated "here document" $ do
         spaces <- spacing
         verifyHereDoc dashed quoted spaces hereInfo
         token <- string endToken
-        return $ T_FdRedirect "" $ T_HereDoc dashed quoted hereInfo
+        return $ T_FdRedirect fid "" $ T_HereDoc hid dashed quoted hereInfo
      `attempting` (eof >> debugHereDoc tokenPosition endToken hereInfo)
 
 verifyHereDoc dashed quoted spacing hereInfo = do
@@ -545,32 +547,44 @@ debugHereDoc pos endToken doc =
 
 
 readFilename = readNormalWord
-readIoFileOp = choice [g_LESSAND, g_GREATAND, g_DGREAT, g_LESSGREAT, g_CLOBBER, string "<" >> return T_Less, string ">" >> return T_Greater ]
+readIoFileOp = choice [g_LESSAND, g_GREATAND, g_DGREAT, g_LESSGREAT, g_CLOBBER, tryToken "<" T_Less, tryToken ">" T_Greater ]
+
+prop_readIoFile = isOk readIoFile ">> \"$(date +%YYmmDD)\""
 readIoFile = do
+    id <- getNextId
     op <- readIoFileOp
     spacing
     file <- readFilename
-    return $ T_FdRedirect "" $ T_IoFile op file
+    return $ T_FdRedirect id "" $ T_IoFile id op file
+
 readIoNumber = try $ do
     x <- many1 digit
     lookAhead readIoFileOp
     return x
-readIoNumberRedirect = annotated "fd io redirect" $ do
-    n <- readIoNumber
-    op <- merging readHereString <|> merging readHereDoc <|> readIoFile
-    let actualOp = case op of T_FdRedirect "" x -> x
-    spacing
-    return $ T_FdRedirect n actualOp
 
-readIoRedirect = annotated "io redirect" $ choice [ merging readIoNumberRedirect, merging readHereString, merging readHereDoc, readIoFile ] `thenSkip` spacing
+prop_readIoNumberRedirect = isOk readIoNumberRedirect "3>&2"
+prop_readIoNumberRedirect2 = isOk readIoNumberRedirect "2> lol"
+prop_readIoNumberRedirect3 = isOk readIoNumberRedirect "4>&-"
+readIoNumberRedirect = do
+    id <- getNextId
+    n <- readIoNumber
+    op <- readHereString <|> readHereDoc <|> readIoFile
+    let actualOp = case op of T_FdRedirect _ "" x -> x
+    spacing
+    return $ T_FdRedirect id n actualOp
+
+readIoRedirect = choice [ readIoNumberRedirect, readHereString, readHereDoc, readIoFile ] `thenSkip` spacing
 
 readRedirectList = many1 readIoRedirect
 
-readHereString = annotated "here string" $ do
+prop_readHereString = isOk readHereString "<<< \"Hello $world\""
+readHereString = do
+    id <- getNextId
     try $ string "<<<"
     spacing
+    id2 <- getNextId
     word <- readNormalWord
-    return $ T_FdRedirect "" $ T_HereString word
+    return $ T_FdRedirect id "" $ T_HereString id2 word
 
 readNewlineList = many1 ((newline <|> carriageReturn) `thenSkip` spacing)
 readLineBreak = optional readNewlineList
@@ -592,38 +606,39 @@ readSeparator =
             readNewlineList
             return '\n'
 
-makeSimpleCommand tokens =
-    let (assignment, rest) = partition (\x -> case dropAnnotation x of T_Assignment _ _ -> True; _ -> False) tokens
-    in let (redirections, rest2) = partition (\x -> case dropAnnotation x of T_FdRedirect _ _ -> True; _ -> False) rest
-       in T_Redirecting redirections $ T_SimpleCommand assignment rest2
+makeSimpleCommand id tokens =
+    let (assignment, rest) = partition (\x -> case x of T_Assignment _ _ _ -> True; _ -> False) tokens
+    in let (redirections, rest2) = partition (\x -> case x of T_FdRedirect _ _ _ -> True; _ -> False) rest
+       in T_Redirecting id redirections $ T_SimpleCommand id assignment rest2
 
-readSimpleCommand = annotated "simple command" $ do
+prop_readSimpleCommand = isOk readSimpleCommand "echo test > file"
+readSimpleCommand = do
+    id <- getNextId
     prefix <- option [] readCmdPrefix
-    cmd <- option [] $ do { f <- annotated "command name" readCmdName; return [f]; }
+    cmd <- option [] $ do { f <- readCmdName; return [f]; }
     when (null prefix && null cmd) $ fail "No command"
     if null cmd
-        then return $ makeSimpleCommand prefix
+        then return $ makeSimpleCommand id prefix
         else do
             suffix <- option [] readCmdSuffix
-            return $ makeSimpleCommand (prefix ++ cmd ++ suffix)
+            return $ makeSimpleCommand id (prefix ++ cmd ++ suffix)
 
-readPipeline = annotated "Pipeline" $ do
+prop_readPipeline = isOk readPipeline "! cat /etc/issue | grep -i ubuntu"
+readPipeline = do
     notFollowedBy $ try readKeyword
     do
-        g_Bang `thenSkip` spacing
+        (T_Bang id) <- g_Bang `thenSkip` spacing
         pipe <- readPipeSequence
-        return $ T_Banged pipe
+        return $ T_Banged id pipe
       <|> do
         readPipeSequence
 
-readAndOr = (flip (>>=)) (return . T_Command) $ chainr1 readPipeline $ do
-    pos <- getPosition
+prop_readAndOr = isOk readAndOr "grep -i lol foo || exit 1"
+readAndOr = chainr1 readPipeline $ do
     op <- g_AND_IF <|> g_OR_IF
     readLineBreak
-    return $ \a b ->
-                blankAnnotation pos $
-                     case op of T_AND_IF -> T_AndIf a b
-                                T_OR_IF  -> T_OrIf a b
+    return $ case op of T_AND_IF id -> T_AndIf id
+                        T_OR_IF  id -> T_OrIf id 
 
 readTerm = do
     m <- readAndOr
@@ -631,23 +646,25 @@ readTerm = do
 
 readTerm' current =
     do
+        id <- getNextId
         sep <- readSeparator
-        more <- (option T_EOF $ readAndOr)
-        case more of T_EOF -> return [transformWithSeparator sep current]
-                     _     -> do
+        more <- (option (T_EOF id)$ readAndOr)
+        case more of (T_EOF _) -> return [transformWithSeparator id sep current]
+                     _         -> do
                                 list <- readTerm' more
-                                return $ (transformWithSeparator sep current : list)
+                                return $ (transformWithSeparator id sep current : list)
       <|>
         return [current]
 
-transformWithSeparator '&' = T_Backgrounded
-transformWithSeparator _  = id
+transformWithSeparator i '&' = T_Backgrounded i
+transformWithSeparator i _  = id
 
 
 readPipeSequence = do
+    id <- getNextId
     list <- readCommand `sepBy1` (readPipe `thenSkip` (spacing >> readLineBreak))
     spacing
-    return $ T_Pipeline list
+    return $ T_Pipeline id list
 
 readPipe = do
     notFollowedBy g_OR_IF
@@ -665,12 +682,14 @@ readCmdWord = do
     spacing
     return f
 
-readIfClause = annotated "if statement" $ do
-    (condition, action) <- readIfPart
-    elifs <- many readElifPart
-    elses <- option [] readElsePart
+prop_readIfClause = isOk readIfClause "if false; then foo; elif true; then stuff; more stuff; else cows; fi"
+readIfClause = do
+    id <- getNextId
+    (condition, action) <- readIfPart 
+    elifs <- many readElifPart 
+    elses <- option [] readElsePart 
     g_Fi
-    return $ T_IfExpression ((condition, action):elifs) elses
+    return $ T_IfExpression id ((condition, action):elifs) elses
 
 readIfPart = do
     g_If
@@ -695,33 +714,39 @@ readElsePart = do
     allspacing
     readTerm
 
-readSubshell = annotated "subshell group" $ do
+prop_readSubshell = isOk readSubshell "( cd /foo; tar cf stuff.tar * )"
+readSubshell = do
+    id <- getNextId
     char '('
     allspacing
     list <- readCompoundList
     allspacing
     char ')'
-    return $ T_Subshell list
+    return $ T_Subshell id list
 
-readBraceGroup = annotated "brace group" $ do
+prop_readBraceGroup = isOk readBraceGroup "{ a; b | c | d; e; }"
+readBraceGroup = do
+    id <- getNextId
     char '{'
     allspacing
     list <- readTerm
     allspacing
     char '}'
-    return $ T_BraceGroup list
+    return $ T_BraceGroup id list
 
-readWhileClause = annotated "while loop" $ do
-    g_While
+prop_readWhileClause = isOk readWhileClause "while [[ -e foo ]]; do sleep 1; done"
+readWhileClause = do
+    (T_While id) <- g_While
     condition <- readTerm
     statements <- readDoGroup
-    return $ T_WhileExpression condition statements
+    return $ T_WhileExpression id condition statements
 
-readUntilClause = annotated "until loop" $ do
-    g_Until
+prop_readUntilClause = isOk readUntilClause "until kill -0 $PID; do sleep 1; done"
+readUntilClause = do
+    (T_Until id) <- g_Until
     condition <- readTerm
     statements <- readDoGroup
-    return $ T_UntilExpression condition statements
+    return $ T_UntilExpression id condition statements
 
 readDoGroup = do
     pos <- getPosition
@@ -736,14 +761,16 @@ readDoGroup = do
             parseProblemAt pos ErrorC "Can't find the 'done' for this 'do'"
             fail "No done"
 
-readForClause = annotated "for loop" $ do
-    g_For
+prop_readForClause = isOk readForClause "for f in *; do rm \"$f\"; done"
+prop_readForClause2 = isOk readForClause "for f in *; do ..."
+readForClause = do
+    (T_For id) <- g_For
     spacing
     name <- readVariableName
     allspacing
     values <- readInClause <|> (readSequentialSep >> return [])
     group <- readDoGroup <|> (allspacing >> eof >> return []) -- stunted support
-    return $ T_ForIn name values group
+    return $ T_ForIn id name values group
 
 readInClause = do
     g_In
@@ -760,7 +787,9 @@ readInClause = do
 
     return things
 
-readCaseClause = annotated "case statement" $ do
+prop_readCaseClause = isOk readCaseClause "case foo in a ) lol; cow;; b|d) fooo; esac"
+readCaseClause = do
+    id <- getNextId
     g_Case
     word <- readNormalWord
     spacing
@@ -768,7 +797,7 @@ readCaseClause = annotated "case statement" $ do
     readLineBreak
     list <- readCaseList
     g_Esac
-    return $ T_CaseExpression word list
+    return $ T_CaseExpression id word list
 
 readCaseList = many readCaseItem
 
@@ -784,12 +813,15 @@ readCaseItem = do
     readLineBreak
     return (pattern, list)
 
-readFunctionDefinition = annotated "function definition" $ do
+prop_readFunctionDefinition = isOk readFunctionDefinition "foo() { command foo --lol \"$@\"; }"
+prop_readFunctionDefinition2 = isWarning readFunctionDefinition "function foo() { command foo --lol \"$@\"; }"
+readFunctionDefinition = do
+    id <- getNextId
     name <- try readFunctionSignature
     allspacing
     (disregard (lookAhead g_Lbrace) <|> parseProblem ErrorC "Expected a { to open the function definition")
-    group <- merging readBraceGroup
-    return $ T_Function name group
+    group <- readBraceGroup
+    return $ T_Function id name group
 
 
 readFunctionSignature = do
@@ -804,34 +836,57 @@ readFunctionSignature = do
 readPattern = (readNormalWord `thenSkip` spacing) `sepBy1` (char '|' `thenSkip` spacing)
 
 
-readCompoundCommand = annotated "compound command" $ do
-    cmd <- merging $ choice [ readBraceGroup, readSubshell, readWhileClause, readUntilClause, readIfClause, readForClause, readCaseClause, readFunctionDefinition]
+readCompoundCommand = do
+    id <- getNextId
+    cmd <- choice [ readBraceGroup, readArithmeticExpression, readSubshell, readWhileClause, readUntilClause, readIfClause, readForClause, readCaseClause, readFunctionDefinition]
     spacing
     redirs <- many readIoRedirect
-    return $ T_Redirecting redirs $ cmd
+    return $ T_Redirecting id redirs $ cmd
 
 
 readCompoundList = readTerm
 
 readCmdPrefix = many1 (readIoRedirect <|> readAssignmentWord)
-readCmdSuffix = many1 (readIoRedirect <|> annotated "normal word" readCmdWord)
+readCmdSuffix = many1 (readIoRedirect <|> readCmdWord)
 
-readAssignmentWord = annotated "assignment" $ try $ do
+prop_readAssignmentWord = isOk readAssignmentWord "a=42"
+prop_readAssignmentWord2 = isOk readAssignmentWord "b=(1 2 3)"
+prop_readAssignmentWord3 = isWarning readAssignmentWord "$b = 13"
+prop_readAssignmentWord4 = isWarning readAssignmentWord "b = $(lol)"
+readAssignmentWord = try $ do
+    id <- getNextId
     optional (char '$' >> parseNote ErrorC "Don't use $ on the left side of assignments")
     variable <- readVariableName
     space <- spacing
     pos <- getPosition
     char '='
     space2 <- spacing
-    value <- readNormalWord
+    value <- readArray <|> readNormalWord
     spacing
     when (space ++ space2 /= "") $ parseNoteAt pos ErrorC "Don't put spaces around the = in assignments"
-    return $ T_Assignment variable value
+    return $ T_Assignment id variable value
+
+readArray = do
+    id <- getNextId
+    char '('
+    allspacing
+    words <- (readNormalWord `thenSkip` allspacing) `reluctantlyTill` (char ')')
+    char ')'
+    return $ T_Array id words
 
 
-tryToken s t = try (string s >> spacing >> return t)
+tryToken s t = try $ do
+    id <- getNextId
+    string s
+    spacing
+    return $ t id
+
 tryWordToken s t = tryParseWordToken (string s) t `thenSkip` spacing
-tryParseWordToken parser t = try (parser >> (lookAhead (eof <|> disregard whitespace))) >> return t
+tryParseWordToken parser t = try $ do
+    id <- getNextId
+    parser
+    lookAhead (eof <|> disregard whitespace)
+    return $ t id
 
 g_AND_IF = tryToken "&&" T_AND_IF
 g_OR_IF = tryToken "||" T_OR_IF
@@ -879,51 +934,133 @@ wtf = do
     parseProblem ErrorC x
 
 readScript = do
+    id <- getNextId
     do {
         allspacing;
         commands <- readTerm;
-        eof <|> (parseProblem WarningC "Stopping here, because I can't parse this command");
-        return $ T_Script commands;
+--        eof <|> (parseProblem WarningC "Stopping here, because I can't parse this command");
+        return $ T_Script id commands;
     } <|> do {
         parseProblem WarningC "Couldn't read any commands";
         wtf;
-        return T_EOF;
+        return $ T_EOF id;
     }
 
-shpell s = rp readScript s
-rp p s = Ms.runState (runParserT p StackEmpty "-" s) []
+rp p s = Ms.runState (runParserT p initialState "-" s) []
+isWarning p s = not $ null $ getNotesWith (do { x <- p; eof; return x; }) return s
+isOk p s = case rp (p >> eof) s of 
+                (Right _, []) -> True
+                _ -> False
 
--------- Destructively simplify AST
+parseWithNotes parser analytics = do
+    item <- parser
+    analytics item
+    notes <- collectNotes
+    return (item, notes)
+    
+toParseNotes (Metadata pos list) = map (\(Note level note) -> ParseNote pos level note) list
 
-simplify (T_Redirecting [] t) = t
-simplify (T_Pipeline [x]) = dropAnnotation x
-simplify (T_NormalWord [x]) = dropAnnotation x
-simplify t = t
+collectNotes = do
+    map <- getMap
+    notes <- getParseNotes
+    let values = Map.fold (\meta list -> (toParseNotes meta) ++ list) notes map
+    return values
+
+getNotes s = getNotesWith readScript doAllAnalysis s
+getNotesWith parser analytics s = 
+    case rp (parseWithNotes (parser) analytics) s of
+        (Right (x, notes), parsenotes) -> sortNotes $ notes ++ parsenotes
+        (Left err, p) -> sortNotes $ (ParseNote (initialPos "-") ErrorC $ "Parsing failed: " ++ (show err)):(p)
+
+compareNotes (ParseNote pos1 level1 s1) (ParseNote pos2 level2 s2) = compare (pos1, level1, s1) (pos2, level2, s2)
+sortNotes = sortBy compareNotes
+
+stuff p s = rp (parseWithNotes p return) s
 
 -------- Analytics
-doAllAnalysis t = foldl (\v f -> doAnalysis f v) t checks
+doAllAnalysis t = foldM (\v f -> doAnalysis f v) t checks
 
-getAst s = case rp readScript s of (Right parsed, _) -> parsed
-getAst2 s = case rp readScript s of (Right parsed, _) -> transform simplify parsed
-lol (Right x, _) = x
+--getAst s = case rp readScript s of (Right parsed, _) -> parsed
+lol (Right (x, f), _) = x
 
-deadSimple (T_NormalWord l) = [concat (concatMap (deadSimple . dropAnnotation) l)]
-deadSimple (T_DoubleQuoted l) = ["\"" ++(concat (concatMap (deadSimple . dropAnnotation) l)) ++ "\""]
-deadSimple (T_SingleQuoted s) = [s]
-deadSimple (T_DollarVariable _) = ["${VAR}"]
-deadSimple (T_DollarBraced _) = ["${VAR}"]
-deadSimple (T_DollarArithmetic _) = ["${VAR}"]
-deadSimple (T_DollarExpansion _) = ["${VAR}"]
-deadSimple (T_Literal x) = [x]
-deadSimple (T_SimpleCommand vars words) = concatMap (deadSimple . dropAnnotation) words
-deadSimple (T_Redirecting _ foo) = deadSimple foo
+willSplit x = 
+  case x of 
+    T_DollarVariable _ _ -> True
+    T_DollarBraced _ _ -> True
+    T_DollarExpansion _ _ -> True
+    T_BraceExpansion _ s -> True
+    T_NormalWord _ l -> any willSplit l
+    T_Literal _ s -> isGlob s
+    _ -> False
+
+
+makeSimple (T_NormalWord _ [f]) = f
+makeSimple (T_Redirecting _ _ f) = f
+makeSimple t = t
+simplify = transform makeSimple
+
+deadSimple (T_NormalWord _ l) = [concat (concatMap (deadSimple) l)]
+deadSimple (T_DoubleQuoted _ l) = ["\"" ++(concat (concatMap (deadSimple) l)) ++ "\""]
+deadSimple (T_SingleQuoted _ s) = [s]
+deadSimple (T_DollarVariable _ _) = ["${VAR}"]
+deadSimple (T_DollarBraced _ _) = ["${VAR}"]
+deadSimple (T_DollarArithmetic _ _) = ["${VAR}"]
+deadSimple (T_DollarExpansion _ _) = ["${VAR}"]
+deadSimple (T_Pipeline _ [x]) = deadSimple x
+deadSimple (T_Literal _ x) = [x]
+deadSimple (T_SimpleCommand _ vars words) = concatMap (deadSimple) words
+deadSimple (T_Redirecting _ _ foo) = deadSimple foo
 deadSimple _ = []
 
+verify f s = (getNotesWith readScript return  s) == [] && (getNotesWith readScript (doAnalysis f) s) /= []
+verifyNot f s = (getNotesWith readScript return  s) == (getNotesWith readScript (doAnalysis f) s)
+canParse p s = isOk (p >> eof) s
 
-checks = [checkUuoc]
-checkUuoc (T_Pipeline ((Annotated _ _ x):_:_)) = case (deadSimple x) of ["cat", _] -> style "UUOC: Instead of 'cat a | b', use 'b < a'"
-                                                                        _ -> return ()
+checks = [checkUuoc, checkForInQuoted, checkForInLs, checkMissingForQuotes, checkUnquotedExpansions]
+
+
+prop_checkUuoc = verify checkUuoc "cat foo | grep bar"
+checkUuoc (T_Pipeline _ (T_Redirecting _ _ f@(T_SimpleCommand id _ _):_:_)) = 
+    case deadSimple f of ["cat", _] -> addNoteFor id $ Note InfoC "UUOC: 'cat foo | bar | baz' is better written as 'bar < foo | baz'"
+                         _ -> return ()
 checkUuoc _ = return ()
+
+
+prop_checkForInQuoted = verify checkForInQuoted "for f in \"$(ls)\"; do echo foo; done"
+checkForInQuoted (T_ForIn _ f [T_NormalWord _ [T_DoubleQuoted id list]] _) = 
+    when (any willSplit list) $ addNoteFor id $ Note ErrorC $ "Since you double quoted this, it will not word split, and the loop will only run once"
+checkForInQuoted _ = return ()
+
+
+prop_checkForInLs = verify checkForInLs "for f in $(ls *.mp3); do mplayer \"$f\"; done"
+checkForInLs (T_ForIn _ f [T_NormalWord _ [T_DollarExpansion id [x]]] _) = 
+    case deadSimple x of ("ls":n) -> let args = (if n == [] then ["*"] else n) in 
+                                        addNoteFor id $ Note WarningC $ "Don't use 'for "++f++" in $(ls " ++ (intercalate " " n) ++ ")'. Use 'for "++f++" in "++ (intercalate " " args) ++ "'"
+                         _ -> return ()
+checkForInLs _ = return ()
+
+
+prop_checkMissingForQuotes = verify checkMissingForQuotes "for f in *.mp3; do rm $f; done"
+prop_checkMissingForQuotes2 = verifyNot checkMissingForQuotes "for f in foo bar; do rm $f; done"
+checkMissingForQuotes (T_ForIn _ f words cmds) = 
+    if not $ any willSplit words then return () else do
+        mapM_  (doAnalysis (markUnquoted f)) cmds
+  where 
+    markUnquoted f (T_NormalWord _ l) = mapM_ mu l
+    markUnquoted _ _ = return ()
+    mu (T_DollarVariable id s) | s == f = warning id
+    mu (T_DollarBraced id s) | s == f = warning id
+    mu _ = return ()
+    warning id = addNoteFor id $ Note WarningC $ "Variables that could contain spaces should be quoted"
+checkMissingForQuotes _ = return ()
+
+
+prop_checkUnquotedExpansions = verify checkUnquotedExpansions "rm $(ls)"
+checkUnquotedExpansions (T_SimpleCommand _ _ cmds) = mapM_ check cmds 
+    where check (T_NormalWord _ [T_DollarExpansion id _]) = addNoteFor id $ Note WarningC "Quote the expansion to prevent word splitting"
+          check _ = return ()
+checkUnquotedExpansions _ = return ()
+
 
 
 main = do
@@ -932,3 +1069,4 @@ main = do
 --                            (Left x, y) -> putStrLn $ "Can't parse: " ++ (show (x,y))
 
     mapM (putStrLn . show) $ getNotes s
+    return ()
