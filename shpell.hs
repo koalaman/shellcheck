@@ -683,6 +683,8 @@ readCmdWord = do
     return f
 
 prop_readIfClause = isOk readIfClause "if false; then foo; elif true; then stuff; more stuff; else cows; fi"
+prop_readIfClause2 = isWarning readIfClause "if false; then; echo oo; fi"
+prop_readIfClause3 = isWarning readIfClause "if false; then true; else; echo lol fi"
 readIfClause = do
     id <- getNextId
     (condition, action) <- readIfPart 
@@ -696,6 +698,7 @@ readIfPart = do
     allspacing
     condition <- readTerm
     g_Then
+    optional (g_Semi >> parseProblem ErrorC "No semicolons directly after 'then'")
     allspacing
     action <- readTerm
     return (condition, action)
@@ -705,12 +708,14 @@ readElifPart = do
     allspacing
     condition <- readTerm
     g_Then
+    optional (g_Semi >> parseProblem ErrorC "No semicolons directly after 'then'")
     allspacing
     action <- readTerm
     return (condition, action)
 
 readElsePart = do
     g_Else
+    optional (g_Semi >> parseProblem ErrorC "No semicolons directly after 'else'")
     allspacing
     readTerm
 
@@ -885,7 +890,7 @@ tryWordToken s t = tryParseWordToken (string s) t `thenSkip` spacing
 tryParseWordToken parser t = try $ do
     id <- getNextId
     parser
-    lookAhead (eof <|> disregard whitespace)
+    lookAhead (keywordSeparator)
     return $ t id
 
 g_AND_IF = tryToken "&&" T_AND_IF
@@ -923,6 +928,8 @@ g_Bang = tryToken "!" T_Bang
 g_Semi = do
     notFollowedBy g_DSEMI
     tryToken ";" T_Semi
+
+keywordSeparator = eof <|> disregard allspacing <|> (disregard $ oneOf ";()")
 
 readKeyword = choice [ g_Then, g_Else, g_Elif, g_Fi, g_Do, g_Done, g_Esac, g_Rbrace, g_Rparen, g_DSEMI ]
 
