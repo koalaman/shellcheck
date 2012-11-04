@@ -981,7 +981,7 @@ collectNotes = do
 
 getNotes s = getNotesWith readScript doAllAnalysis s
 getNotesWith parser analytics s = 
-    case rp (parseWithNotes (parser) analytics) s of
+    case rp (parseWithNotes (do { x <- parser; eof; return x; }) analytics) s of
         (Right (x, notes), parsenotes) -> sortNotes $ notes ++ parsenotes
         (Left err, p) -> sortNotes $ (ParseNote (initialPos "-") ErrorC $ "Parsing failed: " ++ (show err)):(p)
 
