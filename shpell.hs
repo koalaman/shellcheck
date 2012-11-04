@@ -14,7 +14,7 @@ import qualified Control.Monad.State as Ms
 import Data.Maybe
 import Prelude hiding (readList)
 import System.IO
-
+import qualified Text.Regex as Re
 
 
 backslash = char '\\'
@@ -141,8 +141,11 @@ wasIncluded p = option False (p >> return True)
 
 -- Horrifying AST
 data Token = T_AND_IF Id | T_OR_IF Id | T_DSEMI Id | T_Semi Id | T_DLESS Id | T_DGREAT Id | T_LESSAND Id | T_GREATAND Id | T_LESSGREAT Id | T_DLESSDASH Id | T_CLOBBER Id | T_If Id | T_Then Id | T_Else Id | T_Elif Id | T_Fi Id | T_Do Id | T_Done Id | T_Case Id | T_Esac Id | T_While Id | T_Until Id | T_For Id | T_Lbrace Id | T_Rbrace Id | T_Lparen Id | T_Rparen Id | T_Bang Id | T_In  Id | T_NEWLINE Id | T_EOF Id | T_Less Id | T_Greater Id | T_SingleQuoted Id String | T_Literal Id String | T_NormalWord Id [Token] | T_DoubleQuoted Id [Token] | T_DollarExpansion Id [Token] | T_DollarBraced Id String | T_DollarVariable Id String | T_DollarArithmetic Id String | T_BraceExpansion Id String | T_IoFile Id Token Token | T_HereDoc Id Bool Bool String | T_HereString Id Token | T_FdRedirect Id String Token | T_Assignment Id String Token | T_Array Id [Token] | T_Redirecting Id [Token] Token | T_SimpleCommand Id [Token] [Token] | T_Pipeline Id [Token] | T_Banged Id Token | T_AndIf Id (Token) (Token) | T_OrIf Id (Token) (Token) | T_Backgrounded Id Token | T_IfExpression Id [([Token],[Token])] [Token] | T_Subshell Id [Token] | T_BraceGroup Id [Token] | T_WhileExpression Id [Token] [Token] | T_UntilExpression Id [Token] [Token] | T_ForIn Id String [Token] [Token] | T_CaseExpression Id Token [([Token],[Token])] | T_Function Id String Token | T_Arithmetic Id String | T_Script Id [Token]
-    deriving (Show, Eq)
+    deriving (Show)
 
+lolHax s = Re.subRegex (Re.mkRegex "(Id [0-9]+)") (show s) "(Id 0)" 
+instance Eq Token where
+    (==) a b = (lolHax a) == (lolHax b)
 
 analyzeScopes f i = mapM (analyze f i)
 
@@ -890,7 +893,7 @@ tryWordToken s t = tryParseWordToken (string s) t `thenSkip` spacing
 tryParseWordToken parser t = try $ do
     id <- getNextId
     parser
-    lookAhead (keywordSeparator)
+    try $ lookAhead (keywordSeparator)
     return $ t id
 
 g_AND_IF = tryToken "&&" T_AND_IF
@@ -929,7 +932,7 @@ g_Semi = do
     notFollowedBy g_DSEMI
     tryToken ";" T_Semi
 
-keywordSeparator = eof <|> disregard allspacing <|> (disregard $ oneOf ";()")
+keywordSeparator = eof <|> disregard whitespace <|> (disregard $ oneOf ";()")
 
 readKeyword = choice [ g_Then, g_Else, g_Elif, g_Fi, g_Do, g_Done, g_Esac, g_Rbrace, g_Rparen, g_DSEMI ]
 
@@ -1023,7 +1026,14 @@ verify f s = (getNotesWith readScript return  s) == [] && (getNotesWith readScri
 verifyNot f s = (getNotesWith readScript return  s) == (getNotesWith readScript (doAnalysis f) s)
 canParse p s = isOk (p >> eof) s
 
-checks = [checkUuoc, checkForInQuoted, checkForInLs, checkMissingForQuotes, checkUnquotedExpansions]
+checks = [
+    checkUuoc,
+    checkForInQuoted,
+    checkForInLs,
+    checkMissingForQuotes,
+    checkUnquotedExpansions,
+    checkRedirectToSame
+    ]
 
 
 prop_checkUuoc = verify checkUuoc "cat foo | grep bar"
@@ -1068,12 +1078,33 @@ checkUnquotedExpansions (T_SimpleCommand _ _ cmds) = mapM_ check cmds
           check _ = return ()
 checkUnquotedExpansions _ = return ()
 
+prop_checkRedirectToSame = verify checkRedirectToSame "cat foo > foo"
+prop_checkRedirectToSame2 = verify checkRedirectToSame "cat lol | sed -e 's/a/b/g' > lol"
+prop_checkRedirectToSame3 = verifyNot checkRedirectToSame "cat lol | sed -e 's/a/b/g' > foo.bar && mv foo.bar lol"
+checkRedirectToSame s@(T_Pipeline _ list) = 
+    mapM_ (\l -> (mapM_ (\x -> doAnalysis (checkOccurences x) l) (getAllRedirs list))) list
+  where checkOccurences (T_NormalWord exceptId x) (T_NormalWord newId y) = 
+            when (x == y && exceptId /= newId) (do
+                let note = Note InfoC $ "Make sure not to read and write the same file in the same pipeline"
+                addNoteFor newId $ note
+                addNoteFor exceptId $ note)
+        checkOccurences _ _ = return ()
+        getAllRedirs l = concatMap (\(T_Redirecting _ ls _) -> concatMap getRedirs ls) l
+        getRedirs (T_FdRedirect _ _ (T_IoFile _ op file)) = 
+                case op of T_Greater _ -> [file]
+                           T_Less _    -> [file]
+                           T_DGREAT _  -> [file]
+                           _ -> []
+        getRedirs _ = []
+checkRedirectToSame _ = return ()
+
+
+lt x = trace (show x) x
 
 
 main = do
     s <- getContents
 --    case rp readScript s of (Right parsed, _) -> putStrLn . show $ transform simplify parsed
 --                            (Left x, y) -> putStrLn $ "Can't parse: " ++ (show (x,y))
-
     mapM (putStrLn . show) $ getNotes s
     return ()
