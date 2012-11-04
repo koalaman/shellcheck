@@ -592,9 +592,12 @@ readHereString = do
 readNewlineList = many1 ((newline <|> carriageReturn) `thenSkip` spacing)
 readLineBreak = optional readNewlineList
 
+prop_roflol = isWarning readScript "a &; b"
+prop_roflol2 = isOk readScript "a & b"
 readSeparatorOp = do
     notFollowedBy (g_AND_IF <|> g_DSEMI)
-    f <- char ';' <|> char '&'
+    f <- (try $ char '&' >> spacing >> char ';' >> parseProblem ErrorC "It's not 'foo &; bar', just 'foo & bar'. " >> return '&') 
+            <|> char ';' <|> char '&'
     spacing
     return f
 
