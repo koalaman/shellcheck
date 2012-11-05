@@ -38,7 +38,7 @@ doInput filename contents colorFunc = do
     if not $ null comments then do
         mapM_ (\x -> do
             let lineNum = shpellLine (head x)
-            let line = if lineNum < 1 || lineNum >= lineCount
+            let line = if lineNum < 1 || lineNum > lineCount
                             then ""
                             else fileLines !! (lineNum - 1)
             putStrLn ""
