@@ -7,7 +7,10 @@ import qualified Data.Map as Map
 import Data.List
 import Debug.Trace
 
-checks = map runBasicAnalysis basicChecks
+checks = concat [
+    map runBasicAnalysis basicChecks
+    ,[subshellAssignmentCheck]
+    ]
 
 runAllAnalytics = checkList checks
 checkList l t m = foldl (\x f -> f t x) m l
@@ -169,3 +172,88 @@ checkStderrRedirect (T_Redirecting _ [
 checkStderrRedirect _ = return ()
 
 lt x = trace (show x) x
+
+
+
+--- Subshell detection
+
+subshellAssignmentCheck t map =
+    let flow = getVariableFlow t
+        check = findSubshelled flow [[]] Map.empty 
+    in snd $ runState check map
+
+
+data Scope = SubshellScope | NoneScope deriving (Show, Eq)
+data StackData = StackScope Scope | StackScopeEnd | Assignment (Id, String) | Reference (Id, String) deriving (Show, Eq)
+data VariableState = Dead Id | Alive deriving (Show, Eq)
+
+leadType t = 
+    case t of
+        T_DollarExpansion _ _  -> SubshellScope
+        T_Backgrounded _ _  -> SubshellScope
+        T_Subshell _ _  -> SubshellScope
+        -- This considers the pipeline one subshell. Consider fixing.
+        T_Pipeline _ (_:_:[])  -> SubshellScope
+        _ -> NoneScope
+        
+
+getModifiedVariables t =
+    case t of 
+        T_SimpleCommand _ vars [] -> 
+            concatMap (\x -> case x of 
+                                T_Assignment id name _ -> [(id, name)]
+                                _ -> []
+                      ) vars
+        T_SimpleCommand _ vars commandLine@(_:_) -> 
+            getModifiedVariableCommand commandLine
+
+        --Points to 'for' rather than variable
+        T_ForIn id str _ _ -> [(id, str)] 
+        _ -> []
+
+getModifiedVariableCommand list = [] -- TODO
+getBracedReference s = s -- TODO
+
+getReferencedVariables t =
+    case t of 
+        T_DollarBraced id str -> map (\x -> (id, x)) $ [getBracedReference str]
+        T_DollarVariable id str -> [(id, str)]
+        T_Arithmetic _ _ -> [] -- TODO
+        _ -> []
+
+
+startScope t = 
+    let scopeType = leadType t
+        written = getModifiedVariables t
+        read    = getReferencedVariables t
+    in do
+        when (scopeType /= NoneScope) $ modify ((StackScope scopeType):)
+        mapM_ (\v -> modify ((Assignment v):)) written
+        mapM_ (\v -> modify ((Reference v):)) read
+
+endScope t =
+    let scopeType = leadType t
+    in do
+        when (scopeType /= NoneScope) $ modify ((StackScopeEnd):)
+
+getVariableFlow t = 
+    let (_, stack) = runState (doStackAnalysis startScope endScope t) [] 
+    in reverse stack
+
+findSubshelled :: [StackData] -> [[(Id,String)]] -> (Map.Map String VariableState) -> State (Map.Map Id Metadata) ()
+findSubshelled [] _ _ = return ()
+findSubshelled ((Assignment x):rest) (scope:lol) deadVars = findSubshelled rest ((x:scope):lol) deadVars
+findSubshelled ((Reference (readId, str)):rest) scopes deadVars = do
+    case Map.findWithDefault Alive str deadVars of 
+        Alive -> return ()
+        Dead writeId -> do
+                    addNoteFor writeId $ Note InfoC $ str ++ " is here modified inside a subshell, but is later used outside."
+                    addNoteFor readId $ Note InfoC $ str ++ " was last modified in a subshell, and that change might be lost."
+    findSubshelled rest scopes deadVars
+
+findSubshelled ((StackScope SubshellScope):rest) scopes deadVars = 
+    findSubshelled rest ([]:scopes) deadVars 
+
+findSubshelled ((StackScopeEnd):rest) (scope:oldScopes) deadVars = 
+    findSubshelled rest oldScopes $ foldl (\m (id, var) -> Map.insert var (Dead id) m) deadVars scope 
+------
