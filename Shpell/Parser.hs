@@ -1,6 +1,6 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
-module Shpell.Parser (Token(..), Note(..), Severity(..), parseShell, ParseResult(..), notesFromMap, Metadata(..), doAnalysis, doTransform) where 
+module Shpell.Parser (Token(..), Note(..), Severity(..), parseShell, ParseResult(..), ParseNote(..), notesFromMap, Metadata(..), doAnalysis, doTransform, sortNotes) where 
 
 import Text.Parsec
 import Text.Parsec.Pos (initialPos)

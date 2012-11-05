@@ -9,7 +9,7 @@ import Debug.Trace
 
 checks = map runBasicAnalysis basicChecks
 
-checkAll = checkList checks
+runAllAnalytics = checkList checks
 checkList l t m = foldl (\x f -> f t x) m l
 
 runBasicAnalysis f t m = snd $ runState (doAnalysis f t) m
