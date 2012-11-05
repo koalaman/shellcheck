@@ -1006,10 +1006,13 @@ getStringFromParsec errors =
             _ -> "Unknown error"
     where f err =
             case err of
-                UnExpect s    -> (1, "Aborting due to unexpected " ++ s ++". Is this valid?")
-                SysUnExpect s -> (2, "Aborting due to unexpected " ++ s ++ ". Is this valid?")
+                UnExpect s    -> (1, unexpected s)
+                SysUnExpect s -> (2, unexpected s)
                 Expect s      -> (3, "Expected " ++ s ++ "")
                 Message s     -> (4, "Message: " ++ s)
+          wut "" = "eof"
+          wut x = x
+          unexpected s = "Aborting due to unexpected " ++ (wut s) ++ ". Is this valid?"
 
 parseShell filename contents = do
     case rp (parseWithNotes readScript) filename contents of
