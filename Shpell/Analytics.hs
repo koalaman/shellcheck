@@ -248,8 +248,8 @@ findSubshelled ((Reference (readId, str)):rest) scopes deadVars = do
     case Map.findWithDefault Alive str deadVars of 
         Alive -> return ()
         Dead writeId -> do
-                    addNoteFor writeId $ Note InfoC $ str ++ " is here modified inside a subshell, but is later used outside."
-                    addNoteFor readId $ Note InfoC $ str ++ " was last modified in a subshell, and that change might be lost."
+                    addNoteFor writeId $ Note InfoC $ str ++ " is here set inside a subshell, but is later used outside."
+                    addNoteFor readId $ Note InfoC $ str ++ " was last set in a subshell, and that change might be lost."
     findSubshelled rest scopes deadVars
 
 findSubshelled ((StackScope SubshellScope):rest) scopes deadVars = 
