@@ -137,6 +137,13 @@ attempting rest branch = do
 
 wasIncluded p = option False (p >> return True)
 
+acceptButWarn parser level note = do
+    optional (do
+        pos <- getPosition
+        parser
+        parseProblemAt pos level note
+      )
+
 -- Horrifying AST
 data Token = T_AND_IF Id | T_OR_IF Id | T_DSEMI Id | T_Semi Id | T_DLESS Id | T_DGREAT Id | T_LESSAND Id | T_GREATAND Id | T_LESSGREAT Id | T_DLESSDASH Id | T_CLOBBER Id | T_If Id | T_Then Id | T_Else Id | T_Elif Id | T_Fi Id | T_Do Id | T_Done Id | T_Case Id | T_Esac Id | T_While Id | T_Until Id | T_For Id | T_Lbrace Id | T_Rbrace Id | T_Lparen Id | T_Rparen Id | T_Bang Id | T_In  Id | T_NEWLINE Id | T_EOF Id | T_Less Id | T_Greater Id | T_SingleQuoted Id String | T_Literal Id String | T_NormalWord Id [Token] | T_DoubleQuoted Id [Token] | T_DollarExpansion Id [Token] | T_DollarBraced Id String | T_DollarVariable Id String | T_DollarArithmetic Id String | T_BraceExpansion Id String | T_IoFile Id Token Token | T_HereDoc Id Bool Bool String | T_HereString Id Token | T_FdRedirect Id String Token | T_Assignment Id String Token | T_Array Id [Token] | T_Redirecting Id [Token] Token | T_SimpleCommand Id [Token] [Token] | T_Pipeline Id [Token] | T_Banged Id Token | T_AndIf Id (Token) (Token) | T_OrIf Id (Token) (Token) | T_Backgrounded Id Token | T_IfExpression Id [([Token],[Token])] [Token] | T_Subshell Id [Token] | T_BraceGroup Id [Token] | T_WhileExpression Id [Token] [Token] | T_UntilExpression Id [Token] [Token] | T_ForIn Id String [Token] [Token] | T_CaseExpression Id Token [([Token],[Token])] | T_Function Id String Token | T_Arithmetic Id String | T_Script Id [Token]
     deriving (Show)
@@ -702,7 +709,7 @@ readIfPart = do
     allspacing
     condition <- readTerm
     g_Then
-    optional (g_Semi >> parseProblem ErrorC "No semicolons directly after 'then'")
+    acceptButWarn g_Semi ErrorC "No semicolons directly after 'then'"
     allspacing
     action <- readTerm
     return (condition, action)
@@ -712,14 +719,14 @@ readElifPart = do
     allspacing
     condition <- readTerm
     g_Then
-    optional (g_Semi >> parseProblem ErrorC "No semicolons directly after 'then'")
+    acceptButWarn g_Semi ErrorC "No semicolons directly after 'then'"
     allspacing
     action <- readTerm
     return (condition, action)
 
 readElsePart = do
     g_Else
-    optional (g_Semi >> parseProblem ErrorC "No semicolons directly after 'else'")
+    acceptButWarn g_Semi ErrorC "No semicolons directly after 'else'"
     allspacing
     readTerm
 
