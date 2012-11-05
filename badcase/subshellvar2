@@ -1,0 +1,7 @@
+for f in *
+do
+  echo "Processing: $f"
+done | tee log
+
+echo "Done. Last processed was $f."
+
