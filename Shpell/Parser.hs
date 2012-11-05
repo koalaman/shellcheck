@@ -51,7 +51,7 @@ carriageReturn = do
 data Id = Id Int deriving (Show, Eq, Ord)
 data Note = Note Severity String deriving (Show, Eq)
 data ParseNote = ParseNote SourcePos Severity String deriving (Show, Eq)
-data Metadata = Metadata SourcePos [Note]
+data Metadata = Metadata SourcePos [Note] deriving (Show)
 data Severity = ErrorC | WarningC | InfoC | StyleC deriving (Show, Eq, Ord)
 
 initialState = (Id $ -1, Map.empty, [])
@@ -139,7 +139,7 @@ attempting rest branch = do
 wasIncluded p = option False (p >> return True)
 
 acceptButWarn parser level note = do
-    optional (do
+    optional $ try (do
         pos <- getPosition
         parser
         parseProblemAt pos level note
@@ -653,6 +653,7 @@ readAndOr = chainr1 readPipeline $ do
                         T_OR_IF  id -> T_OrIf id
 
 readTerm = do
+    allspacing
     m <- readAndOr
     readTerm' m
 
@@ -696,7 +697,7 @@ readCmdWord = do
 
 prop_readIfClause = isOk readIfClause "if false; then foo; elif true; then stuff; more stuff; else cows; fi"
 prop_readIfClause2 = isWarning readIfClause "if false; then; echo oo; fi"
-prop_readIfClause3 = isWarning readIfClause "if false; then true; else; echo lol fi"
+prop_readIfClause3 = isWarning readIfClause "if false; then true; else; echo lol; fi"
 readIfClause = do
     id <- getNextId
     (condition, action) <- readIfPart
@@ -842,7 +843,7 @@ readFunctionDefinition = do
 
 
 readFunctionSignature = do
-    (optional $ try (string "function " >> parseNote StyleC "Don't use 'function' in front of function definitions"))
+    acceptButWarn (string "function" >> linewhitespace >> spacing) StyleC "Drop the keyword 'function'. It's optional in Bash but illegal in others."
     name <- readVariableName
     spacing
     g_Lparen
@@ -973,8 +974,8 @@ isOk :: (ParsecT String (Id, Map.Map Id Metadata, [ParseNote]) (Ms.State [ParseN
 isOk p s = (fst cs) && (null . snd $ cs) where cs = checkString p s
 
 checkString parser string =
-    case rp (parser >> eof >> getMap) "-" string of
-        (Right (m), n) -> (True, (notesFromMap m) ++ n)
+    case rp (parser >> eof >> getState) "-" string of
+        (Right (tree, map, notes), problems) -> (True, (notesFromMap map) ++ notes ++ problems)
         (Left _, n) -> (False, n)
 
 parseWithNotes parser = do
@@ -992,7 +993,7 @@ compareNotes (ParseNote pos1 level1 s1) (ParseNote pos2 level2 s2) = compare (po
 sortNotes = sortBy compareNotes
 
 
-data ParseResult = ParseResult { parseResult :: Maybe (Token, Map.Map Id Metadata), parseNotes :: [ParseNote] }
+data ParseResult = ParseResult { parseResult :: Maybe (Token, Map.Map Id Metadata), parseNotes :: [ParseNote] } deriving (Show)
 
 makeErrorFor parsecError =
     ParseNote (errorPos parsecError) ErrorC $ getStringFromParsec $ errorMessages parsecError
@@ -1004,7 +1005,7 @@ getStringFromParsec errors =
     where f err =
             case err of
                 UnExpect s    -> (1, "Aborting due to unexpected " ++ s ++". Is this valid?")
-                SysUnExpect s -> (2, "Internal unexpected " ++ s ++ ". Submit a bug.")
+                SysUnExpect s -> (2, "Aborting due to unexpected " ++ s ++ ". Is this valid?")
                 Expect s      -> (3, "Expected " ++ s ++ "")
                 Message s     -> (4, "Message: " ++ s)
 
