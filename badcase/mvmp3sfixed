@@ -1,0 +1,5 @@
+# There, I fixed it!
+for f in "$(ls *.mp3)"
+do
+  mv "$f" /music
+done

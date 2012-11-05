@@ -1,0 +1,3 @@
+cat << EOF
+Hello world
+Eof

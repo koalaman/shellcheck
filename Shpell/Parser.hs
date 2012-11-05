@@ -318,12 +318,13 @@ readSingleQuoted = do
     id <- getNextId
     singleQuote
     s <- readSingleQuotedPart `reluctantlyTill` singleQuote
+    pos <- getPosition
     singleQuote <?> "End single quoted string"
 
     let string = concat s
     return (T_SingleQuoted id string) `attempting` do
         x <- lookAhead anyChar
-        when (isAlpha x && isAlpha (last string)) $ parseProblem WarningC "This apostrophe terminated the single quoted string."
+        when (isAlpha x && isAlpha (last string)) $ parseProblemAt pos WarningC "This apostrophe terminated the single quoted string!"
 
 readSingleQuotedLiteral = do
     singleQuote
@@ -338,7 +339,7 @@ readSingleQuotedPart =
 prop_readBackTicked = isWarning readBackTicked "`ls *.mp3`"
 readBackTicked = do
     id <- getNextId
-    parseNote StyleC "Ignoring deprecated `..` backtick expansion.  Use $(..) instead."
+    parseNote InfoC "Ignoring deprecated `..` backtick expansion.  Use $(..) instead."
     pos <- getPosition
     char '`'
     f <- readGenericLiteral (char '`')
@@ -381,15 +382,15 @@ readNormalLiteralPart = do
     readNormalEscaped <|> (anyChar `reluctantlyTill1` quotable)
 
 readNormalEscaped = do
-    backslash
     pos <- getPosition
+    backslash
     do
         next <- (quotable <|> oneOf "?*[]")
         return $ if next == '\n' then "" else [next]
       <|>
         do
             next <- anyChar <?> "No character after \\"
-            parseNoteAt pos WarningC $ "This character doesn't need escaping here, the \\ is ignored"
+            parseNoteAt pos WarningC $ "Did you mean \"$(printf \"\\" ++ [next] ++ "\")\"? The shell just ignores the \\ here."
             return [next]
 
 readSingleEscaped = do
@@ -502,8 +503,7 @@ readDollarVariable = do
         name <- readVariableName
         return $ T_DollarVariable id (name)
 
-    char '$'
-    positional <|> special <|> regular
+    try $ char '$' >> (positional <|> special <|> regular)
 
 readVariableName = do
     f <- variableStart
@@ -512,7 +512,7 @@ readVariableName = do
 
 readDollarLonely = do
     id <- getNextId
-    parseNote ErrorC "$ is not used specially and should therefore be escaped"
+    parseNote StyleC "$ is not used specially and should therefore be escaped"
     char '$'
     return $ T_Literal id "$"
 
@@ -543,15 +543,15 @@ readHereDoc = do
      `attempting` (eof >> debugHereDoc tokenPosition endToken hereInfo)
 
 verifyHereDoc dashed quoted spacing hereInfo = do
-    when (not dashed && spacing /= "") $ parseNote ErrorC "When using << instead of <<-, the end tokens can't be indented"
+    when (not dashed && spacing /= "") $ parseNote ErrorC "Use <<- instead of << if you want to indent the end token"
     when (dashed && filter (/= '\t') spacing /= "" ) $ parseNote ErrorC "When using <<-, you can only indent with tabs"
     return ()
 
 debugHereDoc pos endToken doc =
     if endToken `isInfixOf` doc
-        then parseProblemAt pos ErrorC (endToken ++ " was part of the here document, but not by itself at the start of the line")
+        then parseProblemAt pos ErrorC ("Found " ++ endToken ++ " further down, but not by itself at the start of the line")
         else if (map toLower endToken) `isInfixOf` (map toLower doc)
-            then parseProblemAt pos ErrorC (endToken ++ " appears in the here document, but with different case")
+            then parseProblemAt pos ErrorC ("Found " ++ endToken ++ " further down, but with wrong casing.")
             else parseProblemAt pos ErrorC ("Couldn't find end token `" ++ endToken ++ "' in the here document ")
 
 
@@ -797,7 +797,7 @@ readInClause = do
 
     do {
         lookAhead (g_Do);
-        parseNote ErrorC "You need a line feed or semicolon before the 'do' (in Bash)";
+        parseNote ErrorC "You need a line feed or semicolon before the 'do'";
     } <|> do {
         optional $ g_Semi;
         disregard allspacing;
@@ -843,7 +843,7 @@ readFunctionDefinition = do
 
 
 readFunctionSignature = do
-    acceptButWarn (string "function" >> linewhitespace >> spacing) StyleC "Drop the keyword 'function'. It's optional in Bash but illegal in others."
+    acceptButWarn (string "function" >> linewhitespace >> spacing) InfoC "Drop the keyword 'function'. It's optional in Bash but invalid in other shells."
     name <- readVariableName
     spacing
     g_Lparen

@@ -1,0 +1,7 @@
+# Caution, white space sensitive file!
+if true
+then
+  cat <<- FOO
+    Some text
+  FOO
+fi

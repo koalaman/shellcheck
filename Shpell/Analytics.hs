@@ -67,7 +67,7 @@ checkBasic f s = case parseShell "-" s of
 
 prop_checkUuoc = verify checkUuoc "cat foo | grep bar"
 checkUuoc (T_Pipeline _ (T_Redirecting _ _ f@(T_SimpleCommand id _ _):_:_)) =
-    case deadSimple f of ["cat", _] -> addNoteFor id $ Note InfoC "UUOC: 'cat foo | bar | baz' is better written as 'bar < foo | baz'"
+    case deadSimple f of ["cat", _] -> addNoteFor id $ Note StyleC "Useless cat. Consider 'cmd < file | ..' or 'cmd file | ..' instead."
                          _ -> return ()
 checkUuoc _ = return ()
 

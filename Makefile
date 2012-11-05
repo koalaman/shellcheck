@@ -1,7 +1,7 @@
 all: .tests shpell
 	true
 	
-shpell: 
+shpell: regardless
 	ghc --make shpell #GHC handles the dependencies
 
 .tests: *.hs */*.hs
@@ -9,3 +9,7 @@ shpell:
   
 clean:
 	rm -f .tests shpell  *.hi *.o  Shpell/*.hi Shpell/*.o
+
+regardless:
+	:
+

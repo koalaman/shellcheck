@@ -1,0 +1,6 @@
+if true
+then
+  cat << FOO
+    Some text
+  FOO
+fi
