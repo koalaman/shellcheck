@@ -242,7 +242,8 @@ getVariableFlow t =
 
 findSubshelled :: [StackData] -> [[(Id,String)]] -> (Map.Map String VariableState) -> State (Map.Map Id Metadata) ()
 findSubshelled [] _ _ = return ()
-findSubshelled ((Assignment x):rest) (scope:lol) deadVars = findSubshelled rest ((x:scope):lol) deadVars
+findSubshelled ((Assignment x@(id, str)):rest) (scope:lol) deadVars = 
+    findSubshelled rest ((x:scope):lol) $ Map.insert str Alive deadVars
 findSubshelled ((Reference (readId, str)):rest) scopes deadVars = do
     case Map.findWithDefault Alive str deadVars of 
         Alive -> return ()
