@@ -1,4 +1,4 @@
-all: .tests shpell
+all: shpell .tests
 	true
 	
 shpell: regardless
@@ -6,7 +6,7 @@ shpell: regardless
 
 .tests: *.hs */*.hs
 	./test/runQuack && touch .tests
-  
+
 clean:
 	rm -f .tests shpell  *.hi *.o  Shpell/*.hi Shpell/*.o
 
