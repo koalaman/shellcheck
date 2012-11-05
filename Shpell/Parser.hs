@@ -149,151 +149,178 @@ acceptButWarn parser level note = do
 data Token = T_AND_IF Id | T_OR_IF Id | T_DSEMI Id | T_Semi Id | T_DLESS Id | T_DGREAT Id | T_LESSAND Id | T_GREATAND Id | T_LESSGREAT Id | T_DLESSDASH Id | T_CLOBBER Id | T_If Id | T_Then Id | T_Else Id | T_Elif Id | T_Fi Id | T_Do Id | T_Done Id | T_Case Id | T_Esac Id | T_While Id | T_Until Id | T_For Id | T_Lbrace Id | T_Rbrace Id | T_Lparen Id | T_Rparen Id | T_Bang Id | T_In  Id | T_NEWLINE Id | T_EOF Id | T_Less Id | T_Greater Id | T_SingleQuoted Id String | T_Literal Id String | T_NormalWord Id [Token] | T_DoubleQuoted Id [Token] | T_DollarExpansion Id [Token] | T_DollarBraced Id String | T_DollarVariable Id String | T_DollarArithmetic Id String | T_BraceExpansion Id String | T_IoFile Id Token Token | T_HereDoc Id Bool Bool String | T_HereString Id Token | T_FdRedirect Id String Token | T_Assignment Id String Token | T_Array Id [Token] | T_Redirecting Id [Token] Token | T_SimpleCommand Id [Token] [Token] | T_Pipeline Id [Token] | T_Banged Id Token | T_AndIf Id (Token) (Token) | T_OrIf Id (Token) (Token) | T_Backgrounded Id Token | T_IfExpression Id [([Token],[Token])] [Token] | T_Subshell Id [Token] | T_BraceGroup Id [Token] | T_WhileExpression Id [Token] [Token] | T_UntilExpression Id [Token] [Token] | T_ForIn Id String [Token] [Token] | T_CaseExpression Id Token [([Token],[Token])] | T_Function Id String Token | T_Arithmetic Id String | T_Script Id [Token]
     deriving (Show)
 
-analyzeScopes f i = mapM (analyze f i)
-analyze f i s@(T_NormalWord id list) = do
+analyzeScopes f g i = mapM (analyze f g i)
+analyze f g i s@(T_NormalWord id list) = do
     f s
-    a <- analyzeScopes f i list
+    a <- analyzeScopes f g i list
+    g s
     return . i $ T_NormalWord id a
 
-analyze f i s@(T_DoubleQuoted id list) = do
+analyze f g i s@(T_DoubleQuoted id list) = do
     f s
-    a <- analyzeScopes f i list
+    a <- analyzeScopes f g i list
+    g s
     return . i $ T_DoubleQuoted id a
 
-analyze f i s@(T_DollarExpansion id l) = do
+analyze f g i s@(T_DollarExpansion id l) = do
     f s
-    nl <- mapM (analyze f i) l
+    nl <- mapM (analyze f g i) l
+    g s
     return . i $ T_DollarExpansion id nl
 
-analyze f i s@(T_IoFile id op file) = do
+analyze f g i s@(T_IoFile id op file) = do
     f s
-    a <- analyze f i op
-    b <- analyze f i file
+    a <- analyze f g i op
+    b <- analyze f g i file
+    g s
     return . i $ T_IoFile id a b
 
-analyze f i s@(T_HereString id word) = do
+analyze f g i s@(T_HereString id word) = do
     f s
-    a <- analyze f i word
+    a <- analyze f g i word
+    g s
     return . i $ T_HereString id a
 
-analyze f i s@(T_FdRedirect id v t) = do
+analyze f g i s@(T_FdRedirect id v t) = do
     f s
-    a <- analyze f i t
+    a <- analyze f g i t
+    g s
     return . i $ T_FdRedirect id v a
 
-analyze f i s@(T_Assignment id v t) = do
+analyze f g i s@(T_Assignment id v t) = do
     f s
-    a <- analyze f i t
+    a <- analyze f g i t
+    g s
     return . i $ T_Assignment id v a
 
-analyze f i s@(T_Array id t) = do
+analyze f g i s@(T_Array id t) = do
     f s
-    a <- analyzeScopes f i t
+    a <- analyzeScopes f g i t
+    g s
     return . i $ T_Array id a
 
-analyze f i s@(T_Redirecting id redirs cmd) = do
+analyze f g i s@(T_Redirecting id redirs cmd) = do
     f s
-    newRedirs <- analyzeScopes f i redirs
-    newCmd <- analyze f i $ cmd
+    newRedirs <- analyzeScopes f g i redirs
+    newCmd <- analyze f g i $ cmd
+    g s
     return . i $ (T_Redirecting id newRedirs newCmd)
 
-analyze f i s@(T_SimpleCommand id vars cmds) = do
+analyze f g i s@(T_SimpleCommand id vars cmds) = do
     f s
-    a <- analyzeScopes f i vars
-    b <- analyzeScopes f i cmds
+    a <- analyzeScopes f g i vars
+    b <- analyzeScopes f g i cmds
+    g s
     return . i $ T_SimpleCommand id a b
 
-analyze f i s@(T_Pipeline id l) = do
+analyze f g i s@(T_Pipeline id l) = do
     f s
-    a <- analyzeScopes f i l
+    a <- analyzeScopes f g i l
+    g s
     return . i $ T_Pipeline id a
 
-analyze f i s@(T_Banged id l) = do
+analyze f g i s@(T_Banged id l) = do
     f s
-    a <- analyze f i l
+    a <- analyze f g i l
+    g s
     return . i $ T_Banged id a
 
-analyze f i s@(T_AndIf id t u) = do
+analyze f g i s@(T_AndIf id t u) = do
     f s
-    a <- analyze f i t
-    b <- analyze f i u
+    a <- analyze f g i t
+    b <- analyze f g i u
+    g s
     return . i $ T_AndIf id a b
 
-analyze f i s@(T_OrIf id t u) = do
+analyze f g i s@(T_OrIf id t u) = do
     f s
-    a <- analyze f i t
-    b <- analyze f i u
+    a <- analyze f g i t
+    b <- analyze f g i u
+    g s
     return . i $ T_OrIf id a b
 
-analyze f i s@(T_Backgrounded id l) = do
+analyze f g i s@(T_Backgrounded id l) = do
     f s
-    a <- analyze f i l
+    a <- analyze f g i l
+    g s
     return . i $ T_Backgrounded id a
 
-analyze f i s@(T_IfExpression id conditions elses) = do
+analyze f g i s@(T_IfExpression id conditions elses) = do
     f s
     newConds <- mapM (\(c, t) -> do
-                x <- mapM (analyze f i) c
-                y <- mapM (analyze f i) t
+                x <- mapM (analyze f g i) c
+                y <- mapM (analyze f g i) t
                 return (x, y)
              ) conditions
-    newElses <- mapM (analyze f i) elses
+    newElses <- mapM (analyze f g i) elses
+    g s
     return . i $ T_IfExpression id newConds newElses
 
-analyze f i s@(T_Subshell id l) = do
+analyze f g i s@(T_Subshell id l) = do
     f s
-    a <- mapM (analyze f i) l
+    a <- mapM (analyze f g i) l
+    g s
     return . i $ T_Subshell id a
 
-analyze f i s@(T_BraceGroup id l) = do
+analyze f g i s@(T_BraceGroup id l) = do
     f s
-    a <- mapM (analyze f i) l
+    a <- mapM (analyze f g i) l
+    g s
     return . i $ T_BraceGroup id a
 
-analyze f i s@(T_WhileExpression id c l) = do
+analyze f g i s@(T_WhileExpression id c l) = do
     f s
-    a <- mapM (analyze f i) c
-    b <- mapM (analyze f i) l
+    a <- mapM (analyze f g i) c
+    b <- mapM (analyze f g i) l
+    g s
     return . i $ T_WhileExpression id a b
 
-analyze f i s@(T_UntilExpression id c l) = do
+analyze f g i s@(T_UntilExpression id c l) = do
     f s
-    a <- mapM (analyze f i) c
-    b <- mapM (analyze f i) l
+    a <- mapM (analyze f g i) c
+    b <- mapM (analyze f g i) l
+    g s
     return . i $ T_UntilExpression id a b
 
-analyze f i s@(T_ForIn id v w l) = do
+analyze f g i s@(T_ForIn id v w l) = do
     f s
-    a <- mapM (analyze f i) w
-    b <- mapM (analyze f i) l
+    a <- mapM (analyze f g i) w
+    b <- mapM (analyze f g i) l
+    g s
     return . i $ T_ForIn id v a b
 
-analyze f i s@(T_CaseExpression id word cases) = do
+analyze f g i s@(T_CaseExpression id word cases) = do
     f s
-    newWord <- analyze f i word
+    newWord <- analyze f g i word
     newCases <- mapM (\(c, t) -> do
-                x <- mapM (analyze f i) c
-                y <- mapM (analyze f i) t
+                x <- mapM (analyze f g i) c
+                y <- mapM (analyze f g i) t
                 return (x, y)
              ) cases
+    g s
     return . i $ T_CaseExpression id newWord newCases
 
-analyze f i s@(T_Script id l) = do
+analyze f g i s@(T_Script id l) = do
     f s
-    a <- mapM (analyze f i) l
+    a <- mapM (analyze f g i) l
+    g s
     return . i $ T_Script id a
 
-analyze f i s@(T_Function id name body) = do
+analyze f g i s@(T_Function id name body) = do
     f s
-    a <- analyze f i body
+    a <- analyze f g i body
+    g s
     return . i $ T_Function id name a
 
-analyze f i t = do
+analyze f g i t = do
     f t
+    g t
     return . i $ t
 
-doAnalysis f t = analyze f id t
-doTransform i t = runIdentity $ analyze (const $ return ()) i t
+blank = const $ return ()
+doAnalysis f t = analyze f blank id t
+doStackAnalysis startToken endToken t = analyze startToken endToken id t
+doTransform i t = runIdentity $ analyze blank blank i t
 
 
 lolHax s = Re.subRegex (Re.mkRegex "(Id [0-9]+)") (show s) "(Id 0)"
