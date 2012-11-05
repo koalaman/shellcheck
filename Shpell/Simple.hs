@@ -5,25 +5,25 @@ import Shpell.Analytics
 import Data.Maybe
 import Text.Parsec.Pos
 
+shpellCheck :: String -> [ShpellComment]
+shpellCheck script =
+    let (ParseResult result notes) = parseShell "-" script in
+        let allNotes = notes ++ (concat $ maybeToList $ do
+            (tree, map) <- result
+            let newMap = runAllAnalytics tree map
+            return $ notesFromMap newMap
+            )
+        in
+            map formatNote $ sortNotes allNotes
+
 data ShpellComment = ShpellComment { shpellLine :: Int, shpellColumn :: Int, shpellSeverity :: String, shpellComment :: String }
 
 
 instance Show ShpellComment where
     show c = concat ["(", show $ shpellLine c, ",", show $ shpellColumn c, ") ", shpellSeverity c, ": ", shpellComment c]
 
-shpellCheck script = 
-    let (ParseResult result notes) = parseShell "-" script in
-        let allNotes = notes ++ (concat $ maybeToList $ do
-            (tree, map) <- result
-            let newMap = runAllAnalytics tree map
-            return $ notesFromMap newMap 
-            )
-        in
-            map formatNote $ sortNotes allNotes
-
-
-severityToString s = 
-    case s of 
+severityToString s =
+    case s of
         ErrorC -> "error"
         WarningC -> "warning"
         InfoC -> "info"

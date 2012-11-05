@@ -1,6 +1,6 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
-module Shpell.Parser (Token(..), Note(..), Severity(..), parseShell, ParseResult(..), ParseNote(..), notesFromMap, Metadata(..), doAnalysis, doTransform, sortNotes) where 
+module Shpell.Parser (Token(..), Note(..), Severity(..), parseShell, ParseResult(..), ParseNote(..), notesFromMap, Metadata(..), doAnalysis, doTransform, sortNotes) where
 
 import Text.Parsec
 import Text.Parsec.Pos (initialPos)
@@ -284,11 +284,11 @@ analyze f i t = do
     f t
     return . i $ t
 
-doAnalysis f t = analyze f id t 
+doAnalysis f t = analyze f id t
 doTransform i t = runIdentity $ analyze (const $ return ()) i t
 
 
-lolHax s = Re.subRegex (Re.mkRegex "(Id [0-9]+)") (show s) "(Id 0)" 
+lolHax s = Re.subRegex (Re.mkRegex "(Id [0-9]+)") (show s) "(Id 0)"
 instance Eq Token where
     (==) a b = (lolHax a) == (lolHax b)
 
@@ -594,7 +594,7 @@ prop_roflol = isWarning readScript "a &; b"
 prop_roflol2 = isOk readScript "a & b"
 readSeparatorOp = do
     notFollowedBy (g_AND_IF <|> g_DSEMI)
-    f <- (try $ char '&' >> spacing >> char ';' >> parseProblem ErrorC "It's not 'foo &; bar', just 'foo & bar'. " >> return '&') 
+    f <- (try $ char '&' >> spacing >> char ';' >> parseProblem ErrorC "It's not 'foo &; bar', just 'foo & bar'. " >> return '&')
             <|> char ';' <|> char '&'
     spacing
     return f
@@ -642,7 +642,7 @@ readAndOr = chainr1 readPipeline $ do
     op <- g_AND_IF <|> g_OR_IF
     readLineBreak
     return $ case op of T_AND_IF id -> T_AndIf id
-                        T_OR_IF  id -> T_OrIf id 
+                        T_OR_IF  id -> T_OrIf id
 
 readTerm = do
     m <- readAndOr
@@ -691,9 +691,9 @@ prop_readIfClause2 = isWarning readIfClause "if false; then; echo oo; fi"
 prop_readIfClause3 = isWarning readIfClause "if false; then true; else; echo lol fi"
 readIfClause = do
     id <- getNextId
-    (condition, action) <- readIfPart 
-    elifs <- many readElifPart 
-    elses <- option [] readElsePart 
+    (condition, action) <- readIfPart
+    elifs <- many readElifPart
+    elses <- option [] readElsePart
     g_Fi
     return $ T_IfExpression id ((condition, action):elifs) elses
 
@@ -959,14 +959,14 @@ readScript = do
 rp p filename contents = Ms.runState (runParserT p initialState filename contents) []
 
 isWarning :: (ParsecT String (Id, Map.Map Id Metadata, [ParseNote]) (Ms.State [ParseNote]) t) -> String -> Bool
-isWarning p s = (fst cs) && (not . null . snd $ cs) where cs = checkString p s 
+isWarning p s = (fst cs) && (not . null . snd $ cs) where cs = checkString p s
 
 isOk :: (ParsecT String (Id, Map.Map Id Metadata, [ParseNote]) (Ms.State [ParseNote]) t) -> String -> Bool
 isOk p s = (fst cs) && (null . snd $ cs) where cs = checkString p s
 
-checkString parser string = 
+checkString parser string =
     case rp (parser >> eof >> getMap) "-" string of
-        (Right (m), n) -> (True, (notesFromMap m) ++ n) 
+        (Right (m), n) -> (True, (notesFromMap m) ++ n)
         (Left _, n) -> (False, n)
 
 parseWithNotes parser = do
@@ -974,7 +974,7 @@ parseWithNotes parser = do
     map <- getMap
     parseNotes <- getParseNotes
     return (item, map, nub . sortNotes $ parseNotes)
-    
+
 toParseNotes (Metadata pos list) = map (\(Note level note) -> ParseNote pos level note) list
 notesFromMap map = Map.fold (\x -> (++) (toParseNotes x)) [] map
 

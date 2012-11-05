@@ -46,7 +46,7 @@ doInput filename contents colorFunc = do
       else do
         putStrLn ("No comments for " ++ filename)
 
-cuteIndent comment = 
+cuteIndent comment =
     (replicate ((shpellColumn comment) - 1) ' ') ++ "^-- " ++ (shpellComment comment)
 
 getColorFunc = do
@@ -60,6 +60,6 @@ main = do
         hPutStrLn stderr "shpell -- bash/sh shell script static analysis tool"
         hPutStrLn stderr "Usage: shpell filenames..."
         exitFailure
-      else 
+      else
         mapM (\f -> doFile f colors) args
 

@@ -1,6 +1,6 @@
 module Shpell.Analytics where
 
-import Shpell.Parser 
+import Shpell.Parser
 import Control.Monad
 import Control.Monad.State
 import qualified Data.Map as Map
@@ -25,8 +25,8 @@ basicChecks = [
 modifyMap = modify
 addNoteFor id note = modifyMap $ Map.adjust (\(Metadata pos notes) -> Metadata pos (note:notes)) id
 
-willSplit x = 
-  case x of 
+willSplit x =
+  case x of
     T_DollarVariable _ _ -> True
     T_DollarBraced _ _ -> True
     T_DollarExpansion _ _ -> True
@@ -59,28 +59,28 @@ deadSimple _ = []
 verify f s = checkBasic f s == Just True
 verifyNot f s = checkBasic f s == Just False
 
-checkBasic f s = case parseShell "-" s of 
+checkBasic f s = case parseShell "-" s of
         (ParseResult (Just (t, m)) _) -> Just . not $ (notesFromMap $ runBasicAnalysis f t m) == (notesFromMap m)
         _ -> Nothing
 
 
 
 prop_checkUuoc = verify checkUuoc "cat foo | grep bar"
-checkUuoc (T_Pipeline _ (T_Redirecting _ _ f@(T_SimpleCommand id _ _):_:_)) = 
+checkUuoc (T_Pipeline _ (T_Redirecting _ _ f@(T_SimpleCommand id _ _):_:_)) =
     case deadSimple f of ["cat", _] -> addNoteFor id $ Note InfoC "UUOC: 'cat foo | bar | baz' is better written as 'bar < foo | baz'"
                          _ -> return ()
 checkUuoc _ = return ()
 
 
 prop_checkForInQuoted = verify checkForInQuoted "for f in \"$(ls)\"; do echo foo; done"
-checkForInQuoted (T_ForIn _ f [T_NormalWord _ [T_DoubleQuoted id list]] _) = 
+checkForInQuoted (T_ForIn _ f [T_NormalWord _ [T_DoubleQuoted id list]] _) =
     when (any willSplit list) $ addNoteFor id $ Note ErrorC $ "Since you double quoted this, it will not word split, and the loop will only run once"
 checkForInQuoted _ = return ()
 
 
 prop_checkForInLs = verify checkForInLs "for f in $(ls *.mp3); do mplayer \"$f\"; done"
-checkForInLs (T_ForIn _ f [T_NormalWord _ [T_DollarExpansion id [x]]] _) = 
-    case deadSimple x of ("ls":n) -> let args = (if n == [] then ["*"] else n) in 
+checkForInLs (T_ForIn _ f [T_NormalWord _ [T_DollarExpansion id [x]]] _) =
+    case deadSimple x of ("ls":n) -> let args = (if n == [] then ["*"] else n) in
                                         addNoteFor id $ Note WarningC $ "Don't use 'for "++f++" in $(ls " ++ (intercalate " " n) ++ ")'. Use 'for "++f++" in "++ (intercalate " " args) ++ "'"
                          _ -> return ()
 checkForInLs _ = return ()
@@ -88,10 +88,10 @@ checkForInLs _ = return ()
 
 prop_checkMissingForQuotes = verify checkMissingForQuotes "for f in *.mp3; do rm $f; done"
 prop_checkMissingForQuotes2 = verifyNot checkMissingForQuotes "for f in foo bar; do rm $f; done"
-checkMissingForQuotes (T_ForIn _ f words cmds) = 
+checkMissingForQuotes (T_ForIn _ f words cmds) =
     if not $ any willSplit words then return () else do
         mapM_  (doAnalysis (markUnquoted f)) cmds
-  where 
+  where
     markUnquoted f (T_NormalWord _ l) = mapM_ mu l
     markUnquoted _ _ = return ()
     mu (T_DollarVariable id s) | s == f = warning id
@@ -102,7 +102,7 @@ checkMissingForQuotes _ = return ()
 
 
 prop_checkUnquotedExpansions = verify checkUnquotedExpansions "rm $(ls)"
-checkUnquotedExpansions (T_SimpleCommand _ _ cmds) = mapM_ check cmds 
+checkUnquotedExpansions (T_SimpleCommand _ _ cmds) = mapM_ check cmds
     where check (T_NormalWord _ [T_DollarExpansion id _]) = addNoteFor id $ Note WarningC "Quote the expansion to prevent word splitting"
           check _ = return ()
 checkUnquotedExpansions _ = return ()
@@ -110,16 +110,16 @@ checkUnquotedExpansions _ = return ()
 prop_checkRedirectToSame = verify checkRedirectToSame "cat foo > foo"
 prop_checkRedirectToSame2 = verify checkRedirectToSame "cat lol | sed -e 's/a/b/g' > lol"
 prop_checkRedirectToSame3 = verifyNot checkRedirectToSame "cat lol | sed -e 's/a/b/g' > foo.bar && mv foo.bar lol"
-checkRedirectToSame s@(T_Pipeline _ list) = 
+checkRedirectToSame s@(T_Pipeline _ list) =
     mapM_ (\l -> (mapM_ (\x -> doAnalysis (checkOccurences x) l) (getAllRedirs list))) list
-  where checkOccurences (T_NormalWord exceptId x) (T_NormalWord newId y) = 
+  where checkOccurences (T_NormalWord exceptId x) (T_NormalWord newId y) =
             when (x == y && exceptId /= newId) (do
                 let note = Note InfoC $ "Make sure not to read and write the same file in the same pipeline"
                 addNoteFor newId $ note
                 addNoteFor exceptId $ note)
         checkOccurences _ _ = return ()
         getAllRedirs l = concatMap (\(T_Redirecting _ ls _) -> concatMap getRedirs ls) l
-        getRedirs (T_FdRedirect _ _ (T_IoFile _ op file)) = 
+        getRedirs (T_FdRedirect _ _ (T_IoFile _ op file)) =
                 case op of T_Greater _ -> [file]
                            T_Less _    -> [file]
                            T_DGREAT _  -> [file]
