@@ -338,7 +338,7 @@ readSingleQuotedPart =
 prop_readBackTicked = isWarning readBackTicked "`ls *.mp3`"
 readBackTicked = do
     id <- getNextId
-    parseNote StyleC "`..` style expansion is deprecated, use $(..) instead if you want my help"
+    parseNote StyleC "Ignoring deprecated `..` backtick expansion.  Use $(..) instead."
     pos <- getPosition
     char '`'
     f <- readGenericLiteral (char '`')
