@@ -1,0 +1,1 @@
+for f; do echo "$f"; done

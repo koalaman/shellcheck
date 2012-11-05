@@ -20,7 +20,9 @@ basicChecks = [
     checkMissingForQuotes,
     checkUnquotedExpansions,
     checkRedirectToSame,
-    checkShorthandIf
+    checkShorthandIf,
+    checkForInDollarStar,
+    checkUnquotedDollarAt
     ]
 
 modifyMap = modify
@@ -73,9 +75,14 @@ checkUuoc (T_Pipeline _ (T_Redirecting _ _ f@(T_SimpleCommand id _ _):_:_)) =
 checkUuoc _ = return ()
 
 
+isMagicInQuotes (T_DollarVariable _ "@") = True
+isMagicInQuotes _ = False
+
 prop_checkForInQuoted = verify checkForInQuoted "for f in \"$(ls)\"; do echo foo; done"
+prop_checkForInQuoted2 = verifyNot checkForInQuoted "for f in \"$@\"; do echo foo; done"
 checkForInQuoted (T_ForIn _ f [T_NormalWord _ [T_DoubleQuoted id list]] _) =
-    when (any willSplit list) $ addNoteFor id $ Note ErrorC $ "Since you double quoted this, it will not word split, and the loop will only run once"
+    when (any (\x -> willSplit x && not (isMagicInQuotes x)) list) $ 
+        addNoteFor id $ Note ErrorC $ "Since you double quoted this, it will not word split, and the loop will only run once"
 checkForInQuoted _ = return ()
 
 
@@ -134,5 +141,18 @@ prop_checkShorthandIf2 = verifyNot checkShorthandIf "[[ ! -z file ]] && { scp fi
 checkShorthandIf (T_AndIf id _ (T_OrIf _ _ _)) =
     addNoteFor id $ Note InfoC "Note that A && B || C is not if-then-else. C may run when A is true."
 checkShorthandIf _ = return ()
+
+
+prop_checkForInDollarStar = verify checkForInDollarStar "for f in $*; do ..; done"
+checkForInDollarStar (T_ForIn _ var [T_NormalWord _ [(T_DollarVariable id "*")]] _) =
+    addNoteFor id $ Note WarningC $ "Use 'for " ++ var ++ " in \"$@\"; ..' if you want to loop over arguments."
+checkForInDollarStar _ = return ()
+
+
+prop_checkUnquotedDollarAt = verify checkUnquotedDollarAt "ls $@"
+prop_checkUnquotedDollarAt2 = verifyNot checkUnquotedDollarAt "ls \"$@\""
+checkUnquotedDollarAt (T_NormalWord _ [T_DollarVariable id "@"]) =
+    addNoteFor id $ Note ErrorC $ "Add double quotes around $@, otherwise it's just like $* and breaks on spaces"
+checkUnquotedDollarAt _ = return ()
 
 lt x = trace (show x) x
