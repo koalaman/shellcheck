@@ -960,7 +960,7 @@ readScript = do
     do {
         allspacing;
         commands <- readTerm;
-        eof <|> (parseProblem WarningC "Stopping here, because I can't parse this command");
+        eof <|> (parseProblem ErrorC "Parsing stopped here because of parsing errors.");
         return $ T_Script id commands;
     } <|> do {
         parseProblem WarningC "Couldn't read any commands";
