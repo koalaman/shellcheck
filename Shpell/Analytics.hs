@@ -22,7 +22,8 @@ basicChecks = [
     checkRedirectToSame,
     checkShorthandIf,
     checkForInDollarStar,
-    checkUnquotedDollarAt
+    checkUnquotedDollarAt,
+    checkStderrRedirect
     ]
 
 modifyMap = modify
@@ -81,7 +82,7 @@ isMagicInQuotes _ = False
 prop_checkForInQuoted = verify checkForInQuoted "for f in \"$(ls)\"; do echo foo; done"
 prop_checkForInQuoted2 = verifyNot checkForInQuoted "for f in \"$@\"; do echo foo; done"
 checkForInQuoted (T_ForIn _ f [T_NormalWord _ [T_DoubleQuoted id list]] _) =
-    when (any (\x -> willSplit x && not (isMagicInQuotes x)) list) $ 
+    when (any (\x -> willSplit x && not (isMagicInQuotes x)) list) $
         addNoteFor id $ Note ErrorC $ "Since you double quoted this, it will not word split, and the loop will only run once"
 checkForInQuoted _ = return ()
 
@@ -154,5 +155,17 @@ prop_checkUnquotedDollarAt2 = verifyNot checkUnquotedDollarAt "ls \"$@\""
 checkUnquotedDollarAt (T_NormalWord _ [T_DollarVariable id "@"]) =
     addNoteFor id $ Note ErrorC $ "Add double quotes around $@, otherwise it's just like $* and breaks on spaces"
 checkUnquotedDollarAt _ = return ()
+
+prop_checkStderrRedirect = verify checkStderrRedirect "test 2>&1 > cow"
+prop_checkStderrRedirect2 = verifyNot checkStderrRedirect "test > cow 2>&1"
+checkStderrRedirect (T_Redirecting _ [
+    T_FdRedirect id "2" (T_IoFile _ (T_GREATAND _) (T_NormalWord _ [T_Literal _ "1"])),
+    T_FdRedirect _ _ (T_IoFile _ op _)
+    ] _) = case op of
+            T_Greater _ -> error
+            T_DGREAT _ -> error
+            _ -> return ()
+         where error = addNoteFor id $ Note ErrorC $ "The order of the 2>&1 and the redirect matters. The 2>&1 has to be last."
+checkStderrRedirect _ = return ()
 
 lt x = trace (show x) x
