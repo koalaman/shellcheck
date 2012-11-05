@@ -14,16 +14,16 @@ checkList l t m = foldl (\x f -> f t x) m l
 
 runBasicAnalysis f t m = snd $ runState (doAnalysis f t) m
 basicChecks = [
-    checkUuoc,
-    checkForInQuoted,
-    checkForInLs,
-    checkMissingForQuotes,
-    checkUnquotedExpansions,
-    checkRedirectToSame,
-    checkShorthandIf,
-    checkForInDollarStar,
-    checkUnquotedDollarAt,
-    checkStderrRedirect
+    checkUuoc
+    ,checkForInQuoted
+    ,checkForInLs
+    ,checkMissingForQuotes
+    ,checkUnquotedExpansions
+    ,checkRedirectToSame
+    ,checkShorthandIf
+    ,checkForInDollarStar
+    ,checkUnquotedDollarAt
+    ,checkStderrRedirect
     ]
 
 modifyMap = modify
