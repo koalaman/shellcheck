@@ -512,8 +512,9 @@ readVariableName = do
 
 readDollarLonely = do
     id <- getNextId
-    parseNote StyleC "$ is not used specially and should therefore be escaped"
     char '$'
+    n <- lookAhead (anyChar <|> (eof >> return '_'))
+    when (n /= '\'') $ parseNote StyleC "$ is not used specially and should therefore be escaped"
     return $ T_Literal id "$"
 
 prop_readHereDoc = isOk readHereDoc "<< foo\nlol\ncow\nfoo"
@@ -781,11 +782,12 @@ readDoGroup = do
 
 prop_readForClause = isOk readForClause "for f in *; do rm \"$f\"; done"
 prop_readForClause2 = isOk readForClause "for f in *; do ..."
+prop_readForClause3 = isOk readForClause "for f; do foo; done"
 readForClause = do
     (T_For id) <- g_For
     spacing
     name <- readVariableName
-    allspacing
+    spacing
     values <- readInClause <|> (readSequentialSep >> return [])
     group <- readDoGroup <|> (allspacing >> eof >> return []) -- stunted support
     return $ T_ForIn id name values group
