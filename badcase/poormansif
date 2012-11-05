@@ -1,0 +1,2 @@
+# When the network goes down, the backup gets deleted
+[[ ! -z backup ]] && scp backup host: || rm backup

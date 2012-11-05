@@ -19,7 +19,8 @@ basicChecks = [
     checkForInLs,
     checkMissingForQuotes,
     checkUnquotedExpansions,
-    checkRedirectToSame
+    checkRedirectToSame,
+    checkShorthandIf
     ]
 
 modifyMap = modify
@@ -127,5 +128,11 @@ checkRedirectToSame s@(T_Pipeline _ list) =
         getRedirs _ = []
 checkRedirectToSame _ = return ()
 
+
+prop_checkShorthandIf  = verify checkShorthandIf "[[ ! -z file ]] && scp file host || rm file"
+prop_checkShorthandIf2 = verifyNot checkShorthandIf "[[ ! -z file ]] && { scp file host || echo 'Eek'; }"
+checkShorthandIf (T_AndIf id _ (T_OrIf _ _ _)) =
+    addNoteFor id $ Note InfoC "Note that A && B || C is not if-then-else. C may run when A is true."
+checkShorthandIf _ = return ()
 
 lt x = trace (show x) x
