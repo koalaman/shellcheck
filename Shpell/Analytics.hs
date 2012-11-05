@@ -89,7 +89,7 @@ checkForInQuoted _ = return ()
 prop_checkForInLs = verify checkForInLs "for f in $(ls *.mp3); do mplayer \"$f\"; done"
 checkForInLs (T_ForIn _ f [T_NormalWord _ [T_DollarExpansion id [x]]] _) =
     case deadSimple x of ("ls":n) -> let args = (if n == [] then ["*"] else n) in
-                                        addNoteFor id $ Note WarningC $ "Don't use 'for "++f++" in $(ls " ++ (intercalate " " n) ++ ")'. Use 'for "++f++" in "++ (intercalate " " args) ++ "'"
+                                        addNoteFor id $ Note ErrorC $ "Don't use 'for "++f++" in $(ls " ++ (intercalate " " n) ++ ")'. Use 'for "++f++" in "++ (intercalate " " args) ++ "'"
                          _ -> return ()
 checkForInLs _ = return ()
 
