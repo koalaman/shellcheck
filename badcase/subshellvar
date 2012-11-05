@@ -1,0 +1,2 @@
+echo cow | while read foo; do DIR=$foo; done
+echo $DIR

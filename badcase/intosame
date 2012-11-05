@@ -1,0 +1,1 @@
+cat compile.sh |tr -d '\r' > compile.sh

@@ -1,0 +1,4 @@
+if file foo 2>&1 | grep lol 2> /dev/null
+then 
+	echo cow
+fi
