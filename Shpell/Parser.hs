@@ -3,7 +3,6 @@
 module Shpell.Parser (Token(..), Note(..), Severity(..), parseShell, ParseResult(..), ParseNote(..), notesFromMap, Metadata(..), doAnalysis, doTransform, sortNotes) where
 
 import Text.Parsec
-import Text.Parsec.Pos (initialPos)
 import Debug.Trace
 import Control.Monad
 import Control.Monad.Identity
@@ -14,7 +13,9 @@ import qualified Control.Monad.State as Ms
 import Data.Maybe
 import Prelude hiding (readList)
 import System.IO
+import Text.Parsec.Error
 import qualified Text.Regex as Re
+import GHC.Exts (sortWith)
 
 
 
@@ -993,8 +994,22 @@ sortNotes = sortBy compareNotes
 
 data ParseResult = ParseResult { parseResult :: Maybe (Token, Map.Map Id Metadata), parseNotes :: [ParseNote] }
 
+makeErrorFor parsecError =
+    ParseNote (errorPos parsecError) ErrorC $ getStringFromParsec $ errorMessages parsecError
+
+getStringFromParsec errors =
+        case map snd $ sortWith fst $ map f errors of
+            (s:_) -> s
+            _ -> "Unknown error"
+    where f err =
+            case err of
+                UnExpect s    -> (1, "Aborting due to unexpected " ++ s ++". Is this valid?")
+                SysUnExpect s -> (2, "Internal unexpected " ++ s ++ ". Submit a bug.")
+                Expect s      -> (3, "Expected " ++ s ++ "")
+                Message s     -> (4, "Message: " ++ s)
+
 parseShell filename contents = do
     case rp (parseWithNotes readScript) filename contents of
         (Right (script, map, notes), parsenotes) -> ParseResult (Just (script, map)) (nub $ sortNotes $ notes ++ parsenotes)
-        (Left err, p) -> ParseResult Nothing (nub $ sortNotes $ (ParseNote (initialPos "-") ErrorC $ "Parsing failed: " ++ (show err)):(p))
+        (Left err, p) -> ParseResult Nothing (nub $ sortNotes $ (makeErrorFor err):p)
 

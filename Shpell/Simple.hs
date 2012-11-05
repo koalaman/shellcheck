@@ -4,6 +4,7 @@ import Shpell.Parser
 import Shpell.Analytics
 import Data.Maybe
 import Text.Parsec.Pos
+import Data.List
 
 shpellCheck :: String -> [ShpellComment]
 shpellCheck script =
@@ -14,7 +15,7 @@ shpellCheck script =
             return $ notesFromMap newMap
             )
         in
-            map formatNote $ sortNotes allNotes
+            map formatNote $ nub $ sortNotes allNotes
 
 data ShpellComment = ShpellComment { shpellLine :: Int, shpellColumn :: Int, shpellSeverity :: String, shpellComment :: String }
 

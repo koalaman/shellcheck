@@ -32,13 +32,17 @@ doFile path colorFunc = do
 
 doInput filename contents colorFunc = do
     let fileLines = lines contents
+    let lineCount = length fileLines
     let comments = shpellCheck contents
     let groups = groupWith shpellLine comments
     if not $ null comments then do
         mapM_ (\x -> do
-            let line = fileLines !! (shpellLine (head x) - 1)
+            let lineNum = shpellLine (head x)
+            let line = if lineNum < 1 || lineNum >= lineCount
+                            then ""
+                            else fileLines !! (lineNum - 1)
             putStrLn ""
-            putStrLn $ colorFunc "message" ("In " ++ filename ++" line " ++ (show $ shpellLine (head x)) ++ ":")
+            putStrLn $ colorFunc "message" ("In " ++ filename ++" line " ++ (show $ lineNum) ++ ":")
             putStrLn (colorFunc "source" line)
             mapM (\c -> putStrLn (colorFunc (shpellSeverity c) $ cuteIndent c)) x
             putStrLn ""
