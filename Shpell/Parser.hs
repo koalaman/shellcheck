@@ -1,20 +1,21 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
--- Shpell Check, by Vidar 'koala_man' Holen
--- Sorry about the code. It was a week's worth of hacking.
+module Shpell.Parser (Token(..), Note(..), Severity(..), parseShell, ParseResult(..), notesFromMap, Metadata(..), doAnalysis, doTransform) where 
 
 import Text.Parsec
 import Text.Parsec.Pos (initialPos)
 import Debug.Trace
 import Control.Monad
+import Control.Monad.Identity
 import Data.Char
-import Data.List (isInfixOf, partition, sortBy, intercalate)
+import Data.List (isInfixOf, partition, sortBy, intercalate, nub)
 import qualified Data.Map as Map
 import qualified Control.Monad.State as Ms
 import Data.Maybe
 import Prelude hiding (readList)
 import System.IO
 import qualified Text.Regex as Re
+
 
 
 backslash = char '\\'
@@ -29,7 +30,6 @@ quotable = oneOf "#|&;<>()$`\\ \"'\t\n"
 doubleQuotable = oneOf "\"$`"
 whitespace = oneOf " \t\n"
 linewhitespace = oneOf " \t"
-glob="?*"
 
 prop_spacing = isOk spacing "  \\\n # Comment"
 spacing = do
@@ -46,14 +46,12 @@ carriageReturn = do
     parseNote ErrorC "Literal carriage return. Run script through tr -d '\\r' "
     char '\r'
 
-isGlob str = any (`elem` str) glob
-
 --------- Message/position annotation on top of user state
 data Id = Id Int deriving (Show, Eq, Ord)
 data Note = Note Severity String deriving (Show, Eq)
 data ParseNote = ParseNote SourcePos Severity String deriving (Show, Eq)
-data Severity = ErrorC | WarningC | InfoC | StyleC deriving (Show, Eq, Ord)
 data Metadata = Metadata SourcePos [Note]
+data Severity = ErrorC | WarningC | InfoC | StyleC deriving (Show, Eq, Ord)
 
 initialState = (Id $ -1, Map.empty, [])
 
@@ -143,12 +141,7 @@ wasIncluded p = option False (p >> return True)
 data Token = T_AND_IF Id | T_OR_IF Id | T_DSEMI Id | T_Semi Id | T_DLESS Id | T_DGREAT Id | T_LESSAND Id | T_GREATAND Id | T_LESSGREAT Id | T_DLESSDASH Id | T_CLOBBER Id | T_If Id | T_Then Id | T_Else Id | T_Elif Id | T_Fi Id | T_Do Id | T_Done Id | T_Case Id | T_Esac Id | T_While Id | T_Until Id | T_For Id | T_Lbrace Id | T_Rbrace Id | T_Lparen Id | T_Rparen Id | T_Bang Id | T_In  Id | T_NEWLINE Id | T_EOF Id | T_Less Id | T_Greater Id | T_SingleQuoted Id String | T_Literal Id String | T_NormalWord Id [Token] | T_DoubleQuoted Id [Token] | T_DollarExpansion Id [Token] | T_DollarBraced Id String | T_DollarVariable Id String | T_DollarArithmetic Id String | T_BraceExpansion Id String | T_IoFile Id Token Token | T_HereDoc Id Bool Bool String | T_HereString Id Token | T_FdRedirect Id String Token | T_Assignment Id String Token | T_Array Id [Token] | T_Redirecting Id [Token] Token | T_SimpleCommand Id [Token] [Token] | T_Pipeline Id [Token] | T_Banged Id Token | T_AndIf Id (Token) (Token) | T_OrIf Id (Token) (Token) | T_Backgrounded Id Token | T_IfExpression Id [([Token],[Token])] [Token] | T_Subshell Id [Token] | T_BraceGroup Id [Token] | T_WhileExpression Id [Token] [Token] | T_UntilExpression Id [Token] [Token] | T_ForIn Id String [Token] [Token] | T_CaseExpression Id Token [([Token],[Token])] | T_Function Id String Token | T_Arithmetic Id String | T_Script Id [Token]
     deriving (Show)
 
-lolHax s = Re.subRegex (Re.mkRegex "(Id [0-9]+)") (show s) "(Id 0)" 
-instance Eq Token where
-    (==) a b = (lolHax a) == (lolHax b)
-
 analyzeScopes f i = mapM (analyze f i)
-
 analyze f i s@(T_NormalWord id list) = do
     f s
     a <- analyzeScopes f i list
@@ -292,7 +285,12 @@ analyze f i t = do
     return . i $ t
 
 doAnalysis f t = analyze f id t 
-transform i t = analyze (const $ return ()) i t
+doTransform i t = runIdentity $ analyze (const $ return ()) i t
+
+
+lolHax s = Re.subRegex (Re.mkRegex "(Id [0-9]+)") (show s) "(Id 0)" 
+instance Eq Token where
+    (==) a b = (lolHax a) == (lolHax b)
 
 readComment = do
     char '#'
@@ -951,163 +949,45 @@ readScript = do
     do {
         allspacing;
         commands <- readTerm;
---        eof <|> (parseProblem WarningC "Stopping here, because I can't parse this command");
+        eof <|> (parseProblem WarningC "Stopping here, because I can't parse this command");
         return $ T_Script id commands;
     } <|> do {
         parseProblem WarningC "Couldn't read any commands";
-        wtf;
-        return $ T_EOF id;
+        return $ T_Script id $ [T_EOF id];
     }
 
-rp p s = Ms.runState (runParserT p initialState "-" s) []
-isWarning p s = not $ null $ getNotesWith (do { x <- p; eof; return x; }) return s
-isOk p s = case rp (p >> eof) s of 
-                (Right _, []) -> True
-                _ -> False
+rp p filename contents = Ms.runState (runParserT p initialState filename contents) []
 
-parseWithNotes parser analytics = do
+isWarning :: (ParsecT String (Id, Map.Map Id Metadata, [ParseNote]) (Ms.State [ParseNote]) t) -> String -> Bool
+isWarning p s = (fst cs) && (not . null . snd $ cs) where cs = checkString p s 
+
+isOk :: (ParsecT String (Id, Map.Map Id Metadata, [ParseNote]) (Ms.State [ParseNote]) t) -> String -> Bool
+isOk p s = (fst cs) && (null . snd $ cs) where cs = checkString p s
+
+checkString parser string = 
+    case rp (parser >> eof >> getMap) "-" string of
+        (Right (m), n) -> (True, (notesFromMap m) ++ n) 
+        (Left _, n) -> (False, n)
+
+parseWithNotes parser = do
     item <- parser
-    analytics item
-    notes <- collectNotes
-    return (item, notes)
+    map <- getMap
+    parseNotes <- getParseNotes
+    return (item, map, nub . sortNotes $ parseNotes)
     
 toParseNotes (Metadata pos list) = map (\(Note level note) -> ParseNote pos level note) list
+notesFromMap map = Map.fold (\x -> (++) (toParseNotes x)) [] map
 
-collectNotes = do
-    map <- getMap
-    notes <- getParseNotes
-    let values = Map.fold (\meta list -> (toParseNotes meta) ++ list) notes map
-    return values
-
-getNotes s = getNotesWith readScript doAllAnalysis s
-getNotesWith parser analytics s = 
-    case rp (parseWithNotes (do { x <- parser; eof; return x; }) analytics) s of
-        (Right (x, notes), parsenotes) -> sortNotes $ notes ++ parsenotes
-        (Left err, p) -> sortNotes $ (ParseNote (initialPos "-") ErrorC $ "Parsing failed: " ++ (show err)):(p)
+getAllNotes result = (concatMap (notesFromMap . snd) (maybeToList . parseResult $ result)) ++ (parseNotes result)
 
 compareNotes (ParseNote pos1 level1 s1) (ParseNote pos2 level2 s2) = compare (pos1, level1, s1) (pos2, level2, s2)
 sortNotes = sortBy compareNotes
 
-stuff p s = rp (parseWithNotes p return) s
 
--------- Analytics
-doAllAnalysis t = foldM (\v f -> doAnalysis f v) t checks
+data ParseResult = ParseResult { parseResult :: Maybe (Token, Map.Map Id Metadata), parseNotes :: [ParseNote] }
 
---getAst s = case rp readScript s of (Right parsed, _) -> parsed
-lol (Right (x, f), _) = x
+parseShell filename contents = do
+    case rp (parseWithNotes readScript) filename contents of
+        (Right (script, map, notes), parsenotes) -> ParseResult (Just (script, map)) (nub $ sortNotes $ notes ++ parsenotes)
+        (Left err, p) -> ParseResult Nothing (nub $ sortNotes $ (ParseNote (initialPos "-") ErrorC $ "Parsing failed: " ++ (show err)):(p))
 
-willSplit x = 
-  case x of 
-    T_DollarVariable _ _ -> True
-    T_DollarBraced _ _ -> True
-    T_DollarExpansion _ _ -> True
-    T_BraceExpansion _ s -> True
-    T_NormalWord _ l -> any willSplit l
-    T_Literal _ s -> isGlob s
-    _ -> False
-
-
-makeSimple (T_NormalWord _ [f]) = f
-makeSimple (T_Redirecting _ _ f) = f
-makeSimple t = t
-simplify = transform makeSimple
-
-deadSimple (T_NormalWord _ l) = [concat (concatMap (deadSimple) l)]
-deadSimple (T_DoubleQuoted _ l) = ["\"" ++(concat (concatMap (deadSimple) l)) ++ "\""]
-deadSimple (T_SingleQuoted _ s) = [s]
-deadSimple (T_DollarVariable _ _) = ["${VAR}"]
-deadSimple (T_DollarBraced _ _) = ["${VAR}"]
-deadSimple (T_DollarArithmetic _ _) = ["${VAR}"]
-deadSimple (T_DollarExpansion _ _) = ["${VAR}"]
-deadSimple (T_Pipeline _ [x]) = deadSimple x
-deadSimple (T_Literal _ x) = [x]
-deadSimple (T_SimpleCommand _ vars words) = concatMap (deadSimple) words
-deadSimple (T_Redirecting _ _ foo) = deadSimple foo
-deadSimple _ = []
-
-verify f s = (getNotesWith readScript return  s) == [] && (getNotesWith readScript (doAnalysis f) s) /= []
-verifyNot f s = (getNotesWith readScript return  s) == (getNotesWith readScript (doAnalysis f) s)
-canParse p s = isOk (p >> eof) s
-
-checks = [
-    checkUuoc,
-    checkForInQuoted,
-    checkForInLs,
-    checkMissingForQuotes,
-    checkUnquotedExpansions,
-    checkRedirectToSame
-    ]
-
-
-prop_checkUuoc = verify checkUuoc "cat foo | grep bar"
-checkUuoc (T_Pipeline _ (T_Redirecting _ _ f@(T_SimpleCommand id _ _):_:_)) = 
-    case deadSimple f of ["cat", _] -> addNoteFor id $ Note InfoC "UUOC: 'cat foo | bar | baz' is better written as 'bar < foo | baz'"
-                         _ -> return ()
-checkUuoc _ = return ()
-
-
-prop_checkForInQuoted = verify checkForInQuoted "for f in \"$(ls)\"; do echo foo; done"
-checkForInQuoted (T_ForIn _ f [T_NormalWord _ [T_DoubleQuoted id list]] _) = 
-    when (any willSplit list) $ addNoteFor id $ Note ErrorC $ "Since you double quoted this, it will not word split, and the loop will only run once"
-checkForInQuoted _ = return ()
-
-
-prop_checkForInLs = verify checkForInLs "for f in $(ls *.mp3); do mplayer \"$f\"; done"
-checkForInLs (T_ForIn _ f [T_NormalWord _ [T_DollarExpansion id [x]]] _) = 
-    case deadSimple x of ("ls":n) -> let args = (if n == [] then ["*"] else n) in 
-                                        addNoteFor id $ Note WarningC $ "Don't use 'for "++f++" in $(ls " ++ (intercalate " " n) ++ ")'. Use 'for "++f++" in "++ (intercalate " " args) ++ "'"
-                         _ -> return ()
-checkForInLs _ = return ()
-
-
-prop_checkMissingForQuotes = verify checkMissingForQuotes "for f in *.mp3; do rm $f; done"
-prop_checkMissingForQuotes2 = verifyNot checkMissingForQuotes "for f in foo bar; do rm $f; done"
-checkMissingForQuotes (T_ForIn _ f words cmds) = 
-    if not $ any willSplit words then return () else do
-        mapM_  (doAnalysis (markUnquoted f)) cmds
-  where 
-    markUnquoted f (T_NormalWord _ l) = mapM_ mu l
-    markUnquoted _ _ = return ()
-    mu (T_DollarVariable id s) | s == f = warning id
-    mu (T_DollarBraced id s) | s == f = warning id
-    mu _ = return ()
-    warning id = addNoteFor id $ Note WarningC $ "Variables that could contain spaces should be quoted"
-checkMissingForQuotes _ = return ()
-
-
-prop_checkUnquotedExpansions = verify checkUnquotedExpansions "rm $(ls)"
-checkUnquotedExpansions (T_SimpleCommand _ _ cmds) = mapM_ check cmds 
-    where check (T_NormalWord _ [T_DollarExpansion id _]) = addNoteFor id $ Note WarningC "Quote the expansion to prevent word splitting"
-          check _ = return ()
-checkUnquotedExpansions _ = return ()
-
-prop_checkRedirectToSame = verify checkRedirectToSame "cat foo > foo"
-prop_checkRedirectToSame2 = verify checkRedirectToSame "cat lol | sed -e 's/a/b/g' > lol"
-prop_checkRedirectToSame3 = verifyNot checkRedirectToSame "cat lol | sed -e 's/a/b/g' > foo.bar && mv foo.bar lol"
-checkRedirectToSame s@(T_Pipeline _ list) = 
-    mapM_ (\l -> (mapM_ (\x -> doAnalysis (checkOccurences x) l) (getAllRedirs list))) list
-  where checkOccurences (T_NormalWord exceptId x) (T_NormalWord newId y) = 
-            when (x == y && exceptId /= newId) (do
-                let note = Note InfoC $ "Make sure not to read and write the same file in the same pipeline"
-                addNoteFor newId $ note
-                addNoteFor exceptId $ note)
-        checkOccurences _ _ = return ()
-        getAllRedirs l = concatMap (\(T_Redirecting _ ls _) -> concatMap getRedirs ls) l
-        getRedirs (T_FdRedirect _ _ (T_IoFile _ op file)) = 
-                case op of T_Greater _ -> [file]
-                           T_Less _    -> [file]
-                           T_DGREAT _  -> [file]
-                           _ -> []
-        getRedirs _ = []
-checkRedirectToSame _ = return ()
-
-
-lt x = trace (show x) x
-
-
-main = do
-    s <- getContents
---    case rp readScript s of (Right parsed, _) -> putStrLn . show $ transform simplify parsed
---                            (Left x, y) -> putStrLn $ "Can't parse: " ++ (show (x,y))
-    mapM (putStrLn . show) $ getNotes s
-    return ()
