@@ -4,6 +4,7 @@ import Shpell.Parser
 import Control.Monad
 import Control.Monad.State
 import qualified Data.Map as Map
+import Data.Char
 import Data.List
 import Debug.Trace
 
@@ -27,6 +28,7 @@ basicChecks = [
     ,checkDollarStar
     ,checkUnquotedDollarAt
     ,checkStderrRedirect
+    ,checkMissingPositionalQuotes
     ]
 
 modifyMap = modify
@@ -112,6 +114,14 @@ checkMissingForQuotes (T_ForIn _ f words cmds) =
     warning id = addNoteFor id $ Note WarningC $ "Variables that could contain spaces should be quoted"
 checkMissingForQuotes _ = return ()
 
+prop_checkMissingPositionalQuotes = verify checkMissingPositionalQuotes "rm $1"
+prop_checkMissingPositionalQuotes2 = verify checkMissingPositionalQuotes "rm ${10//foo/bar}"
+checkMissingPositionalQuotes (T_NormalWord _ list) =
+    mapM_ checkPos list
+    where checkPos (T_DollarBraced id s) | all isDigit (getBracedReference s) = 
+            addNoteFor id $ Note WarningC $ "Positional parameters should be quoted to avoid whitespace trouble"
+          checkPos _ = return ()
+checkMissingPositionalQuotes _ = return ()
 
 prop_checkUnquotedExpansions = verify checkUnquotedExpansions "rm $(ls)"
 checkUnquotedExpansions (T_SimpleCommand _ _ cmds) = mapM_ check cmds
