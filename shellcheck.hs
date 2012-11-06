@@ -33,25 +33,25 @@ doFile path colorFunc = do
 doInput filename contents colorFunc = do
     let fileLines = lines contents
     let lineCount = length fileLines
-    let comments = shellcheckCheck contents
-    let groups = groupWith shellcheckLine comments
+    let comments = shellCheck contents
+    let groups = groupWith scLine comments
     if not $ null comments then do
         mapM_ (\x -> do
-            let lineNum = shellcheckLine (head x)
+            let lineNum = scLine (head x)
             let line = if lineNum < 1 || lineNum > lineCount
                             then ""
                             else fileLines !! (lineNum - 1)
             putStrLn ""
             putStrLn $ colorFunc "message" ("In " ++ filename ++" line " ++ (show $ lineNum) ++ ":")
             putStrLn (colorFunc "source" line)
-            mapM (\c -> putStrLn (colorFunc (shellcheckSeverity c) $ cuteIndent c)) x
+            mapM (\c -> putStrLn (colorFunc (scSeverity c) $ cuteIndent c)) x
             putStrLn ""
           ) groups
       else do
         putStrLn ("No comments for " ++ filename)
 
 cuteIndent comment =
-    (replicate ((shellcheckColumn comment) - 1) ' ') ++ "^-- " ++ (shellcheckComment comment)
+    (replicate ((scColumn comment) - 1) ' ') ++ "^-- " ++ (scMessage comment)
 
 getColorFunc = do
     term <- hIsTerminalDevice stdout
@@ -61,7 +61,7 @@ main = do
     args <- getArgs
     colors <- getColorFunc
     if null args then do
-        hPutStrLn stderr "shellcheck -- bash/sh shell script static analysis tool"
+        hPutStrLn stderr "shellcheck -- bash/sh script static analysis tool"
         hPutStrLn stderr "Usage: shellcheck filenames..."
         exitFailure
       else
