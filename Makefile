@@ -1,15 +1,16 @@
 all: shpell .tests
-	true
+	: Done
 	
 shpell: regardless
-	ghc --make shpell #GHC handles the dependencies
+	: Conditionally compiling shpell
+	ghc --make shpell
 
 .tests: *.hs */*.hs
+	: Running unit tests
 	./test/runQuack && touch .tests
 
 clean:
 	rm -f .tests shpell  *.hi *.o  Shpell/*.hi Shpell/*.o
 
 regardless:
-	:
-
+	
