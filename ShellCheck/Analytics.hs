@@ -1,6 +1,6 @@
-module Shpell.Analytics where
+module ShellCheck.Analytics where
 
-import Shpell.Parser
+import ShellCheck.Parser
 import Control.Monad
 import Control.Monad.State
 import qualified Data.Map as Map

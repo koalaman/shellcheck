@@ -1,16 +1,16 @@
-all: shpell .tests
+all: shellcheck .tests
 	: Done
 	
-shpell: regardless
-	: Conditionally compiling shpell
-	ghc --make shpell
+shellcheck: regardless
+	: Conditionally compiling shellcheck
+	ghc --make shellcheck
 
 .tests: *.hs */*.hs
 	: Running unit tests
 	./test/runQuack && touch .tests
 
 clean:
-	rm -f .tests shpell  *.hi *.o  Shpell/*.hi Shpell/*.o
+	rm -f .tests shellcheck  *.hi *.o  ShellCheck/*.hi ShellCheck/*.o
 
 regardless:
 	

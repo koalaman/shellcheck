@@ -1,7 +1,7 @@
 import Control.Monad
 import GHC.Exts
 import GHC.IO.Device
-import Shpell.Simple
+import ShellCheck.Simple
 import System.Directory
 import System.Environment
 import System.Exit
@@ -33,25 +33,25 @@ doFile path colorFunc = do
 doInput filename contents colorFunc = do
     let fileLines = lines contents
     let lineCount = length fileLines
-    let comments = shpellCheck contents
-    let groups = groupWith shpellLine comments
+    let comments = shellcheckCheck contents
+    let groups = groupWith shellcheckLine comments
     if not $ null comments then do
         mapM_ (\x -> do
-            let lineNum = shpellLine (head x)
+            let lineNum = shellcheckLine (head x)
             let line = if lineNum < 1 || lineNum > lineCount
                             then ""
                             else fileLines !! (lineNum - 1)
             putStrLn ""
             putStrLn $ colorFunc "message" ("In " ++ filename ++" line " ++ (show $ lineNum) ++ ":")
             putStrLn (colorFunc "source" line)
-            mapM (\c -> putStrLn (colorFunc (shpellSeverity c) $ cuteIndent c)) x
+            mapM (\c -> putStrLn (colorFunc (shellcheckSeverity c) $ cuteIndent c)) x
             putStrLn ""
           ) groups
       else do
         putStrLn ("No comments for " ++ filename)
 
 cuteIndent comment =
-    (replicate ((shpellColumn comment) - 1) ' ') ++ "^-- " ++ (shpellComment comment)
+    (replicate ((shellcheckColumn comment) - 1) ' ') ++ "^-- " ++ (shellcheckComment comment)
 
 getColorFunc = do
     term <- hIsTerminalDevice stdout
@@ -61,8 +61,8 @@ main = do
     args <- getArgs
     colors <- getColorFunc
     if null args then do
-        hPutStrLn stderr "shpell -- bash/sh shell script static analysis tool"
-        hPutStrLn stderr "Usage: shpell filenames..."
+        hPutStrLn stderr "shellcheck -- bash/sh shell script static analysis tool"
+        hPutStrLn stderr "Usage: shellcheck filenames..."
         exitFailure
       else
         mapM (\f -> doFile f colors) args

@@ -1,6 +1,6 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
-module Shpell.Parser (Token(..), Id(..), Note(..), Severity(..), parseShell, ParseResult(..), ParseNote(..), notesFromMap, Metadata(..), doAnalysis, doStackAnalysis, doTransform, sortNotes) where
+module ShellCheck.Parser (Token(..), Id(..), Note(..), Severity(..), parseShell, ParseResult(..), ParseNote(..), notesFromMap, Metadata(..), doAnalysis, doStackAnalysis, doTransform, sortNotes) where
 
 import Text.Parsec
 import Debug.Trace
