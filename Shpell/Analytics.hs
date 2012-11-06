@@ -7,6 +7,7 @@ import qualified Data.Map as Map
 import Data.Char
 import Data.List
 import Debug.Trace
+import Text.Regex
 
 checks = concat [
     map runBasicAnalysis basicChecks
@@ -29,6 +30,7 @@ basicChecks = [
     ,checkUnquotedDollarAt
     ,checkStderrRedirect
     ,checkMissingPositionalQuotes
+    ,checkSingleQuotedVariables
     ]
 
 modifyMap = modify
@@ -184,6 +186,18 @@ checkStderrRedirect _ = return ()
 lt x = trace ("FAILURE " ++ (show x)) x
 
 
+prop_checkSingleQuotedVariables = verify checkSingleQuotedVariables "echo '$foo'"
+prop_checkSingleQuotedVariables2 = verify checkSingleQuotedVariables "echo 'lol$1.jpg'"
+prop_checkSingleQuotedVariables3 = verifyNot checkSingleQuotedVariables "sed 's/foo$/bar/'"
+checkSingleQuotedVariables (T_SingleQuoted id s) =
+            case matchRegex checkSingleQuotedVariablesRe s of
+                Just [var] -> addNoteFor id $ Note WarningC $ var ++ " won't be expanded in single quotes."
+                _          -> return ()
+checkSingleQuotedVariables _ = return ()
+checkSingleQuotedVariablesRe = mkRegex "(\\$[0-9a-zA-Z_]+)"
+
+
+allModifiedVariables t = snd $ runState (doAnalysis (\x -> modify $ (++) (getModifiedVariables t)) t) []
 
 --- Subshell detection
 
