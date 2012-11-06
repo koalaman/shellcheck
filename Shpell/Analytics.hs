@@ -24,7 +24,7 @@ basicChecks = [
     ,checkUnquotedExpansions
     ,checkRedirectToSame
     ,checkShorthandIf
-    ,checkForInDollarStar
+    ,checkDollarStar
     ,checkUnquotedDollarAt
     ,checkStderrRedirect
     ]
@@ -34,7 +34,6 @@ addNoteFor id note = modifyMap $ Map.adjust (\(Metadata pos notes) -> Metadata p
 
 willSplit x =
   case x of
-    T_DollarVariable _ _ -> True
     T_DollarBraced _ _ -> True
     T_DollarExpansion _ _ -> True
     T_BraceExpansion _ s -> True
@@ -53,7 +52,6 @@ simplify = doTransform makeSimple
 deadSimple (T_NormalWord _ l) = [concat (concatMap (deadSimple) l)]
 deadSimple (T_DoubleQuoted _ l) = ["\"" ++(concat (concatMap (deadSimple) l)) ++ "\""]
 deadSimple (T_SingleQuoted _ s) = [s]
-deadSimple (T_DollarVariable _ _) = ["${VAR}"]
 deadSimple (T_DollarBraced _ _) = ["${VAR}"]
 deadSimple (T_DollarArithmetic _ _) = ["${VAR}"]
 deadSimple (T_DollarExpansion _ _) = ["${VAR}"]
@@ -82,7 +80,7 @@ checkUuoc (T_Pipeline _ (T_Redirecting _ _ f@(T_SimpleCommand id _ _):_:_)) =
 checkUuoc _ = return ()
 
 
-isMagicInQuotes (T_DollarVariable _ "@") = True
+isMagicInQuotes (T_DollarBraced _ s) | '@' `elem` s = True
 isMagicInQuotes _ = False
 
 prop_checkForInQuoted = verify checkForInQuoted "for f in \"$(ls)\"; do echo foo; done"
@@ -109,7 +107,6 @@ checkMissingForQuotes (T_ForIn _ f words cmds) =
   where
     markUnquoted f (T_NormalWord _ l) = mapM_ mu l
     markUnquoted _ _ = return ()
-    mu (T_DollarVariable id s) | s == f = warning id
     mu (T_DollarBraced id s) | s == f = warning id
     mu _ = return ()
     warning id = addNoteFor id $ Note WarningC $ "Variables that could contain spaces should be quoted"
@@ -150,15 +147,15 @@ checkShorthandIf (T_AndIf id _ (T_OrIf _ _ _)) =
 checkShorthandIf _ = return ()
 
 
-prop_checkForInDollarStar = verify checkForInDollarStar "for f in $*; do ..; done"
-checkForInDollarStar (T_ForIn _ var [T_NormalWord _ [(T_DollarVariable id "*")]] _) =
-    addNoteFor id $ Note WarningC $ "Use 'for " ++ var ++ " in \"$@\"; ..' if you want to loop over arguments."
-checkForInDollarStar _ = return ()
+prop_checkDollarStar = verify checkDollarStar "for f in $*; do ..; done"
+checkDollarStar (T_NormalWord _ [(T_DollarBraced id "*")]) =
+    addNoteFor id $ Note WarningC $ "Use \"$@\" (with quotes) to prevent whitespace problems"
+checkDollarStar _ = return ()
 
 
 prop_checkUnquotedDollarAt = verify checkUnquotedDollarAt "ls $@"
 prop_checkUnquotedDollarAt2 = verifyNot checkUnquotedDollarAt "ls \"$@\""
-checkUnquotedDollarAt (T_NormalWord _ [T_DollarVariable id "@"]) =
+checkUnquotedDollarAt (T_NormalWord _ [T_DollarBraced id "@"]) =
     addNoteFor id $ Note ErrorC $ "Add double quotes around $@, otherwise it's just like $* and breaks on spaces"
 checkUnquotedDollarAt _ = return ()
 
@@ -236,12 +233,12 @@ exportParamToLiteral (T_NormalWord _ ((T_Literal id s):_)) =
     where prefix = takeWhile (/= '=') s
 exportParamToLiteral _ = []
 
-getBracedReference s = s -- TODO
+-- TODO:
+getBracedReference s = takeWhile (\x -> not $ x `elem` ":[#%/^,") $ dropWhile (== '#') s
 
 getReferencedVariables t =
     case t of 
         T_DollarBraced id str -> map (\x -> (id, x)) $ [getBracedReference str]
-        T_DollarVariable id str -> [(id, str)]
         T_Arithmetic _ _ -> [] -- TODO
         _ -> []
 
