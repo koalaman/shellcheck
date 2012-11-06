@@ -65,9 +65,12 @@ deadSimple _ = []
 
 verify f s = checkBasic f s == Just True
 verifyNot f s = checkBasic f s == Just False
+verifyFull f s = checkFull f s == Just True
+verifyNotFull f s = checkFull f s == Just False
 
-checkBasic f s = case parseShell "-" s of
-        (ParseResult (Just (t, m)) _) -> Just . not $ (notesFromMap $ runBasicAnalysis f t m) == (notesFromMap m)
+checkBasic f s = checkFull (runBasicAnalysis f) s
+checkFull f s = case parseShell "-" s of
+        (ParseResult (Just (t, m)) _) -> Just . not $ (notesFromMap $ f t m) == (notesFromMap m)
         _ -> Nothing
 
 
@@ -171,12 +174,18 @@ checkStderrRedirect (T_Redirecting _ [
          where error = addNoteFor id $ Note ErrorC $ "The order of the 2>&1 and the redirect matters. The 2>&1 has to be last."
 checkStderrRedirect _ = return ()
 
-lt x = trace (show x) x
+lt x = trace ("FAILURE " ++ (show x)) x
 
 
 
 --- Subshell detection
 
+prop_subshellAssignmentCheck = verifyFull     subshellAssignmentCheck "cat foo | while read bar; do a=$bar; done; echo \"$a\""
+prop_subshellAssignmentCheck2 = verifyNotFull subshellAssignmentCheck "while read bar; do a=$bar; done < file; echo \"$a\""
+prop_subshellAssignmentCheck3 = verifyFull    subshellAssignmentCheck "( A=foo; ); rm $A"
+prop_subshellAssignmentCheck4 = verifyNotFull subshellAssignmentCheck "( A=foo; rm $A; )"
+prop_subshellAssignmentCheck5 = verifyFull    subshellAssignmentCheck "cat foo | while read cow; do true; done; echo $cow;"
+prop_subshellAssignmentCheck6 = verifyFull    subshellAssignmentCheck "( export lol=$(ls); ); echo $lol;"
 subshellAssignmentCheck t map =
     let flow = getVariableFlow t
         check = findSubshelled flow [[]] Map.empty 
@@ -204,14 +213,29 @@ getModifiedVariables t =
                                 T_Assignment id name _ -> [(id, name)]
                                 _ -> []
                       ) vars
-        T_SimpleCommand _ vars commandLine@(_:_) -> 
-            getModifiedVariableCommand commandLine
+        c@(T_SimpleCommand _ _ _) -> 
+            getModifiedVariableCommand c
 
         --Points to 'for' rather than variable
         T_ForIn id str _ _ -> [(id, str)] 
         _ -> []
 
-getModifiedVariableCommand list = [] -- TODO
+getModifiedVariableCommand (T_SimpleCommand _ _ ((T_NormalWord _ ((T_Literal _ x):_)):rest)) = 
+    case x of 
+        "read" -> concatMap getLiteral rest
+        "export" -> concatMap exportParamToLiteral rest
+        _ -> []
+getModifiedVariableCommand _ = [] 
+
+getLiteral (T_NormalWord _ [T_Literal id s]) = [(id,s)]
+getLiteral (T_NormalWord _ [T_DoubleQuoted _ [T_Literal id s]]) = [(id,s)]
+getLiteral x = []
+
+exportParamToLiteral (T_NormalWord _ ((T_Literal id s):_)) =
+    [(id,prefix)] 
+    where prefix = takeWhile (/= '=') s
+exportParamToLiteral _ = []
+
 getBracedReference s = s -- TODO
 
 getReferencedVariables t =

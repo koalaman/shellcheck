@@ -1,2 +1,2 @@
-echo cow | while read foo; do DIR=$foo; done
-echo $DIR
+echo cow | read foo
+echo "$foo"
