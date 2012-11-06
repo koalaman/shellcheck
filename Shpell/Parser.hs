@@ -789,7 +789,12 @@ readBraceGroup = do
 prop_readWhileClause = isOk readWhileClause "while [[ -e foo ]]; do sleep 1; done"
 readWhileClause = do
     (T_While id) <- g_While
+    pos <- getPosition
     condition <- readTerm
+    return () `attempting` (do
+                                eof
+                                parseProblemAt pos ErrorC "Condition missing 'do'. Did you forget it or the ; or \\n before i?"
+            )
     statements <- readDoGroup
     return $ T_WhileExpression id condition statements
 
@@ -807,14 +812,32 @@ readDoGroup = do
     (eof >> return []) <|>
         do
             commands <- readCompoundList
-            disregard g_Done <|> eof -- stunted support
+            disregard g_Done <|> (do
+                eof
+                case hasFinal "done" commands of
+                    Nothing -> parseProblemAt pos ErrorC "Couldn't find a 'done' for this 'do'"
+                    Just (id) -> addNoteFor id $ Note ErrorC "Put a ; or \\n before the done"
+                )
             return commands
           <|> do
             parseProblemAt pos ErrorC "Can't find the 'done' for this 'do'"
             fail "No done"
 
+hasFinal s [] = Nothing
+hasFinal s f = 
+    case last f of 
+        T_Pipeline _ m@(_:_) ->
+            case last m of 
+                T_Redirecting _ [] (T_SimpleCommand _ _ m@(_:_)) -> 
+                    case last m of 
+                        T_NormalWord _ [T_Literal id str] -> 
+                            if str == s then Just id else Nothing
+                        _ -> Nothing
+                _ -> Nothing
+        _ -> Nothing
+        
+
 prop_readForClause = isOk readForClause "for f in *; do rm \"$f\"; done"
-prop_readForClause2 = isOk readForClause "for f in *; do ..."
 prop_readForClause3 = isOk readForClause "for f; do foo; done"
 readForClause = do
     (T_For id) <- g_For
@@ -822,7 +845,11 @@ readForClause = do
     name <- readVariableName
     spacing
     values <- readInClause <|> (readSequentialSep >> return [])
-    group <- readDoGroup <|> (allspacing >> eof >> return []) -- stunted support
+    group <- readDoGroup <|> (
+                allspacing >> 
+                eof >>
+                parseProblem ErrorC "Missing 'do'" >>
+                return []) 
     return $ T_ForIn id name values group
 
 readInClause = do
