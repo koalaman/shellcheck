@@ -1,9 +1,13 @@
-all: shellcheck .tests
+all: shellcheck jsoncheck .tests
 	: Done
 	
 shellcheck: regardless
 	: Conditionally compiling shellcheck
 	ghc --make shellcheck
+
+jsoncheck: regardless
+	: Conditionally compiling shellcheck
+	ghc --make jsoncheck
 
 .tests: *.hs */*.hs
 	: Running unit tests
