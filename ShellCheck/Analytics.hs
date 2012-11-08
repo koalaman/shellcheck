@@ -209,21 +209,21 @@ prop_subshellAssignmentCheck5 = verifyFull    subshellAssignmentCheck "cat foo |
 prop_subshellAssignmentCheck6 = verifyFull    subshellAssignmentCheck "( export lol=$(ls); ); echo $lol;"
 subshellAssignmentCheck t map =
     let flow = getVariableFlow t
-        check = findSubshelled flow [[]] Map.empty 
+        check = findSubshelled flow [("oops",[])] Map.empty 
     in snd $ runState check map
 
 
-data Scope = SubshellScope | NoneScope deriving (Show, Eq)
+data Scope = SubshellScope String | NoneScope deriving (Show, Eq)
 data StackData = StackScope Scope | StackScopeEnd | Assignment (Id, String) | Reference (Id, String) deriving (Show, Eq)
-data VariableState = Dead Id | Alive deriving (Show, Eq)
+data VariableState = Dead Id String | Alive deriving (Show, Eq)
 
 leadType t = 
     case t of
-        T_DollarExpansion _ _  -> SubshellScope
-        T_Backgrounded _ _  -> SubshellScope
-        T_Subshell _ _  -> SubshellScope
+        T_DollarExpansion _ _  -> SubshellScope "$(..)"
+        T_Backgrounded _ _  -> SubshellScope "backgrounding &"
+        T_Subshell _ _  -> SubshellScope "(..) group"
         -- This considers the pipeline one subshell. Consider fixing.
-        T_Pipeline _ (_:_:[])  -> SubshellScope
+        T_Pipeline _ (_:_:[])  -> SubshellScope "pipeline"
         _ -> NoneScope
         
 
@@ -285,21 +285,21 @@ getVariableFlow t =
     let (_, stack) = runState (doStackAnalysis startScope endScope t) [] 
     in reverse stack
 
-findSubshelled :: [StackData] -> [[(Id,String)]] -> (Map.Map String VariableState) -> State (Map.Map Id Metadata) ()
+findSubshelled :: [StackData] -> [(String, [(Id,String)])] -> (Map.Map String VariableState) -> State (Map.Map Id Metadata) ()
 findSubshelled [] _ _ = return ()
-findSubshelled ((Assignment x@(id, str)):rest) (scope:lol) deadVars = 
-    findSubshelled rest ((x:scope):lol) $ Map.insert str Alive deadVars
+findSubshelled ((Assignment x@(id, str)):rest) ((reason,scope):lol) deadVars = 
+    findSubshelled rest ((reason, x:scope):lol) $ Map.insert str Alive deadVars
 findSubshelled ((Reference (readId, str)):rest) scopes deadVars = do
     case Map.findWithDefault Alive str deadVars of 
         Alive -> return ()
-        Dead writeId -> do
-                    addNoteFor writeId $ Note InfoC $ str ++ " is here modified inside a subshell, but is later used outside."
-                    addNoteFor readId $ Note InfoC $ str ++ " was last modified in a subshell, and that change might be lost."
+        Dead writeId reason -> do
+                    addNoteFor writeId $ Note InfoC $ "Modification of " ++ str ++ " is local (to subshell caused by "++ reason ++")."
+                    addNoteFor readId $ Note InfoC $ str ++ " was modified in a subshell. That change might be lost."
     findSubshelled rest scopes deadVars
 
-findSubshelled ((StackScope SubshellScope):rest) scopes deadVars = 
-    findSubshelled rest ([]:scopes) deadVars 
+findSubshelled ((StackScope (SubshellScope reason)):rest) scopes deadVars = 
+    findSubshelled rest ((reason,[]):scopes) deadVars 
 
-findSubshelled ((StackScopeEnd):rest) (scope:oldScopes) deadVars = 
-    findSubshelled rest oldScopes $ foldl (\m (id, var) -> Map.insert var (Dead id) m) deadVars scope 
+findSubshelled ((StackScopeEnd):rest) ((reason, scope):oldScopes) deadVars = 
+    findSubshelled rest oldScopes $ foldl (\m (id, var) -> Map.insert var (Dead id reason) m) deadVars scope 
 ------
