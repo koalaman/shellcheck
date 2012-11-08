@@ -7,7 +7,7 @@ import Debug.Trace
 import Control.Monad
 import Control.Monad.Identity
 import Data.Char
-import Data.List (isInfixOf, partition, sortBy, intercalate, nub)
+import Data.List (isInfixOf, isSuffixOf, partition, sortBy, intercalate, nub)
 import qualified Data.Map as Map
 import qualified Control.Monad.State as Ms
 import Data.Maybe
@@ -145,9 +145,154 @@ acceptButWarn parser level note = do
         parseProblemAt pos level note
       )
 
+
+readConditionContents single = do
+    readCondOr `attempting` (lookAhead $ do
+                                pos <- getPosition
+                                choice (map string commonCommands)
+                                parseProblemAt pos WarningC "To check a command, skip [] and just do 'if foo | grep bar; then'.")
+                                
+  where
+    readCondBinaryOp = try $ do
+        op <- choice $ (map tryOp ["-nt", "-ot", "-ef", "=", "==", "!=", "<", ">", "-eq", "-ne", "-lt", "-le", "-gt", "-ge", "=~"]) 
+        hardCondSpacing
+        return op
+      where tryOp s = try $ do
+              id <- getNextId
+              string s
+              return $ TC_Binary id s
+
+    readCondUnaryExp = do
+      op <- readCondUnaryOp
+      pos <- getPosition
+      (do
+          arg <- readCondWord
+          return $ op arg)
+        <|> (do
+              parseProblemAt pos ErrorC $ "Expected this to be an argument to the unary condition"
+              fail "oops")
+              
+    readCondUnaryOp = try $ do
+        op <- choice $ (map tryOp [ "-a", "-b", "-c", "-d", "-e", "-f", "-g", "-h", "-L", "-k", "-p", "-r", "-s", "-S", "-t", "-u", "-w", "-x", "-O", "-G", "-N",
+                    "-z", "-n", "-o"
+                    ]) 
+        hardCondSpacing
+        return op
+      where tryOp s = try $ do
+              id <- getNextId
+              string s
+              return $ TC_Unary id s
+
+    readCondWord = do 
+        notFollowedBy (try (spacing >> (string "]")))
+        x <- readNormalWord
+        pos <- getPosition
+        if (endedWithBracket x) 
+            then do
+                lookAhead (try $ (many whitespace) >> (eof <|> disregard readSeparator <|> disregard (g_Then <|> g_Do)))
+                parseProblemAt pos ErrorC $ "You need a space before the " ++ if single then "]" else "]]"
+            else 
+                softCondSpacing
+        return x
+      where endedWithBracket (T_NormalWord id s@(_:_)) = 
+                case (last s) of T_Literal id s -> "]" `isSuffixOf` s
+                                 _ -> False
+            endedWithBracket _ = False
+
+    readCondAndOp = do
+        id <- getNextId
+        x <- try (string "&&" <|> string "-a")
+        when (single && x == "&&") $ addNoteFor id $ Note ErrorC "You can't use && inside [..]. Use [[..]] instead."
+        when (not single && x == "-a") $ addNoteFor id $ Note ErrorC "In [[..]], use && instead of -a"
+        softCondSpacing
+        return $ TC_And id x
+
+    readCondOrOp = do
+        id <- getNextId
+        x <- try (string "||" <|> string "-o")
+        when (single && x == "||") $ addNoteFor id $ Note ErrorC "You can't use || inside [..]. Use [[..]] instead."
+        when (not single && x == "-o") $ addNoteFor id $ Note ErrorC "In [[..]], use && instead of -o"
+        softCondSpacing
+        return $ TC_Or id x
+
+    readCondNoaryOrBinary = do
+      id <- getNextId
+      x <- readCondWord `attempting` (do
+              pos <- getPosition
+              lookAhead (char '[')
+              parseProblemAt pos ErrorC $ if single 
+                  then "Don't use [] for grouping. Use \\( .. \\) "
+                  else "Don't use [] for grouping. Use ()."
+            )
+      (do
+            pos <- getPosition
+            op <- readCondBinaryOp
+            y <- readCondWord <|> ( (parseProblemAt pos ErrorC $ "Expected another argument for this operator") >> mzero)
+            return (x `op` y)
+          ) <|> (return $ TC_Noary id x)
+
+    readCondGroup = do
+          id <- getNextId
+          pos <- getPosition
+          lparen <- string "(" <|> string "\\(" 
+          when (single && lparen == "(") $ parseProblemAt pos ErrorC "In [..] you have to escape (). Use [[..]] instead."
+          when single softCondSpacing
+          x <- readConditionContents single
+          when single softCondSpacing
+          rparen <- string ")" <|> string "\\)"
+          when (single && rparen == ")") $ parseProblemAt pos ErrorC "In [..] you have to escape (). Use [[..]] instead."
+          when (isEscaped lparen `xor` isEscaped rparen) $ parseProblemAt pos ErrorC "Did you just escape one half of () but not the other?"
+          return $ TC_Group id x
+      where
+        isEscaped ('\\':_) = True
+        isEscaped _ = False
+        xor x y = x && not y || not x && y
+
+    readCondTerm = readCondNot <|> readCondExpr
+    readCondNot = do
+        id <- getNextId
+        char '!'
+        softCondSpacing
+        expr <- readCondExpr
+        return $ TC_Not id expr
+
+    readCondExpr = 
+      readCondGroup <|> readCondUnaryExp <|> readCondNoaryOrBinary
+
+    readCondOr = chainl1 readCondAnd readCondAndOp
+    readCondAnd = chainl1 readCondTerm readCondOrOp
+
+    commonCommands :: [String]
+    commonCommands = [ "bash", "bunzip2", "busybox", "bzcat", "bzcmp", "bzdiff", "bzegrep", "bzexe", "bzfgrep", "bzgrep", "bzip2", "bzip2recover", "bzless", "bzmore", "cat", "chacl", "chgrp", "chmod", "chown", "cp", "cpio", "dash", "date", "dd", "df", "dir", "dmesg", "dnsdomainname", "domainname", "echo", "ed", "egrep", "false", "fgconsole", "fgrep", "fuser", "getfacl", "grep", "gunzip", "gzexe", "gzip", "hostname", "ip", "kill", "ksh", "ksh93", "less", "lessecho", "lessfile", "lesskey", "lesspipe", "ln", "loadkeys", "login", "ls", "lsmod", "mkdir", "mknod", "mktemp", "more", "mount", "mountpoint", "mt", "mt-gnu", "mv", "nano", "nc", "nc.traditional", "netcat", "netstat", "nisdomainname", "noshell", "pidof", "ping", "ping6", "ps", "pwd", "rbash", "readlink", "rm", "rmdir", "rnano", "run-parts", "sed", "setfacl", "sh", "sh.distrib", "sleep", "stty", "su", "sync", "tailf", "tar", "tempfile", "touch", "true", "umount", "uname", "uncompress", "vdir", "which", "ypdomainname", "zcat", "zcmp", "zdiff", "zegrep", "zfgrep", "zforce", "zgrep", "zless", "zmore", "znew" ]
+
+readCondition = do
+  opos <- getPosition
+  id <- getNextId
+  open <- (try $ string "[[") <|> (string "[")
+  let single = open == "["
+  condSpacingMsg False $ if single 
+        then "You need spaces after the opening [ and before the closing ]"
+        else "You need spaces after the opening [[ and before the closing ]]"
+  condition <- readConditionContents single
+  cpos <- getPosition
+  close <- (try $ string "]]") <|> (string "]")
+  when (open == "[[" && close /= "]]") $ parseProblemAt cpos ErrorC "Did you mean ]] ?"
+  when (open == "[" && close /= "]" ) $ parseProblemAt opos ErrorC "Did you mean [[ ?"
+  return $ T_Condition id condition
+
+ 
+hardCondSpacing = condSpacingMsg False "You need a space here"
+softCondSpacing = condSpacingMsg True "You need a space here"
+condSpacingMsg soft msg = do
+  pos <- getPosition
+  space <- spacing
+  when (null space) $ (if soft then parseNoteAt else parseProblemAt) pos ErrorC msg
+
 -- Horrifying AST
-data Token = T_AND_IF Id | T_OR_IF Id | T_DSEMI Id | T_Semi Id | T_DLESS Id | T_DGREAT Id | T_LESSAND Id | T_GREATAND Id | T_LESSGREAT Id | T_DLESSDASH Id | T_CLOBBER Id | T_If Id | T_Then Id | T_Else Id | T_Elif Id | T_Fi Id | T_Do Id | T_Done Id | T_Case Id | T_Esac Id | T_While Id | T_Until Id | T_For Id | T_Lbrace Id | T_Rbrace Id | T_Lparen Id | T_Rparen Id | T_Bang Id | T_In  Id | T_NEWLINE Id | T_EOF Id | T_Less Id | T_Greater Id | T_SingleQuoted Id String | T_Literal Id String | T_NormalWord Id [Token] | T_DoubleQuoted Id [Token] | T_DollarExpansion Id [Token] | T_DollarBraced Id String | T_DollarArithmetic Id String | T_BraceExpansion Id String | T_IoFile Id Token Token | T_HereDoc Id Bool Bool String | T_HereString Id Token | T_FdRedirect Id String Token | T_Assignment Id String Token | T_Array Id [Token] | T_Redirecting Id [Token] Token | T_SimpleCommand Id [Token] [Token] | T_Pipeline Id [Token] | T_Banged Id Token | T_AndIf Id (Token) (Token) | T_OrIf Id (Token) (Token) | T_Backgrounded Id Token | T_IfExpression Id [([Token],[Token])] [Token] | T_Subshell Id [Token] | T_BraceGroup Id [Token] | T_WhileExpression Id [Token] [Token] | T_UntilExpression Id [Token] [Token] | T_ForIn Id String [Token] [Token] | T_CaseExpression Id Token [([Token],[Token])] | T_Function Id String Token | T_Arithmetic Id String | T_Script Id [Token]
+data Token = T_AND_IF Id | T_OR_IF Id | T_DSEMI Id | T_Semi Id | T_DLESS Id | T_DGREAT Id | T_LESSAND Id | T_GREATAND Id | T_LESSGREAT Id | T_DLESSDASH Id | T_CLOBBER Id | T_If Id | T_Then Id | T_Else Id | T_Elif Id | T_Fi Id | T_Do Id | T_Done Id | T_Case Id | T_Esac Id | T_While Id | T_Until Id | T_For Id | T_Lbrace Id | T_Rbrace Id | T_Lparen Id | T_Rparen Id | T_Bang Id | T_In  Id | T_NEWLINE Id | T_EOF Id | T_Less Id | T_Greater Id | T_SingleQuoted Id String | T_Literal Id String | T_NormalWord Id [Token] | T_DoubleQuoted Id [Token] | T_DollarExpansion Id [Token] | T_DollarBraced Id String | T_DollarArithmetic Id String | T_BraceExpansion Id String | T_IoFile Id Token Token | T_HereDoc Id Bool Bool String | T_HereString Id Token | T_FdRedirect Id String Token | T_Assignment Id String Token | T_Array Id [Token] | T_Redirecting Id [Token] Token | T_SimpleCommand Id [Token] [Token] | T_Pipeline Id [Token] | T_Banged Id Token | T_AndIf Id (Token) (Token) | T_OrIf Id (Token) (Token) | T_Backgrounded Id Token | T_IfExpression Id [([Token],[Token])] [Token] | T_Subshell Id [Token] | T_BraceGroup Id [Token] | T_WhileExpression Id [Token] [Token] | T_UntilExpression Id [Token] [Token] | T_ForIn Id String [Token] [Token] | T_CaseExpression Id Token [([Token],[Token])] | T_Function Id String Token | T_Arithmetic Id String | T_Script Id [Token] |
+  T_Condition Id Token | TC_And Id String Token Token | TC_Or Id String Token Token | TC_Not Id Token | TC_Group Id Token | TC_Binary Id String Token Token | TC_Unary Id String Token | TC_Noary Id Token
     deriving (Show)
+
 
 analyzeScopes f g i = mapM (analyze f g i)
 analyze f g i s@(T_NormalWord id list) = do
@@ -312,10 +457,56 @@ analyze f g i s@(T_Function id name body) = do
     g s
     return . i $ T_Function id name a
 
+analyze f g i s@(T_Condition id token) = do
+  f s
+  a <- analyze f g i token
+  g s
+  return . i $ T_Condition id a
+
+analyze f g i s@(TC_And id str t1 t2) = do
+  f s
+  a <- analyze f g i t1
+  b <- analyze f g i t2
+  g s
+  return . i $ TC_And id str a b
+
+analyze f g i s@(TC_Or id str t1 t2) = do
+  f s
+  a <- analyze f g i t1
+  b <- analyze f g i t2
+  g s
+  return . i $ TC_Or id str a b
+
+analyze f g i s@(TC_Group id token) = do
+  f s
+  a <- analyze f g i token
+  g s
+  return . i $ TC_Group id a
+
+analyze f g i s@(TC_Binary id op lhs rhs) = do
+  f s
+  a <- analyze f g i lhs
+  b <- analyze f g i rhs
+  g s
+  return . i $ TC_Binary id op a b
+
+analyze f g i s@(TC_Unary id op token) = do
+  f s
+  a <- analyze f g i token
+  g s
+  return . i $ TC_Unary id op a
+
+analyze f g i s@(TC_Noary id token) = do
+  f s
+  a <- analyze f g i token
+  g s
+  return . i $ TC_Noary id a
+
 analyze f g i t = do
     f t
     g t
     return . i $ t
+
 
 blank = const $ return ()
 doAnalysis f t = analyze f blank id t
@@ -918,7 +1109,7 @@ readPattern = (readNormalWord `thenSkip` spacing) `sepBy1` (char '|' `thenSkip` 
 
 readCompoundCommand = do
     id <- getNextId
-    cmd <- choice [ readBraceGroup, readArithmeticExpression, readSubshell, readWhileClause, readUntilClause, readIfClause, readForClause, readCaseClause, readFunctionDefinition]
+    cmd <- choice [ readBraceGroup, readArithmeticExpression, readSubshell, readCondition, readWhileClause, readUntilClause, readIfClause, readForClause, readCaseClause, readFunctionDefinition]
     spacing
     redirs <- many readIoRedirect
     return $ T_Redirecting id redirs $ cmd
@@ -1051,7 +1242,7 @@ notesFromMap map = Map.fold (\x -> (++) (toParseNotes x)) [] map
 
 getAllNotes result = (concatMap (notesFromMap . snd) (maybeToList . parseResult $ result)) ++ (parseNotes result)
 
-compareNotes (ParseNote pos1 level1 s1) (ParseNote pos2 level2 s2) = compare (pos1, level1, s1) (pos2, level2, s2)
+compareNotes (ParseNote pos1 level1 s1) (ParseNote pos2 level2 s2) = compare (pos1, level1) (pos2, level2)
 sortNotes = sortBy compareNotes
 
 
@@ -1077,5 +1268,5 @@ getStringFromParsec errors =
 parseShell filename contents = do
     case rp (parseWithNotes readScript) filename contents of
         (Right (script, map, notes), parsenotes) -> ParseResult (Just (script, map)) (nub $ sortNotes $ notes ++ parsenotes)
-        (Left err, p) -> ParseResult Nothing (nub $ sortNotes $ (makeErrorFor err):p)
+        (Left err, p) -> ParseResult Nothing (nub $ sortNotes $ p ++ ([makeErrorFor err]))
 
