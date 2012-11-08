@@ -219,10 +219,10 @@ data VariableState = Dead Id String | Alive deriving (Show, Eq)
 
 leadType t = 
     case t of
-        T_DollarExpansion _ _  -> SubshellScope "$(..)"
+        T_DollarExpansion _ _  -> SubshellScope "$(..) expansion"
         T_Backgrounded _ _  -> SubshellScope "backgrounding &"
         T_Subshell _ _  -> SubshellScope "(..) group"
-        -- This considers the pipeline one subshell. Consider fixing.
+        -- This considers the whole pipeline one subshell. Consider fixing.
         T_Pipeline _ (_:_:[])  -> SubshellScope "pipeline"
         _ -> NoneScope
         
