@@ -233,7 +233,7 @@ checkNoaryWasBinary (TC_Noary _ _ t@(T_NormalWord id l)) = do
     when ('=' `elem` str) $ addNoteFor id $ Note ErrorC $ "Always true because you didn't put spaces around the ="
 checkNoaryWasBinary _ = return ()
 
-allModifiedVariables t = snd $ runState (doAnalysis (\x -> modify $ (++) (getModifiedVariables t)) t) []
+allModifiedVariables t = snd $ runState (doAnalysis (\x -> modify $ (++) (getModifiedVariables x)) t) []
 
 --- Subshell detection
 
