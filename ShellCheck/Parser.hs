@@ -146,7 +146,6 @@ acceptButWarn parser level note = do
       )
 
 
-prop_readConditionContents = isWarning readCondition "[ grep -q file dir ]"
 readConditionContents single = do
     readCondOr `attempting` (lookAhead $ do
                                 pos <- getPosition

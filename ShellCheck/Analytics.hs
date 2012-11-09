@@ -33,6 +33,7 @@ basicChecks = [
     ,checkSingleQuotedVariables
     ,checkUnquotedZN
     ,checkNumberComparisons
+    ,checkNoaryWasBinary 
     ]
 
 modifyMap = modify
@@ -224,6 +225,13 @@ checkNumberComparisons (TC_Binary id typ op lhs rhs)
         eqv ">=" = "-ge"
         eqv _ = "the numerical equivalent"
 checkNumberComparisons _ = return ()
+
+prop_checkNoaryWasBinary = verify checkNoaryWasBinary "[[ a==$foo ]]"
+prop_checkNoaryWasBinary2 = verify checkNoaryWasBinary "[ $foo=3 ]"
+checkNoaryWasBinary (TC_Noary _ _ t@(T_NormalWord id l)) = do
+    let str = concat $ deadSimple t
+    when ('=' `elem` str) $ addNoteFor id $ Note ErrorC $ "Always true because you didn't put spaces around the ="
+checkNoaryWasBinary _ = return ()
 
 allModifiedVariables t = snd $ runState (doAnalysis (\x -> modify $ (++) (getModifiedVariables t)) t) []
 
