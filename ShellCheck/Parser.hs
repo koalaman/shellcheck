@@ -147,7 +147,7 @@ acceptButWarn parser level note = do
 
 
 readConditionContents single = do
-    readCondOr `attempting` (lookAhead $ do
+    readCondContents `attempting` (lookAhead $ do
                                 pos <- getPosition
                                 choice (map (try . string) commonCommands)
                                 parseProblemAt pos WarningC "To check a command, skip [] and just do 'if foo | grep bar; then'.")
@@ -193,7 +193,7 @@ readConditionContents single = do
                 lookAhead (try $ (many whitespace) >> (eof <|> disregard readSeparator <|> disregard (g_Then <|> g_Do)))
                 parseProblemAt pos ErrorC $ "You need a space before the " ++ if single then "]" else "]]"
             else 
-                softCondSpacing
+                disregard spacing
         return x
       where endedWithBracket (T_NormalWord id s@(_:_)) = 
                 case (last s) of T_Literal id s -> "]" `isSuffixOf` s
@@ -238,11 +238,14 @@ readConditionContents single = do
           pos <- getPosition
           lparen <- string "(" <|> string "\\(" 
           when (single && lparen == "(") $ parseProblemAt pos ErrorC "In [..] you have to escape (). Use [[..]] instead."
-          when single softCondSpacing
-          x <- readConditionContents single
-          when single softCondSpacing
+          when (not single && lparen == "\\(") $ parseProblemAt pos ErrorC "In [[..]] you shouldn't escape ()."
+          if single then softCondSpacing else disregard spacing
+          x <- readCondContents
+          cpos <- getPosition
           rparen <- string ")" <|> string "\\)"
-          when (single && rparen == ")") $ parseProblemAt pos ErrorC "In [..] you have to escape (). Use [[..]] instead."
+          if single then softCondSpacing else disregard spacing
+          when (single && rparen == ")") $ parseProblemAt cpos ErrorC "In [..] you have to escape (). Use [[..]] instead."
+          when (not single && rparen == "\\)") $ parseProblemAt cpos ErrorC "In [[..]] you shouldn't escape ()."
           when (isEscaped lparen `xor` isEscaped rparen) $ parseProblemAt pos ErrorC "Did you just escape one half of () but not the other?"
           return $ TC_Group id typ x
       where
@@ -263,9 +266,12 @@ readConditionContents single = do
 
     readCondOr = chainl1 readCondAnd readCondAndOp
     readCondAnd = chainl1 readCondTerm readCondOrOp
+    readCondContents = readCondOr
 
     commonCommands = [ "bash", "bunzip2", "busybox", "bzcat", "bzcmp", "bzdiff", "bzegrep", "bzexe", "bzfgrep", "bzgrep", "bzip2", "bzip2recover", "bzless", "bzmore", "cat", "chacl", "chgrp", "chmod", "chown", "cp", "cpio", "dash", "date", "dd", "df", "dir", "dmesg", "dnsdomainname", "domainname", "echo", "ed", "egrep", "false", "fgconsole", "fgrep", "fuser", "getfacl", "grep", "gunzip", "gzexe", "gzip", "hostname", "ip", "kill", "ksh", "ksh93", "less", "lessecho", "lessfile", "lesskey", "lesspipe", "ln", "loadkeys", "login", "ls", "lsmod", "mkdir", "mknod", "mktemp", "more", "mount", "mountpoint", "mt", "mt-gnu", "mv", "nano", "nc", "nc.traditional", "netcat", "netstat", "nisdomainname", "noshell", "pidof", "ping", "ping6", "ps", "pwd", "rbash", "readlink", "rm", "rmdir", "rnano", "run-parts", "sed", "setfacl", "sh", "sh.distrib", "sleep", "stty", "su", "sync", "tailf", "tar", "tempfile", "touch", "true", "umount", "uname", "uncompress", "vdir", "which", "ypdomainname", "zcat", "zcmp", "zdiff", "zegrep", "zfgrep", "zforce", "zgrep", "zless", "zmore", "znew" ]
 
+prop_readCondition = isOk readCondition "[ \\( a = b \\) -a \\( c = d \\) ]"
+prop_readCondition2 = isOk readCondition "[[ (a = b) || (c = d) ]]"
 readCondition = do
   opos <- getPosition
   id <- getNextId
@@ -282,7 +288,7 @@ readCondition = do
   return $ T_Condition id (if single then SingleBracket else DoubleBracket) condition
 
  
-hardCondSpacing = condSpacingMsg False "You need a space here"
+hardCondSpacing = condSpacingMsg False "You need a space here."
 softCondSpacing = condSpacingMsg True "You need a space here"
 condSpacingMsg soft msg = do
   pos <- getPosition
