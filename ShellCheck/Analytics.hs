@@ -34,6 +34,7 @@ basicChecks = [
     ,checkUnquotedZN
     ,checkNumberComparisons
     ,checkNoaryWasBinary 
+    ,checkBraceExpansionVars
     ]
 
 modifyMap = modify
@@ -232,6 +233,11 @@ checkNoaryWasBinary (TC_Noary _ _ t@(T_NormalWord id l)) = do
     let str = concat $ deadSimple t
     when ('=' `elem` str) $ addNoteFor id $ Note ErrorC $ "Always true because you didn't put spaces around the ="
 checkNoaryWasBinary _ = return ()
+
+prop_checkBraceExpansionVars = verify checkBraceExpansionVars "echo {1..$n}"
+checkBraceExpansionVars (T_BraceExpansion id s) | '$' `elem` s = 
+    addNoteFor id $ Note WarningC $ "You can't use variables in brace expansions."
+checkBraceExpansionVars _ = return ()
 
 allModifiedVariables t = snd $ runState (doAnalysis (\x -> modify $ (++) (getModifiedVariables x)) t) []
 
