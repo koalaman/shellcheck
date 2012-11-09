@@ -31,6 +31,8 @@ basicChecks = [
     ,checkStderrRedirect
     ,checkMissingPositionalQuotes
     ,checkSingleQuotedVariables
+    ,checkUnquotedZN
+    ,checkNumberComparisons
     ]
 
 modifyMap = modify
@@ -196,6 +198,32 @@ checkSingleQuotedVariables (T_SingleQuoted id s) =
 checkSingleQuotedVariables _ = return ()
 checkSingleQuotedVariablesRe = mkRegex "(\\$[0-9a-zA-Z_]+)"
 
+
+prop_checkUnquotedZN = verify checkUnquotedZN "if [ -z $foo ]; then echo cow; fi"
+prop_checkUnquotedZN2 = verify checkUnquotedZN "[ -n $cow ]"
+prop_checkUnquotedZN3 = verifyNot checkUnquotedZN "[[ -z $foo ]] && echo cow"
+checkUnquotedZN (T_Condition _ SingleBracket (TC_Unary _ SingleBracket op (T_NormalWord id [t]))) | ( op == "-z" || op == "-n" ) && willSplit t =
+       addNoteFor id $ Note ErrorC "Always true because you failed to quote. Use [[ ]] instead."
+checkUnquotedZN _ = return ()
+
+prop_checkNumberComparisons1 = verify checkNumberComparisons "[[ $foo < 3 ]]"
+prop_checkNumberComparisons2 = verify checkNumberComparisons "[[ 0 >= $(cmd) ]]"
+prop_checkNumberComparisons3 = verifyNot checkNumberComparisons "[[ $foo ]] > 3"
+prop_checkNumberComparisons4 = verify checkNumberComparisons "[ $foo > $bar ]"
+prop_checkNumberComparisons5 = verify checkNumberComparisons "until [ $n <= $z ]; do echo foo; done"
+checkNumberComparisons (TC_Binary id typ op lhs rhs) 
+    | op `elem` ["<", ">", "<=", ">="] = do
+        when (isNum lhs || isNum rhs) $ addNoteFor id $ Note ErrorC $ "\"" ++ op ++ "\" is for string comparisons. Use " ++ (eqv op)
+        when (typ == SingleBracket) $ addNoteFor id $ Note ErrorC $ "Can't use " ++ op ++" in [ ]. Use [[ ]]."
+    where
+        isNum t = case deadSimple t of [v] -> all isDigit v
+                                       _ -> False
+        eqv "<" = "-lt"
+        eqv ">" = "-gt"
+        eqv "<=" = "-le"
+        eqv ">=" = "-ge"
+        eqv _ = "the numerical equivalent"
+checkNumberComparisons _ = return ()
 
 allModifiedVariables t = snd $ runState (doAnalysis (\x -> modify $ (++) (getModifiedVariables t)) t) []
 

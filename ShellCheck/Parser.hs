@@ -1,6 +1,6 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
-module ShellCheck.Parser (Token(..), Id(..), Note(..), Severity(..), parseShell, ParseResult(..), ParseNote(..), notesFromMap, Metadata(..), doAnalysis, doStackAnalysis, doTransform, sortNotes) where
+module ShellCheck.Parser (Token(..), ConditionType(..), Id(..), Note(..), Severity(..), parseShell, ParseResult(..), ParseNote(..), notesFromMap, Metadata(..), doAnalysis, doStackAnalysis, doTransform, sortNotes) where
 
 import Text.Parsec
 import Debug.Trace
@@ -153,14 +153,15 @@ readConditionContents single = do
                                 parseProblemAt pos WarningC "To check a command, skip [] and just do 'if foo | grep bar; then'.")
                                 
   where
+    typ = if single then SingleBracket else DoubleBracket
     readCondBinaryOp = try $ do
-        op <- choice $ (map tryOp ["-nt", "-ot", "-ef", "=", "==", "!=", "<", ">", "-eq", "-ne", "-lt", "-le", "-gt", "-ge", "=~"]) 
+        op <- choice $ (map tryOp ["-nt", "-ot", "-ef", "=", "==", "!=", "<=", ">=", "-eq", "-ne", "-lt", "-le", "-gt", "-ge", "=~", ">", "<"]) 
         hardCondSpacing
         return op
       where tryOp s = try $ do
               id <- getNextId
               string s
-              return $ TC_Binary id s
+              return $ TC_Binary id typ s
 
     readCondUnaryExp = do
       op <- readCondUnaryOp
@@ -181,7 +182,7 @@ readConditionContents single = do
       where tryOp s = try $ do
               id <- getNextId
               string s
-              return $ TC_Unary id s
+              return $ TC_Unary id typ s
 
     readCondWord = do 
         notFollowedBy (try (spacing >> (string "]")))
@@ -205,7 +206,8 @@ readConditionContents single = do
         when (single && x == "&&") $ addNoteFor id $ Note ErrorC "You can't use && inside [..]. Use [[..]] instead."
         when (not single && x == "-a") $ addNoteFor id $ Note ErrorC "In [[..]], use && instead of -a"
         softCondSpacing
-        return $ TC_And id x
+        return $ TC_And id typ x
+
 
     readCondOrOp = do
         id <- getNextId
@@ -213,7 +215,7 @@ readConditionContents single = do
         when (single && x == "||") $ addNoteFor id $ Note ErrorC "You can't use || inside [..]. Use [[..]] instead."
         when (not single && x == "-o") $ addNoteFor id $ Note ErrorC "In [[..]], use && instead of -o"
         softCondSpacing
-        return $ TC_Or id x
+        return $ TC_Or id typ x
 
     readCondNoaryOrBinary = do
       id <- getNextId
@@ -229,7 +231,7 @@ readConditionContents single = do
             op <- readCondBinaryOp
             y <- readCondWord <|> ( (parseProblemAt pos ErrorC $ "Expected another argument for this operator") >> mzero)
             return (x `op` y)
-          ) <|> (return $ TC_Noary id x)
+          ) <|> (return $ TC_Noary id typ x)
 
     readCondGroup = do
           id <- getNextId
@@ -242,7 +244,7 @@ readConditionContents single = do
           rparen <- string ")" <|> string "\\)"
           when (single && rparen == ")") $ parseProblemAt pos ErrorC "In [..] you have to escape (). Use [[..]] instead."
           when (isEscaped lparen `xor` isEscaped rparen) $ parseProblemAt pos ErrorC "Did you just escape one half of () but not the other?"
-          return $ TC_Group id x
+          return $ TC_Group id typ x
       where
         isEscaped ('\\':_) = True
         isEscaped _ = False
@@ -254,7 +256,7 @@ readConditionContents single = do
         char '!'
         softCondSpacing
         expr <- readCondExpr
-        return $ TC_Not id expr
+        return $ TC_Not id typ expr
 
     readCondExpr = 
       readCondGroup <|> readCondUnaryExp <|> readCondNoaryOrBinary
@@ -278,7 +280,7 @@ readCondition = do
   close <- (try $ string "]]") <|> (string "]")
   when (open == "[[" && close /= "]]") $ parseProblemAt cpos ErrorC "Did you mean ]] ?"
   when (open == "[" && close /= "]" ) $ parseProblemAt opos ErrorC "Did you mean [[ ?"
-  return $ T_Condition id condition
+  return $ T_Condition id (if single then SingleBracket else DoubleBracket) condition
 
  
 hardCondSpacing = condSpacingMsg False "You need a space here"
@@ -290,8 +292,10 @@ condSpacingMsg soft msg = do
 
 -- Horrifying AST
 data Token = T_AND_IF Id | T_OR_IF Id | T_DSEMI Id | T_Semi Id | T_DLESS Id | T_DGREAT Id | T_LESSAND Id | T_GREATAND Id | T_LESSGREAT Id | T_DLESSDASH Id | T_CLOBBER Id | T_If Id | T_Then Id | T_Else Id | T_Elif Id | T_Fi Id | T_Do Id | T_Done Id | T_Case Id | T_Esac Id | T_While Id | T_Until Id | T_For Id | T_Lbrace Id | T_Rbrace Id | T_Lparen Id | T_Rparen Id | T_Bang Id | T_In  Id | T_NEWLINE Id | T_EOF Id | T_Less Id | T_Greater Id | T_SingleQuoted Id String | T_Literal Id String | T_NormalWord Id [Token] | T_DoubleQuoted Id [Token] | T_DollarExpansion Id [Token] | T_DollarBraced Id String | T_DollarArithmetic Id String | T_BraceExpansion Id String | T_IoFile Id Token Token | T_HereDoc Id Bool Bool String | T_HereString Id Token | T_FdRedirect Id String Token | T_Assignment Id String Token | T_Array Id [Token] | T_Redirecting Id [Token] Token | T_SimpleCommand Id [Token] [Token] | T_Pipeline Id [Token] | T_Banged Id Token | T_AndIf Id (Token) (Token) | T_OrIf Id (Token) (Token) | T_Backgrounded Id Token | T_IfExpression Id [([Token],[Token])] [Token] | T_Subshell Id [Token] | T_BraceGroup Id [Token] | T_WhileExpression Id [Token] [Token] | T_UntilExpression Id [Token] [Token] | T_ForIn Id String [Token] [Token] | T_CaseExpression Id Token [([Token],[Token])] | T_Function Id String Token | T_Arithmetic Id String | T_Script Id [Token] |
-  T_Condition Id Token | TC_And Id String Token Token | TC_Or Id String Token Token | TC_Not Id Token | TC_Group Id Token | TC_Binary Id String Token Token | TC_Unary Id String Token | TC_Noary Id Token
+  T_Condition Id ConditionType Token | TC_And Id ConditionType String Token Token | TC_Or Id ConditionType String Token Token | TC_Not Id ConditionType Token | TC_Group Id ConditionType Token | TC_Binary Id ConditionType String Token Token | TC_Unary Id ConditionType String Token | TC_Noary Id ConditionType Token
     deriving (Show)
+
+data ConditionType = DoubleBracket | SingleBracket deriving (Show, Eq)
 
 
 analyzeScopes f g i = mapM (analyze f g i)
@@ -457,50 +461,50 @@ analyze f g i s@(T_Function id name body) = do
     g s
     return . i $ T_Function id name a
 
-analyze f g i s@(T_Condition id token) = do
+analyze f g i s@(T_Condition id typ token) = do
   f s
   a <- analyze f g i token
   g s
-  return . i $ T_Condition id a
+  return . i $ T_Condition id typ a
 
-analyze f g i s@(TC_And id str t1 t2) = do
+analyze f g i s@(TC_And id typ str t1 t2) = do
   f s
   a <- analyze f g i t1
   b <- analyze f g i t2
   g s
-  return . i $ TC_And id str a b
+  return . i $ TC_And id typ str a b
 
-analyze f g i s@(TC_Or id str t1 t2) = do
+analyze f g i s@(TC_Or id typ str t1 t2) = do
   f s
   a <- analyze f g i t1
   b <- analyze f g i t2
   g s
-  return . i $ TC_Or id str a b
+  return . i $ TC_Or id typ str a b
 
-analyze f g i s@(TC_Group id token) = do
+analyze f g i s@(TC_Group id typ token) = do
   f s
   a <- analyze f g i token
   g s
-  return . i $ TC_Group id a
+  return . i $ TC_Group id typ a
 
-analyze f g i s@(TC_Binary id op lhs rhs) = do
+analyze f g i s@(TC_Binary id typ op lhs rhs) = do
   f s
   a <- analyze f g i lhs
   b <- analyze f g i rhs
   g s
-  return . i $ TC_Binary id op a b
+  return . i $ TC_Binary id typ op a b
 
-analyze f g i s@(TC_Unary id op token) = do
+analyze f g i s@(TC_Unary id typ op token) = do
   f s
   a <- analyze f g i token
   g s
-  return . i $ TC_Unary id op a
+  return . i $ TC_Unary id typ op a
 
-analyze f g i s@(TC_Noary id token) = do
+analyze f g i s@(TC_Noary id typ token) = do
   f s
   a <- analyze f g i token
   g s
-  return . i $ TC_Noary id a
+  return . i $ TC_Noary id typ a
 
 analyze f g i t = do
     f t

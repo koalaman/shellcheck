@@ -13,7 +13,7 @@ ansi n = "\x1B[" ++ (show n) ++ "m"
 
 colorForLevel "error" = 31 -- red
 colorForLevel "warning" = 33 -- yellow
-colorForLevel "info" = 33 -- yellow
+colorForLevel "info" = 32 -- green
 colorForLevel "style" = 32 -- green
 colorForLevel "message" = 1 -- bold
 colorForLevel "source" = 0 -- none
