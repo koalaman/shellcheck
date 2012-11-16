@@ -151,11 +151,11 @@ readConditionContents single = do
                                 pos <- getPosition
                                 choice (map (try . string) commonCommands)
                                 parseProblemAt pos WarningC "To check a command, skip [] and just do 'if foo | grep bar; then'.")
-                                
+
   where
     typ = if single then SingleBracket else DoubleBracket
     readCondBinaryOp = try $ do
-        op <- choice $ (map tryOp ["-nt", "-ot", "-ef", "=", "==", "!=", "<=", ">=", "-eq", "-ne", "-lt", "-le", "-gt", "-ge", "=~", ">", "<"]) 
+        op <- choice $ (map tryOp ["-nt", "-ot", "-ef", "==", "!=", "<=", ">=", "-eq", "-ne", "-lt", "-le", "-gt", "-ge", "=~", ">", "<", "="])
         hardCondSpacing
         return op
       where tryOp s = try $ do
@@ -172,11 +172,11 @@ readConditionContents single = do
         <|> (do
               parseProblemAt pos ErrorC $ "Expected this to be an argument to the unary condition"
               fail "oops")
-              
+
     readCondUnaryOp = try $ do
         op <- choice $ (map tryOp [ "-a", "-b", "-c", "-d", "-e", "-f", "-g", "-h", "-L", "-k", "-p", "-r", "-s", "-S", "-t", "-u", "-w", "-x", "-O", "-G", "-N",
                     "-z", "-n", "-o"
-                    ]) 
+                    ])
         hardCondSpacing
         return op
       where tryOp s = try $ do
@@ -184,18 +184,18 @@ readConditionContents single = do
               string s
               return $ TC_Unary id typ s
 
-    readCondWord = do 
+    readCondWord = do
         notFollowedBy (try (spacing >> (string "]")))
         x <- readNormalWord
         pos <- getPosition
-        if (endedWithBracket x) 
+        if (endedWithBracket x)
             then do
                 lookAhead (try $ (many whitespace) >> (eof <|> disregard readSeparator <|> disregard (g_Then <|> g_Do)))
                 parseProblemAt pos ErrorC $ "You need a space before the " ++ if single then "]" else "]]"
-            else 
+            else
                 disregard spacing
         return x
-      where endedWithBracket (T_NormalWord id s@(_:_)) = 
+      where endedWithBracket (T_NormalWord id s@(_:_)) =
                 case (last s) of T_Literal id s -> "]" `isSuffixOf` s
                                  _ -> False
             endedWithBracket _ = False
@@ -222,7 +222,7 @@ readConditionContents single = do
       x <- readCondWord `attempting` (do
               pos <- getPosition
               lookAhead (char '[')
-              parseProblemAt pos ErrorC $ if single 
+              parseProblemAt pos ErrorC $ if single
                   then "Don't use [] for grouping. Use \\( .. \\) "
                   else "Don't use [] for grouping. Use ()."
             )
@@ -236,7 +236,7 @@ readConditionContents single = do
     readCondGroup = do
           id <- getNextId
           pos <- getPosition
-          lparen <- string "(" <|> string "\\(" 
+          lparen <- string "(" <|> string "\\("
           when (single && lparen == "(") $ parseProblemAt pos ErrorC "In [..] you have to escape (). Use [[..]] instead."
           when (not single && lparen == "\\(") $ parseProblemAt pos ErrorC "In [[..]] you shouldn't escape ()."
           if single then softCondSpacing else disregard spacing
@@ -261,7 +261,7 @@ readConditionContents single = do
         expr <- readCondExpr
         return $ TC_Not id typ expr
 
-    readCondExpr = 
+    readCondExpr =
       readCondGroup <|> readCondUnaryExp <|> readCondNoaryOrBinary
 
     readCondOr = chainl1 readCondAnd readCondAndOp
@@ -270,6 +270,134 @@ readConditionContents single = do
 
     commonCommands = [ "bash", "bunzip2", "busybox", "bzcat", "bzcmp", "bzdiff", "bzegrep", "bzexe", "bzfgrep", "bzgrep", "bzip2", "bzip2recover", "bzless", "bzmore", "cat", "chacl", "chgrp", "chmod", "chown", "cp", "cpio", "dash", "date", "dd", "df", "dir", "dmesg", "dnsdomainname", "domainname", "echo", "ed", "egrep", "false", "fgconsole", "fgrep", "fuser", "getfacl", "grep", "gunzip", "gzexe", "gzip", "hostname", "ip", "kill", "ksh", "ksh93", "less", "lessecho", "lessfile", "lesskey", "lesspipe", "ln", "loadkeys", "login", "ls", "lsmod", "mkdir", "mknod", "mktemp", "more", "mount", "mountpoint", "mt", "mt-gnu", "mv", "nano", "nc", "nc.traditional", "netcat", "netstat", "nisdomainname", "noshell", "pidof", "ping", "ping6", "ps", "pwd", "rbash", "readlink", "rm", "rmdir", "rnano", "run-parts", "sed", "setfacl", "sh", "sh.distrib", "sleep", "stty", "su", "sync", "tailf", "tar", "tempfile", "touch", "true", "umount", "uname", "uncompress", "vdir", "which", "ypdomainname", "zcat", "zcmp", "zdiff", "zegrep", "zfgrep", "zforce", "zgrep", "zless", "zmore", "znew" ]
 
+
+prop_a1 = isOk readArithmeticContents " n++ + ++c"
+prop_a2 = isOk readArithmeticContents "$N*4-(3,2)"
+prop_a3 = isOk readArithmeticContents "n|=2<<1"
+prop_a4 = isOk readArithmeticContents "n &= 2 **3"
+prop_a5 = isOk readArithmeticContents "1 |= 4 && n >>= 4"
+prop_a6 = isOk readArithmeticContents " 1 | 2 ||3|4"
+prop_a7 = isOk readArithmeticContents "3*2**10"
+prop_a8 = isOk readArithmeticContents "3"
+prop_a9 = isOk readArithmeticContents "a^!-b"
+readArithmeticContents =
+    readSequence
+  where
+    spacing = many whitespace
+
+    splitBy x ops = chainl1 x (readBinary ops)
+    readBinary ops = readComboOp ops TA_Binary
+    readComboOp op token = do
+        id <- getNextId
+        op <- choice (map (\x -> try $ do
+                                        s <- string x
+                                        notFollowedBy $ oneOf "&|<>="
+                                        return s
+                            ) op)
+        spacing
+        return $ token id op
+
+    readVar = do
+        id <- getNextId
+        x <- readVariableName `thenSkip` spacing
+        return $ TA_Variable id x
+
+    readExpansion = do
+        id <- getNextId
+        x <- readDollar
+        spacing
+        return $ TA_Expansion id x
+
+    readGroup = do
+        char '('
+        s <- readSequence
+        char ')'
+        spacing
+        return s
+
+    readNumber = do 
+        id <- getNextId
+        num <- many1 $ oneOf "0123456789."
+        return $ TA_Literal id num
+
+    readArithTerm = readGroup <|> readExpansion <|> readNumber <|> readVar 
+
+    readSequence = do
+        spacing
+        id <- getNextId
+        l <- readAssignment `sepBy` (char ',' >> spacing)
+        return $ TA_Sequence id l
+
+    readAssignment = readTrinary `splitBy` ["=", "*=", "/=", "%=", "+=", "-=", "<<=", ">>=", "&=", "^=", "|="]
+    readTrinary = do
+        let part = readLogicalOr
+        x <- part
+        do
+            id <- getNextId
+            string "?"
+            spacing
+            y <- part
+            string ":"
+            spacing
+            z <- part
+            return $ TA_Trinary id x y z
+         <|>
+          return x
+
+    readLogicalOr  = readLogicalAnd `splitBy` ["||"]
+    readLogicalAnd = readBitOr `splitBy` ["&&"]
+    readBitOr  = readBitXor `splitBy` ["|"]
+    readBitXor = readBitAnd `splitBy` ["^"]
+    readBitAnd = readEquated `splitBy` ["&"]
+    readEquated = readCompared `splitBy` ["==", "!="]
+    readCompared = readShift `splitBy` ["<=", ">=", "<", ">"]
+    readShift = readAddition `splitBy` ["<<", ">>"]
+    readAddition = readMultiplication `splitBy` ["+", "-"]
+    readMultiplication = readExponential `splitBy` ["*", "/", "%"]
+    readExponential = readAnyNegated `splitBy` ["**"]
+
+    readAnyNegated = readNegated <|> readAnySigned
+    readNegated = do
+        id <- getNextId
+        op <- oneOf "!~"
+        x <- readAnySigned
+        return $ TA_Unary id [op] x
+
+    readAnySigned = readSigned <|> readAnycremented
+    readSigned = do
+        id <- getNextId
+        op <- choice (map readSignOp "+-")
+        spacing
+        x <- readAnycremented
+        return $ TA_Unary id [op] x
+     where
+        readSignOp c = try $ do
+            char c
+            notFollowedBy $ char c
+            spacing
+            return c
+
+    readAnycremented = readNormalOrPostfixIncremented <|> readPrefixIncremented
+    readPrefixIncremented = do
+        id <- getNextId
+        op <- try $ string "++" <|> string "--"
+        spacing
+        x <- readArithTerm
+        return $ TA_Unary id (op ++ "|") x
+
+    readNormalOrPostfixIncremented = do
+        x <- readArithTerm
+        spacing
+        do
+            id <- getNextId
+            op <- try $ string "++" <|> string "--"
+            spacing
+            return $ TA_Unary id ("|" ++ op) x
+         <|>
+            return x
+
+
+
 prop_readCondition = isOk readCondition "[ \\( a = b \\) -a \\( c = d \\) ]"
 prop_readCondition2 = isOk readCondition "[[ (a = b) || (c = d) ]]"
 readCondition = do
@@ -277,7 +405,7 @@ readCondition = do
   id <- getNextId
   open <- (try $ string "[[") <|> (string "[")
   let single = open == "["
-  condSpacingMsg False $ if single 
+  condSpacingMsg False $ if single
         then "You need spaces after the opening [ and before the closing ]"
         else "You need spaces after the opening [[ and before the closing ]]"
   condition <- readConditionContents single
@@ -287,7 +415,7 @@ readCondition = do
   when (open == "[" && close /= "]" ) $ parseProblemAt opos ErrorC "Did you mean [[ ?"
   return $ T_Condition id (if single then SingleBracket else DoubleBracket) condition
 
- 
+
 hardCondSpacing = condSpacingMsg False "You need a space here."
 softCondSpacing = condSpacingMsg True "You need a space here"
 condSpacingMsg soft msg = do
@@ -296,8 +424,8 @@ condSpacingMsg soft msg = do
   when (null space) $ (if soft then parseNoteAt else parseProblemAt) pos ErrorC msg
 
 -- Horrifying AST
-data Token = T_AND_IF Id | T_OR_IF Id | T_DSEMI Id | T_Semi Id | T_DLESS Id | T_DGREAT Id | T_LESSAND Id | T_GREATAND Id | T_LESSGREAT Id | T_DLESSDASH Id | T_CLOBBER Id | T_If Id | T_Then Id | T_Else Id | T_Elif Id | T_Fi Id | T_Do Id | T_Done Id | T_Case Id | T_Esac Id | T_While Id | T_Until Id | T_For Id | T_Lbrace Id | T_Rbrace Id | T_Lparen Id | T_Rparen Id | T_Bang Id | T_In  Id | T_NEWLINE Id | T_EOF Id | T_Less Id | T_Greater Id | T_SingleQuoted Id String | T_Literal Id String | T_NormalWord Id [Token] | T_DoubleQuoted Id [Token] | T_DollarExpansion Id [Token] | T_DollarBraced Id String | T_DollarArithmetic Id String | T_BraceExpansion Id String | T_IoFile Id Token Token | T_HereDoc Id Bool Bool String | T_HereString Id Token | T_FdRedirect Id String Token | T_Assignment Id String Token | T_Array Id [Token] | T_Redirecting Id [Token] Token | T_SimpleCommand Id [Token] [Token] | T_Pipeline Id [Token] | T_Banged Id Token | T_AndIf Id (Token) (Token) | T_OrIf Id (Token) (Token) | T_Backgrounded Id Token | T_IfExpression Id [([Token],[Token])] [Token] | T_Subshell Id [Token] | T_BraceGroup Id [Token] | T_WhileExpression Id [Token] [Token] | T_UntilExpression Id [Token] [Token] | T_ForIn Id String [Token] [Token] | T_CaseExpression Id Token [([Token],[Token])] | T_Function Id String Token | T_Arithmetic Id String | T_Script Id [Token] |
-  T_Condition Id ConditionType Token | TC_And Id ConditionType String Token Token | TC_Or Id ConditionType String Token Token | TC_Not Id ConditionType Token | TC_Group Id ConditionType Token | TC_Binary Id ConditionType String Token Token | TC_Unary Id ConditionType String Token | TC_Noary Id ConditionType Token
+data Token = T_AND_IF Id | T_OR_IF Id | T_DSEMI Id | T_Semi Id | T_DLESS Id | T_DGREAT Id | T_LESSAND Id | T_GREATAND Id | T_LESSGREAT Id | T_DLESSDASH Id | T_CLOBBER Id | T_If Id | T_Then Id | T_Else Id | T_Elif Id | T_Fi Id | T_Do Id | T_Done Id | T_Case Id | T_Esac Id | T_While Id | T_Until Id | T_For Id | T_Lbrace Id | T_Rbrace Id | T_Lparen Id | T_Rparen Id | T_Bang Id | T_In  Id | T_NEWLINE Id | T_EOF Id | T_Less Id | T_Greater Id | T_SingleQuoted Id String | T_Literal Id String | T_NormalWord Id [Token] | T_DoubleQuoted Id [Token] | T_DollarExpansion Id [Token] | T_DollarBraced Id String | T_DollarArithmetic Id Token | T_BraceExpansion Id String | T_IoFile Id Token Token | T_HereDoc Id Bool Bool String | T_HereString Id Token | T_FdRedirect Id String Token | T_Assignment Id String Token | T_Array Id [Token] | T_Redirecting Id [Token] Token | T_SimpleCommand Id [Token] [Token] | T_Pipeline Id [Token] | T_Banged Id Token | T_AndIf Id (Token) (Token) | T_OrIf Id (Token) (Token) | T_Backgrounded Id Token | T_IfExpression Id [([Token],[Token])] [Token] | T_Subshell Id [Token] | T_BraceGroup Id [Token] | T_WhileExpression Id [Token] [Token] | T_UntilExpression Id [Token] [Token] | T_ForIn Id String [Token] [Token] | T_CaseExpression Id Token [([Token],[Token])] | T_Function Id String Token | T_Arithmetic Id Token | T_Script Id [Token] | T_Condition Id ConditionType Token | TC_And Id ConditionType String Token Token | TC_Or Id ConditionType String Token Token | TC_Not Id ConditionType Token | TC_Group Id ConditionType Token | TC_Binary Id ConditionType String Token Token | TC_Unary Id ConditionType String Token | TC_Noary Id ConditionType Token | TA_Binary Id String Token Token | TA_Unary Id String Token | TA_Sequence Id [Token] | TA_Variable Id String | TA_Trinary Id Token Token Token | TA_Expansion Id Token | TA_Literal Id String
+
     deriving (Show)
 
 data ConditionType = DoubleBracket | SingleBracket deriving (Show, Eq)
@@ -511,6 +639,39 @@ analyze f g i s@(TC_Noary id typ token) = do
   g s
   return . i $ TC_Noary id typ a
 
+analyze f g i s@(TA_Binary id op t1 t2) = do
+    f s
+    a <- analyze f g i t1
+    b <- analyze f g i t2
+    g s
+    return . i $ TA_Binary id op t1 t2
+
+analyze f g i s@(TA_Unary id op t1) = do
+    f s
+    a <- analyze f g i t1
+    g s
+    return . i $ TA_Unary id op a
+
+analyze f g i s@(TA_Sequence id l) = do
+    f s
+    a <- analyzeScopes f g i l
+    g s
+    return . i $ TA_Sequence id a
+
+analyze f g i s@(TA_Trinary id t1 t2 t3) = do
+    f s
+    a <- analyze f g i t1
+    b <- analyze f g i t2
+    c <- analyze f g i t3
+    g s
+    return  . i $ TA_Trinary id a b c
+
+analyze f g i s@(TA_Expansion id t) = do
+    f s
+    a <- analyze f g i t
+    g s
+    return  . i $ TA_Expansion id a
+
 analyze f g i t = do
     f t
     g t
@@ -683,18 +844,16 @@ prop_readDollarArithmetic2 = isOk readDollarArithmetic "$(((3*4)+(1*2+(3-1))))"
 readDollarArithmetic = do
     id <- getNextId
     try (string "$((")
-    -- TODO
-    str <- readParenLiteralHack
+    c <- readArithmeticContents
     string "))"
-    return (T_DollarArithmetic id str)
+    return (T_DollarArithmetic id c)
 
 readArithmeticExpression = do
     id <- getNextId
     try (string "((")
-    -- TODO
-    str <- readParenLiteralHack
+    c <- readArithmeticContents
     string "))"
-    return (T_Arithmetic id str)
+    return (T_Arithmetic id c)
 
 prop_readDollarBraced = isOk readDollarBraced "${foo//bar/baz}"
 readDollarBraced = do
@@ -1024,18 +1183,18 @@ readDoGroup = do
             fail "No done"
 
 hasFinal s [] = Nothing
-hasFinal s f = 
-    case last f of 
+hasFinal s f =
+    case last f of
         T_Pipeline _ m@(_:_) ->
-            case last m of 
-                T_Redirecting _ [] (T_SimpleCommand _ _ m@(_:_)) -> 
-                    case last m of 
-                        T_NormalWord _ [T_Literal id str] -> 
+            case last m of
+                T_Redirecting _ [] (T_SimpleCommand _ _ m@(_:_)) ->
+                    case last m of
+                        T_NormalWord _ [T_Literal id str] ->
                             if str == s then Just id else Nothing
                         _ -> Nothing
                 _ -> Nothing
         _ -> Nothing
-        
+
 
 prop_readForClause = isOk readForClause "for f in *; do rm \"$f\"; done"
 prop_readForClause3 = isOk readForClause "for f; do foo; done"
@@ -1046,10 +1205,10 @@ readForClause = do
     spacing
     values <- readInClause <|> (readSequentialSep >> return [])
     group <- readDoGroup <|> (
-                allspacing >> 
+                allspacing >>
                 eof >>
                 parseProblem ErrorC "Missing 'do'" >>
-                return []) 
+                return [])
     return $ T_ForIn id name values group
 
 readInClause = do
