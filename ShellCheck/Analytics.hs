@@ -38,6 +38,7 @@ basicChecks = [
     ,checkForDecimals
     ,checkDivBeforeMult
     ,checkArithmeticDeref
+    ,checkComparisonAgainstGlob
     ]
 
 modifyMap = modify
@@ -259,6 +260,13 @@ prop_checkArithmeticDeref3 = verifyNot checkArithmeticDeref "cow=1/40; (( s+= ${
 checkArithmeticDeref (TA_Expansion _ (T_DollarBraced id str)) | not $ any (`elem` "/.:#%") $ str =
     addNoteFor id $ Note WarningC $ "Don't use $ on variables in (( )) unless you want to dereference twice"
 checkArithmeticDeref _ = return ()
+
+
+prop_checkComparisonAgainstGlob = verify checkComparisonAgainstGlob "[[ $cow == $bar ]]"
+prop_checkComparisonAgainstGlob2 = verifyNot checkComparisonAgainstGlob "[[ $cow == \"$bar\" ]]"
+checkComparisonAgainstGlob (TC_Binary _ DoubleBracket op _ (T_NormalWord id [T_DollarBraced _ _])) | op == "=" || op == "==" = 
+    addNoteFor id $ Note WarningC $ "Quote the rhs of = in [[ ]] to prevent glob interpretation"
+checkComparisonAgainstGlob _ = return ()
 
 allModifiedVariables t = snd $ runState (doAnalysis (\x -> modify $ (++) (getModifiedVariables x)) t) []
 
