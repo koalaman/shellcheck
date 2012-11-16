@@ -1,5 +1,6 @@
 module ShellCheck.Analytics where
 
+import ShellCheck.AST
 import ShellCheck.Parser
 import Control.Monad
 import Control.Monad.State
