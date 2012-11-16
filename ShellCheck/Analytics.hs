@@ -8,6 +8,7 @@ import Data.Char
 import Data.List
 import Debug.Trace
 import Text.Regex
+import Data.Maybe
 
 checks = concat [
     map runBasicAnalysis basicChecks
@@ -39,6 +40,7 @@ basicChecks = [
     ,checkDivBeforeMult
     ,checkArithmeticDeref
     ,checkComparisonAgainstGlob
+    ,checkPrintfVar
     ]
 
 modifyMap = modify
@@ -264,11 +266,47 @@ checkArithmeticDeref _ = return ()
 
 prop_checkComparisonAgainstGlob = verify checkComparisonAgainstGlob "[[ $cow == $bar ]]"
 prop_checkComparisonAgainstGlob2 = verifyNot checkComparisonAgainstGlob "[[ $cow == \"$bar\" ]]"
-checkComparisonAgainstGlob (TC_Binary _ DoubleBracket op _ (T_NormalWord id [T_DollarBraced _ _])) | op == "=" || op == "==" = 
+checkComparisonAgainstGlob (TC_Binary _ DoubleBracket op _ (T_NormalWord id [T_DollarBraced _ _])) | op == "=" || op == "==" =
     addNoteFor id $ Note WarningC $ "Quote the rhs of = in [[ ]] to prevent glob interpretation"
 checkComparisonAgainstGlob _ = return ()
 
 allModifiedVariables t = snd $ runState (doAnalysis (\x -> modify $ (++) (getModifiedVariables x)) t) []
+
+--- Command specific checks
+
+checkCommand str f (T_SimpleCommand id _ cmd) =
+    case cmd of
+        (w:rest) -> if w `isCommand` str then f rest else return ()
+        _ -> return ()
+checkCommand _ _ _ = return ()
+
+getLiteralString t = g t
+  where
+    allInList l = let foo = map g l in if all isJust foo then return $ concat (catMaybes foo) else Nothing
+    g s@(T_DoubleQuoted _ l) = allInList l
+    g s@(T_NormalWord _ l) = allInList l
+    g (T_SingleQuoted _ s) = return s
+    g (T_Literal _ s) = return s
+    g _ = Nothing
+
+isLiteral t = isJust $ getLiteralString t
+
+isCommand token str =
+    case getLiteralString token of
+        Just cmd -> cmd == str || ("/" ++ str) `isSuffixOf` cmd
+        Nothing -> False
+
+prop_checkPrintfVar1 = verify checkPrintfVar "printf \"Lol: $s\""
+prop_checkPrintfVar2 = verifyNot checkPrintfVar "printf 'Lol: $s'"
+prop_checkPrintfVar3 = verify checkPrintfVar "printf -v cow $(cmd)"
+checkPrintfVar = checkCommand "printf" f where
+    f (dashv:var:rest) | getLiteralString dashv == (Just "-v") = f rest
+    f (format:params) = check format
+    f _ = return ()
+    check format =
+        if not $ isLiteral format
+          then addNoteFor (getId format) $ Note WarningC $ "Don't use printf \"$foo\", use printf \"%s\" \"$foo\"" 
+          else return ()
 
 --- Subshell detection
 

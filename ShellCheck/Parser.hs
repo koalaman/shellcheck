@@ -1,6 +1,6 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
-module ShellCheck.Parser (Token(..), ConditionType(..), Id(..), Note(..), Severity(..), parseShell, ParseResult(..), ParseNote(..), notesFromMap, Metadata(..), doAnalysis, doStackAnalysis, doTransform, sortNotes) where
+module ShellCheck.Parser (Token(..), ConditionType(..), Id(..), Note(..), Severity(..), parseShell, ParseResult(..), ParseNote(..), notesFromMap, Metadata(..), doAnalysis, doStackAnalysis, doTransform, sortNotes, getId) where
 
 import Text.Parsec
 import Debug.Trace
@@ -519,6 +519,87 @@ analyze f g i t =
         return $ TA_Trinary id a b c
     delve (TA_Expansion id t) = d1 t $ TA_Expansion id
     delve t = return t
+
+getId t = case t of
+        T_AND_IF id  -> id
+        T_OR_IF id  -> id
+        T_DSEMI id  -> id
+        T_Semi id  -> id
+        T_DLESS id  -> id
+        T_DGREAT id  -> id
+        T_LESSAND id  -> id
+        T_GREATAND id  -> id
+        T_LESSGREAT id  -> id
+        T_DLESSDASH id  -> id
+        T_CLOBBER id  -> id
+        T_If id  -> id
+        T_Then id  -> id
+        T_Else id  -> id
+        T_Elif id  -> id
+        T_Fi id  -> id
+        T_Do id  -> id
+        T_Done id  -> id
+        T_Case id  -> id
+        T_Esac id  -> id
+        T_While id  -> id
+        T_Until id  -> id
+        T_For id  -> id
+        T_Lbrace id  -> id
+        T_Rbrace id  -> id
+        T_Lparen id  -> id
+        T_Rparen id  -> id
+        T_Bang id  -> id
+        T_In  id  -> id
+        T_NEWLINE id  -> id
+        T_EOF id  -> id
+        T_Less id  -> id
+        T_Greater id  -> id
+        T_SingleQuoted id _  -> id
+        T_Literal id _  -> id
+        T_NormalWord id _  -> id
+        T_DoubleQuoted id _  -> id
+        T_DollarExpansion id _  -> id
+        T_DollarBraced id _  -> id
+        T_DollarArithmetic id _  -> id
+        T_BraceExpansion id _  -> id
+        T_IoFile id _ _  -> id
+        T_HereDoc id _ _ _ -> id
+        T_HereString id _  -> id
+        T_FdRedirect id _ _  -> id
+        T_Assignment id _ _  -> id
+        T_Array id _  -> id
+        T_Redirecting id _ _  -> id
+        T_SimpleCommand id _ _  -> id
+        T_Pipeline id _  -> id
+        T_Banged id _  -> id
+        T_AndIf id _ _ -> id
+        T_OrIf id _ _ -> id
+        T_Backgrounded id _  -> id
+        T_IfExpression id _ _  -> id
+        T_Subshell id _  -> id
+        T_BraceGroup id _  -> id
+        T_WhileExpression id _ _  -> id
+        T_UntilExpression id _ _  -> id
+        T_ForIn id _ _ _  -> id
+        T_CaseExpression id _ _ -> id
+        T_Function id _ _  -> id
+        T_Arithmetic id _  -> id
+        T_Script id _  -> id
+        T_Condition id _ _  -> id
+        TC_And id _ _ _ _  -> id
+        TC_Or id _ _ _ _  -> id
+        TC_Not id _ _  -> id
+        TC_Group id _ _  -> id
+        TC_Binary id _ _ _ _  -> id
+        TC_Unary id _ _ _  -> id
+        TC_Noary id _ _  -> id
+        TA_Binary id _ _ _  -> id
+        TA_Unary id _ _  -> id
+        TA_Sequence id _  -> id
+        TA_Variable id _  -> id
+        TA_Trinary id _ _ _  -> id
+        TA_Expansion id _  -> id
+        TA_Literal id _ -> id
 
 blank = const $ return ()
 doAnalysis f t = analyze f blank id t
