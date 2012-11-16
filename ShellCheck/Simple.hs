@@ -19,7 +19,6 @@ shellCheck script =
 
 data ShellCheckComment = ShellCheckComment { scLine :: Int, scColumn :: Int, scSeverity :: String, scMessage :: String }
 
-
 instance Show ShellCheckComment where
     show c = concat ["(", show $ scLine c, ",", show $ scColumn c, ") ", scSeverity c, ": ", scMessage c]
 

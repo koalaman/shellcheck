@@ -315,12 +315,12 @@ readArithmeticContents =
         spacing
         return s
 
-    readNumber = do 
+    readNumber = do
         id <- getNextId
         num <- many1 $ oneOf "0123456789."
         return $ TA_Literal id num
 
-    readArithTerm = readGroup <|> readExpansion <|> readNumber <|> readVar 
+    readArithTerm = readGroup <|> readExpansion <|> readNumber <|> readVar
 
     readSequence = do
         spacing
@@ -431,9 +431,9 @@ data Token = T_AND_IF Id | T_OR_IF Id | T_DSEMI Id | T_Semi Id | T_DLESS Id | T_
 data ConditionType = DoubleBracket | SingleBracket deriving (Show, Eq)
 
 
-analyze f g i t = 
+analyze f g i t =
     round t
-  where 
+  where
     round t = do
         f t
         newT <- delve t
@@ -459,8 +459,9 @@ analyze f g i t =
     delve (T_NormalWord id list) = dl list $ T_NormalWord id
     delve (T_DoubleQuoted id list) = dl list $ T_DoubleQuoted id
     delve (T_DollarExpansion id list) = dl list $ T_DollarExpansion id
+    delve (T_DollarArithmetic id c) = d1 c $ T_DollarArithmetic id
     delve (T_IoFile id op file) = d2 op file $ T_IoFile id
-    delve (T_HereString id word) = d1 word $ T_HereString id 
+    delve (T_HereString id word) = d1 word $ T_HereString id
     delve (T_FdRedirect id v t) = d1 t $ T_FdRedirect id v
     delve (T_Assignment id v t) = d1 t $ T_Assignment id v
     delve (T_Array id t) = dl t $ T_Array id
@@ -475,6 +476,7 @@ analyze f g i t =
     delve (T_OrIf id t u) = d2 t u $ T_OrIf id
     delve (T_Backgrounded id l) = d1 l $ T_Backgrounded id
     delve (T_Subshell id l) = dl l $ T_Subshell id
+    delve (T_Arithmetic id c) = d1 c $ T_Arithmetic id
     delve (T_IfExpression id conditions elses) = do
         newConds <- mapM (\(c, t) -> do
                             x <- mapM round c
@@ -482,12 +484,12 @@ analyze f g i t =
                             return (x,y)
                     ) conditions
         newElses <- roundAll elses
-        return $ T_IfExpression id newConds newElses 
+        return $ T_IfExpression id newConds newElses
     delve (T_BraceGroup id l) = dl l $ T_BraceGroup id
     delve (T_WhileExpression id c l) = dll c l $ T_WhileExpression id
     delve (T_UntilExpression id c l) = dll c l $ T_UntilExpression id
     delve (T_ForIn id v w l) = dll w l $ T_ForIn id v
-    delve (T_CaseExpression id word cases) = do 
+    delve (T_CaseExpression id word cases) = do
         newWord <- round word
         newCases <- mapM (\(c, t) -> do
                             x <- mapM round c
@@ -517,7 +519,6 @@ analyze f g i t =
         return $ TA_Trinary id a b c
     delve (TA_Expansion id t) = d1 t $ TA_Expansion id
     delve t = return t
-
 
 blank = const $ return ()
 doAnalysis f t = analyze f blank id t
@@ -1279,3 +1280,4 @@ parseShell filename contents = do
         (Right (script, map, notes), parsenotes) -> ParseResult (Just (script, map)) (nub $ sortNotes $ notes ++ parsenotes)
         (Left err, p) -> ParseResult Nothing (nub $ sortNotes $ p ++ ([makeErrorFor err]))
 
+lt x = trace (show x) x

@@ -1,0 +1,3 @@
+n=0; 
+mycmd | while read foo; do rm "$foo"; ((n++)); done
+echo "Deleted $n files"

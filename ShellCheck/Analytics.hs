@@ -33,8 +33,10 @@ basicChecks = [
     ,checkSingleQuotedVariables
     ,checkUnquotedZN
     ,checkNumberComparisons
-    ,checkNoaryWasBinary 
+    ,checkNoaryWasBinary
     ,checkBraceExpansionVars
+    ,checkForDecimals
+    ,checkDivBeforeMult
     ]
 
 modifyMap = modify
@@ -124,7 +126,7 @@ prop_checkMissingPositionalQuotes = verify checkMissingPositionalQuotes "rm $1"
 prop_checkMissingPositionalQuotes2 = verify checkMissingPositionalQuotes "rm ${10//foo/bar}"
 checkMissingPositionalQuotes (T_NormalWord _ list) =
     mapM_ checkPos list
-    where checkPos (T_DollarBraced id s) | all isDigit (getBracedReference s) = 
+    where checkPos (T_DollarBraced id s) | all isDigit (getBracedReference s) =
             addNoteFor id $ Note WarningC $ "Positional parameters should be quoted to avoid whitespace trouble"
           checkPos _ = return ()
 checkMissingPositionalQuotes _ = return ()
@@ -213,7 +215,7 @@ prop_checkNumberComparisons2 = verify checkNumberComparisons "[[ 0 >= $(cmd) ]]"
 prop_checkNumberComparisons3 = verifyNot checkNumberComparisons "[[ $foo ]] > 3"
 prop_checkNumberComparisons4 = verify checkNumberComparisons "[ $foo > $bar ]"
 prop_checkNumberComparisons5 = verify checkNumberComparisons "until [ $n <= $z ]; do echo foo; done"
-checkNumberComparisons (TC_Binary id typ op lhs rhs) 
+checkNumberComparisons (TC_Binary id typ op lhs rhs)
     | op `elem` ["<", ">", "<=", ">="] = do
         when (isNum lhs || isNum rhs) $ addNoteFor id $ Note ErrorC $ "\"" ++ op ++ "\" is for string comparisons. Use " ++ (eqv op)
         when (typ == SingleBracket) $ addNoteFor id $ Note ErrorC $ "Can't use " ++ op ++" in [ ]. Use [[ ]]."
@@ -235,9 +237,20 @@ checkNoaryWasBinary (TC_Noary _ _ t@(T_NormalWord id l)) = do
 checkNoaryWasBinary _ = return ()
 
 prop_checkBraceExpansionVars = verify checkBraceExpansionVars "echo {1..$n}"
-checkBraceExpansionVars (T_BraceExpansion id s) | '$' `elem` s = 
+checkBraceExpansionVars (T_BraceExpansion id s) | '$' `elem` s =
     addNoteFor id $ Note WarningC $ "You can't use variables in brace expansions."
 checkBraceExpansionVars _ = return ()
+
+prop_checkForDecimals = verify checkForDecimals "((3.14*c))"
+checkForDecimals (TA_Literal id s) | any (== '.') s = do
+    addNoteFor id $ Note ErrorC $ "(( )) doesn't support decimals. Use bc or awk."
+checkForDecimals _ = return ()
+
+prop_checkDivBeforeMult = verify checkDivBeforeMult "echo $((c/n*100))"
+prop_checkDivBeforeMult2 = verifyNot checkDivBeforeMult "echo $((c*100/n))"
+checkDivBeforeMult (TA_Binary _ "*" (TA_Binary id "/" _ _) _) = do
+    addNoteFor id $ Note InfoC $ "Increase precision by replacing a/b*c with a*c/b"
+checkDivBeforeMult _ = return ()
 
 allModifiedVariables t = snd $ runState (doAnalysis (\x -> modify $ (++) (getModifiedVariables x)) t) []
 
@@ -249,9 +262,13 @@ prop_subshellAssignmentCheck3 = verifyFull    subshellAssignmentCheck "( A=foo; 
 prop_subshellAssignmentCheck4 = verifyNotFull subshellAssignmentCheck "( A=foo; rm $A; )"
 prop_subshellAssignmentCheck5 = verifyFull    subshellAssignmentCheck "cat foo | while read cow; do true; done; echo $cow;"
 prop_subshellAssignmentCheck6 = verifyFull    subshellAssignmentCheck "( export lol=$(ls); ); echo $lol;"
+prop_subshellAssignmentCheck7 = verifyFull    subshellAssignmentCheck "cmd | while read foo; do (( n++ )); done; echo \"$n lines\""
+prop_subshellAssignmentCheck8 = verifyFull    subshellAssignmentCheck "n=3 & echo $((n++))"
+prop_subshellAssignmentCheck9 = verifyFull    subshellAssignmentCheck "read n & n=foo$n"
+prop_subshellAssignmentCheck10 = verifyFull    subshellAssignmentCheck "(( n <<= 3 )) & (( n |= 4 )) &"
 subshellAssignmentCheck t map =
     let flow = getVariableFlow t
-        check = findSubshelled flow [("oops",[])] Map.empty 
+        check = findSubshelled flow [("oops",[])] Map.empty
     in snd $ runState check map
 
 
@@ -259,7 +276,7 @@ data Scope = SubshellScope String | NoneScope deriving (Show, Eq)
 data StackData = StackScope Scope | StackScopeEnd | Assignment (Id, String) | Reference (Id, String) deriving (Show, Eq)
 data VariableState = Dead Id String | Alive deriving (Show, Eq)
 
-leadType t = 
+leadType t =
     case t of
         T_DollarExpansion _ _  -> SubshellScope "$(..) expansion"
         T_Backgrounded _ _  -> SubshellScope "backgrounding &"
@@ -267,35 +284,41 @@ leadType t =
         -- This considers the whole pipeline one subshell. Consider fixing.
         T_Pipeline _ (_:_:[])  -> SubshellScope "pipeline"
         _ -> NoneScope
-        
+
 
 getModifiedVariables t =
-    case t of 
-        T_SimpleCommand _ vars [] -> 
-            concatMap (\x -> case x of 
+    case t of
+        T_SimpleCommand _ vars [] ->
+            concatMap (\x -> case x of
                                 T_Assignment id name _ -> [(id, name)]
                                 _ -> []
                       ) vars
-        c@(T_SimpleCommand _ _ _) -> 
+        c@(T_SimpleCommand _ _ _) ->
             getModifiedVariableCommand c
 
+        TA_Unary _ "++|" (TA_Variable id name) -> [(id, name)]
+        TA_Unary _ "|++" (TA_Variable id name) -> [(id, name)]
+        TA_Binary _ op (TA_Variable id name) _ -> if any (==op) ["=", "*=", "/=", "%=", "+=", "-=", "<<=", ">>=", "&=", "^=", "|="]
+                                                    then [(id,name)]
+                                                    else []
+
         --Points to 'for' rather than variable
-        T_ForIn id str _ _ -> [(id, str)] 
+        T_ForIn id str _ _ -> [(id, str)]
         _ -> []
 
-getModifiedVariableCommand (T_SimpleCommand _ _ ((T_NormalWord _ ((T_Literal _ x):_)):rest)) = 
-    case x of 
+getModifiedVariableCommand (T_SimpleCommand _ _ ((T_NormalWord _ ((T_Literal _ x):_)):rest)) =
+    case x of
         "read" -> concatMap getLiteral rest
         "export" -> concatMap exportParamToLiteral rest
         _ -> []
-getModifiedVariableCommand _ = [] 
+getModifiedVariableCommand _ = []
 
 getLiteral (T_NormalWord _ [T_Literal id s]) = [(id,s)]
 getLiteral (T_NormalWord _ [T_DoubleQuoted _ [T_Literal id s]]) = [(id,s)]
 getLiteral x = []
 
 exportParamToLiteral (T_NormalWord _ ((T_Literal id s):_)) =
-    [(id,prefix)] 
+    [(id,prefix)]
     where prefix = takeWhile (/= '=') s
 exportParamToLiteral _ = []
 
@@ -303,45 +326,45 @@ exportParamToLiteral _ = []
 getBracedReference s = takeWhile (\x -> not $ x `elem` ":[#%/^,") $ dropWhile (== '#') s
 
 getReferencedVariables t =
-    case t of 
+    case t of
         T_DollarBraced id str -> map (\x -> (id, x)) $ [getBracedReference str]
-        T_Arithmetic _ _ -> [] -- TODO
-        _ -> []
+        TA_Variable id str -> [(id,str)]
+        x -> []
 
 
-startScope t = 
+startScope t =
+    let scopeType = leadType t
+    in do
+        when (scopeType /= NoneScope) $ modify ((StackScope scopeType):)
+
+endScope t =
     let scopeType = leadType t
         written = getModifiedVariables t
         read    = getReferencedVariables t
     in do
-        when (scopeType /= NoneScope) $ modify ((StackScope scopeType):)
-        mapM_ (\v -> modify ((Assignment v):)) written
-        mapM_ (\v -> modify ((Reference v):)) read
-
-endScope t =
-    let scopeType = leadType t
-    in do
         when (scopeType /= NoneScope) $ modify ((StackScopeEnd):)
+        mapM_ (\v -> modify ((Reference v):)) read
+        mapM_ (\v -> modify ((Assignment v):)) written
 
-getVariableFlow t = 
-    let (_, stack) = runState (doStackAnalysis startScope endScope t) [] 
+getVariableFlow t =
+    let (_, stack) = runState (doStackAnalysis startScope endScope t) []
     in reverse stack
 
 findSubshelled :: [StackData] -> [(String, [(Id,String)])] -> (Map.Map String VariableState) -> State (Map.Map Id Metadata) ()
 findSubshelled [] _ _ = return ()
-findSubshelled ((Assignment x@(id, str)):rest) ((reason,scope):lol) deadVars = 
+findSubshelled ((Assignment x@(id, str)):rest) ((reason,scope):lol) deadVars =
     findSubshelled rest ((reason, x:scope):lol) $ Map.insert str Alive deadVars
 findSubshelled ((Reference (readId, str)):rest) scopes deadVars = do
-    case Map.findWithDefault Alive str deadVars of 
+    case Map.findWithDefault Alive str deadVars of
         Alive -> return ()
         Dead writeId reason -> do
                     addNoteFor writeId $ Note InfoC $ "Modification of " ++ str ++ " is local (to subshell caused by "++ reason ++")."
                     addNoteFor readId $ Note InfoC $ str ++ " was modified in a subshell. That change might be lost."
     findSubshelled rest scopes deadVars
 
-findSubshelled ((StackScope (SubshellScope reason)):rest) scopes deadVars = 
-    findSubshelled rest ((reason,[]):scopes) deadVars 
+findSubshelled ((StackScope (SubshellScope reason)):rest) scopes deadVars =
+    findSubshelled rest ((reason,[]):scopes) deadVars
 
-findSubshelled ((StackScopeEnd):rest) ((reason, scope):oldScopes) deadVars = 
-    findSubshelled rest oldScopes $ foldl (\m (id, var) -> Map.insert var (Dead id reason) m) deadVars scope 
+findSubshelled ((StackScopeEnd):rest) ((reason, scope):oldScopes) deadVars =
+    findSubshelled rest oldScopes $ foldl (\m (id, var) -> Map.insert var (Dead id reason) m) deadVars scope
 ------
