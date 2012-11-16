@@ -46,6 +46,10 @@ basicChecks = [
 
 modifyMap = modify
 addNoteFor id note = modifyMap $ Map.adjust (\(Metadata pos notes) -> Metadata pos (note:notes)) id
+warn id note = addNoteFor id $ Note WarningC $ note
+err id note = addNoteFor id $ Note ErrorC $ note
+info id note = addNoteFor id $ Note InfoC $ note
+style id note = addNoteFor id $ Note StyleC $ note
 
 willSplit x =
   case x of
@@ -90,7 +94,7 @@ checkFull f s = case parseShell "-" s of
 
 prop_checkUuoc = verify checkUuoc "cat foo | grep bar"
 checkUuoc (T_Pipeline _ (T_Redirecting _ _ f@(T_SimpleCommand id _ _):_:_)) =
-    case deadSimple f of ["cat", _] -> addNoteFor id $ Note StyleC "Useless cat. Consider 'cmd < file | ..' or 'cmd file | ..' instead."
+    case deadSimple f of ["cat", _] -> style id "Useless cat. Consider 'cmd < file | ..' or 'cmd file | ..' instead."
                          _ -> return ()
 checkUuoc _ = return ()
 
@@ -102,14 +106,14 @@ prop_checkForInQuoted = verify checkForInQuoted "for f in \"$(ls)\"; do echo foo
 prop_checkForInQuoted2 = verifyNot checkForInQuoted "for f in \"$@\"; do echo foo; done"
 checkForInQuoted (T_ForIn _ f [T_NormalWord _ [T_DoubleQuoted id list]] _) =
     when (any (\x -> willSplit x && not (isMagicInQuotes x)) list) $
-        addNoteFor id $ Note ErrorC $ "Since you double quoted this, it will not word split, and the loop will only run once"
+        err id $ "Since you double quoted this, it will not word split, and the loop will only run once"
 checkForInQuoted _ = return ()
 
 
 prop_checkForInLs = verify checkForInLs "for f in $(ls *.mp3); do mplayer \"$f\"; done"
 checkForInLs (T_ForIn _ f [T_NormalWord _ [T_DollarExpansion id [x]]] _) =
     case deadSimple x of ("ls":n) -> let args = (if n == [] then ["*"] else n) in
-                                        addNoteFor id $ Note ErrorC $ "Don't use 'for "++f++" in $(ls " ++ (intercalate " " n) ++ ")'. Use 'for "++f++" in "++ (intercalate " " args) ++ "'"
+                                        err id $ "Don't use 'for "++f++" in $(ls " ++ (intercalate " " n) ++ ")'. Use 'for "++f++" in "++ (intercalate " " args) ++ "'"
                          _ -> return ()
 checkForInLs _ = return ()
 
@@ -124,7 +128,7 @@ checkMissingForQuotes (T_ForIn _ f words cmds) =
     markUnquoted _ _ = return ()
     mu (T_DollarBraced id s) | s == f = warning id
     mu _ = return ()
-    warning id = addNoteFor id $ Note WarningC $ "Variables that could contain spaces should be quoted"
+    warning id = warn id $ "Variables that could contain spaces should be quoted"
 checkMissingForQuotes _ = return ()
 
 prop_checkMissingPositionalQuotes = verify checkMissingPositionalQuotes "rm $1"
@@ -132,13 +136,13 @@ prop_checkMissingPositionalQuotes2 = verify checkMissingPositionalQuotes "rm ${1
 checkMissingPositionalQuotes (T_NormalWord _ list) =
     mapM_ checkPos list
     where checkPos (T_DollarBraced id s) | all isDigit (getBracedReference s) =
-            addNoteFor id $ Note WarningC $ "Positional parameters should be quoted to avoid whitespace trouble"
+            warn id $ "Positional parameters should be quoted to avoid whitespace trouble"
           checkPos _ = return ()
 checkMissingPositionalQuotes _ = return ()
 
 prop_checkUnquotedExpansions = verify checkUnquotedExpansions "rm $(ls)"
 checkUnquotedExpansions (T_SimpleCommand _ _ cmds) = mapM_ check cmds
-    where check (T_NormalWord _ [T_DollarExpansion id _]) = addNoteFor id $ Note WarningC "Quote the expansion to prevent word splitting"
+    where check (T_NormalWord _ [T_DollarExpansion id _]) = warn id "Quote the expansion to prevent word splitting"
           check _ = return ()
 checkUnquotedExpansions _ = return ()
 
@@ -166,20 +170,20 @@ checkRedirectToSame _ = return ()
 prop_checkShorthandIf  = verify checkShorthandIf "[[ ! -z file ]] && scp file host || rm file"
 prop_checkShorthandIf2 = verifyNot checkShorthandIf "[[ ! -z file ]] && { scp file host || echo 'Eek'; }"
 checkShorthandIf (T_AndIf id _ (T_OrIf _ _ _)) =
-    addNoteFor id $ Note InfoC "Note that A && B || C is not if-then-else. C may run when A is true."
+    info id "Note that A && B || C is not if-then-else. C may run when A is true."
 checkShorthandIf _ = return ()
 
 
 prop_checkDollarStar = verify checkDollarStar "for f in $*; do ..; done"
 checkDollarStar (T_NormalWord _ [(T_DollarBraced id "*")]) =
-    addNoteFor id $ Note WarningC $ "Use \"$@\" (with quotes) to prevent whitespace problems"
+    warn id $ "Use \"$@\" (with quotes) to prevent whitespace problems"
 checkDollarStar _ = return ()
 
 
 prop_checkUnquotedDollarAt = verify checkUnquotedDollarAt "ls $@"
 prop_checkUnquotedDollarAt2 = verifyNot checkUnquotedDollarAt "ls \"$@\""
 checkUnquotedDollarAt (T_NormalWord _ [T_DollarBraced id "@"]) =
-    addNoteFor id $ Note ErrorC $ "Add double quotes around $@, otherwise it's just like $* and breaks on spaces"
+    err id $ "Add double quotes around $@, otherwise it's just like $* and breaks on spaces"
 checkUnquotedDollarAt _ = return ()
 
 prop_checkStderrRedirect = verify checkStderrRedirect "test 2>&1 > cow"
@@ -191,7 +195,7 @@ checkStderrRedirect (T_Redirecting _ [
             T_Greater _ -> error
             T_DGREAT _ -> error
             _ -> return ()
-         where error = addNoteFor id $ Note ErrorC $ "The order of the 2>&1 and the redirect matters. The 2>&1 has to be last."
+         where error = err id $ "The order of the 2>&1 and the redirect matters. The 2>&1 has to be last."
 checkStderrRedirect _ = return ()
 
 lt x = trace ("FAILURE " ++ (show x)) x
@@ -202,7 +206,7 @@ prop_checkSingleQuotedVariables2 = verify checkSingleQuotedVariables "echo 'lol$
 prop_checkSingleQuotedVariables3 = verifyNot checkSingleQuotedVariables "sed 's/foo$/bar/'"
 checkSingleQuotedVariables (T_SingleQuoted id s) =
             case matchRegex checkSingleQuotedVariablesRe s of
-                Just [var] -> addNoteFor id $ Note WarningC $ var ++ " won't be expanded in single quotes."
+                Just [var] -> warn id $ var ++ " won't be expanded in single quotes."
                 _          -> return ()
 checkSingleQuotedVariables _ = return ()
 checkSingleQuotedVariablesRe = mkRegex "(\\$[0-9a-zA-Z_]+)"
@@ -212,7 +216,7 @@ prop_checkUnquotedZN = verify checkUnquotedZN "if [ -z $foo ]; then echo cow; fi
 prop_checkUnquotedZN2 = verify checkUnquotedZN "[ -n $cow ]"
 prop_checkUnquotedZN3 = verifyNot checkUnquotedZN "[[ -z $foo ]] && echo cow"
 checkUnquotedZN (T_Condition _ SingleBracket (TC_Unary _ SingleBracket op (T_NormalWord id [t]))) | ( op == "-z" || op == "-n" ) && willSplit t =
-       addNoteFor id $ Note ErrorC "Always true because you failed to quote. Use [[ ]] instead."
+       err id "Always true because you failed to quote. Use [[ ]] instead."
 checkUnquotedZN _ = return ()
 
 prop_checkNumberComparisons1 = verify checkNumberComparisons "[[ $foo < 3 ]]"
@@ -222,8 +226,8 @@ prop_checkNumberComparisons4 = verify checkNumberComparisons "[ $foo > $bar ]"
 prop_checkNumberComparisons5 = verify checkNumberComparisons "until [ $n <= $z ]; do echo foo; done"
 checkNumberComparisons (TC_Binary id typ op lhs rhs)
     | op `elem` ["<", ">", "<=", ">="] = do
-        when (isNum lhs || isNum rhs) $ addNoteFor id $ Note ErrorC $ "\"" ++ op ++ "\" is for string comparisons. Use " ++ (eqv op)
-        when (typ == SingleBracket) $ addNoteFor id $ Note ErrorC $ "Can't use " ++ op ++" in [ ]. Use [[ ]]."
+        when (isNum lhs || isNum rhs) $ err id $ "\"" ++ op ++ "\" is for string comparisons. Use " ++ (eqv op)
+        when (typ == SingleBracket) $ err id $ "Can't use " ++ op ++" in [ ]. Use [[ ]]."
     where
         isNum t = case deadSimple t of [v] -> all isDigit v
                                        _ -> False
@@ -238,37 +242,37 @@ prop_checkNoaryWasBinary = verify checkNoaryWasBinary "[[ a==$foo ]]"
 prop_checkNoaryWasBinary2 = verify checkNoaryWasBinary "[ $foo=3 ]"
 checkNoaryWasBinary (TC_Noary _ _ t@(T_NormalWord id l)) = do
     let str = concat $ deadSimple t
-    when ('=' `elem` str) $ addNoteFor id $ Note ErrorC $ "Always true because you didn't put spaces around the ="
+    when ('=' `elem` str) $ err id $ "Always true because you didn't put spaces around the ="
 checkNoaryWasBinary _ = return ()
 
 prop_checkBraceExpansionVars = verify checkBraceExpansionVars "echo {1..$n}"
 checkBraceExpansionVars (T_BraceExpansion id s) | '$' `elem` s =
-    addNoteFor id $ Note WarningC $ "You can't use variables in brace expansions."
+    warn id $ "You can't use variables in brace expansions."
 checkBraceExpansionVars _ = return ()
 
 prop_checkForDecimals = verify checkForDecimals "((3.14*c))"
 checkForDecimals (TA_Literal id s) | any (== '.') s = do
-    addNoteFor id $ Note ErrorC $ "(( )) doesn't support decimals. Use bc or awk."
+    err id $ "(( )) doesn't support decimals. Use bc or awk."
 checkForDecimals _ = return ()
 
 prop_checkDivBeforeMult = verify checkDivBeforeMult "echo $((c/n*100))"
 prop_checkDivBeforeMult2 = verifyNot checkDivBeforeMult "echo $((c*100/n))"
 checkDivBeforeMult (TA_Binary _ "*" (TA_Binary id "/" _ _) _) = do
-    addNoteFor id $ Note InfoC $ "Increase precision by replacing a/b*c with a*c/b"
+    info id $ "Increase precision by replacing a/b*c with a*c/b"
 checkDivBeforeMult _ = return ()
 
 prop_checkArithmeticDeref = verify checkArithmeticDeref "echo $((3+$foo))"
 prop_checkArithmeticDeref2 = verify checkArithmeticDeref "cow=14; (( s+= $cow ))"
 prop_checkArithmeticDeref3 = verifyNot checkArithmeticDeref "cow=1/40; (( s+= ${cow%%/*} ))"
 checkArithmeticDeref (TA_Expansion _ (T_DollarBraced id str)) | not $ any (`elem` "/.:#%") $ str =
-    addNoteFor id $ Note WarningC $ "Don't use $ on variables in (( )) unless you want to dereference twice"
+    warn id $ "Don't use $ on variables in (( )) unless you want to dereference twice"
 checkArithmeticDeref _ = return ()
 
 
 prop_checkComparisonAgainstGlob = verify checkComparisonAgainstGlob "[[ $cow == $bar ]]"
 prop_checkComparisonAgainstGlob2 = verifyNot checkComparisonAgainstGlob "[[ $cow == \"$bar\" ]]"
 checkComparisonAgainstGlob (TC_Binary _ DoubleBracket op _ (T_NormalWord id [T_DollarBraced _ _])) | op == "=" || op == "==" =
-    addNoteFor id $ Note WarningC $ "Quote the rhs of = in [[ ]] to prevent glob interpretation"
+    warn id $ "Quote the rhs of = in [[ ]] to prevent glob interpretation"
 checkComparisonAgainstGlob _ = return ()
 
 allModifiedVariables t = snd $ runState (doAnalysis (\x -> modify $ (++) (getModifiedVariables x)) t) []
@@ -306,7 +310,7 @@ checkPrintfVar = checkCommand "printf" f where
     f _ = return ()
     check format =
         if not $ isLiteral format
-          then addNoteFor (getId format) $ Note WarningC $ "Don't use printf \"$foo\", use printf \"%s\" \"$foo\"" 
+          then warn (getId format) $ "Don't use printf \"$foo\", use printf \"%s\" \"$foo\"" 
           else return ()
 
 --- Subshell detection
@@ -413,8 +417,8 @@ findSubshelled ((Reference (readId, str)):rest) scopes deadVars = do
     case Map.findWithDefault Alive str deadVars of
         Alive -> return ()
         Dead writeId reason -> do
-                    addNoteFor writeId $ Note InfoC $ "Modification of " ++ str ++ " is local (to subshell caused by "++ reason ++")."
-                    addNoteFor readId $ Note InfoC $ str ++ " was modified in a subshell. That change might be lost."
+                    info writeId $ "Modification of " ++ str ++ " is local (to subshell caused by "++ reason ++")."
+                    info readId $ str ++ " was modified in a subshell. That change might be lost."
     findSubshelled rest scopes deadVars
 
 findSubshelled ((StackScope (SubshellScope reason)):rest) scopes deadVars =
