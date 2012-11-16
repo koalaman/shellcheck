@@ -264,7 +264,8 @@ checkDivBeforeMult _ = return ()
 prop_checkArithmeticDeref = verify checkArithmeticDeref "echo $((3+$foo))"
 prop_checkArithmeticDeref2 = verify checkArithmeticDeref "cow=14; (( s+= $cow ))"
 prop_checkArithmeticDeref3 = verifyNot checkArithmeticDeref "cow=1/40; (( s+= ${cow%%/*} ))"
-checkArithmeticDeref (TA_Expansion _ (T_DollarBraced id str)) | not $ any (`elem` "/.:#%") $ str =
+prop_checkArithmeticDeref4 = verifyNot checkArithmeticDeref "(( ! $? ))"
+checkArithmeticDeref (TA_Expansion _ (T_DollarBraced id str)) | not $ any (`elem` "/.:#%?*@") $ str =
     warn id $ "Don't use $ on variables in (( )) unless you want to dereference twice"
 checkArithmeticDeref _ = return ()
 

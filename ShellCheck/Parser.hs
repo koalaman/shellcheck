@@ -279,6 +279,7 @@ prop_a6 = isOk readArithmeticContents " 1 | 2 ||3|4"
 prop_a7 = isOk readArithmeticContents "3*2**10"
 prop_a8 = isOk readArithmeticContents "3"
 prop_a9 = isOk readArithmeticContents "a^!-b"
+prop_aA = isOk readArithmeticContents "! $?"
 readArithmeticContents =
     readSequence
   where
@@ -359,6 +360,7 @@ readArithmeticContents =
     readNegated = do
         id <- getNextId
         op <- oneOf "!~"
+        spacing
         x <- readAnySigned
         return $ TA_Unary id [op] x
 
