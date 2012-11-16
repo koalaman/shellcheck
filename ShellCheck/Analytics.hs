@@ -37,6 +37,7 @@ basicChecks = [
     ,checkBraceExpansionVars
     ,checkForDecimals
     ,checkDivBeforeMult
+    ,checkArithmeticDeref
     ]
 
 modifyMap = modify
@@ -251,6 +252,13 @@ prop_checkDivBeforeMult2 = verifyNot checkDivBeforeMult "echo $((c*100/n))"
 checkDivBeforeMult (TA_Binary _ "*" (TA_Binary id "/" _ _) _) = do
     addNoteFor id $ Note InfoC $ "Increase precision by replacing a/b*c with a*c/b"
 checkDivBeforeMult _ = return ()
+
+prop_checkArithmeticDeref = verify checkArithmeticDeref "echo $((3+$foo))"
+prop_checkArithmeticDeref2 = verify checkArithmeticDeref "cow=14; (( s+= $cow ))"
+prop_checkArithmeticDeref3 = verifyNot checkArithmeticDeref "cow=1/40; (( s+= ${cow%%/*} ))"
+checkArithmeticDeref (TA_Expansion _ (T_DollarBraced id str)) | not $ any (`elem` "/.:#%") $ str =
+    addNoteFor id $ Note WarningC $ "Don't use $ on variables in (( )) unless you want to dereference twice"
+checkArithmeticDeref _ = return ()
 
 allModifiedVariables t = snd $ runState (doAnalysis (\x -> modify $ (++) (getModifiedVariables x)) t) []
 
