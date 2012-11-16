@@ -206,7 +206,7 @@ prop_checkSingleQuotedVariables2 = verify checkSingleQuotedVariables "echo 'lol$
 prop_checkSingleQuotedVariables3 = verifyNot checkSingleQuotedVariables "sed 's/foo$/bar/'"
 checkSingleQuotedVariables (T_SingleQuoted id s) =
             case matchRegex checkSingleQuotedVariablesRe s of
-                Just [var] -> warn id $ var ++ " won't be expanded in single quotes."
+                Just [var] -> info id $ var ++ " won't be expanded in single quotes."
                 _          -> return ()
 checkSingleQuotedVariables _ = return ()
 checkSingleQuotedVariablesRe = mkRegex "(\\$[0-9a-zA-Z_]+)"
