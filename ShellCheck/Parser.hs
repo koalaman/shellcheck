@@ -1033,13 +1033,15 @@ prop_readAssignmentWord = isOk readAssignmentWord "a=42"
 prop_readAssignmentWord2 = isOk readAssignmentWord "b=(1 2 3)"
 prop_readAssignmentWord3 = isWarning readAssignmentWord "$b = 13"
 prop_readAssignmentWord4 = isWarning readAssignmentWord "b = $(lol)"
+prop_readAssignmentWord5 = isOk readAssignmentWord "b+=lol"
+prop_readAssignmentWord6 = isWarning readAssignmentWord "b += (1 2 3)"
 readAssignmentWord = try $ do
     id <- getNextId
     optional (char '$' >> parseNote ErrorC "Don't use $ on the left side of assignments")
     variable <- readVariableName
     space <- spacing
     pos <- getPosition
-    char '='
+    op <- string "+=" <|> string "="  -- analysis doesn't treat += as a reference. fixme?
     space2 <- spacing
     value <- readArray <|> readNormalWord
     spacing
