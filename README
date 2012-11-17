@@ -13,7 +13,7 @@ The goals of ShellCheck are:
     that causes a shell to behave strangely and counter-intuitively.
 
   - To point out subtle caveats, corner cases and pitfalls, that may cause an
-    advance user's otherwise working script to fail under future circumstances.
+    advanced user's otherwise working script to fail under future circumstances.
 
 
 ShellCheck is written in Haskell, and requires GHC and Parsec3. To build the
