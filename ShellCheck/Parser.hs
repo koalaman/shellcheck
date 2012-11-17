@@ -424,8 +424,8 @@ readCondition = do
   open <- (try $ string "[[") <|> (string "[")
   let single = open == "["
   condSpacingMsg False $ if single
-        then "You need spaces after the opening [ and before the closing ]"
-        else "You need spaces after the opening [[ and before the closing ]]"
+        then "You need spaces after the opening [ and before the closing ]."
+        else "You need spaces after the opening [[ and before the closing ]]."
   condition <- readConditionContents single
   cpos <- getPosition
   close <- (try $ string "]]") <|> (string "]")
@@ -435,7 +435,7 @@ readCondition = do
 
 
 hardCondSpacing = condSpacingMsg False "You need a space here."
-softCondSpacing = condSpacingMsg True "You need a space here"
+softCondSpacing = condSpacingMsg True "You need a space here."
 condSpacingMsg soft msg = do
   pos <- getPosition
   space <- spacing
