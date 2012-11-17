@@ -851,27 +851,41 @@ prop_readIfClause2 = isWarning readIfClause "if false; then; echo oo; fi"
 prop_readIfClause3 = isWarning readIfClause "if false; then true; else; echo lol; fi"
 readIfClause = do
     id <- getNextId
+    pos <- getPosition
     (condition, action) <- readIfPart
     elifs <- many readElifPart
     elses <- option [] readElsePart
-    g_Fi
+    g_Fi <|> (do
+                eof
+                parseProblemAt pos ErrorC "Can't find 'fi' for this if. Make sure it's preceeded by a ; or \\n"
+                fail "lol"
+             )
     return $ T_IfExpression id ((condition, action):elifs) elses
+
+checkIfNotSpecial pos key stuff = do
+    eof
+    let f (T_Literal id str) | str == key = parseProblemAt pos ErrorC $ "You need a \\n or ; before '"++ key ++ "' to make it special"
+        f t  = return ()
+    mapM (doAnalysis f) stuff
+    fail "lol"
 
 readIfPart = do
     g_If
     allspacing
+    pos <- getPosition
     condition <- readTerm
-    g_Then
+    g_Then <|> (checkIfNotSpecial pos "then" condition)
     acceptButWarn g_Semi ErrorC "No semicolons directly after 'then'"
     allspacing
     action <- readTerm
     return (condition, action)
 
 readElifPart = do
+    pos <- getPosition
     g_Elif
     allspacing
     condition <- readTerm
-    g_Then
+    g_Then <|> (checkIfNotSpecial pos "then" condition)
     acceptButWarn g_Semi ErrorC "No semicolons directly after 'then'"
     allspacing
     action <- readTerm
