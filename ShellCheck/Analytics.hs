@@ -157,6 +157,7 @@ prop_checkMissingPositionalQuotes = verifyFull checkMissingPositionalQuotes "rm 
 prop_checkMissingPositionalQuotes2 = verifyFull checkMissingPositionalQuotes "rm ${10//foo/bar}"
 prop_checkMissingPositionalQuotes3 = verifyNotFull checkMissingPositionalQuotes "(( $1 + 3 ))"
 prop_checkMissingPositionalQuotes4 = verifyNotFull checkMissingPositionalQuotes "if [[ $2 -gt 14 ]]; then true; fi"
+prop_checkMissingPositionalQuotes5 = verifyNotFull checkMissingPositionalQuotes "foo=$3 env"
 checkMissingPositionalQuotes t m = 
     runBasicAnalysis cq t m
   where 
@@ -337,6 +338,7 @@ inUnquotableContext tree t =
         TA_Binary _ _ _ _ -> True
         TA_Trinary _ _ _ _ -> True
         TA_Expansion _ _ -> True
+        T_Assignment _ _ _ -> True
         T_Redirecting _ _ _ -> False
         x -> case Map.lookup (getId x) tree of
                 Nothing -> False
