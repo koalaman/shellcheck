@@ -123,14 +123,14 @@ prop_checkForInQuoted = verify checkForInQuoted "for f in \"$(ls)\"; do echo foo
 prop_checkForInQuoted2 = verifyNot checkForInQuoted "for f in \"$@\"; do echo foo; done"
 checkForInQuoted (T_ForIn _ f [T_NormalWord _ [T_DoubleQuoted id list]] _) =
     when (any (\x -> willSplit x && not (isMagicInQuotes x)) list) $
-        err id $ "Since you double quoted this, it will not word split, and the loop will only run once"
+        err id $ "Since you double quoted this, it will not word split, and the loop will only run once."
 checkForInQuoted _ = return ()
 
 
 prop_checkForInLs = verify checkForInLs "for f in $(ls *.mp3); do mplayer \"$f\"; done"
 checkForInLs (T_ForIn _ f [T_NormalWord _ [T_DollarExpansion id [x]]] _) =
     case deadSimple x of ("ls":n) -> let args = (if n == [] then ["*"] else n) in
-                                        err id $ "Don't use 'for "++f++" in $(ls " ++ (intercalate " " n) ++ ")'. Use 'for "++f++" in "++ (intercalate " " args) ++ "'"
+                                        err id $ "Don't use 'for "++f++" in $(ls " ++ (intercalate " " n) ++ ")'. Use 'for "++f++" in "++ (intercalate " " args) ++ "' ."
                          _ -> return ()
 checkForInLs _ = return ()
 
@@ -149,7 +149,7 @@ checkMissingForQuotes t m =
         markUnquoted _ _ = return ()
         mu (T_DollarBraced id s) | s == f = warning id
         mu _ = return ()
-        warning id = warn id $ "Variables that could contain spaces should be quoted"
+        warning id = warn id $ "Variables that could contain spaces should be quoted."
     cq _ = return ()
     parents = getParentTree t
 
@@ -163,14 +163,14 @@ checkMissingPositionalQuotes t m =
     cq l@(T_NormalWord _ list) =
         unless (inUnquotableContext parents l) $ mapM_ checkPos list
         where checkPos (T_DollarBraced id s) | all isDigit (getBracedReference s) =
-                warn id $ "Positional parameters should be quoted to avoid whitespace trouble"
+                warn id $ "Positional parameters should be quoted to avoid whitespace trouble."
               checkPos _ = return ()
     cq _ = return ()
     parents = getParentTree t
 
 prop_checkUnquotedExpansions = verify checkUnquotedExpansions "rm $(ls)"
 checkUnquotedExpansions (T_SimpleCommand _ _ cmds) = mapM_ check cmds
-    where check (T_NormalWord _ [T_DollarExpansion id _]) = warn id "Quote the expansion to prevent word splitting"
+    where check (T_NormalWord _ [T_DollarExpansion id _]) = warn id "Quote the expansion to prevent word splitting."
           check _ = return ()
 checkUnquotedExpansions _ = return ()
 
@@ -181,7 +181,7 @@ checkRedirectToSame s@(T_Pipeline _ list) =
     mapM_ (\l -> (mapM_ (\x -> doAnalysis (checkOccurences x) l) (getAllRedirs list))) list
   where checkOccurences (T_NormalWord exceptId x) (T_NormalWord newId y) =
             when (x == y && exceptId /= newId) (do
-                let note = Note InfoC $ "Make sure not to read and write the same file in the same pipeline"
+                let note = Note InfoC $ "Make sure not to read and write the same file in the same pipeline."
                 addNoteFor newId $ note
                 addNoteFor exceptId $ note)
         checkOccurences _ _ = return ()
@@ -204,14 +204,14 @@ checkShorthandIf _ = return ()
 
 prop_checkDollarStar = verify checkDollarStar "for f in $*; do ..; done"
 checkDollarStar (T_NormalWord _ [(T_DollarBraced id "*")]) =
-    warn id $ "Use \"$@\" (with quotes) to prevent whitespace problems"
+    warn id $ "Use \"$@\" (with quotes) to prevent whitespace problems."
 checkDollarStar _ = return ()
 
 
 prop_checkUnquotedDollarAt = verify checkUnquotedDollarAt "ls $@"
 prop_checkUnquotedDollarAt2 = verifyNot checkUnquotedDollarAt "ls \"$@\""
 checkUnquotedDollarAt (T_NormalWord _ [T_DollarBraced id "@"]) =
-    err id $ "Add double quotes around $@, otherwise it's just like $* and breaks on spaces"
+    err id $ "Add double quotes around $@, otherwise it's just like $* and breaks on spaces."
 checkUnquotedDollarAt _ = return ()
 
 prop_checkStderrRedirect = verify checkStderrRedirect "test 2>&1 > cow"
@@ -254,7 +254,7 @@ prop_checkNumberComparisons4 = verify checkNumberComparisons "[ $foo > $bar ]"
 prop_checkNumberComparisons5 = verify checkNumberComparisons "until [ $n <= $z ]; do echo foo; done"
 checkNumberComparisons (TC_Binary id typ op lhs rhs)
     | op `elem` ["<", ">", "<=", ">="] = do
-        when (isNum lhs || isNum rhs) $ err id $ "\"" ++ op ++ "\" is for string comparisons. Use " ++ (eqv op)
+        when (isNum lhs || isNum rhs) $ err id $ "\"" ++ op ++ "\" is for string comparisons. Use " ++ (eqv op) ++" ."
         when (typ == SingleBracket) $ err id $ "Can't use " ++ op ++" in [ ]. Use [[ ]]."
     where
         isNum t = case deadSimple t of [v] -> all isDigit v
@@ -270,7 +270,7 @@ prop_checkNoaryWasBinary = verify checkNoaryWasBinary "[[ a==$foo ]]"
 prop_checkNoaryWasBinary2 = verify checkNoaryWasBinary "[ $foo=3 ]"
 checkNoaryWasBinary (TC_Noary _ _ t@(T_NormalWord id l)) = do
     let str = concat $ deadSimple t
-    when ('=' `elem` str) $ err id $ "Always true because you didn't put spaces around the ="
+    when ('=' `elem` str) $ err id $ "Always true because you didn't put spaces around the = ."
 checkNoaryWasBinary _ = return ()
 
 prop_checkBraceExpansionVars = verify checkBraceExpansionVars "echo {1..$n}"
@@ -286,7 +286,7 @@ checkForDecimals _ = return ()
 prop_checkDivBeforeMult = verify checkDivBeforeMult "echo $((c/n*100))"
 prop_checkDivBeforeMult2 = verifyNot checkDivBeforeMult "echo $((c*100/n))"
 checkDivBeforeMult (TA_Binary _ "*" (TA_Binary id "/" _ _) _) = do
-    info id $ "Increase precision by replacing a/b*c with a*c/b"
+    info id $ "Increase precision by replacing a/b*c with a*c/b."
 checkDivBeforeMult _ = return ()
 
 prop_checkArithmeticDeref = verify checkArithmeticDeref "echo $((3+$foo))"
@@ -294,14 +294,14 @@ prop_checkArithmeticDeref2 = verify checkArithmeticDeref "cow=14; (( s+= $cow ))
 prop_checkArithmeticDeref3 = verifyNot checkArithmeticDeref "cow=1/40; (( s+= ${cow%%/*} ))"
 prop_checkArithmeticDeref4 = verifyNot checkArithmeticDeref "(( ! $? ))"
 checkArithmeticDeref (TA_Expansion _ (T_DollarBraced id str)) | not $ any (`elem` "/.:#%?*@") $ str =
-    warn id $ "Don't use $ on variables in (( )) unless you want to dereference twice"
+    style id $ "Don't use $ on variables in (( ))."
 checkArithmeticDeref _ = return ()
 
 
 prop_checkComparisonAgainstGlob = verify checkComparisonAgainstGlob "[[ $cow == $bar ]]"
 prop_checkComparisonAgainstGlob2 = verifyNot checkComparisonAgainstGlob "[[ $cow == \"$bar\" ]]"
 checkComparisonAgainstGlob (TC_Binary _ DoubleBracket op _ (T_NormalWord id [T_DollarBraced _ _])) | op == "=" || op == "==" =
-    warn id $ "Quote the rhs of = in [[ ]] to prevent glob interpretation"
+    warn id $ "Quote the rhs of = in [[ ]] to prevent glob interpretation."
 checkComparisonAgainstGlob _ = return ()
 
 prop_checkCommarrays1 = verify checkCommarrays "a=(1, 2)"
@@ -309,7 +309,7 @@ prop_checkCommarrays2 = verify checkCommarrays "a+=(1,2,3)"
 prop_checkCommarrays3 = verifyNot checkCommarrays "cow=(1 \"foo,bar\" 3)"
 checkCommarrays (T_Array id l) =
     if any ("," `isSuffixOf`) (concatMap deadSimple l) || (length $ filter (==',') (concat $ concatMap deadSimple l)) > 1
-    then warn id "Use spaces, not commas, to separate array elements"
+    then warn id "Use spaces, not commas, to separate array elements."
     else return ()
 checkCommarrays _ = return ()
 
@@ -375,7 +375,7 @@ checkPrintfVar = checkCommand "printf" f where
     f _ = return ()
     check format =
         if not $ isLiteral format
-          then warn (getId format) $ "Don't use printf \"$foo\", use printf \"%s\" \"$foo\""
+          then warn (getId format) $ "Don't use variables in the printf format string. Use printf \"%s\" \"$foo\"."
           else return ()
 
 --- Subshell detection

@@ -61,7 +61,7 @@ allspacing = do
     when x allspacing
 
 carriageReturn = do
-    parseNote ErrorC "Literal carriage return. Run script through tr -d '\\r' "
+    parseNote ErrorC "Literal carriage return. Run script through tr -d '\\r' ."
     char '\r'
 
 --------- Message/position annotation on top of user state
@@ -186,7 +186,7 @@ readConditionContents single = do
           arg <- readCondWord
           return $ op arg)
         <|> (do
-              parseProblemAt pos ErrorC $ "Expected this to be an argument to the unary condition"
+              parseProblemAt pos ErrorC $ "Expected this to be an argument to the unary condition."
               fail "oops")
 
     readCondUnaryOp = try $ do
@@ -207,7 +207,7 @@ readConditionContents single = do
         if (endedWithBracket x)
             then do
                 lookAhead (try $ (many whitespace) >> (eof <|> disregard readSeparator <|> disregard (g_Then <|> g_Do)))
-                parseProblemAt pos ErrorC $ "You need a space before the " ++ if single then "]" else "]]"
+                parseProblemAt pos ErrorC $ "You need a space before the " ++ (if single then "]" else "]]") ++ "."
             else
                 disregard spacing
         return x
@@ -220,7 +220,7 @@ readConditionContents single = do
         id <- getNextId
         x <- try (string "&&" <|> string "-a")
         when (single && x == "&&") $ addNoteFor id $ Note ErrorC "You can't use && inside [..]. Use [[..]] instead."
-        when (not single && x == "-a") $ addNoteFor id $ Note ErrorC "In [[..]], use && instead of -a"
+        when (not single && x == "-a") $ addNoteFor id $ Note ErrorC "In [[..]], use && instead of -a."
         softCondSpacing
         return $ TC_And id typ x
 
@@ -229,7 +229,7 @@ readConditionContents single = do
         id <- getNextId
         x <- try (string "||" <|> string "-o")
         when (single && x == "||") $ addNoteFor id $ Note ErrorC "You can't use || inside [..]. Use [[..]] instead."
-        when (not single && x == "-o") $ addNoteFor id $ Note ErrorC "In [[..]], use && instead of -o"
+        when (not single && x == "-o") $ addNoteFor id $ Note ErrorC "In [[..]], use && instead of -o."
         softCondSpacing
         return $ TC_Or id typ x
 
@@ -239,13 +239,13 @@ readConditionContents single = do
               pos <- getPosition
               lookAhead (char '[')
               parseProblemAt pos ErrorC $ if single
-                  then "Don't use [] for grouping. Use \\( .. \\) "
+                  then "Don't use [] for grouping. Use \\( .. \\)."
                   else "Don't use [] for grouping. Use ()."
             )
       (do
             pos <- getPosition
             op <- readCondBinaryOp
-            y <- readCondWord <|> ( (parseProblemAt pos ErrorC $ "Expected another argument for this operator") >> mzero)
+            y <- readCondWord <|> ( (parseProblemAt pos ErrorC $ "Expected another argument for this operator.") >> mzero)
             return (x `op` y)
           ) <|> (return $ TC_Noary id typ x)
 
@@ -489,7 +489,7 @@ readBackTicked = do
     pos <- getPosition
     char '`'
     f <- readGenericLiteral (char '`')
-    char '`' `attempting` (eof >> parseProblemAt pos ErrorC "Can't find terminating backtick for this one")
+    char '`' `attempting` (eof >> parseProblemAt pos ErrorC "Can't find terminating backtick for this one.")
     return $ T_Literal id f
 
 
@@ -638,7 +638,7 @@ readDollarVariable = do
         return (T_DollarBraced id [n]) `attempting` do
             pos <- getPosition
             num <- lookAhead $ many1 p
-            parseNoteAt pos ErrorC $ "$" ++ (n:num) ++ " is equivalent to ${" ++ [n] ++ "}"++ num
+            parseNoteAt pos ErrorC $ "$" ++ (n:num) ++ " is equivalent to ${" ++ [n] ++ "}"++ num ++"."
 
     let positional = singleCharred digit
     let special = singleCharred specialVariable
@@ -658,7 +658,7 @@ readDollarLonely = do
     id <- getNextId
     char '$'
     n <- lookAhead (anyChar <|> (eof >> return '_'))
-    when (n /= '\'') $ parseNote StyleC "$ is not used specially and should therefore be escaped"
+    when (n /= '\'') $ parseNote StyleC "$ is not used specially and should therefore be escaped."
     return $ T_Literal id "$"
 
 prop_readHereDoc = isOk readHereDoc "<< foo\nlol\ncow\nfoo"
@@ -688,16 +688,16 @@ readHereDoc = do
      `attempting` (eof >> debugHereDoc tokenPosition endToken hereInfo)
 
 verifyHereDoc dashed quoted spacing hereInfo = do
-    when (not dashed && spacing /= "") $ parseNote ErrorC "Use <<- instead of << if you want to indent the end token"
-    when (dashed && filter (/= '\t') spacing /= "" ) $ parseNote ErrorC "When using <<-, you can only indent with tabs"
+    when (not dashed && spacing /= "") $ parseNote ErrorC "Use <<- instead of << if you want to indent the end token."
+    when (dashed && filter (/= '\t') spacing /= "" ) $ parseNote ErrorC "When using <<-, you can only indent with tabs."
     return ()
 
 debugHereDoc pos endToken doc =
     if endToken `isInfixOf` doc
-        then parseProblemAt pos ErrorC ("Found " ++ endToken ++ " further down, but not by itself at the start of the line")
+        then parseProblemAt pos ErrorC ("Found " ++ endToken ++ " further down, but not by itself at the start of the line.")
         else if (map toLower endToken) `isInfixOf` (map toLower doc)
             then parseProblemAt pos ErrorC ("Found " ++ endToken ++ " further down, but with wrong casing.")
-            else parseProblemAt pos ErrorC ("Couldn't find end token `" ++ endToken ++ "' in the here document ")
+            else parseProblemAt pos ErrorC ("Couldn't find end token `" ++ endToken ++ "' in the here document.")
 
 
 readFilename = readNormalWord
@@ -752,7 +752,7 @@ readSeparatorOp = do
                     spacing
                     pos <- getPosition
                     char ';'
-                    parseProblemAt pos ErrorC "It's not 'foo &; bar', just 'foo & bar'. "
+                    parseProblemAt pos ErrorC "It's not 'foo &; bar', just 'foo & bar'."
                     return '&'
             ) <|> char ';' <|> char '&'
     spacing
@@ -857,14 +857,14 @@ readIfClause = do
     elses <- option [] readElsePart
     g_Fi <|> (do
                 eof
-                parseProblemAt pos ErrorC "Can't find 'fi' for this if. Make sure it's preceeded by a ; or \\n"
+                parseProblemAt pos ErrorC "Can't find 'fi' for this if. Make sure it's preceeded by a ; or \\n."
                 fail "lol"
              )
     return $ T_IfExpression id ((condition, action):elifs) elses
 
 checkIfNotSpecial pos key stuff = do
     eof
-    let f (T_Literal id str) | str == key = parseProblemAt pos ErrorC $ "You need a \\n or ; before '"++ key ++ "' to make it special"
+    let f (T_Literal id str) | str == key = parseProblemAt pos ErrorC $ "You need a \\n or ; before '"++ key ++ "' to make it special."
         f t  = return ()
     mapM (doAnalysis f) stuff
     fail "lol"
@@ -875,7 +875,7 @@ readIfPart = do
     pos <- getPosition
     condition <- readTerm
     g_Then <|> (checkIfNotSpecial pos "then" condition)
-    acceptButWarn g_Semi ErrorC "No semicolons directly after 'then'"
+    acceptButWarn g_Semi ErrorC "No semicolons directly after 'then'."
     allspacing
     action <- readTerm
     return (condition, action)
@@ -886,14 +886,14 @@ readElifPart = do
     allspacing
     condition <- readTerm
     g_Then <|> (checkIfNotSpecial pos "then" condition)
-    acceptButWarn g_Semi ErrorC "No semicolons directly after 'then'"
+    acceptButWarn g_Semi ErrorC "No semicolons directly after 'then'."
     allspacing
     action <- readTerm
     return (condition, action)
 
 readElsePart = do
     g_Else
-    acceptButWarn g_Semi ErrorC "No semicolons directly after 'else'"
+    acceptButWarn g_Semi ErrorC "No semicolons directly after 'else'."
     allspacing
     readTerm
 
@@ -946,12 +946,12 @@ readDoGroup = do
             disregard g_Done <|> (do
                 eof
                 case hasFinal "done" commands of
-                    Nothing -> parseProblemAt pos ErrorC "Couldn't find a 'done' for this 'do'"
-                    Just (id) -> addNoteFor id $ Note ErrorC "Put a ; or \\n before the done"
+                    Nothing -> parseProblemAt pos ErrorC "Couldn't find a 'done' for this 'do'."
+                    Just (id) -> addNoteFor id $ Note ErrorC "Put a ; or \\n before the done."
                 )
             return commands
           <|> do
-            parseProblemAt pos ErrorC "Can't find the 'done' for this 'do'"
+            parseProblemAt pos ErrorC "Can't find the 'done' for this 'do'."
             fail "No done"
 
 hasFinal s [] = Nothing
@@ -979,7 +979,7 @@ readForClause = do
     group <- readDoGroup <|> (
                 allspacing >>
                 eof >>
-                parseProblem ErrorC "Missing 'do'" >>
+                parseProblem ErrorC "Missing 'do'." >>
                 return [])
     return $ T_ForIn id name values group
 
@@ -990,7 +990,7 @@ readInClause = do
 
     do {
         lookAhead (g_Do);
-        parseNote ErrorC "You need a line feed or semicolon before the 'do'";
+        parseNote ErrorC "You need a line feed or semicolon before the 'do'.";
     } <|> do {
         optional $ g_Semi;
         disregard allspacing;
@@ -1030,7 +1030,7 @@ readFunctionDefinition = do
     id <- getNextId
     name <- try readFunctionSignature
     allspacing
-    (disregard (lookAhead g_Lbrace) <|> parseProblem ErrorC "Expected a { to open the function definition")
+    (disregard (lookAhead g_Lbrace) <|> parseProblem ErrorC "Expected a { to open the function definition.")
     group <- readBraceGroup
     return $ T_Function id name group
 
@@ -1068,7 +1068,7 @@ prop_readAssignmentWord5 = isOk readAssignmentWord "b+=lol"
 prop_readAssignmentWord6 = isWarning readAssignmentWord "b += (1 2 3)"
 readAssignmentWord = try $ do
     id <- getNextId
-    optional (char '$' >> parseNote ErrorC "Don't use $ on the left side of assignments")
+    optional (char '$' >> parseNote ErrorC "Don't use $ on the left side of assignments.")
     variable <- readVariableName
     space <- spacing
     pos <- getPosition
@@ -1076,7 +1076,7 @@ readAssignmentWord = try $ do
     space2 <- spacing
     value <- readArray <|> readNormalWord
     spacing
-    when (space ++ space2 /= "") $ parseNoteAt pos ErrorC "Don't put spaces around the = in assignments"
+    when (space ++ space2 /= "") $ parseNoteAt pos ErrorC "Don't put spaces around the = in assignments."
     return $ T_Assignment id variable value
 
 readArray = do
@@ -1156,7 +1156,7 @@ readScript = do
         eof <|> (parseProblem ErrorC "Parsing stopped here because of parsing errors.");
         return $ T_Script id commands;
     } <|> do {
-        parseProblem WarningC "Couldn't read any commands";
+        parseProblem WarningC "Couldn't read any commands.";
         return $ T_Script id $ [T_EOF id];
     }
 
