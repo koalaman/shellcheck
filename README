@@ -1,0 +1,27 @@
+ShellCheck - A shell script static analysis tool
+http://www.vidarholen.net/contents/shellcheck
+
+Copyright 2012, Vidar 'koala_man' Holen
+Licensed under the GNU Affero General Public License, v3
+
+The goals of ShellCheck are:
+
+  - To point out and clarify typical beginner's syntax issues,
+    that causes a shell to give cryptic error messages.
+
+  - To point out and clarify typical intermediate level semantic problems,
+    that causes a shell to behave strangely and counter-intuitively.
+
+  - To point out subtle caveats, corner cases and pitfalls, that may cause an
+    advance user's otherwise working script to fail under future circumstances.
+
+
+ShellCheck is written in Haskell, and requires GHC and Parsec3. To build the
+JSON interface and run the unit tests, it also requires QuickCheck2 and JSON.
+
+On Ubuntu and similar, these are called:
+  ghc6 libghc6-parsec3-dev libghc6-quickcheck2-dev libghc6-json-dev 
+
+Build with 'make'. 
+
+Happy ShellChecking!

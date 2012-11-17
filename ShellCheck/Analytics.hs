@@ -1,3 +1,20 @@
+{-
+    This file is part of ShellCheck.
+    http://www.vidarholen.net/contents/shellcheck
+
+    ShellCheck is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    ShellCheck is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+-}
 module ShellCheck.Analytics where
 
 import ShellCheck.AST
@@ -42,6 +59,7 @@ basicChecks = [
     ,checkArithmeticDeref
     ,checkComparisonAgainstGlob
     ,checkPrintfVar
+    ,checkCommarrays
     ]
 
 modifyMap = modify
@@ -276,6 +294,16 @@ checkComparisonAgainstGlob (TC_Binary _ DoubleBracket op _ (T_NormalWord id [T_D
     warn id $ "Quote the rhs of = in [[ ]] to prevent glob interpretation"
 checkComparisonAgainstGlob _ = return ()
 
+prop_checkCommarrays1 = verify checkCommarrays "a=(1, 2)"
+prop_checkCommarrays2 = verify checkCommarrays "a+=(1,2,3)"
+prop_checkCommarrays3 = verifyNot checkCommarrays "cow=(1 \"foo,bar\" 3)"
+checkCommarrays (T_Array id l) =
+    if any ("," `isSuffixOf`) (concatMap deadSimple l) || (length $ filter (==',') (concat $ concatMap deadSimple l)) > 1
+    then warn id "Use spaces, not commas, to separate array elements"
+    else return ()
+checkCommarrays _ = return ()
+
+
 allModifiedVariables t = snd $ runState (doAnalysis (\x -> modify $ (++) (getModifiedVariables x)) t) []
 
 --- Command specific checks
@@ -311,7 +339,7 @@ checkPrintfVar = checkCommand "printf" f where
     f _ = return ()
     check format =
         if not $ isLiteral format
-          then warn (getId format) $ "Don't use printf \"$foo\", use printf \"%s\" \"$foo\"" 
+          then warn (getId format) $ "Don't use printf \"$foo\", use printf \"%s\" \"$foo\""
           else return ()
 
 --- Subshell detection
