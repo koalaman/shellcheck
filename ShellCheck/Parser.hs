@@ -1205,7 +1205,7 @@ getStringFromParsec errors =
                 Message s     -> (4, "Message: " ++ s)
           wut "" = "eof"
           wut x = x
-          unexpected s = "Aborting due to unexpected " ++ (wut s) ++ ". Is this valid?"
+          unexpected s = "Aborting due to unexpected " ++ (wut s) ++ ". Is this even valid?"
 
 parseShell filename contents = do
     case rp (parseWithNotes readScript) filename contents of
