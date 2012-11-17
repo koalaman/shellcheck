@@ -2,11 +2,12 @@
 # Todo: Find a way to make this not suck.
 
 [[ -e test/quackCheck.hs ]] || { echo "Are you running me from the wrong directory?"; exit 1; }
+[[ $1 == -v ]] && pattern="" || pattern="FAIL"
 
 find . -name '*.hs' -exec bash -c '
 grep -v "^module " "$1" > quack.tmp.hs
 ./test/quackCheck.hs +names quack.tmp.hs
-' -- {} \; 2>&1 | grep -i FAIL
+' -- {} \; 2>&1 | grep -i "$pattern"
 result=$?
 rm -f quack.tmp.hs hugsin
 

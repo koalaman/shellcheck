@@ -31,6 +31,7 @@ import Data.Maybe
 checks = concat [
     map runBasicAnalysis basicChecks
     ,[subshellAssignmentCheck]
+    ,[checkMissingPositionalQuotes, checkMissingForQuotes]
     ]
 
 runAllAnalytics = checkList checks
@@ -41,14 +42,12 @@ basicChecks = [
     checkUuoc
     ,checkForInQuoted
     ,checkForInLs
-    ,checkMissingForQuotes
     ,checkUnquotedExpansions
     ,checkRedirectToSame
     ,checkShorthandIf
     ,checkDollarStar
     ,checkUnquotedDollarAt
     ,checkStderrRedirect
-    ,checkMissingPositionalQuotes
     ,checkSingleQuotedVariables
     ,checkUnquotedZN
     ,checkNumberComparisons
@@ -136,27 +135,38 @@ checkForInLs (T_ForIn _ f [T_NormalWord _ [T_DollarExpansion id [x]]] _) =
 checkForInLs _ = return ()
 
 
-prop_checkMissingForQuotes = verify checkMissingForQuotes "for f in *.mp3; do rm $f; done"
-prop_checkMissingForQuotes2 = verifyNot checkMissingForQuotes "for f in foo bar; do rm $f; done"
-checkMissingForQuotes (T_ForIn _ f words cmds) =
-    if not $ any willSplit words then return () else do
-        mapM_  (doAnalysis (markUnquoted f)) cmds
-  where
-    markUnquoted f (T_NormalWord _ l) = mapM_ mu l
-    markUnquoted _ _ = return ()
-    mu (T_DollarBraced id s) | s == f = warning id
-    mu _ = return ()
-    warning id = warn id $ "Variables that could contain spaces should be quoted"
-checkMissingForQuotes _ = return ()
+prop_checkMissingForQuotes = verifyFull checkMissingForQuotes "for f in *.mp3; do rm $f; done"
+prop_checkMissingForQuotes2 = verifyNotFull checkMissingForQuotes "for f in foo bar; do rm $f; done"
+prop_checkMissingForQuotes3 = verifyNotFull checkMissingForQuotes "for f in *.mp3; do [[ -e $f ]]; done"
+checkMissingForQuotes t m = 
+    runBasicAnalysis cq t m
+  where 
+    cq (T_ForIn _ f words cmds) =
+        if not $ any willSplit words then return () else do
+            mapM_  (doAnalysis (markUnquoted f)) cmds
+      where
+        markUnquoted f t@(T_NormalWord _ l) = unless (inUnquotableContext parents t) $  mapM_ mu l
+        markUnquoted _ _ = return ()
+        mu (T_DollarBraced id s) | s == f = warning id
+        mu _ = return ()
+        warning id = warn id $ "Variables that could contain spaces should be quoted"
+    cq _ = return ()
+    parents = getParentTree t
 
-prop_checkMissingPositionalQuotes = verify checkMissingPositionalQuotes "rm $1"
-prop_checkMissingPositionalQuotes2 = verify checkMissingPositionalQuotes "rm ${10//foo/bar}"
-checkMissingPositionalQuotes (T_NormalWord _ list) =
-    mapM_ checkPos list
-    where checkPos (T_DollarBraced id s) | all isDigit (getBracedReference s) =
-            warn id $ "Positional parameters should be quoted to avoid whitespace trouble"
-          checkPos _ = return ()
-checkMissingPositionalQuotes _ = return ()
+prop_checkMissingPositionalQuotes = verifyFull checkMissingPositionalQuotes "rm $1"
+prop_checkMissingPositionalQuotes2 = verifyFull checkMissingPositionalQuotes "rm ${10//foo/bar}"
+prop_checkMissingPositionalQuotes3 = verifyNotFull checkMissingPositionalQuotes "(( $1 + 3 ))"
+prop_checkMissingPositionalQuotes4 = verifyNotFull checkMissingPositionalQuotes "if [[ $2 -gt 14 ]]; then true; fi"
+checkMissingPositionalQuotes t m = 
+    runBasicAnalysis cq t m
+  where 
+    cq l@(T_NormalWord _ list) =
+        unless (inUnquotableContext parents l) $ mapM_ checkPos list
+        where checkPos (T_DollarBraced id s) | all isDigit (getBracedReference s) =
+                warn id $ "Positional parameters should be quoted to avoid whitespace trouble"
+              checkPos _ = return ()
+    cq _ = return ()
+    parents = getParentTree t
 
 prop_checkUnquotedExpansions = verify checkUnquotedExpansions "rm $(ls)"
 checkUnquotedExpansions (T_SimpleCommand _ _ cmds) = mapM_ check cmds
@@ -305,6 +315,32 @@ checkCommarrays _ = return ()
 
 
 allModifiedVariables t = snd $ runState (doAnalysis (\x -> modify $ (++) (getModifiedVariables x)) t) []
+
+--- Context seeking
+
+getParentTree t =
+    snd . snd $ runState (doStackAnalysis pre post t) ([], Map.empty)
+  where
+    pre t = modify (\(l, m) -> (t:l, m))
+    post t = do
+        ((_:rest), map) <- get
+        case rest of [] -> put (rest, map)
+                     (x:_) -> put (rest, Map.insert (getId t) x map)
+
+
+inUnquotableContext tree t =
+    case t of 
+        TC_Noary _ DoubleBracket _ -> True
+        TC_Unary _ DoubleBracket _ _ -> True
+        TC_Binary _ DoubleBracket _ _ _ -> True
+        TA_Unary _ _ _ -> True
+        TA_Binary _ _ _ _ -> True
+        TA_Trinary _ _ _ _ -> True
+        TA_Expansion _ _ -> True
+        T_Redirecting _ _ _ -> False
+        x -> case Map.lookup (getId x) tree of
+                Nothing -> False
+                Just parent -> inUnquotableContext tree parent
 
 --- Command specific checks
 
