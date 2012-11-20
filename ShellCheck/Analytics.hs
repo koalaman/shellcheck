@@ -40,6 +40,7 @@ checkList l t m = foldl (\x f -> f t x) m l
 runBasicAnalysis f t m = snd $ runState (doAnalysis f t) m
 basicChecks = [
     checkUuoc
+    ,checkPipePitfalls
     ,checkForInQuoted
     ,checkForInLs
     ,checkUnquotedExpansions
@@ -115,6 +116,35 @@ checkUuoc (T_Pipeline _ (T_Redirecting _ _ f@(T_SimpleCommand id _ _):_:_)) =
                          _ -> return ()
 checkUuoc _ = return ()
 
+prop_checkPipePitfalls1 = verify checkPipePitfalls "foo | grep foo | awk bar"
+prop_checkPipePitfalls2 = verifyNot checkPipePitfalls "foo | awk bar | grep foo"
+prop_checkPipePitfalls3 = verify checkPipePitfalls "ls | grep -v mp3"
+checkPipePitfalls (T_Pipeline id commands) = do
+    for [["grep"], ["awk"]] $  \id -> style id "You don't need grep | awk, awk can filter lines by itself."
+    for [["ls"], ["?"]] $      \id -> warn id "Don't parse ls output; it mangles filenames."
+    for [["ls"], ["grep"]] $   \id -> warn id "Don't use ls | grep. Use a for loop with a condition in it."
+    for [["ls"], ["xargs"]] $  \id -> warn id "Don't use ls | xargs. Use find -exec .. +"
+    for [["find"], ["xargs"]]$ \id -> warn id "Don't use find | xargs cmd. find -exec cmd {} + handles whitespace."
+    for [["?"], ["echo"]] $    \id -> info id "echo doesn't read from stdin, are you sure you should be piping to it?"
+  where
+    for l f =
+        let indices = indexOfSublists l (map (take 1 . deadSimple) commands)
+        in mapM_ f (map (\n -> getId $ commands !! n) indices)
+checkPipePitfalls _ = return ()
+
+indexOfSublists sub all = f 0 all
+  where
+    f _ [] = []
+    f n a@(r:rest) =
+        let others = f (n+1) rest in
+            if match sub (take (length sub) a)
+              then n:others
+              else others
+    match [] [] = True
+    match (["?"]:r1) (_:r2) = match r1 r2
+    match (x1:r1) (x2:r2) | x1 == x2 = match r1 r2
+    match _ _ = False
+
 
 isMagicInQuotes (T_DollarBraced _ s) | '@' `elem` s = True
 isMagicInQuotes _ = False
@@ -138,9 +168,9 @@ checkForInLs _ = return ()
 prop_checkMissingForQuotes = verifyFull checkMissingForQuotes "for f in *.mp3; do rm $f; done"
 prop_checkMissingForQuotes2 = verifyNotFull checkMissingForQuotes "for f in foo bar; do rm $f; done"
 prop_checkMissingForQuotes3 = verifyNotFull checkMissingForQuotes "for f in *.mp3; do [[ -e $f ]]; done"
-checkMissingForQuotes t m = 
+checkMissingForQuotes t m =
     runBasicAnalysis cq t m
-  where 
+  where
     cq (T_ForIn _ f words cmds) =
         if not $ any willSplit words then return () else do
             mapM_  (doAnalysis (markUnquoted f)) cmds
@@ -158,9 +188,9 @@ prop_checkMissingPositionalQuotes2 = verifyFull checkMissingPositionalQuotes "rm
 prop_checkMissingPositionalQuotes3 = verifyNotFull checkMissingPositionalQuotes "(( $1 + 3 ))"
 prop_checkMissingPositionalQuotes4 = verifyNotFull checkMissingPositionalQuotes "if [[ $2 -gt 14 ]]; then true; fi"
 prop_checkMissingPositionalQuotes5 = verifyNotFull checkMissingPositionalQuotes "foo=$3 env"
-checkMissingPositionalQuotes t m = 
+checkMissingPositionalQuotes t m =
     runBasicAnalysis cq t m
-  where 
+  where
     cq l@(T_NormalWord _ list) =
         unless (inUnquotableContext parents l) $ mapM_ checkPos list
         where checkPos (T_DollarBraced id s) | all isDigit (getBracedReference s) =
@@ -330,7 +360,7 @@ getParentTree t =
 
 
 inUnquotableContext tree t =
-    case t of 
+    case t of
         TC_Noary _ DoubleBracket _ -> True
         TC_Unary _ DoubleBracket _ _ -> True
         TC_Binary _ DoubleBracket _ _ _ -> True
