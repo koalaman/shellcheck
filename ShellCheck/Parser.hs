@@ -47,6 +47,7 @@ quotable = oneOf "#|&;<>()$`\\ \"'\t\n"
 doubleQuotable = oneOf "\"$`"
 whitespace = oneOf " \t\n"
 linewhitespace = oneOf " \t"
+extglobStart = oneOf "?*@!+"
 
 prop_spacing = isOk spacing "  \\\n # Comment"
 spacing = do
@@ -445,6 +446,7 @@ readComment = do
     anyChar `reluctantlyTill` linefeed
 
 prop_readNormalWord = isOk readNormalWord "'foo'\"bar\"{1..3}baz$(lol)"
+prop_readNormalWord2 = isOk readNormalWord "foo**(foo)!!!(@@(bar))"
 readNormalWord = do
     id <- getNextId
     x <- many1 readNormalWordPart
@@ -523,7 +525,7 @@ readNormalLiteral = do
     return $ T_Literal id (concat s)
 
 readNormalLiteralPart = do
-    readNormalEscaped <|> (anyChar `reluctantlyTill1` quotable)
+    readNormalEscaped <|> (anyChar `reluctantlyTill1` (quotable <|> extglobStart))
 
 readNormalEscaped = do
     pos <- getPosition
@@ -542,13 +544,15 @@ prop_readExtglob1 = isOk readExtglob "!(*.mp3)"
 prop_readExtglob2 = isOk readExtglob "!(*.mp3|*.wmv)"
 prop_readExtglob4 = isOk readExtglob "+(foo \\) bar)"
 prop_readExtglob5 = isOk readExtglob "+(!(foo *(bar)))"
-readExtglob = try $ do
+readExtglob = do
     id <- getNextId
-    c <- oneOf "?*@!+"
-    char '('
-    contents <- readExtglobPart `sepBy` (char '|')
-    char ')'
-    return $ T_Extglob id [c] contents
+    c <- extglobStart
+    ( try $ do 
+        char '('
+        contents <- readExtglobPart `sepBy` (char '|')
+        char ')'
+        return $ T_Extglob id [c] contents
+      ) <|> (return $ T_Literal id [c])
 
 readExtglobPart = do
     id <- getNextId
