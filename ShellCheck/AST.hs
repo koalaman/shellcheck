@@ -19,6 +19,7 @@ module ShellCheck.AST where
 
 import Control.Monad
 import Control.Monad.Identity
+import qualified Text.Regex as Re
 
 data Id = Id Int deriving (Show, Eq, Ord)
 
@@ -27,6 +28,11 @@ data Token = T_AND_IF Id | T_OR_IF Id | T_DSEMI Id | T_Semi Id | T_DLESS Id | T_
     deriving (Show)
 
 data ConditionType = DoubleBracket | SingleBracket deriving (Show, Eq)
+
+-- I apologize for nothing!
+lolHax s = Re.subRegex (Re.mkRegex "(Id [0-9]+)") (show s) "(Id 0)"
+instance Eq Token where
+    (==) a b = (lolHax a) == (lolHax b)
 
 
 analyze :: Monad m => (Token -> m ()) -> (Token -> m ()) -> (Token -> Token) -> Token -> m Token

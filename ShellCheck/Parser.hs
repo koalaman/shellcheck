@@ -31,7 +31,6 @@ import Data.Maybe
 import Prelude hiding (readList)
 import System.IO
 import Text.Parsec.Error
-import qualified Text.Regex as Re
 import GHC.Exts (sortWith)
 
 
@@ -440,11 +439,6 @@ condSpacingMsg soft msg = do
   pos <- getPosition
   space <- spacing
   when (null space) $ (if soft then parseNoteAt else parseProblemAt) pos ErrorC msg
-
-
-lolHax s = Re.subRegex (Re.mkRegex "(Id [0-9]+)") (show s) "(Id 0)"
-instance Eq Token where
-    (==) a b = (lolHax a) == (lolHax b)
 
 readComment = do
     char '#'
