@@ -456,7 +456,11 @@ readNormalWord = do
     x <- many1 readNormalWordPart
     return $ T_NormalWord id x
 
-readNormalWordPart = readSingleQuoted <|> readDoubleQuoted <|> readDollar <|> readBraced <|> readBackTicked <|> (readNormalLiteral)
+readNormalWordPart = readSingleQuoted <|> readDoubleQuoted <|> readExtglob <|> readDollar <|> readBraced <|> readBackTicked <|> (readNormalLiteral)
+readSpacePart = do
+    id <- getNextId
+    x <- many1 whitespace
+    return $ T_Literal id x
 
 prop_readSingleQuoted = isOk readSingleQuoted "'foo bar'"
 prop_readSingleQuoted2 = isWarning readSingleQuoted "'foo bar\\'"
@@ -531,13 +535,32 @@ readNormalEscaped = do
     pos <- getPosition
     backslash
     do
-        next <- (quotable <|> oneOf "?*[]")
+        next <- (quotable <|> oneOf "?*@!+[]")
         return $ if next == '\n' then "" else [next]
       <|>
         do
             next <- anyChar <?> "No character after \\"
             parseNoteAt pos WarningC $ "Did you mean \"$(printf \"\\" ++ [next] ++ "\")\"? The shell just ignores the \\ here."
             return [next]
+
+
+prop_readExtglob1 = isOk readExtglob "!(*.mp3)"
+prop_readExtglob2 = isOk readExtglob "!(*.mp3|*.wmv)"
+prop_readExtglob4 = isOk readExtglob "+(foo \\) bar)"
+prop_readExtglob5 = isOk readExtglob "+(!(foo *(bar)))"
+readExtglob = try $ do
+    id <- getNextId
+    c <- oneOf "?*@!+"
+    char '('
+    contents <- readExtglobPart `sepBy` (char '|')
+    char ')'
+    return $ T_Extglob id [c] contents
+
+readExtglobPart = do
+    id <- getNextId
+    x <- many1 (readNormalWordPart <|> readSpacePart)
+    return $ T_NormalWord id x
+
 
 readSingleEscaped = do
     s <- backslash
