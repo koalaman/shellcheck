@@ -60,6 +60,7 @@ basicChecks = [
     ,checkComparisonAgainstGlob
     ,checkPrintfVar
     ,checkCommarrays
+    ,checkOrNeq
     ]
 
 modifyMap = modify
@@ -344,6 +345,18 @@ checkCommarrays (T_Array id l) =
     else return ()
 checkCommarrays _ = return ()
 
+prop_checkOrNeq1 = verify checkOrNeq "if [[ $lol -ne cow || $lol -ne foo ]]; then echo foo; fi"
+prop_checkOrNeq2 = verify checkOrNeq "(( a!=lol || a!=foo ))"
+prop_checkOrNeq3 = verify checkOrNeq "[ \"$a\" != lol || \"$a\" != foo ]"
+prop_checkOrNeq4 = verifyNot checkOrNeq "[ a != $cow || b != $foo ]"
+-- This only catches the most idiomatic cases. Fixme?
+checkOrNeq (TC_Or id typ op (TC_Binary _ _ op1 word1 _) (TC_Binary _ _ op2 word2 _))
+    | word1 == word2 && (op1 == op2 && (op1 == "-ne" || op1 == "!=")) =
+        warn id $ "You probably wanted " ++ (if typ == SingleBracket then "-a" else "&&") ++ " here."
+checkOrNeq (TA_Binary id "||" (TA_Binary _ "!=" word1 _) (TA_Binary _ "!=" word2 _))
+    | word1 == word2 =
+        warn id "You probably wanted && here."
+checkOrNeq _ = return ()
 
 allModifiedVariables t = snd $ runState (doAnalysis (\x -> modify $ (++) (getModifiedVariables x)) t) []
 
