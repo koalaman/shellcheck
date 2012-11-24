@@ -790,22 +790,23 @@ readSeparator =
             readNewlineList
             return '\n'
 
-makeSimpleCommand id tokens =
+makeSimpleCommand id1 id2 tokens =
     let (assignment, rest) = partition (\x -> case x of T_Assignment _ _ _ -> True; _ -> False) tokens
     in let (redirections, rest2) = partition (\x -> case x of T_FdRedirect _ _ _ -> True; _ -> False) rest
-       in T_Redirecting id redirections $ T_SimpleCommand id assignment rest2
+       in T_Redirecting id1 redirections $ T_SimpleCommand id2 assignment rest2
 
 prop_readSimpleCommand = isOk readSimpleCommand "echo test > file"
 readSimpleCommand = do
-    id <- getNextId
+    id1 <- getNextId
+    id2 <- getNextId
     prefix <- option [] readCmdPrefix
     cmd <- option [] $ do { f <- readCmdName; return [f]; }
     when (null prefix && null cmd) $ fail "No command"
     if null cmd
-        then return $ makeSimpleCommand id prefix
+        then return $ makeSimpleCommand id1 id2 prefix
         else do
             suffix <- option [] readCmdSuffix
-            return $ makeSimpleCommand id (prefix ++ cmd ++ suffix)
+            return $ makeSimpleCommand id1 id2 (prefix ++ cmd ++ suffix)
 
 prop_readPipeline = isOk readPipeline "! cat /etc/issue | grep -i ubuntu"
 readPipeline = do

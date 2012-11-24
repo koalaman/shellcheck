@@ -31,7 +31,7 @@ import Data.Maybe
 checks = concat [
     map runBasicAnalysis basicChecks
     ,[subshellAssignmentCheck]
-    ,[checkMissingPositionalQuotes, checkMissingForQuotes]
+    ,[checkSpacefulness]
     ]
 
 runAllAnalytics = checkList checks
@@ -166,40 +166,6 @@ checkForInLs (T_ForIn _ f [T_NormalWord _ [T_DollarExpansion id [x]]] _) =
 checkForInLs _ = return ()
 
 
-prop_checkMissingForQuotes = verifyFull checkMissingForQuotes "for f in *.mp3; do rm $f; done"
-prop_checkMissingForQuotes2 = verifyNotFull checkMissingForQuotes "for f in foo bar; do rm $f; done"
-prop_checkMissingForQuotes3 = verifyNotFull checkMissingForQuotes "for f in *.mp3; do [[ -e $f ]]; done"
-checkMissingForQuotes t m =
-    runBasicAnalysis cq t m
-  where
-    cq (T_ForIn _ f words cmds) =
-        if not $ any willSplit words then return () else do
-            mapM_  (doAnalysis (markUnquoted f)) cmds
-      where
-        markUnquoted f t@(T_NormalWord _ l) = unless (inUnquotableContext parents t) $  mapM_ mu l
-        markUnquoted _ _ = return ()
-        mu (T_DollarBraced id s) | s == f = warning id
-        mu _ = return ()
-        warning id = warn id $ "Variables that could contain spaces should be quoted."
-    cq _ = return ()
-    parents = getParentTree t
-
-prop_checkMissingPositionalQuotes = verifyFull checkMissingPositionalQuotes "rm $1"
-prop_checkMissingPositionalQuotes2 = verifyFull checkMissingPositionalQuotes "rm ${10//foo/bar}"
-prop_checkMissingPositionalQuotes3 = verifyNotFull checkMissingPositionalQuotes "(( $1 + 3 ))"
-prop_checkMissingPositionalQuotes4 = verifyNotFull checkMissingPositionalQuotes "if [[ $2 -gt 14 ]]; then true; fi"
-prop_checkMissingPositionalQuotes5 = verifyNotFull checkMissingPositionalQuotes "foo=$3 env"
-checkMissingPositionalQuotes t m =
-    runBasicAnalysis cq t m
-  where
-    cq l@(T_NormalWord _ list) =
-        unless (inUnquotableContext parents l) $ mapM_ checkPos list
-        where checkPos (T_DollarBraced id s) | all isDigit (getBracedReference s) =
-                warn id $ "Positional parameters should be quoted to avoid whitespace trouble."
-              checkPos _ = return ()
-    cq _ = return ()
-    parents = getParentTree t
-
 prop_checkUnquotedExpansions = verify checkUnquotedExpansions "rm $(ls)"
 checkUnquotedExpansions (T_SimpleCommand _ _ cmds) = mapM_ check cmds
     where check (T_NormalWord _ [T_DollarExpansion id _]) = warn id "Quote the expansion to prevent word splitting."
@@ -259,6 +225,7 @@ checkStderrRedirect (T_Redirecting _ [
 checkStderrRedirect _ = return ()
 
 lt x = trace ("FAILURE " ++ (show x)) x
+ltt t x = trace ("FAILURE " ++ (show t)) x
 
 
 prop_checkSingleQuotedVariables = verify checkSingleQuotedVariables "echo '$foo'"
@@ -371,8 +338,13 @@ getParentTree t =
         case rest of [] -> put (rest, map)
                      (x:_) -> put (rest, Map.insert (getId t) x map)
 
+getTokenMap t =
+    snd $ runState (doAnalysis f t) (Map.empty)
+  where
+    f t = modify (Map.insert (getId t) t)
 
-inUnquotableContext tree t =
+
+inUnquotableContext tree t = 
     case t of
         TC_Noary _ DoubleBracket _ -> True
         TC_Unary _ DoubleBracket _ _ -> True
@@ -383,6 +355,8 @@ inUnquotableContext tree t =
         TA_Expansion _ _ -> True
         T_Assignment _ _ _ -> True
         T_Redirecting _ _ _ -> False
+        T_DoubleQuoted _ _ -> True
+        T_ForIn _ _ _ _ -> True -- Pragmatically assume it's desirable here
         x -> case Map.lookup (getId x) tree of
                 Nothing -> False
                 Just parent -> inUnquotableContext tree parent
@@ -444,6 +418,7 @@ subshellAssignmentCheck t map =
 data Scope = SubshellScope String | NoneScope deriving (Show, Eq)
 data StackData = StackScope Scope | StackScopeEnd | Assignment (Id, String) | Reference (Id, String) deriving (Show, Eq)
 data VariableState = Dead Id String | Alive deriving (Show, Eq)
+data VariableType = Spaceful | Spaceless deriving (Show, Eq)
 
 leadType t =
     case t of
@@ -456,24 +431,47 @@ leadType t =
 
 
 getModifiedVariables t =
+    let l = getModifiedVariablesWithType (const False) t
+    in map (\(id, name, typ) -> (id, name)) l
+
+getModifiedVariablesWithType spacefulF t =
     case t of
         T_SimpleCommand _ vars [] ->
             concatMap (\x -> case x of
-                                T_Assignment id name _ -> [(id, name)]
+                                T_Assignment id name w -> [(id, name, if isSpaceful spacefulF w then Spaceful else Spaceless)]
                                 _ -> []
                       ) vars
         c@(T_SimpleCommand _ _ _) ->
             getModifiedVariableCommand c
 
-        TA_Unary _ "++|" (TA_Variable id name) -> [(id, name)]
-        TA_Unary _ "|++" (TA_Variable id name) -> [(id, name)]
+        TA_Unary _ "++|" (TA_Variable id name) -> [(id, name, Spaceless)]
+        TA_Unary _ "|++" (TA_Variable id name) -> [(id, name, Spaceless)]
         TA_Binary _ op (TA_Variable id name) _ -> if any (==op) ["=", "*=", "/=", "%=", "+=", "-=", "<<=", ">>=", "&=", "^=", "|="]
-                                                    then [(id,name)]
+                                                    then [(id,name, Spaceless)]
                                                     else []
 
         --Points to 'for' rather than variable
-        T_ForIn id str _ _ -> [(id, str)]
+        T_ForIn id str words _ -> [(id, str, if any (isSpaceful spacefulF) words then Spaceful else Spaceless)]
         _ -> []
+
+isSpaceful :: (String -> Bool) -> Token -> Bool
+isSpaceful spacefulF x = 
+    case x of 
+      T_DollarExpansion  _ _ -> True
+      T_Extglob _ _ _    -> True
+      T_Literal _ s      -> s `containsAny` globspace
+      T_SingleQuoted _ s -> s `containsAny` globspace
+      T_DollarBraced _ s -> spacefulF $ getBracedReference s
+      T_NormalWord _ w   -> isSpacefulWord spacefulF w
+      T_DoubleQuoted _ w -> isSpacefulWord spacefulF w
+      _ -> False
+  where 
+    globspace = "* \t\n"
+    containsAny s chars = any (\c -> c `elem` s) chars
+
+isSpacefulWord :: (String -> Bool) -> [Token] -> Bool
+isSpacefulWord f words = 
+    any (isSpaceful f) words
 
 getModifiedVariableCommand (T_SimpleCommand _ _ ((T_NormalWord _ ((T_Literal _ x):_)):rest)) =
     case x of
@@ -482,12 +480,12 @@ getModifiedVariableCommand (T_SimpleCommand _ _ ((T_NormalWord _ ((T_Literal _ x
         _ -> []
 getModifiedVariableCommand _ = []
 
-getLiteral (T_NormalWord _ [T_Literal id s]) = [(id,s)]
-getLiteral (T_NormalWord _ [T_DoubleQuoted _ [T_Literal id s]]) = [(id,s)]
+getLiteral (T_NormalWord _ [T_Literal id s]) = [(id,s, Spaceful)]
+getLiteral (T_NormalWord _ [T_DoubleQuoted _ [T_Literal id s]]) = [(id,s,Spaceful)]
 getLiteral x = []
 
 exportParamToLiteral (T_NormalWord _ ((T_Literal id s):_)) =
-    [(id,prefix)]
+    [(id,prefix,Spaceless)] -- Todo, make this determine spacefulness
     where prefix = takeWhile (/= '=') s
 exportParamToLiteral _ = []
 
@@ -500,24 +498,23 @@ getReferencedVariables t =
         TA_Variable id str -> [(id,str)]
         x -> []
 
-
-startScope t =
-    let scopeType = leadType t
-    in do
-        when (scopeType /= NoneScope) $ modify ((StackScope scopeType):)
-
-endScope t =
-    let scopeType = leadType t
-        written = getModifiedVariables t
-        read    = getReferencedVariables t
-    in do
-        when (scopeType /= NoneScope) $ modify ((StackScopeEnd):)
-        mapM_ (\v -> modify ((Reference v):)) read
-        mapM_ (\v -> modify ((Assignment v):)) written
-
 getVariableFlow t =
     let (_, stack) = runState (doStackAnalysis startScope endScope t) []
     in reverse stack
+  where
+    startScope t =
+        let scopeType = leadType t
+        in do
+            when (scopeType /= NoneScope) $ modify ((StackScope scopeType):)
+
+    endScope t =
+        let scopeType = leadType t
+            read    = getReferencedVariables t
+            written = getModifiedVariables t
+        in do
+            when (scopeType /= NoneScope) $ modify ((StackScopeEnd):)
+            mapM_ (\v -> modify ((Reference v):)) read
+            mapM_ (\v -> modify ((Assignment v):)) written
 
 findSubshelled :: [StackData] -> [(String, [(Id,String)])] -> (Map.Map String VariableState) -> State (Map.Map Id Metadata) ()
 findSubshelled [] _ _ = return ()
@@ -536,4 +533,53 @@ findSubshelled ((StackScope (SubshellScope reason)):rest) scopes deadVars =
 
 findSubshelled ((StackScopeEnd):rest) ((reason, scope):oldScopes) deadVars =
     findSubshelled rest oldScopes $ foldl (\m (id, var) -> Map.insert var (Dead id reason) m) deadVars scope
-------
+
+
+---- Spacefulness detection
+
+prop_checkSpacefulness1 = verifyFull checkSpacefulness "a='cow moo'; echo $a"
+prop_checkSpacefulness2 = verifyNotFull checkSpacefulness "a='cow moo'; [[ $a ]]"
+prop_checkSpacefulness3 = verifyNotFull checkSpacefulness "a='cow*.mp3'; echo \"$a\""
+prop_checkSpacefulness4 = verifyFull checkSpacefulness "for f in *.mp3; do echo $f; done"
+prop_checkSpacefulness5 = verifyFull checkSpacefulness "a='*'; b=$a; c=lol${b//foo/bar}; echo $c"
+prop_checkSpacefulness6 = verifyFull checkSpacefulness "a=foo$(lol); echo $a"
+prop_checkSpacefulness7 = verifyFull checkSpacefulness "a=foo\\ bar; rm $a"
+prop_checkSpacefulness8 = verifyNotFull checkSpacefulness "a=foo\\ bar; a=foo; rm $a"
+prop_checkSpacefulnessA = verifyFull checkSpacefulness "rm $1"
+prop_checkSpacefulnessB = verifyFull checkSpacefulness "rm ${10//foo/bar}"
+prop_checkSpacefulnessC = verifyNotFull checkSpacefulness "(( $1 + 3 ))"
+prop_checkSpacefulnessD = verifyNotFull checkSpacefulness "if [[ $2 -gt 14 ]]; then true; fi"
+prop_checkSpacefulnessE = verifyNotFull checkSpacefulness "foo=$3 env"
+
+checkSpacefulness t metaMap =
+    let (_, (newMetaMap, spaceMap)) = runState (doStackAnalysis startScope endScope t) (metaMap, Map.empty)
+    in newMetaMap
+  where
+    isSpaceless m s = (not $ all isDigit s) && (Map.findWithDefault Spaceless s m) == Spaceless
+    addInfo :: (Id, String) -> State (Map.Map Id Metadata, Map.Map String VariableType) ()
+    addInfo (id, s) = do
+        (metaMap, spaceMap) <- get
+        when (not (inUnquotableContext parents (Map.findWithDefault undefined id items)) && not (isSpaceless spaceMap s)) $ do
+            let note = Note InfoC "This variable may contain spaces/globs. Quote it unless you want splitting."
+            let mm = Map.adjust (\(Metadata pos notes) -> Metadata pos (note:notes)) id metaMap
+            put (mm, spaceMap)
+
+    registerSpacing (id, s, typ) = do
+        (metaMap, spaceMap) <- get
+        put (metaMap, Map.insert s typ spaceMap)
+            
+    parents = getParentTree t
+    items = getTokenMap t
+
+    endScope _ = return ()
+
+    startScope t = do
+        (_, spaceMap) <- get
+        let 
+            isSpaceful id = (Map.findWithDefault Spaceless id spaceMap) /= Spaceless
+            read    = getReferencedVariables t
+            written = getModifiedVariablesWithType isSpaceful t
+
+        mapM_ addInfo read
+        mapM_ registerSpacing written
+
