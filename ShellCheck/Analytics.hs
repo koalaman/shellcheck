@@ -61,6 +61,7 @@ basicChecks = [
     ,checkPrintfVar
     ,checkCommarrays
     ,checkOrNeq
+    ,checkEchoSed 
     ]
 
 modifyMap = modify
@@ -88,7 +89,7 @@ makeSimple t = t
 simplify = doTransform makeSimple
 
 deadSimple (T_NormalWord _ l) = [concat (concatMap (deadSimple) l)]
-deadSimple (T_DoubleQuoted _ l) = ["\"" ++(concat (concatMap (deadSimple) l)) ++ "\""]
+deadSimple (T_DoubleQuoted _ l) = [(concat (concatMap (deadSimple) l))]
 deadSimple (T_SingleQuoted _ s) = [s]
 deadSimple (T_DollarBraced _ _) = ["${VAR}"]
 deadSimple (T_DollarArithmetic _ _) = ["${VAR}"]
@@ -110,6 +111,23 @@ checkFull f s = case parseShell "-" s of
         _ -> Nothing
 
 
+prop_checkEchoSed1 = verify checkEchoSed "FOO=$(echo \"$cow\" | sed 's/foo/bar/g')"
+prop_checkEchoSed2 = verify checkEchoSed "rm $(echo $cow | sed -e 's,foo,bar,')"
+checkEchoSed (T_Pipeline id [a, b]) = 
+    when (acmd == ["echo", "${VAR}"]) $ 
+        case bcmd of 
+            ["sed", v] -> checkIn v
+            ["sed", "-e", v] -> checkIn v
+            _ -> return ()
+  where
+    acmd = deadSimple a
+    bcmd = deadSimple b
+    checkIn s = 
+        case matchRegex checkEchoSedRe s of
+                Just _ -> style id $ "See if you can use ${variable//search/replace} instead."
+                _        -> return ()
+checkEchoSed _ = return ()
+checkEchoSedRe = mkRegex "^s(.)(.*)\\1(.*)\\1g?$"
 
 prop_checkUuoc = verify checkUuoc "cat foo | grep bar"
 checkUuoc (T_Pipeline _ (T_Redirecting _ _ f@(T_SimpleCommand id _ _):_:_)) =
@@ -396,6 +414,7 @@ checkPrintfVar = checkCommand "printf" f where
         if not $ isLiteral format
           then warn (getId format) $ "Don't use variables in the printf format string. Use printf \"%s\" \"$foo\"."
           else return ()
+
 
 --- Subshell detection
 
