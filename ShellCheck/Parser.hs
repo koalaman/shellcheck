@@ -450,7 +450,14 @@ prop_readNormalWord2 = isOk readNormalWord "foo**(foo)!!!(@@(bar))"
 readNormalWord = do
     id <- getNextId
     x <- many1 readNormalWordPart
+    checkPossibleTermination x
     return $ T_NormalWord id x
+
+
+checkPossibleTermination [T_Literal _ "}"] = 
+    parseProblem WarningC "If you meant to terminate a {} block, you need a semicolon or linefeed before the }."
+checkPossibleTermination _ = return ()
+
 
 readNormalWordPart = readSingleQuoted <|> readDoubleQuoted <|> readExtglob <|> readDollar <|> readBraced <|> readBackTicked <|> (readNormalLiteral)
 readSpacePart = do
