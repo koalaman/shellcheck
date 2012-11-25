@@ -61,7 +61,7 @@ basicChecks = [
     ,checkPrintfVar
     ,checkCommarrays
     ,checkOrNeq
-    ,checkEchoSed 
+    ,checkEcho 
     ]
 
 modifyMap = modify
@@ -111,13 +111,16 @@ checkFull f s = case parseShell "-" s of
         _ -> Nothing
 
 
-prop_checkEchoSed1 = verify checkEchoSed "FOO=$(echo \"$cow\" | sed 's/foo/bar/g')"
-prop_checkEchoSed2 = verify checkEchoSed "rm $(echo $cow | sed -e 's,foo,bar,')"
-checkEchoSed (T_Pipeline id [a, b]) = 
+prop_checkEcho1 = verify checkEcho "FOO=$(echo \"$cow\" | sed 's/foo/bar/g')"
+prop_checkEcho2 = verify checkEcho "rm $(echo $cow | sed -e 's,foo,bar,')"
+prop_checkEcho3 = verify checkEcho "n=$(echo $foo | wc -c)"
+checkEcho (T_Pipeline id [a, b]) = 
     when (acmd == ["echo", "${VAR}"]) $ 
         case bcmd of 
             ["sed", v] -> checkIn v
             ["sed", "-e", v] -> checkIn v
+            ["wc", "-c"] -> countMsg
+            ["wc", "-m"] -> countMsg
             _ -> return ()
   where
     acmd = deadSimple a
@@ -126,7 +129,8 @@ checkEchoSed (T_Pipeline id [a, b]) =
         case matchRegex checkEchoSedRe s of
                 Just _ -> style id $ "See if you can use ${variable//search/replace} instead."
                 _        -> return ()
-checkEchoSed _ = return ()
+    countMsg = style id $ "See if you can use ${#variable} instead."
+checkEcho _ = return ()
 checkEchoSedRe = mkRegex "^s(.)(.*)\\1(.*)\\1g?$"
 
 prop_checkUuoc = verify checkUuoc "cat foo | grep bar"
