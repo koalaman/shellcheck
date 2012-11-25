@@ -449,14 +449,17 @@ prop_readNormalWord = isOk readNormalWord "'foo'\"bar\"{1..3}baz$(lol)"
 prop_readNormalWord2 = isOk readNormalWord "foo**(foo)!!!(@@(bar))"
 readNormalWord = do
     id <- getNextId
+    pos <- getPosition
     x <- many1 readNormalWordPart
-    checkPossibleTermination x
+    checkPossibleTermination pos x
     return $ T_NormalWord id x
 
 
-checkPossibleTermination [T_Literal _ "}"] = 
-    parseProblem WarningC "If you meant to terminate a {} block, you need a semicolon or linefeed before the }."
-checkPossibleTermination _ = return ()
+checkPossibleTermination pos [T_Literal _ x] = 
+    if x `elem` ["do", "done", "then", "fi", "esac", "}"]
+        then parseProblemAt pos WarningC $ "Use semicolon or linefeed before '" ++ x ++ "' (or quote to make it literal)."
+        else return ()
+checkPossibleTermination _ _ = return ()
 
 
 readNormalWordPart = readSingleQuoted <|> readDoubleQuoted <|> readExtglob <|> readDollar <|> readBraced <|> readBackTicked <|> (readNormalLiteral)
@@ -891,19 +894,12 @@ readIfClause = do
              )
     return $ T_IfExpression id ((condition, action):elifs) elses
 
-checkIfNotSpecial pos key stuff = do
-    eof
-    let f (T_Literal id str) | str == key = parseProblemAt pos ErrorC $ "You need a \\n or ; before '"++ key ++ "' to make it special."
-        f t  = return ()
-    mapM (doAnalysis f) stuff
-    fail "lol"
-
 readIfPart = do
     g_If
     allspacing
     pos <- getPosition
     condition <- readTerm
-    g_Then <|> (checkIfNotSpecial pos "then" condition)
+    g_Then
     acceptButWarn g_Semi ErrorC "No semicolons directly after 'then'."
     allspacing
     action <- readTerm
@@ -914,7 +910,7 @@ readElifPart = do
     g_Elif
     allspacing
     condition <- readTerm
-    g_Then <|> (checkIfNotSpecial pos "then" condition)
+    g_Then
     acceptButWarn g_Semi ErrorC "No semicolons directly after 'then'."
     allspacing
     action <- readTerm
@@ -953,7 +949,7 @@ readWhileClause = do
     condition <- readTerm
     return () `attempting` (do
                                 eof
-                                parseProblemAt pos ErrorC "Condition missing 'do'. Did you forget it or the ; or \\n before i?"
+                                parseProblemAt pos ErrorC "Condition missing 'do'. Did you forget it or the ; or \\n before it?"
             )
     statements <- readDoGroup
     return $ T_WhileExpression id condition statements
