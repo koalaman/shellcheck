@@ -78,6 +78,7 @@ willSplit x =
     T_DollarBraced _ _ -> True
     T_DollarExpansion _ _ -> True
     T_BraceExpansion _ s -> True
+    T_Extglob _ _ _ -> True
     T_NormalWord _ l -> any willSplit l
     T_Literal _ s -> isGlob s
     _ -> False
