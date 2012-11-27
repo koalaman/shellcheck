@@ -61,7 +61,7 @@ basicChecks = [
     ,checkPrintfVar
     ,checkCommarrays
     ,checkOrNeq
-    ,checkEcho 
+    ,checkEcho
     ,checkConstantIfs
     ]
 
@@ -115,9 +115,9 @@ checkFull f s = case parseShell "-" s of
 prop_checkEcho1 = verify checkEcho "FOO=$(echo \"$cow\" | sed 's/foo/bar/g')"
 prop_checkEcho2 = verify checkEcho "rm $(echo $cow | sed -e 's,foo,bar,')"
 prop_checkEcho3 = verify checkEcho "n=$(echo $foo | wc -c)"
-checkEcho (T_Pipeline id [a, b]) = 
-    when (acmd == ["echo", "${VAR}"]) $ 
-        case bcmd of 
+checkEcho (T_Pipeline id [a, b]) =
+    when (acmd == ["echo", "${VAR}"]) $
+        case bcmd of
             ["sed", v] -> checkIn v
             ["sed", "-e", v] -> checkIn v
             ["wc", "-c"] -> countMsg
@@ -126,7 +126,7 @@ checkEcho (T_Pipeline id [a, b]) =
   where
     acmd = deadSimple a
     bcmd = deadSimple b
-    checkIn s = 
+    checkIn s =
         case matchRegex checkEchoSedRe s of
                 Just _ -> style id $ "See if you can use ${variable//search/replace} instead."
                 _        -> return ()
@@ -380,7 +380,7 @@ getTokenMap t =
     f t = modify (Map.insert (getId t) t)
 
 
-inUnquotableContext tree t = 
+inUnquotableContext tree t =
     case t of
         TC_Noary _ DoubleBracket _ -> True
         TC_Unary _ DoubleBracket _ _ -> True
@@ -492,8 +492,8 @@ getModifiedVariablesWithType spacefulF t =
         _ -> []
 
 isSpaceful :: (String -> Bool) -> Token -> Bool
-isSpaceful spacefulF x = 
-    case x of 
+isSpaceful spacefulF x =
+    case x of
       T_DollarExpansion  _ _ -> True
       T_Extglob _ _ _    -> True
       T_Literal _ s      -> s `containsAny` globspace
@@ -502,12 +502,12 @@ isSpaceful spacefulF x =
       T_NormalWord _ w   -> isSpacefulWord spacefulF w
       T_DoubleQuoted _ w -> isSpacefulWord spacefulF w
       _ -> False
-  where 
+  where
     globspace = "* \t\n"
     containsAny s chars = any (\c -> c `elem` s) chars
 
 isSpacefulWord :: (String -> Bool) -> [Token] -> Bool
-isSpacefulWord f words = 
+isSpacefulWord f words =
     any (isSpaceful f) words
 
 getModifiedVariableCommand (T_SimpleCommand _ _ ((T_NormalWord _ ((T_Literal _ x):_)):rest)) =
@@ -604,7 +604,7 @@ checkSpacefulness t metaMap =
     registerSpacing (id, s, typ) = do
         (metaMap, spaceMap) <- get
         put (metaMap, Map.insert s typ spaceMap)
-            
+
     parents = getParentTree t
     items = getTokenMap t
 
@@ -612,7 +612,7 @@ checkSpacefulness t metaMap =
 
     startScope t = do
         (_, spaceMap) <- get
-        let 
+        let
             isSpaceful id = (Map.findWithDefault Spaceless id spaceMap) /= Spaceless
             read    = getReferencedVariables t
             written = getModifiedVariablesWithType isSpaceful t
