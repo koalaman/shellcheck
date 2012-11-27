@@ -64,6 +64,7 @@ basicChecks = [
     ,checkEcho
     ,checkConstantIfs
     ,checkTrAZ
+    ,checkPipedAssignment
     ]
 
 modifyMap = modify
@@ -134,6 +135,15 @@ checkEcho (T_Pipeline id [a, b]) =
     countMsg = style id $ "See if you can use ${#variable} instead."
 checkEcho _ = return ()
 checkEchoSedRe = mkRegex "^s(.)(.*)\\1(.*)\\1g?$"
+
+
+prop_checkPipedAssignment1 = verify checkPipedAssignment "A=ls | grep foo"
+prop_checkPipedAssignment2 = verifyNot checkPipedAssignment "A=foo cmd | grep foo"
+prop_checkPipedAssignment3 = verifyNot checkPipedAssignment "A=foo"
+checkPipedAssignment (T_Pipeline _ (T_Redirecting _ _ (T_SimpleCommand id (_:_) []):_:_)) =
+    warn id "If you wanted to assign the output of the pipeline, use a=$(b | c)"
+checkPipedAssignment _ = return ()
+
 
 prop_checkUuoc = verify checkUuoc "cat foo | grep bar"
 checkUuoc (T_Pipeline _ (T_Redirecting _ _ f@(T_SimpleCommand id _ _):_:_)) =
