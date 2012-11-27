@@ -62,6 +62,7 @@ basicChecks = [
     ,checkCommarrays
     ,checkOrNeq
     ,checkEcho 
+    ,checkConstantIfs
     ]
 
 modifyMap = modify
@@ -286,6 +287,19 @@ checkNumberComparisons (TC_Binary id typ op lhs rhs)
         eqv ">=" = "-ge"
         eqv _ = "the numerical equivalent"
 checkNumberComparisons _ = return ()
+
+prop_checkConstantIfs1 = verify checkConstantIfs "[[ foo != bar ]]"
+prop_checkConstantIfs2 = verify checkConstantIfs "[[ n -le 4 ]]"
+prop_checkConstantIfs3 = verify checkConstantIfs "[[ $n -le 4 && n -ge 2 ]]"
+prop_checkConstantIfs4 = verifyNot checkConstantIfs "[[ $n -le 3 ]]"
+prop_checkConstantIfs5 = verifyNot checkConstantIfs "[[ $n -le $n ]]"
+checkConstantIfs (TC_Binary id typ op lhs rhs)
+    | op `elem` [ "==", "!=", "<=", ">=", "-eq", "-ne", "-lt", "-le", "-gt", "-ge", "=~", ">", "<", "="] = do
+        when (isJust lLit && isJust rLit) $ warn id $ "This expression is constant. Did you forget the $ on a variable?"
+    where
+        lLit = getLiteralString lhs
+        rLit = getLiteralString rhs
+checkConstantIfs _ = return ()
 
 prop_checkNoaryWasBinary = verify checkNoaryWasBinary "[[ a==$foo ]]"
 prop_checkNoaryWasBinary2 = verify checkNoaryWasBinary "[ $foo=3 ]"
