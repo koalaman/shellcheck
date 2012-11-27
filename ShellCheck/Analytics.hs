@@ -174,9 +174,12 @@ isMagicInQuotes _ = False
 
 prop_checkForInQuoted = verify checkForInQuoted "for f in \"$(ls)\"; do echo foo; done"
 prop_checkForInQuoted2 = verifyNot checkForInQuoted "for f in \"$@\"; do echo foo; done"
+prop_checkForInQuoted3 = verify checkForInQuoted "for f in 'find /'; do true; done"
 checkForInQuoted (T_ForIn _ f [T_NormalWord _ [T_DoubleQuoted id list]] _) =
     when (any (\x -> willSplit x && not (isMagicInQuotes x)) list) $
         err id $ "Since you double quoted this, it will not word split, and the loop will only run once."
+checkForInQuoted (T_ForIn _ f [T_NormalWord _ [T_SingleQuoted id s]] _) =
+    warn id $ "This is a literal string. To run as a command, use $(" ++ s ++ ")."
 checkForInQuoted _ = return ()
 
 
