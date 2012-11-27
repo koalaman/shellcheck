@@ -170,6 +170,7 @@ prop_checkPipePitfalls1 = verify checkPipePitfalls "foo | grep foo | awk bar"
 prop_checkPipePitfalls2 = verifyNot checkPipePitfalls "foo | awk bar | grep foo"
 prop_checkPipePitfalls3 = verify checkPipePitfalls "ls | grep -v mp3"
 checkPipePitfalls (T_Pipeline id commands) = do
+    for [["grep"], ["sed"]] $  \id -> style id "You don't need grep | sed, sed can filter lines by itself."
     for [["grep"], ["awk"]] $  \id -> style id "You don't need grep | awk, awk can filter lines by itself."
     for [["ls"], ["?"]] $      \id -> warn id "Don't parse ls output; it mangles filenames."
     for [["ls"], ["grep"]] $   \id -> warn id "Don't use ls | grep. Use a for loop with a condition in it."
