@@ -32,6 +32,7 @@ checks = concat [
     map runBasicAnalysis basicChecks
     ,[subshellAssignmentCheck]
     ,[checkSpacefulness]
+    ,[checkUnquotedExpansions]
     ]
 
 runAllAnalytics = checkList checks
@@ -43,7 +44,6 @@ basicChecks = [
     ,checkPipePitfalls
     ,checkForInQuoted
     ,checkForInLs
-    ,checkUnquotedExpansions
     ,checkRedirectToSame
     ,checkShorthandIf
     ,checkDollarStar
@@ -80,7 +80,6 @@ willSplit x =
     T_NormalWord _ l -> any willSplit l
     T_Literal _ s -> isGlob s
     _ -> False
-
 
 isGlob str = any (`elem` str) "*?"
 
@@ -189,11 +188,21 @@ checkForInLs (T_ForIn _ f [T_NormalWord _ [T_DollarExpansion id [x]]] _) =
 checkForInLs _ = return ()
 
 
-prop_checkUnquotedExpansions = verify checkUnquotedExpansions "rm $(ls)"
-checkUnquotedExpansions (T_SimpleCommand _ _ cmds) = mapM_ check cmds
-    where check (T_NormalWord _ [T_DollarExpansion id _]) = warn id "Quote the expansion to prevent word splitting."
-          check _ = return ()
-checkUnquotedExpansions _ = return ()
+prop_checkUnquotedExpansions1 = verifyFull checkUnquotedExpansions "rm $(ls)"
+prop_checkUnquotedExpansions2 = verifyFull checkUnquotedExpansions "rm foo$(date)"
+prop_checkUnquotedExpansions3 = verifyFull checkUnquotedExpansions "[ $(foo) == cow ]"
+prop_checkUnquotedExpansions4 = verifyNotFull checkUnquotedExpansions "[[ $(foo) == cow ]]"
+prop_checkUnquotedExpansions5 = verifyNotFull checkUnquotedExpansions "for f in $(cmd); do echo $f; done"
+checkUnquotedExpansions t metaMap =
+    runBasicAnalysis check t metaMap
+  where
+    tree = getParentTree t
+    msg id = warn id "Quote this to prevent word splitting."
+    check (T_NormalWord _ l) = mapM_ check' l
+    check _ = return ()
+
+    check' t@(T_DollarExpansion id _) = unless (inUnquotableContext tree t) $ msg id
+    check' _ = return ()
 
 prop_checkRedirectToSame = verify checkRedirectToSame "cat foo > foo"
 prop_checkRedirectToSame2 = verify checkRedirectToSame "cat lol | sed -e 's/a/b/g' > lol"
