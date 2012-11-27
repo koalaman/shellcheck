@@ -65,6 +65,7 @@ basicChecks = [
     ,checkConstantIfs
     ,checkTrAZ
     ,checkPipedAssignment
+    ,checkAssignAteCommand
     ]
 
 modifyMap = modify
@@ -141,8 +142,15 @@ prop_checkPipedAssignment1 = verify checkPipedAssignment "A=ls | grep foo"
 prop_checkPipedAssignment2 = verifyNot checkPipedAssignment "A=foo cmd | grep foo"
 prop_checkPipedAssignment3 = verifyNot checkPipedAssignment "A=foo"
 checkPipedAssignment (T_Pipeline _ (T_Redirecting _ _ (T_SimpleCommand id (_:_) []):_:_)) =
-    warn id "If you wanted to assign the output of the pipeline, use a=$(b | c)"
+    warn id "If you wanted to assign the output of the pipeline, use a=$(b | c) ."
 checkPipedAssignment _ = return ()
+
+prop_checkAssignAteCommand1 = verify checkAssignAteCommand "A=ls -l"
+prop_checkAssignAteCommand2 = verify checkAssignAteCommand "A=ls --sort=$foo"
+prop_checkAssignAteCommand3 = verifyNot checkAssignAteCommand "A=foo ls -l"
+checkAssignAteCommand (T_SimpleCommand id (t:[]) (w:_)) | "-" `isPrefixOf` (concat $ deadSimple w) =
+        warn id "To assign the output of a command, use var=$(cmd) ."
+checkAssignAteCommand _ = return ()
 
 
 prop_checkUuoc = verify checkUuoc "cat foo | grep bar"
