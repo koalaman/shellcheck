@@ -898,13 +898,17 @@ readIfClause = do
     return $ T_IfExpression id ((condition, action):elifs) elses
 
 readIfPart = do
+    pos <- getPosition
     g_If
     allspacing
-    pos <- getPosition
     condition <- readTerm
-    g_Then `attempting` (do
-        try . lookAhead $ g_Do
-        parseProblem ErrorC "Perhaps you meant 'then'?")
+
+    optional (do
+        try . lookAhead $ g_Fi
+        parseProblemAt pos ErrorC "Did you forget the 'then' for this 'if'?")
+
+    g_Then `orFail` parseProblem ErrorC "Expected 'then'."
+
     acceptButWarn g_Semi ErrorC "No semicolons directly after 'then'."
     allspacing
     action <- readTerm
@@ -949,30 +953,28 @@ readBraceGroup = do
 
 prop_readWhileClause = isOk readWhileClause "while [[ -e foo ]]; do sleep 1; done"
 readWhileClause = do
-    (T_While id) <- g_While
     pos <- getPosition
+    (T_While id) <- g_While
     condition <- readTerm
-    return () `attempting` (do
-                                eof
-                                parseProblemAt pos ErrorC "Condition missing 'do'. Did you forget it or the ; or \\n before it?"
-            )
-    statements <- readDoGroup
+    statements <- readDoGroup pos
     return $ T_WhileExpression id condition statements
 
 prop_readUntilClause = isOk readUntilClause "until kill -0 $PID; do sleep 1; done"
 readUntilClause = do
+    pos <- getPosition
     (T_Until id) <- g_Until
     condition <- readTerm
-    statements <- readDoGroup
+    statements <- readDoGroup pos
     return $ T_UntilExpression id condition statements
 
-readDoGroup = do
+readDoGroup loopPos = do
     pos <- getPosition
     optional (do
-                try . lookAhead $ g_Then
-                parseProblem ErrorC "Perhaps you meant 'do'.")
+                try . lookAhead $ g_Done
+                parseProblemAt loopPos ErrorC "Did you forget the 'do' for this loop?")
 
-    g_Do
+    g_Do `orFail` parseProblem ErrorC "Expected 'do'."
+
     acceptButWarn g_Semi ErrorC "No semicolons directly after 'do'."
     allspacing
 
@@ -986,16 +988,13 @@ readDoGroup = do
 prop_readForClause = isOk readForClause "for f in *; do rm \"$f\"; done"
 prop_readForClause3 = isOk readForClause "for f; do foo; done"
 readForClause = do
+    pos <- getPosition
     (T_For id) <- g_For
     spacing
     name <- readVariableName
     spacing
     values <- readInClause <|> (readSequentialSep >> return [])
-    group <- readDoGroup <|> (
-                allspacing >>
-                eof >>
-                parseProblem ErrorC "Missing 'do'." >>
-                return [])
+    group <- readDoGroup pos
     return $ T_ForIn id name values group
 
 readInClause = do
