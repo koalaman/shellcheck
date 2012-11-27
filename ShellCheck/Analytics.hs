@@ -404,6 +404,7 @@ inUnquotableContext tree t =
         T_Assignment _ _ _ -> True
         T_Redirecting _ _ _ -> False
         T_DoubleQuoted _ _ -> True
+        T_CaseExpression _ _ _ -> True
         T_ForIn _ _ _ _ -> True -- Pragmatically assume it's desirable here
         x -> case Map.lookup (getId x) tree of
                 Nothing -> False
