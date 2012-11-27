@@ -166,7 +166,7 @@ readConditionContents single = do
     readCondContents `attempting` (lookAhead $ do
                                 pos <- getPosition
                                 choice (map (try . string) commonCommands)
-                                parseProblemAt pos WarningC "To check a command, skip [] and just do 'if foo | grep bar; then'.")
+                                parseProblemAt pos WarningC "Use 'if cmd; then ..' to check exit code, or 'if [[ $(cmd) == .. ]]' to check output.")
 
   where
     typ = if single then SingleBracket else DoubleBracket
