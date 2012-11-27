@@ -1123,6 +1123,9 @@ tryWordToken s t = tryParseWordToken (string s) t `thenSkip` spacing
 tryParseWordToken parser t = try $ do
     id <- getNextId
     parser
+    optional (do
+        try . lookAhead $ char '['
+        parseProblem ErrorC "You need a space before the [.")
     try $ lookAhead (keywordSeparator)
     return $ t id
 
@@ -1162,7 +1165,7 @@ g_Semi = do
     notFollowedBy g_DSEMI
     tryToken ";" T_Semi
 
-keywordSeparator = eof <|> disregard whitespace <|> (disregard $ oneOf ";()")
+keywordSeparator = eof <|> disregard whitespace <|> (disregard $ oneOf ";()[")
 
 readKeyword = choice [ g_Then, g_Else, g_Elif, g_Fi, g_Do, g_Done, g_Esac, g_Rbrace, g_Rparen, g_DSEMI ]
 
