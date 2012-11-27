@@ -63,6 +63,7 @@ basicChecks = [
     ,checkOrNeq
     ,checkEcho
     ,checkConstantIfs
+    ,checkTrAZ
     ]
 
 modifyMap = modify
@@ -445,6 +446,22 @@ checkPrintfVar = checkCommand "printf" f where
         if not $ isLiteral format
           then warn (getId format) $ "Don't use variables in the printf format string. Use printf \"%s\" \"$foo\"."
           else return ()
+
+
+prop_checkTrAZ1 = verify checkTrAZ "tr [a-f] [A-F]"
+prop_checkTrAZ2 = verify checkTrAZ "tr 'a-z' 'A-Z'"
+prop_checkTrAZ3 = verifyNot checkTrAZ "tr -d '[:lower:]'"
+prop_checkTrAZ4 = verifyNot checkTrAZ "ls [a-z]"
+checkTrAZ = checkCommand "tr" (mapM_ f)
+  where
+    f word = case getLiteralString word of
+                Just "a-z" -> info (getId word) "Use '[:lower:]' to support accents and foreign alphabets."
+                Just "A-Z" -> info (getId word) "Use '[:upper:]' to support accents and foreign alphabets."
+                Just s -> unless ("[:" `isPrefixOf` s) $
+                            when ("[" `isPrefixOf` s && "]" `isSuffixOf` s && (length s > 2)) $
+                                info (getId word) "Don't use [] around ranges in tr, it replaces literal square brackets."
+                Nothing -> return ()
+
 
 
 --- Subshell detection
