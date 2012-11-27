@@ -147,9 +147,16 @@ checkPipedAssignment _ = return ()
 
 prop_checkAssignAteCommand1 = verify checkAssignAteCommand "A=ls -l"
 prop_checkAssignAteCommand2 = verify checkAssignAteCommand "A=ls --sort=$foo"
-prop_checkAssignAteCommand3 = verifyNot checkAssignAteCommand "A=foo ls -l"
-checkAssignAteCommand (T_SimpleCommand id (t:[]) (w:_)) | "-" `isPrefixOf` (concat $ deadSimple w) =
-        warn id "To assign the output of a command, use var=$(cmd) ."
+prop_checkAssignAteCommand3 = verify checkAssignAteCommand "A=cat foo | grep bar"
+prop_checkAssignAteCommand4 = verifyNot checkAssignAteCommand "A=foo ls -l"
+prop_checkAssignAteCommand5 = verifyNot checkAssignAteCommand "PAGER=cat grep bar"
+checkAssignAteCommand (T_SimpleCommand id ((T_Assignment _ _ assignmentTerm):[]) (firstWord:_)) =
+    when ("-" `isPrefixOf` (concat $ deadSimple firstWord) || 
+        (isCommonCommand (getLiteralString assignmentTerm) && not (isCommonCommand (getLiteralString firstWord)))) $
+            warn id "To assign the output of a command, use var=$(cmd) ."
+  where
+    isCommonCommand (Just s) = s `elem` commonCommands
+    isCommonCommand _ = False
 checkAssignAteCommand _ = return ()
 
 

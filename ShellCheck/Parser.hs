@@ -17,7 +17,7 @@
 -}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
-module ShellCheck.Parser (Note(..), Severity(..), parseShell, ParseResult(..), ParseNote(..), notesFromMap, Metadata(..), sortNotes, getId) where
+module ShellCheck.Parser (Note(..), Severity(..), parseShell, ParseResult(..), ParseNote(..), notesFromMap, Metadata(..), sortNotes, commonCommands) where
 
 import ShellCheck.AST
 import Text.Parsec
@@ -287,7 +287,6 @@ readConditionContents single = do
     readCondAnd = chainl1 readCondTerm readCondOrOp
     readCondContents = readCondOr
 
-    commonCommands = [ "admin", "alias", "ar", "asa", "at", "awk", "basename", "batch", "bc", "bg", "break", "c99", "cal", "cat", "cd", "cflow", "chgrp", "chmod", "chown", "cksum", "cmp", "colon", "comm", "command", "compress", "continue", "cp", "crontab", "csplit", "ctags", "cut", "cxref", "date", "dd", "delta", "df", "diff", "dirname", "dot", "du", "echo", "ed", "env", "eval", "ex", "exec", "exit", "expand", "export", "expr", "fc", "fg", "file", "find", "fold", "fort77", "fuser", "gencat", "get", "getconf", "getopts", "grep", "hash", "head", "iconv", "ipcrm", "ipcs", "jobs", "join", "kill", "lex", "link", "ln", "locale", "localedef", "logger", "logname", "lp", "ls", "m4", "mailx", "make", "man", "mesg", "mkdir", "mkfifo", "more", "mv", "newgrp", "nice", "nl", "nm", "nohup", "od", "paste", "patch", "pathchk", "pax", "pr", "printf", "prs", "ps", "pwd", "qalter", "qdel", "qhold", "qmove", "qmsg", "qrerun", "qrls", "qselect", "qsig", "qstat", "qsub", "read", "readonly", "renice", "return", "rm", "rmdel", "rmdir", "sact", "sccs", "sed", "set", "sh", "shift", "sleep", "sort", "split", "strings", "strip", "stty", "tabs", "tail", "talk", "tee", "test", "time", "times", "touch", "tput", "tr", "trap", "tsort", "tty", "type", "ulimit", "umask", "unalias", "uname", "uncompress", "unexpand", "unget", "uniq", "unlink", "unset", "uucp", "uudecode", "uuencode", "uustat", "uux", "val", "vi", "wait", "wc", "what", "who", "write", "xargs", "yacc", "zcat" ]
 
 
 prop_a1 = isOk readArithmeticContents " n++ + ++c"
@@ -1149,6 +1148,8 @@ g_Rbrace = tryWordToken "}" T_Rbrace
 g_Lparen = tryToken "(" T_Lparen
 g_Rparen = tryToken ")" T_Rparen
 g_Bang = tryToken "!" T_Bang
+
+commonCommands = [ "admin", "alias", "ar", "asa", "at", "awk", "basename", "batch", "bc", "bg", "break", "c99", "cal", "cat", "cd", "cflow", "chgrp", "chmod", "chown", "cksum", "cmp", "colon", "comm", "command", "compress", "continue", "cp", "crontab", "csplit", "ctags", "cut", "cxref", "date", "dd", "delta", "df", "diff", "dirname", "dot", "du", "echo", "ed", "env", "eval", "ex", "exec", "exit", "expand", "export", "expr", "fc", "fg", "file", "find", "fold", "fort77", "fuser", "gencat", "get", "getconf", "getopts", "grep", "hash", "head", "iconv", "ipcrm", "ipcs", "jobs", "join", "kill", "lex", "link", "ln", "locale", "localedef", "logger", "logname", "lp", "ls", "m4", "mailx", "make", "man", "mesg", "mkdir", "mkfifo", "more", "mv", "newgrp", "nice", "nl", "nm", "nohup", "od", "paste", "patch", "pathchk", "pax", "pr", "printf", "prs", "ps", "pwd", "qalter", "qdel", "qhold", "qmove", "qmsg", "qrerun", "qrls", "qselect", "qsig", "qstat", "qsub", "read", "readonly", "renice", "return", "rm", "rmdel", "rmdir", "sact", "sccs", "sed", "set", "sh", "shift", "sleep", "sort", "split", "strings", "strip", "stty", "tabs", "tail", "talk", "tee", "test", "time", "times", "touch", "tput", "tr", "trap", "tsort", "tty", "type", "ulimit", "umask", "unalias", "uname", "uncompress", "unexpand", "unget", "uniq", "unlink", "unset", "uucp", "uudecode", "uuencode", "uustat", "uux", "val", "vi", "wait", "wc", "what", "who", "write", "xargs", "yacc", "zcat" ]
 
 g_Semi = do
     notFollowedBy g_DSEMI
