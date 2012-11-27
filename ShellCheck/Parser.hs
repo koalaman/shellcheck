@@ -152,6 +152,9 @@ reluctantlyTill1 p end = do
 attempting rest branch = do
     ((try branch) >> rest) <|> rest
 
+orFail parser stuff = do
+    try (disregard parser) <|> (disregard stuff >> fail "nope")
+
 wasIncluded p = option False (p >> return True)
 
 acceptButWarn parser level note = do
@@ -455,7 +458,7 @@ readNormalWord = do
     return $ T_NormalWord id x
 
 
-checkPossibleTermination pos [T_Literal _ x] = 
+checkPossibleTermination pos [T_Literal _ x] =
     if x `elem` ["do", "done", "then", "fi", "esac", "}"]
         then parseProblemAt pos WarningC $ "Use semicolon or linefeed before '" ++ x ++ "' (or quote to make it literal)."
         else return ()
@@ -557,7 +560,7 @@ prop_readExtglob5 = isOk readExtglob "+(!(foo *(bar)))"
 readExtglob = do
     id <- getNextId
     c <- extglobStart
-    ( try $ do 
+    ( try $ do
         char '('
         contents <- readExtglobPart `sepBy` (char '|')
         char ')'
@@ -887,11 +890,11 @@ readIfClause = do
     (condition, action) <- readIfPart
     elifs <- many readElifPart
     elses <- option [] readElsePart
-    g_Fi <|> (do
-                eof
-                parseProblemAt pos ErrorC "Can't find 'fi' for this if. Make sure it's preceeded by a ; or \\n."
-                fail "lol"
-             )
+
+    g_Fi `orFail` do
+        parseProblemAt pos ErrorC "Couldn't find 'fi' for this 'if'."
+        parseProblem ErrorC "Expected 'fi' matching previously mentioned 'if'."
+
     return $ T_IfExpression id ((condition, action):elifs) elses
 
 readIfPart = do
@@ -899,7 +902,9 @@ readIfPart = do
     allspacing
     pos <- getPosition
     condition <- readTerm
-    g_Then
+    g_Then `attempting` (do
+        try . lookAhead $ g_Do
+        parseProblem ErrorC "Perhaps you meant 'then'?")
     acceptButWarn g_Semi ErrorC "No semicolons directly after 'then'."
     allspacing
     action <- readTerm
@@ -963,34 +968,19 @@ readUntilClause = do
 
 readDoGroup = do
     pos <- getPosition
-    g_Do
-    allspacing
-    (eof >> return []) <|>
-        do
-            commands <- readCompoundList
-            disregard g_Done <|> (do
-                eof
-                case hasFinal "done" commands of
-                    Nothing -> parseProblemAt pos ErrorC "Couldn't find a 'done' for this 'do'."
-                    Just (id) -> addNoteFor id $ Note ErrorC "Put a ; or \\n before the done."
-                )
-            return commands
-          <|> do
-            parseProblemAt pos ErrorC "Can't find the 'done' for this 'do'."
-            fail "No done"
+    optional (do
+                try . lookAhead $ g_Then
+                parseProblem ErrorC "Perhaps you meant 'do'.")
 
-hasFinal s [] = Nothing
-hasFinal s f =
-    case last f of
-        T_Pipeline _ m@(_:_) ->
-            case last m of
-                T_Redirecting _ [] (T_SimpleCommand _ _ m@(_:_)) ->
-                    case last m of
-                        T_NormalWord _ [T_Literal id str] ->
-                            if str == s then Just id else Nothing
-                        _ -> Nothing
-                _ -> Nothing
-        _ -> Nothing
+    g_Do
+    acceptButWarn g_Semi ErrorC "No semicolons directly after 'do'."
+    allspacing
+
+    commands <- readCompoundList
+    g_Done `orFail` do
+            parseProblemAt pos ErrorC "Couldn't find 'done' for this 'do'."
+            parseProblem ErrorC "Expected 'done' matching previously mentioned 'do'."
+    return commands
 
 
 prop_readForClause = isOk readForClause "for f in *; do rm \"$f\"; done"
@@ -1233,7 +1223,7 @@ getStringFromParsec errors =
                 Message s     -> (4, "Message: " ++ s)
           wut "" = "eof"
           wut x = x
-          unexpected s = "Aborting due to unexpected " ++ (wut s) ++ ". Is this even valid?"
+          unexpected s = "Aborting due to unexpected " ++ (wut s) ++ ". Fix any mentioned problems and try again."
 
 parseShell filename contents = do
     case rp (parseWithNotes readScript) filename contents of
