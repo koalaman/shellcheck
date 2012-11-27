@@ -434,7 +434,7 @@ readCondition = do
   close <- (try $ string "]]") <|> (string "]") <|> do
         let match = (if single then "]" else "]]")
         parseProblemAt opos ErrorC $ "Couldn't find matching " ++ match ++ "."
-        parseProblem ErrorC $ "Expected " ++ match
+        parseProblem ErrorC $ "Expected " ++ match ++ "."
         fail "condition"
 
   when (open == "[[" && close /= "]]") $ parseProblemAt cpos ErrorC "Did you mean ]] ?"
