@@ -71,6 +71,7 @@ basicChecks = [
     ,checkGrepRe
     ,checkDollarArithmeticCommand
     ,checkExpr
+    ,checkQuotedCondRegex 
     ]
 
 modifyMap = modify
@@ -346,6 +347,19 @@ checkNumberComparisons (TC_Binary id typ op lhs rhs)
         eqv ">=" = "-ge"
         eqv _ = "the numerical equivalent"
 checkNumberComparisons _ = return ()
+
+prop_checkQuotedCondRegex1 = verify checkQuotedCondRegex "[[ $foo =~ \"bar\" ]]"
+prop_checkQuotedCondRegex2 = verify checkQuotedCondRegex "[[ $foo =~ 'cow' ]]"
+prop_checkQuotedCondRegex3 = verifyNot checkQuotedCondRegex "[[ $foo =~ $foo ]]"
+checkQuotedCondRegex (TC_Binary _ _ "=~" _ rhs) = 
+    case rhs of 
+        T_NormalWord id [T_DoubleQuoted _ _] -> error id
+        T_NormalWord id [T_SingleQuoted _ _] -> error id
+        _ -> return ()
+  where
+    error id = err id $ "Don't quote rhs of =~, it'll match literally rather than as a regex."
+checkQuotedCondRegex _ = return ()
+
 
 prop_checkConstantIfs1 = verify checkConstantIfs "[[ foo != bar ]]"
 prop_checkConstantIfs2 = verify checkConstantIfs "[[ n -le 4 ]]"
