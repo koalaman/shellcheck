@@ -1044,7 +1044,10 @@ readCaseItem = do
     return (pattern, list)
 
 prop_readFunctionDefinition = isOk readFunctionDefinition "foo() { command foo --lol \"$@\"; }"
+prop_readFunctionDefinition1 = isOk readFunctionDefinition "foo   (){ command foo --lol \"$@\"; }"
 prop_readFunctionDefinition2 = isWarning readFunctionDefinition "function foo() { command foo --lol \"$@\"; }"
+prop_readFunctionDefinition3 = isWarning readFunctionDefinition "function foo { lol; }"
+prop_readFunctionDefinition4 = isWarning readFunctionDefinition "foo(a, b) { true; }"
 readFunctionDefinition = do
     id <- getNextId
     name <- try readFunctionSignature
@@ -1055,12 +1058,37 @@ readFunctionDefinition = do
 
 
 readFunctionSignature = do
-    acceptButWarn (string "function" >> linewhitespace >> spacing) InfoC "Drop the keyword 'function'. It's optional in Bash but invalid in other shells."
-    name <- readVariableName
-    spacing
-    g_Lparen
-    g_Rparen
-    return name
+    readWithFunction <|> readWithoutFunction
+  where
+    readWithFunction = do
+        pos <- getPosition
+        try $ do
+            string "function"
+            whitespace
+        parseProblemAt pos InfoC "Drop the keyword 'function'. It's optional in Bash but invalid in other shells."
+        spacing
+        name <- readVariableName
+        optional spacing
+        pos <- getPosition
+        readParens <|> do
+            parseProblemAt pos InfoC "Include '()' after the function name (in addition to dropping 'function')."
+        return name
+
+    readWithoutFunction = try $ do
+        name <- readVariableName
+        optional spacing
+        readParens
+        return name
+        
+    readParens = do
+        g_Lparen
+        optional spacing
+        g_Rparen <|> do
+            parseProblem ErrorC "Trying to declare parameters? Don't. Use () and refer to params as $1, $2.."
+            anyChar `reluctantlyTill` oneOf "\n){"
+            g_Rparen
+        return ()
+
 
 
 readPattern = (readNormalWord `thenSkip` spacing) `sepBy1` (char '|' `thenSkip` spacing)
