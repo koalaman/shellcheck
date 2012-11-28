@@ -69,6 +69,7 @@ basicChecks = [
     ,checkUuoe
     ,checkFindNameGlob
     ,checkGrepRe
+    ,checkDollarArithmeticCommand
     ]
 
 modifyMap = modify
@@ -411,6 +412,15 @@ checkOrNeq (TA_Binary id "||" (TA_Binary _ "!=" word1 _) (TA_Binary _ "!=" word2
     | word1 == word2 =
         warn id "You probably wanted && here."
 checkOrNeq _ = return ()
+
+
+prop_checkDollarArithmeticCommand1 = verify checkDollarArithmeticCommand "while $((n>10)); do echo foo; done"
+prop_checkDollarArithmeticCommand2 = verify checkDollarArithmeticCommand "$(( n++ ))"
+prop_checkDollarArithmeticCommand3 = verifyNot checkDollarArithmeticCommand "if (( n > 10 )); then echo foo; fi"
+prop_checkDollarArithmeticCommand4 = verifyNot checkDollarArithmeticCommand "echo $((n+3))"
+checkDollarArithmeticCommand (T_SimpleCommand _ [] [T_NormalWord _ [T_DollarArithmetic id _]]) =
+    err id "Use ((..)) instead of $((..)) when running as a command."
+checkDollarArithmeticCommand _ = return ()
 
 allModifiedVariables t = snd $ runState (doAnalysis (\x -> modify $ (++) (getModifiedVariables x)) t) []
 
