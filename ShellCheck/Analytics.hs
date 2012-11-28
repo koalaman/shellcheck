@@ -72,6 +72,7 @@ basicChecks = [
     ,checkDollarArithmeticCommand
     ,checkExpr
     ,checkQuotedCondRegex 
+    ,checkForInCat
     ]
 
 modifyMap = modify
@@ -229,6 +230,17 @@ checkForInQuoted (T_ForIn _ f [T_NormalWord _ [T_SingleQuoted id s]] _) =
     warn id $ "This is a literal string. To run as a command, use $(" ++ s ++ ")."
 checkForInQuoted _ = return ()
 
+prop_checkForInCat1 = verify checkForInCat "for f in $(cat foo); do stuff; done"
+prop_checkForInCat2 = verify checkForInCat "for f in $(cat foo | grep lol); do stuff; done"
+prop_checkForInCat3 = verifyNot checkForInCat "for f in $(cat foo | grep bar | wc -l); do stuff; done"
+checkForInCat (T_ForIn _ f [T_NormalWord _ w] _) = mapM_ checkF w
+  where
+    checkF (T_DollarExpansion id [T_Pipeline _ r])
+        | all isLineBased r =
+            info id $ "To read lines rather than words, pipe/redirect to a 'while read' loop."
+    checkF _ = return ()
+    isLineBased cmd = any (cmd `isCommand`) ["grep", "sed", "cat"]
+checkForInCat _ = return ()
 
 prop_checkForInLs = verify checkForInLs "for f in $(ls *.mp3); do mplayer \"$f\"; done"
 checkForInLs (T_ForIn _ f [T_NormalWord _ [T_DollarExpansion id [x]]] _) =
@@ -499,6 +511,10 @@ getLiteralString t = g t
 
 isLiteral t = isJust $ getLiteralString t
 
+isCommand (T_Redirecting _ _ w) str = 
+    isCommand w str
+isCommand (T_SimpleCommand _ _ (w:_)) str = 
+    isCommand w str
 isCommand token str =
     case getLiteralString token of
         Just cmd -> cmd == str || ("/" ++ str) `isSuffixOf` cmd
