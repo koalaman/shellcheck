@@ -195,7 +195,7 @@ readConditionContents single = do
 
     readCondUnaryOp = try $ do
         op <- choice $ (map tryOp [ "-a", "-b", "-c", "-d", "-e", "-f", "-g", "-h", "-L", "-k", "-p", "-r", "-s", "-S", "-t", "-u", "-w", "-x", "-O", "-G", "-N",
-                    "-z", "-n", "-o"
+                    "-z", "-n", "-o", "-v", "-R"
                     ])
         hardCondSpacing
         return op
