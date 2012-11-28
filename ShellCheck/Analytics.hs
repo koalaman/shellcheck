@@ -82,6 +82,7 @@ willSplit x =
   case x of
     T_DollarBraced _ _ -> True
     T_DollarExpansion _ _ -> True
+    T_Backticked _ _ -> True
     T_BraceExpansion _ s -> True
     T_Extglob _ _ _ -> True
     T_NormalWord _ l -> any willSplit l
@@ -106,6 +107,7 @@ deadSimple (T_SingleQuoted _ s) = [s]
 deadSimple (T_DollarBraced _ _) = ["${VAR}"]
 deadSimple (T_DollarArithmetic _ _) = ["${VAR}"]
 deadSimple (T_DollarExpansion _ _) = ["${VAR}"]
+deadSimple (T_Backticked _ _) = ["${VAR}"]
 deadSimple (T_Pipeline _ [x]) = deadSimple x
 deadSimple (T_Literal _ x) = [x]
 deadSimple (T_SimpleCommand _ vars words) = concatMap (deadSimple) words

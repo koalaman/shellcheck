@@ -516,12 +516,12 @@ readSingleQuotedPart =
 prop_readBackTicked = isWarning readBackTicked "`ls *.mp3`"
 readBackTicked = do
     id <- getNextId
-    parseNote InfoC "Ignoring deprecated `..` backtick expansion.  Use $(..) instead."
+    parseNote WarningC "Use $(..) instead of deprected `..` backtick expansion."
     pos <- getPosition
     char '`'
     f <- readGenericLiteral (char '`')
     char '`' `attempting` (eof >> parseProblemAt pos ErrorC "Can't find terminating backtick for this one.")
-    return $ T_Literal id f
+    return $ T_Backticked id f
 
 
 prop_readDoubleQuoted = isOk readDoubleQuoted "\"Hello $FOO\""
