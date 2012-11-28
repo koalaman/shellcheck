@@ -279,7 +279,7 @@ readConditionContents single = do
         char '!'
         softCondSpacing
         expr <- readCondExpr
-        return $ TC_Not id typ expr
+        return $ TC_Unary id typ "!" expr
 
     readCondExpr =
       readCondGroup <|> readCondUnaryExp <|> readCondNoaryOrBinary

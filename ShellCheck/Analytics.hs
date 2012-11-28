@@ -240,6 +240,7 @@ checkForInLs _ = return ()
 prop_checkUnquotedExpansions1 = verifyFull checkUnquotedExpansions "rm $(ls)"
 prop_checkUnquotedExpansions2 = verifyFull checkUnquotedExpansions "rm foo$(date)"
 prop_checkUnquotedExpansions3 = verifyFull checkUnquotedExpansions "[ $(foo) == cow ]"
+prop_checkUnquotedExpansions3a= verifyFull checkUnquotedExpansions "[ ! $(foo) ]"
 prop_checkUnquotedExpansions4 = verifyNotFull checkUnquotedExpansions "[[ $(foo) == cow ]]"
 prop_checkUnquotedExpansions5 = verifyNotFull checkUnquotedExpansions "for f in $(cmd); do echo $f; done"
 checkUnquotedExpansions t metaMap =
