@@ -1124,6 +1124,7 @@ readAssignmentWord = try $ do
     value <- readArray <|> readNormalWord
     spacing
     when (space ++ space2 /= "") $ parseNoteAt pos ErrorC "Don't put spaces around the = in assignments."
+    when (space == "" && space2 /= "") $ parseNoteAt pos StyleC "Use var='' if you intended to assign the empty string."
     return $ T_Assignment id variable value
 
 readArray = do
