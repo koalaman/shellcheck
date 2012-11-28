@@ -70,6 +70,7 @@ basicChecks = [
     ,checkFindNameGlob
     ,checkGrepRe
     ,checkDollarArithmeticCommand
+    ,checkExpr
     ]
 
 modifyMap = modify
@@ -176,6 +177,11 @@ checkUuoc (T_Pipeline _ (T_Redirecting _ _ f@(T_SimpleCommand id _ _):_:_)) =
     case deadSimple f of ["cat", _] -> style id "Useless cat. Consider 'cmd < file | ..' or 'cmd file | ..' instead."
                          _ -> return ()
 checkUuoc _ = return ()
+
+prop_checkExpr = verify checkExpr "foo=$(expr 3 + 2)"
+checkExpr (T_SimpleCommand id _ (w:_)) | w `isCommand` "expr" = 
+    style id "Use $((..)), ${} or [[ ]] in place of antiquated expr."
+checkExpr _ = return ()
 
 prop_checkPipePitfalls1 = verify checkPipePitfalls "foo | grep foo | awk bar"
 prop_checkPipePitfalls2 = verifyNot checkPipePitfalls "foo | awk bar | grep foo"
