@@ -68,6 +68,7 @@ basicChecks = [
     ,checkAssignAteCommand
     ,checkUuoe
     ,checkFindNameGlob
+    ,checkGrepRe
     ]
 
 modifyMap = modify
@@ -518,6 +519,21 @@ checkFindNameGlob = checkCommand "find" f where
             warn (getId b) $ "Quote the parameter to " ++ s ++ " so the shell won't interpret it."
         f (b:r)
 
+
+prop_checkGrepRe1 = verify checkGrepRe "cat foo | grep *.mp3"
+prop_checkGrepRe2 = verify checkGrepRe "grep -Ev cow*test *.mp3"
+prop_checkGrepRe3 = verify checkGrepRe "grep --regex=*.mp3 file"
+prop_checkGrepRe4 = verifyNot checkGrepRe "grep foo *.mp3"
+prop_checkGrepRe5 = verifyNot checkGrepRe "grep-v  --regex=moo *"
+checkGrepRe = checkCommand "grep" f where
+    -- --regex=*(extglob) doesn't work. Fixme?
+    skippable (Just s) = not ("--regex=" `isPrefixOf` s) && "-" `isPrefixOf` s
+    skippable _ = False
+    f [] = return ()
+    f (x:r) | skippable (getLiteralString x) = f r
+    f (re:_) = do
+        when (isGlob re) $ do
+            warn (getId re) $ "Quote the grep pattern so the shell won't interpret it."
 
 
 --- Subshell detection
