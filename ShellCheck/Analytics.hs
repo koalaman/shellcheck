@@ -50,7 +50,7 @@ basicChecks = [
     ,checkUnquotedDollarAt
     ,checkStderrRedirect
     ,checkSingleQuotedVariables
-    ,checkUnquotedZN
+    ,checkUnquotedN
     ,checkNumberComparisons
     ,checkNoaryWasBinary
     ,checkBraceExpansionVars
@@ -310,12 +310,12 @@ checkSingleQuotedVariables _ = return ()
 checkSingleQuotedVariablesRe = mkRegex "(\\$[0-9a-zA-Z_]+)"
 
 
-prop_checkUnquotedZN = verify checkUnquotedZN "if [ -z $foo ]; then echo cow; fi"
-prop_checkUnquotedZN2 = verify checkUnquotedZN "[ -n $cow ]"
-prop_checkUnquotedZN3 = verifyNot checkUnquotedZN "[[ -z $foo ]] && echo cow"
-checkUnquotedZN (T_Condition _ SingleBracket (TC_Unary _ SingleBracket op (T_NormalWord id [t]))) | ( op == "-z" || op == "-n" ) && willSplit t =
+prop_checkUnquotedN = verify checkUnquotedN "if [ -n $foo ]; then echo cow; fi"
+prop_checkUnquotedN2 = verify checkUnquotedN "[ -n $cow ]"
+prop_checkUnquotedN3 = verifyNot checkUnquotedN "[[ -n $foo ]] && echo cow"
+checkUnquotedN (T_Condition _ SingleBracket (TC_Unary _ SingleBracket "-n" (T_NormalWord id [t]))) | willSplit t =
        err id "Always true because you failed to quote. Use [[ ]] instead."
-checkUnquotedZN _ = return ()
+checkUnquotedN _ = return ()
 
 prop_checkNumberComparisons1 = verify checkNumberComparisons "[[ $foo < 3 ]]"
 prop_checkNumberComparisons2 = verify checkNumberComparisons "[[ 0 >= $(cmd) ]]"
