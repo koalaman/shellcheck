@@ -205,7 +205,8 @@ indexOfSublists sub all = f 0 all
     match _ _ = False
 
 
-isMagicInQuotes (T_DollarBraced _ s) | '@' `elem` s = True
+bracedString l = concat $ deadSimple l
+isMagicInQuotes (T_DollarBraced _ l) | '@' `elem` (bracedString l) = True
 isMagicInQuotes _ = False
 
 prop_checkForInQuoted = verify checkForInQuoted "for f in \"$(ls)\"; do echo foo; done"
@@ -272,15 +273,15 @@ checkShorthandIf _ = return ()
 
 
 prop_checkDollarStar = verify checkDollarStar "for f in $*; do ..; done"
-checkDollarStar (T_NormalWord _ [(T_DollarBraced id "*")]) =
+checkDollarStar (T_NormalWord _ [(T_DollarBraced id l)]) | (bracedString l) == "*"  =
     warn id $ "Use \"$@\" (with quotes) to prevent whitespace problems."
 checkDollarStar _ = return ()
 
 
 prop_checkUnquotedDollarAt = verify checkUnquotedDollarAt "ls $@"
 prop_checkUnquotedDollarAt2 = verifyNot checkUnquotedDollarAt "ls \"$@\""
-checkUnquotedDollarAt (T_NormalWord _ [T_DollarBraced id "@"]) =
-    err id $ "Add double quotes around $@, otherwise it's just like $* and breaks on spaces."
+checkUnquotedDollarAt (T_NormalWord _ [T_DollarBraced id l]) | '@' `elem` (bracedString l) =
+    err id $ "Add double quotes around ${" ++ (bracedString l) ++ "}, otherwise it's just like $* and breaks on spaces."
 checkUnquotedDollarAt _ = return ()
 
 prop_checkStderrRedirect = verify checkStderrRedirect "test 2>&1 > cow"
@@ -376,7 +377,7 @@ prop_checkArithmeticDeref = verify checkArithmeticDeref "echo $((3+$foo))"
 prop_checkArithmeticDeref2 = verify checkArithmeticDeref "cow=14; (( s+= $cow ))"
 prop_checkArithmeticDeref3 = verifyNot checkArithmeticDeref "cow=1/40; (( s+= ${cow%%/*} ))"
 prop_checkArithmeticDeref4 = verifyNot checkArithmeticDeref "(( ! $? ))"
-checkArithmeticDeref (TA_Expansion _ (T_DollarBraced id str)) | not $ any (`elem` "/.:#%?*@") $ str =
+checkArithmeticDeref (TA_Expansion _ (T_DollarBraced id l)) | not $ any (`elem` "/.:#%?*@") $ bracedString l =
     style id $ "Don't use $ on variables in (( ))."
 checkArithmeticDeref _ = return ()
 
@@ -600,7 +601,7 @@ isSpaceful spacefulF x =
       T_Extglob _ _ _    -> True
       T_Literal _ s      -> s `containsAny` globspace
       T_SingleQuoted _ s -> s `containsAny` globspace
-      T_DollarBraced _ s -> spacefulF $ getBracedReference s
+      T_DollarBraced _ l -> spacefulF $ getBracedReference $ bracedString l
       T_NormalWord _ w   -> isSpacefulWord spacefulF w
       T_DoubleQuoted _ w -> isSpacefulWord spacefulF w
       _ -> False
@@ -633,7 +634,7 @@ getBracedReference s = takeWhile (\x -> not $ x `elem` ":[#%/^,") $ dropWhile (=
 
 getReferencedVariables t =
     case t of
-        T_DollarBraced id str -> map (\x -> (id, x)) $ [getBracedReference str]
+        T_DollarBraced id l -> map (\x -> (id, x)) $ [getBracedReference $ bracedString l]
         TA_Variable id str -> [(id,str)]
         x -> []
 

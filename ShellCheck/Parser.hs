@@ -44,6 +44,7 @@ variableChars = upper <|> lower <|> digit <|> oneOf "_"
 specialVariable = oneOf "@*#?-$!"
 tokenDelimiter = oneOf "&|;<> \t\n"
 quotable = oneOf "#|&;<>()$`\\ \"'\t\n"
+bracedQuotable = oneOf "}\"$`'"
 doubleQuotable = oneOf "\"$`"
 whitespace = oneOf " \t\n"
 linewhitespace = oneOf " \t"
@@ -476,6 +477,18 @@ readSpacePart = do
     x <- many1 whitespace
     return $ T_Literal id x
 
+readDollarBracedWord = do
+    id <- getNextId
+    list <- many readDollarBracedPart
+    return $ T_NormalWord id list
+        
+readDollarBracedPart = readSingleQuoted <|> readDoubleQuoted <|> readExtglob <|> readDollar <|> readBackTicked <|> readDollarBracedLiteral
+
+readDollarBracedLiteral = do
+    id <- getNextId
+    vars <- (readBraceEscaped <|> (anyChar >>= \x -> return [x])) `reluctantlyTill1` bracedQuotable
+    return $ T_Literal id $ concat vars
+
 prop_readSingleQuoted = isOk readSingleQuoted "'foo bar'"
 prop_readSingleQuoted2 = isWarning readSingleQuoted "'foo bar\\'"
 readSingleQuoted = do
@@ -599,6 +612,12 @@ readDoubleEscaped = do
         <|> (doubleQuotable >>= return . return)
         <|> (anyChar >>= (return . \x -> [bs, x]))
 
+readBraceEscaped = do
+    bs <- backslash
+    (linefeed >> return "")
+        <|> (bracedQuotable >>= return . return)
+        <|> (anyChar >>= (return . \x -> [bs, x]))
+
 
 readGenericLiteral endExp = do
     strings <- many (readGenericEscaped <|> anyChar `reluctantlyTill1` endExp)
@@ -652,15 +671,17 @@ readArithmeticExpression = do
     string "))"
     return (T_Arithmetic id c)
 
-prop_readDollarBraced = isOk readDollarBraced "${foo//bar/baz}"
+prop_readDollarBraced1 = isOk readDollarBraced "${foo//bar/baz}"
+prop_readDollarBraced2 = isOk readDollarBraced "${foo/'{cow}'}"
+prop_readDollarBraced3 = isOk readDollarBraced "${foo%%$(echo cow})}"
+prop_readDollarBraced4 = isOk readDollarBraced "${foo#\\}}"
 readDollarBraced = do
     id <- getNextId
     try (string "${")
-    -- TODO
-    str <- readGenericLiteral (char '}')
+    word <- readDollarBracedWord
     char '}' <?> "matching }"
-    return $ (T_DollarBraced id str)
-
+    return $ T_DollarBraced id word
+        
 prop_readDollarExpansion = isOk readDollarExpansion "$(echo foo; ls\n)"
 readDollarExpansion = do
     id <- getNextId
@@ -674,7 +695,8 @@ readDollarVariable = do
     id <- getNextId
     let singleCharred p = do
         n <- p
-        return (T_DollarBraced id [n]) `attempting` do
+        value <- wrap [n]
+        return (T_DollarBraced id value) `attempting` do
             pos <- getPosition
             num <- lookAhead $ many1 p
             parseNoteAt pos ErrorC $ "$" ++ (n:num) ++ " is equivalent to ${" ++ [n] ++ "}"++ num ++"."
@@ -684,9 +706,16 @@ readDollarVariable = do
 
     let regular = do
         name <- readVariableName
-        return $ T_DollarBraced id (name)
+        value <- wrap name
+        return $ T_DollarBraced id value
 
     try $ char '$' >> (positional <|> special <|> regular)
+
+  where
+    wrap s = do
+        x <- getNextId
+        y <- getNextId
+        return $ T_NormalWord x [T_Literal y s]
 
 readVariableName = do
     f <- variableStart
