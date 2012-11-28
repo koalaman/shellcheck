@@ -66,6 +66,8 @@ basicChecks = [
     ,checkTrAZ
     ,checkPipedAssignment
     ,checkAssignAteCommand
+    ,checkUuoe
+    ,checkFindNameGlob
     ]
 
 modifyMap = modify
@@ -82,10 +84,15 @@ willSplit x =
     T_BraceExpansion _ s -> True
     T_Extglob _ _ _ -> True
     T_NormalWord _ l -> any willSplit l
-    T_Literal _ s -> isGlob s
+    T_Literal _ s -> isGlobLiteral s
     _ -> False
 
-isGlob str = any (`elem` str) "*?"
+isGlobLiteral str = any (`elem` str) "*?"
+
+isGlob (T_Extglob _ _ _) = True
+isGlob (T_Literal _ s) = isGlobLiteral s
+isGlob (T_NormalWord _ l) = any isGlob l
+isGlob _ = False
 
 makeSimple (T_NormalWord _ [f]) = f
 makeSimple (T_Redirecting _ _ f) = f
@@ -151,7 +158,7 @@ prop_checkAssignAteCommand3 = verify checkAssignAteCommand "A=cat foo | grep bar
 prop_checkAssignAteCommand4 = verifyNot checkAssignAteCommand "A=foo ls -l"
 prop_checkAssignAteCommand5 = verifyNot checkAssignAteCommand "PAGER=cat grep bar"
 checkAssignAteCommand (T_SimpleCommand id ((T_Assignment _ _ assignmentTerm):[]) (firstWord:_)) =
-    when ("-" `isPrefixOf` (concat $ deadSimple firstWord) || 
+    when ("-" `isPrefixOf` (concat $ deadSimple firstWord) ||
         (isCommonCommand (getLiteralString assignmentTerm) && not (isCommonCommand (getLiteralString firstWord)))) $
             warn id "To assign the output of a command, use var=$(cmd) ."
   where
@@ -474,6 +481,14 @@ checkPrintfVar = checkCommand "printf" f where
           then warn (getId format) $ "Don't use variables in the printf format string. Use printf \"%s\" \"$foo\"."
           else return ()
 
+prop_checkUuoe1 = verify checkUuoe "echo $(date)"
+prop_checkUuoe2 = verify checkUuoe "echo \"$(date)\""
+prop_checkUuoe3 = verifyNot checkUuoe "echo \"The time is $(date)\""
+checkUuoe = checkCommand "echo" f where
+    msg id = style id "Useless echo? Instead of 'echo $(cmd)', just use 'cmd'."
+    f [T_NormalWord id [(T_DollarExpansion _ _)]] = msg id
+    f [T_NormalWord id [T_DoubleQuoted _ [(T_DollarExpansion _ _)]]] = msg id
+    f _ = return ()
 
 prop_checkTrAZ1 = verify checkTrAZ "tr [a-f] [A-F]"
 prop_checkTrAZ2 = verify checkTrAZ "tr 'a-z' 'A-Z'"
@@ -488,6 +503,20 @@ checkTrAZ = checkCommand "tr" (mapM_ f)
                             when ("[" `isPrefixOf` s && "]" `isSuffixOf` s && (length s > 2)) $
                                 info (getId word) "Don't use [] around ranges in tr, it replaces literal square brackets."
                 Nothing -> return ()
+
+prop_checkFindNameGlob1 = verify checkFindNameGlob "find / -name *.php"
+prop_checkFindNameGlob2 = verify checkFindNameGlob "find / -type f -ipath *(foo)"
+prop_checkFindNameGlob3 = verifyNot checkFindNameGlob "find * -name '*.php'"
+checkFindNameGlob = checkCommand "find" f where
+    acceptsGlob (Just s) = s `elem` [ "-ilname", "-iname", "-ipath", "-iregex", "-iwholename", "-lname", "-name", "-path", "-regex", "-wholename" ]
+    acceptsGlob _ = False
+    f [] = return ()
+    f [x] = return ()
+    f (a:b:r) = do
+        when (acceptsGlob (getLiteralString a) && isGlob b) $ do
+            let (Just s) = getLiteralString a
+            warn (getId b) $ "Quote the parameter to " ++ s ++ " so the shell won't interpret it."
+        f (b:r)
 
 
 
