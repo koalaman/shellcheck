@@ -735,10 +735,15 @@ readHereDoc = do
     let stripLiteral (T_Literal _ x) = x
         stripLiteral (T_SingleQuoted _ x) = x
     fid <- getNextId
+    pos <- getPosition
     try $ string "<<"
     dashed <- (char '-' >> return True) <|> return False
     tokenPosition <- getPosition
-    spacing
+    sp <- spacing
+    optional $ do
+        try . lookAhead $ char '('
+        let message = "Shells are space sensitive. Use '< <(cmd)', not '<<" ++ sp ++ "(cmd)'."
+        parseProblemAt pos ErrorC message
     hid <- getNextId
     (quoted, endToken) <- (readNormalLiteral >>= (\x -> return (False, stripLiteral x)) )
                             <|> (readDoubleQuotedLiteral >>= return . (\x -> (True, stripLiteral x)))
