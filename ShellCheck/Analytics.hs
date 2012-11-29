@@ -70,7 +70,7 @@ basicChecks = [
     ,checkFindNameGlob
     ,checkGrepRe
     ,checkDollarArithmeticCommand
-    ,checkExpr
+    ,checkNeedlessCommands
     ,checkQuotedCondRegex 
     ,checkForInCat
     ]
@@ -180,10 +180,14 @@ checkUuoc (T_Pipeline _ (T_Redirecting _ _ f@(T_SimpleCommand id _ _):_:_)) =
                          _ -> return ()
 checkUuoc _ = return ()
 
-prop_checkExpr = verify checkExpr "foo=$(expr 3 + 2)"
-checkExpr (T_SimpleCommand id _ (w:_)) | w `isCommand` "expr" = 
+prop_checkNeedlessCommands = verify checkNeedlessCommands "foo=$(expr 3 + 2)"
+checkNeedlessCommands (T_SimpleCommand id _ (w:_)) | w `isCommand` "expr" = 
     style id "Use $((..)), ${} or [[ ]] in place of antiquated expr."
-checkExpr _ = return ()
+checkNeedlessCommands (T_SimpleCommand id _ (w:_)) | w `isCommand` "dirname" = 
+    style id "Use parameter expansion instead, such as ${var%/*}."
+checkNeedlessCommands (T_SimpleCommand id _ (w:_)) | w `isCommand` "basename" = 
+    style id "Use parameter expansion instead, such as ${var##*/}."
+checkNeedlessCommands _ = return ()
 
 prop_checkPipePitfalls1 = verify checkPipePitfalls "foo | grep foo | awk bar"
 prop_checkPipePitfalls2 = verifyNot checkPipePitfalls "foo | awk bar | grep foo"
