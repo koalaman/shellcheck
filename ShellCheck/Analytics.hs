@@ -71,8 +71,9 @@ basicChecks = [
     ,checkGrepRe
     ,checkDollarArithmeticCommand
     ,checkNeedlessCommands
-    ,checkQuotedCondRegex 
+    ,checkQuotedCondRegex
     ,checkForInCat
+    ,checkFindExec
     ]
 
 modifyMap = modify
@@ -181,11 +182,11 @@ checkUuoc (T_Pipeline _ (T_Redirecting _ _ f@(T_SimpleCommand id _ _):_:_)) =
 checkUuoc _ = return ()
 
 prop_checkNeedlessCommands = verify checkNeedlessCommands "foo=$(expr 3 + 2)"
-checkNeedlessCommands (T_SimpleCommand id _ (w:_)) | w `isCommand` "expr" = 
+checkNeedlessCommands (T_SimpleCommand id _ (w:_)) | w `isCommand` "expr" =
     style id "Use $((..)), ${} or [[ ]] in place of antiquated expr."
-checkNeedlessCommands (T_SimpleCommand id _ (w:_)) | w `isCommand` "dirname" = 
+checkNeedlessCommands (T_SimpleCommand id _ (w:_)) | w `isCommand` "dirname" =
     style id "Use parameter expansion instead, such as ${var%/*}."
-checkNeedlessCommands (T_SimpleCommand id _ (w:_)) | w `isCommand` "basename" = 
+checkNeedlessCommands (T_SimpleCommand id _ (w:_)) | w `isCommand` "basename" =
     style id "Use parameter expansion instead, such as ${var##*/}."
 checkNeedlessCommands _ = return ()
 
@@ -252,6 +253,29 @@ checkForInLs (T_ForIn _ f [T_NormalWord _ [T_DollarExpansion id [x]]] _) =
                                         err id $ "Don't use 'for "++f++" in $(ls " ++ (intercalate " " n) ++ ")'. Use 'for "++f++" in "++ (intercalate " " args) ++ "' ."
                          _ -> return ()
 checkForInLs _ = return ()
+
+
+prop_checkFindExec1 = verify checkFindExec "find / -name '*.php' -exec rm {};"
+prop_checkFindExec2 = verify checkFindExec "find / -exec touch {} && ls {} \\;"
+prop_checkFindExec3 = verify checkFindExec "find / -execdir cat {} | grep lol +"
+prop_checkFindExec4 = verifyNot checkFindExec "find / -name '*.php' -exec foo {} +"
+prop_checkFindExec5 = verifyNot checkFindExec "find / -execdir bash -c 'a && b' \\;"
+checkFindExec (T_SimpleCommand _ _ t) | isBrokenFind t =
+    let wordId = getId $ last t in
+        err wordId "Missing ';' or + terminating -exec. You can't use |/||/&&, and ';' has to be a separate, quoted argument."
+
+  where
+    isBrokenFind (w:r) = w `isCommand` "find" && broken r False
+    isBrokenFind _ = False
+
+    broken [] v = v
+    broken (w:r) v = case getLiteralString w of
+                        Just "-exec" -> broken r True
+                        Just "-execdir" -> broken r True
+                        Just "+" -> broken r False
+                        Just ";" -> broken r False
+                        _ -> broken r v
+checkFindExec _ = return ()
 
 
 prop_checkUnquotedExpansions1 = verifyFull checkUnquotedExpansions "rm $(ls)"
@@ -367,8 +391,8 @@ checkNumberComparisons _ = return ()
 prop_checkQuotedCondRegex1 = verify checkQuotedCondRegex "[[ $foo =~ \"bar\" ]]"
 prop_checkQuotedCondRegex2 = verify checkQuotedCondRegex "[[ $foo =~ 'cow' ]]"
 prop_checkQuotedCondRegex3 = verifyNot checkQuotedCondRegex "[[ $foo =~ $foo ]]"
-checkQuotedCondRegex (TC_Binary _ _ "=~" _ rhs) = 
-    case rhs of 
+checkQuotedCondRegex (TC_Binary _ _ "=~" _ rhs) =
+    case rhs of
         T_NormalWord id [T_DoubleQuoted _ _] -> error id
         T_NormalWord id [T_SingleQuoted _ _] -> error id
         _ -> return ()
@@ -515,9 +539,9 @@ getLiteralString t = g t
 
 isLiteral t = isJust $ getLiteralString t
 
-isCommand (T_Redirecting _ _ w) str = 
+isCommand (T_Redirecting _ _ w) str =
     isCommand w str
-isCommand (T_SimpleCommand _ _ (w:_)) str = 
+isCommand (T_SimpleCommand _ _ (w:_)) str =
     isCommand w str
 isCommand token str =
     case getLiteralString token of
