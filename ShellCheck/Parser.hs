@@ -471,7 +471,7 @@ checkPossibleTermination pos [T_Literal _ x] =
 checkPossibleTermination _ _ = return ()
 
 
-readNormalWordPart = readSingleQuoted <|> readDoubleQuoted <|> readExtglob <|> readDollar <|> readBraced <|> readBackTicked <|> (readNormalLiteral)
+readNormalWordPart = readSingleQuoted <|> readDoubleQuoted <|> readExtglob <|> readDollar <|> readBraced <|> readBackTicked <|> readProcSub <|> readNormalLiteral
 readSpacePart = do
     id <- getNextId
     x <- many1 whitespace
@@ -488,6 +488,20 @@ readDollarBracedLiteral = do
     id <- getNextId
     vars <- (readBraceEscaped <|> (anyChar >>= \x -> return [x])) `reluctantlyTill1` bracedQuotable
     return $ T_Literal id $ concat vars
+
+prop_readProcSub1 = isOk readProcSub "<(echo test | wc -l)"
+prop_readProcSub2 = isOk readProcSub "<(  if true; then true; fi )"
+readProcSub = do
+    id <- getNextId
+    dir <- try $ do
+                    x <- oneOf "<>"
+                    char '('
+                    return [x]
+    allspacing
+    list <- readCompoundList
+    allspacing
+    char ')'
+    return $ T_ProcSub id dir list
 
 prop_readSingleQuoted = isOk readSingleQuoted "'foo bar'"
 prop_readSingleQuoted2 = isWarning readSingleQuoted "'foo bar\\'"
@@ -774,7 +788,7 @@ debugHereDoc pos endToken doc =
 
 
 readFilename = readNormalWord
-readIoFileOp = choice [g_LESSAND, g_GREATAND, g_DGREAT, g_LESSGREAT, g_CLOBBER, tryToken "<" T_Less, tryToken ">" T_Greater ]
+readIoFileOp = choice [g_LESSAND, g_GREATAND, g_DGREAT, g_LESSGREAT, g_CLOBBER, redirToken '<' T_Less, redirToken '>' T_Greater ]
 
 prop_readIoFile = isOk readIoFile ">> \"$(date +%YYmmDD)\""
 readIoFile = do
@@ -1174,6 +1188,12 @@ tryToken s t = try $ do
     id <- getNextId
     string s
     spacing
+    return $ t id
+
+redirToken c t = try $ do
+    id <- getNextId
+    char c
+    notFollowedBy $ char '('
     return $ t id
 
 tryWordToken s t = tryParseWordToken (string s) t `thenSkip` spacing

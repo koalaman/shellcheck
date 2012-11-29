@@ -23,7 +23,7 @@ import qualified Text.Regex as Re
 
 data Id = Id Int deriving (Show, Eq, Ord)
 
-data Token = T_AND_IF Id | T_OR_IF Id | T_DSEMI Id | T_Semi Id | T_DLESS Id | T_DGREAT Id | T_LESSAND Id | T_GREATAND Id | T_LESSGREAT Id | T_DLESSDASH Id | T_CLOBBER Id | T_If Id | T_Then Id | T_Else Id | T_Elif Id | T_Fi Id | T_Do Id | T_Done Id | T_Case Id | T_Esac Id | T_While Id | T_Until Id | T_For Id | T_Lbrace Id | T_Rbrace Id | T_Lparen Id | T_Rparen Id | T_Bang Id | T_In  Id | T_NEWLINE Id | T_EOF Id | T_Less Id | T_Greater Id | T_SingleQuoted Id String | T_Literal Id String | T_NormalWord Id [Token] | T_DoubleQuoted Id [Token] | T_DollarExpansion Id [Token] | T_DollarBraced Id Token | T_DollarArithmetic Id Token | T_BraceExpansion Id String | T_IoFile Id Token Token | T_HereDoc Id Bool Bool String | T_HereString Id Token | T_FdRedirect Id String Token | T_Assignment Id String Token | T_Array Id [Token] | T_Redirecting Id [Token] Token | T_SimpleCommand Id [Token] [Token] | T_Pipeline Id [Token] | T_Banged Id Token | T_AndIf Id (Token) (Token) | T_OrIf Id (Token) (Token) | T_Backgrounded Id Token | T_IfExpression Id [([Token],[Token])] [Token] | T_Subshell Id [Token] | T_BraceGroup Id [Token] | T_WhileExpression Id [Token] [Token] | T_UntilExpression Id [Token] [Token] | T_ForIn Id String [Token] [Token] | T_CaseExpression Id Token [([Token],[Token])] | T_Function Id String Token | T_Arithmetic Id Token | T_Script Id [Token] | T_Condition Id ConditionType Token | T_Extglob Id String [Token] | TC_And Id ConditionType String Token Token | TC_Or Id ConditionType String Token Token | TC_Group Id ConditionType Token | TC_Binary Id ConditionType String Token Token | TC_Unary Id ConditionType String Token | TC_Noary Id ConditionType Token | TA_Binary Id String Token Token | TA_Unary Id String Token | TA_Sequence Id [Token] | TA_Variable Id String | TA_Trinary Id Token Token Token | TA_Expansion Id Token | TA_Literal Id String | T_Backticked Id String
+data Token = T_AND_IF Id | T_OR_IF Id | T_DSEMI Id | T_Semi Id | T_DLESS Id | T_DGREAT Id | T_LESSAND Id | T_GREATAND Id | T_LESSGREAT Id | T_DLESSDASH Id | T_CLOBBER Id | T_If Id | T_Then Id | T_Else Id | T_Elif Id | T_Fi Id | T_Do Id | T_Done Id | T_Case Id | T_Esac Id | T_While Id | T_Until Id | T_For Id | T_Lbrace Id | T_Rbrace Id | T_Lparen Id | T_Rparen Id | T_Bang Id | T_In  Id | T_NEWLINE Id | T_EOF Id | T_Less Id | T_Greater Id | T_SingleQuoted Id String | T_Literal Id String | T_NormalWord Id [Token] | T_DoubleQuoted Id [Token] | T_DollarExpansion Id [Token] | T_DollarBraced Id Token | T_DollarArithmetic Id Token | T_BraceExpansion Id String | T_IoFile Id Token Token | T_HereDoc Id Bool Bool String | T_HereString Id Token | T_FdRedirect Id String Token | T_Assignment Id String Token | T_Array Id [Token] | T_Redirecting Id [Token] Token | T_SimpleCommand Id [Token] [Token] | T_Pipeline Id [Token] | T_Banged Id Token | T_AndIf Id (Token) (Token) | T_OrIf Id (Token) (Token) | T_Backgrounded Id Token | T_IfExpression Id [([Token],[Token])] [Token] | T_Subshell Id [Token] | T_BraceGroup Id [Token] | T_WhileExpression Id [Token] [Token] | T_UntilExpression Id [Token] [Token] | T_ForIn Id String [Token] [Token] | T_CaseExpression Id Token [([Token],[Token])] | T_Function Id String Token | T_Arithmetic Id Token | T_Script Id [Token] | T_Condition Id ConditionType Token | T_Extglob Id String [Token] | TC_And Id ConditionType String Token Token | TC_Or Id ConditionType String Token Token | TC_Group Id ConditionType Token | TC_Binary Id ConditionType String Token Token | TC_Unary Id ConditionType String Token | TC_Noary Id ConditionType Token | TA_Binary Id String Token Token | TA_Unary Id String Token | TA_Sequence Id [Token] | TA_Variable Id String | TA_Trinary Id Token Token Token | TA_Expansion Id Token | TA_Literal Id String | T_Backticked Id String | T_ProcSub Id String [Token]
 
     deriving (Show)
 
@@ -81,6 +81,7 @@ analyze f g i t =
     delve (T_OrIf id t u) = d2 t u $ T_OrIf id
     delve (T_Backgrounded id l) = d1 l $ T_Backgrounded id
     delve (T_Subshell id l) = dl l $ T_Subshell id
+    delve (T_ProcSub id typ l) = dl l $ T_ProcSub id typ
     delve (T_Arithmetic id c) = d1 c $ T_Arithmetic id
     delve (T_IfExpression id conditions elses) = do
         newConds <- mapM (\(c, t) -> do
@@ -208,6 +209,7 @@ getId t = case t of
         TA_Trinary id _ _ _  -> id
         TA_Expansion id _  -> id
         TA_Literal id _ -> id
+        T_ProcSub id _ _ -> id
 
 blank :: Monad m => Token -> m ()
 blank = const $ return ()
