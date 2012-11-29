@@ -634,11 +634,11 @@ readBraceEscaped = do
 
 
 readGenericLiteral endExp = do
-    strings <- many (readGenericEscaped <|> anyChar `reluctantlyTill1` endExp)
+    strings <- (readGenericEscaped <|> (anyChar >>= \x -> return [x])) `reluctantlyTill` endExp
     return $ concat strings
 
 readGenericLiteral1 endExp = do
-    strings <- many1 (readGenericEscaped <|> anyChar `reluctantlyTill1` endExp)
+    strings <- (readGenericEscaped <|> (anyChar >>= \x -> return [x])) `reluctantlyTill1` endExp
     return $ concat strings
 
 readGenericEscaped = do
@@ -656,8 +656,15 @@ readBraced = try $ do
     char '}'
     return $ T_BraceExpansion id $ concat str
 
-readDollar = readDollarArithmetic <|> readDollarBraced <|> readDollarExpansion <|> readDollarVariable <|> readDollarLonely
+readDollar = readDollarArithmetic <|> readDollarBraced <|> readDollarExpansion <|> readDollarVariable <|> readDollarSingleQuote <|> readDollarLonely
 
+prop_readDollarSingleQuote = isOk readDollarSingleQuote "$'foo\\\'lol'"
+readDollarSingleQuote = do
+    id <- getNextId
+    try $ string "$'"
+    str <- readGenericLiteral (char '\'')
+    char '\''
+    return $ T_Literal id str
 
 readParenLiteralHack = do
     strs <- (readParenHack <|> (anyChar >>= \x -> return [x])) `reluctantlyTill1` (string "))")
