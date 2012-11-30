@@ -89,15 +89,13 @@ willSplit x =
     T_DollarExpansion _ _ -> True
     T_Backticked _ _ -> True
     T_BraceExpansion _ s -> True
+    T_Glob _ _ -> True
     T_Extglob _ _ _ -> True
     T_NormalWord _ l -> any willSplit l
-    T_Literal _ s -> isGlobLiteral s
     _ -> False
 
-isGlobLiteral str = any (`elem` str) "*?"
-
 isGlob (T_Extglob _ _ _) = True
-isGlob (T_Literal _ s) = isGlobLiteral s
+isGlob (T_Glob _ _) = True
 isGlob (T_NormalWord _ l) = any isGlob l
 isGlob _ = False
 
@@ -571,10 +569,13 @@ checkUuoe = checkCommand "echo" f where
 
 prop_checkTrAZ1 = verify checkTrAZ "tr [a-f] [A-F]"
 prop_checkTrAZ2 = verify checkTrAZ "tr 'a-z' 'A-Z'"
+prop_checkTrAZ2a= verify checkTrAZ "tr '[a-z]' '[A-Z]'"
 prop_checkTrAZ3 = verifyNot checkTrAZ "tr -d '[:lower:]'"
 prop_checkTrAZ4 = verifyNot checkTrAZ "ls [a-z]"
 checkTrAZ = checkCommand "tr" (mapM_ f)
   where
+    f w | isGlob w = do -- The user will go [ab] -> '[ab]' -> 'ab'. Fixme?
+        warn (getId w) $ "Quote the parameter to tr to prevent glob expansion."
     f word = case getLiteralString word of
                 Just "a-z" -> info (getId word) "Use '[:lower:]' to support accents and foreign alphabets."
                 Just "A-Z" -> info (getId word) "Use '[:upper:]' to support accents and foreign alphabets."
@@ -603,6 +604,7 @@ prop_checkGrepRe2 = verify checkGrepRe "grep -Ev cow*test *.mp3"
 prop_checkGrepRe3 = verify checkGrepRe "grep --regex=*.mp3 file"
 prop_checkGrepRe4 = verifyNot checkGrepRe "grep foo *.mp3"
 prop_checkGrepRe5 = verifyNot checkGrepRe "grep-v  --regex=moo *"
+prop_checkGrepRe6 = verifyNot checkGrepRe "grep foo \\*.mp3"
 checkGrepRe = checkCommand "grep" f where
     -- --regex=*(extglob) doesn't work. Fixme?
     skippable (Just s) = not ("--regex=" `isPrefixOf` s) && "-" `isPrefixOf` s
@@ -675,6 +677,7 @@ isSpaceful :: (String -> Bool) -> Token -> Bool
 isSpaceful spacefulF x =
     case x of
       T_DollarExpansion  _ _ -> True
+      T_Glob _ _         -> True
       T_Extglob _ _ _    -> True
       T_Literal _ s      -> s `containsAny` globspace
       T_SingleQuoted _ s -> s `containsAny` globspace
@@ -683,7 +686,7 @@ isSpaceful spacefulF x =
       T_DoubleQuoted _ w -> isSpacefulWord spacefulF w
       _ -> False
   where
-    globspace = "* \t\n"
+    globspace = "*? \t\n"
     containsAny s chars = any (\c -> c `elem` s) chars
 
 isSpacefulWord :: (String -> Bool) -> [Token] -> Bool

@@ -471,7 +471,7 @@ checkPossibleTermination pos [T_Literal _ x] =
 checkPossibleTermination _ _ = return ()
 
 
-readNormalWordPart = readSingleQuoted <|> readDoubleQuoted <|> readExtglob <|> readDollar <|> readBraced <|> readBackTicked <|> readProcSub <|> readNormalLiteral
+readNormalWordPart = readSingleQuoted <|> readDoubleQuoted <|> readGlob <|> readDollar <|> readBraced <|> readBackTicked <|> readProcSub <|> readNormalLiteral
 readSpacePart = do
     id <- getNextId
     x <- many1 whitespace
@@ -569,8 +569,29 @@ readNormalLiteral = do
     s <- many1 readNormalLiteralPart
     return $ T_Literal id (concat s)
 
+prop_readGlob1 = isOk readGlob "*"
+prop_readGlob2 = isOk readGlob "[^0-9]"
+readGlob = readExtglob <|> readSimple <|> readClass <|> readGlobbyLiteral
+    where
+        readSimple = do
+            id <- getNextId
+            c <- oneOf "*?"
+            return $ T_Glob id [c]
+        -- Doesn't handle weird things like [^]a] and [$foo]. fixme?
+        readClass = try $ do
+            id <- getNextId
+            char '['
+            s <- many1 (letter <|> digit <|> oneOf "^-_:")
+            char ']'
+            return $ T_Glob id $ "[" ++ s ++ "]"
+            
+        readGlobbyLiteral = do
+            id <- getNextId
+            c <- extglobStart <|> char '['
+            return $ T_Literal id [c]
+
 readNormalLiteralPart = do
-    readNormalEscaped <|> (anyChar `reluctantlyTill1` (quotable <|> extglobStart))
+    readNormalEscaped <|> (anyChar `reluctantlyTill1` (quotable <|> extglobStart <|> char '['))
 
 readNormalEscaped = do
     pos <- getPosition
@@ -591,13 +612,13 @@ prop_readExtglob4 = isOk readExtglob "+(foo \\) bar)"
 prop_readExtglob5 = isOk readExtglob "+(!(foo *(bar)))"
 readExtglob = do
     id <- getNextId
-    c <- extglobStart
-    ( try $ do
-        char '('
-        contents <- readExtglobPart `sepBy` (char '|')
-        char ')'
-        return $ T_Extglob id [c] contents
-      ) <|> (return $ T_Literal id [c])
+    c <- try $ do
+            f <- extglobStart
+            char '('
+            return f
+    contents <- readExtglobPart `sepBy` (char '|')
+    char ')'
+    return $ T_Extglob id [c] contents
 
 readExtglobPart = do
     id <- getNextId
