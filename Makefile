@@ -1,13 +1,15 @@
+GHCFLAGS=-O9
+
 all: shellcheck jsoncheck .tests
 	: Done
 	
 shellcheck: regardless
 	: Conditionally compiling shellcheck
-	ghc --make shellcheck
+	ghc $(GHCFLAGS) --make shellcheck
 
 jsoncheck: regardless
 	: Conditionally compiling shellcheck
-	ghc --make jsoncheck
+	ghc $(GHCFLAGS) --make jsoncheck
 
 .tests: *.hs */*.hs
 	: Running unit tests
