@@ -1202,7 +1202,13 @@ readCompoundCommand = do
     cmd <- choice [ readBraceGroup, readArithmeticExpression, readSubshell, readCondition, readWhileClause, readUntilClause, readIfClause, readForClause, readCaseClause, readFunctionDefinition]
     spacing
     redirs <- many readIoRedirect
+    when (not . null $ redirs) $ optional $ do
+        lookAhead $ try (spacing >> needsSeparator)
+        parseProblem WarningC "Bash requires ; or \\n here, after redirecting nested compound commands."
     return $ T_Redirecting id redirs $ cmd
+
+  where
+    needsSeparator = choice [ g_Then, g_Else, g_Elif, g_Fi, g_Do, g_Done, g_Esac, g_Rbrace ]
 
 
 readCompoundList = readTerm
