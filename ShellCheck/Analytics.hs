@@ -439,8 +439,12 @@ prop_checkArithmeticDeref = verify checkArithmeticDeref "echo $((3+$foo))"
 prop_checkArithmeticDeref2 = verify checkArithmeticDeref "cow=14; (( s+= $cow ))"
 prop_checkArithmeticDeref3 = verifyNot checkArithmeticDeref "cow=1/40; (( s+= ${cow%%/*} ))"
 prop_checkArithmeticDeref4 = verifyNot checkArithmeticDeref "(( ! $? ))"
-checkArithmeticDeref (TA_Expansion _ (T_DollarBraced id l)) | not $ any (`elem` "/.:#%?*@") $ bracedString l =
+prop_checkArithmeticDeref5 = verifyNot checkArithmeticDeref "(($1))"
+checkArithmeticDeref (TA_Expansion _ (T_DollarBraced id l)) | not . excepting $ bracedString l =
     style id $ "Don't use $ on variables in (( ))."
+  where
+    excepting [] = True
+    excepting s = (any (`elem` "/.:#%?*@") s) || (isDigit $ head s)
 checkArithmeticDeref _ = return ()
 
 
