@@ -1199,24 +1199,11 @@ readPattern = (readNormalWord `thenSkip` spacing) `sepBy1` (char '|' `thenSkip` 
 
 readCompoundCommand = do
     id <- getNextId
-    -- This is all Bash specific. fi } fails, but ) } works.
-    cmd <- do 
-            x <- needsSeparator
-            return (True, x)
-          <|> do
-            x <- noSeparator
-            return (False, x)
+    cmd <- choice [ readBraceGroup, readArithmeticExpression, readSubshell, readCondition, readWhileClause, readUntilClause, readIfClause, readForClause, readCaseClause, readFunctionDefinition]
     spacing
     redirs <- many readIoRedirect
-    when (fst cmd) $ optional $ do
-        try . lookAhead $ (spacing >> g_Rbrace)
-        parseProblem WarningC "Bash requires semicolon or linefeed before the } here."
+    return $ T_Redirecting id redirs $ cmd
 
-    return $ T_Redirecting id redirs $ snd cmd
-
-  where
-        needsSeparator = choice [ readArithmeticExpression, readCondition, readWhileClause, readUntilClause, readIfClause, readForClause, readCaseClause]
-        noSeparator = choice [ readBraceGroup, readSubshell, readFunctionDefinition]
 
 readCompoundList = readTerm
 
