@@ -63,7 +63,7 @@ basicChecks = [
     ,checkOrNeq
     ,checkEcho
     ,checkConstantIfs
-    ,checkTrAZ
+    ,checkTr
     ,checkPipedAssignment
     ,checkAssignAteCommand
     ,checkUuoe
@@ -567,22 +567,37 @@ checkUuoe = checkCommand "echo" f where
     f [T_NormalWord id [T_DoubleQuoted _ [(T_DollarExpansion _ _)]]] = msg id
     f _ = return ()
 
-prop_checkTrAZ1 = verify checkTrAZ "tr [a-f] [A-F]"
-prop_checkTrAZ2 = verify checkTrAZ "tr 'a-z' 'A-Z'"
-prop_checkTrAZ2a= verify checkTrAZ "tr '[a-z]' '[A-Z]'"
-prop_checkTrAZ3 = verifyNot checkTrAZ "tr -d '[:lower:]'"
-prop_checkTrAZ4 = verifyNot checkTrAZ "ls [a-z]"
-checkTrAZ = checkCommand "tr" (mapM_ f)
+prop_checkTr1 = verify checkTr "tr [a-f] [A-F]"
+prop_checkTr2 = verify checkTr "tr 'a-z' 'A-Z'"
+prop_checkTr2a= verify checkTr "tr '[a-z]' '[A-Z]'"
+prop_checkTr3 = verifyNot checkTr "tr -d '[:lower:]'"
+prop_checkTr4 = verifyNot checkTr "ls [a-z]"
+prop_checkTr5 = verify checkTr "tr foo bar"
+prop_checkTr6 = verify checkTr "tr 'hello' 'world'"
+prop_checkTr8 = verifyNot checkTr "tr aeiou _____"
+prop_checkTr9 = verifyNot checkTr "a-z n-za-m"
+prop_checkTr10= verifyNot checkTr "tr --squeeze-repeats rl lr"
+checkTr = checkCommand "tr" (mapM_ f)
   where
     f w | isGlob w = do -- The user will go [ab] -> '[ab]' -> 'ab'. Fixme?
-        warn (getId w) $ "Quote the parameter to tr to prevent glob expansion."
+        warn (getId w) $ "Quote parameters to tr to prevent glob expansion."
     f word = case getLiteralString word of
                 Just "a-z" -> info (getId word) "Use '[:lower:]' to support accents and foreign alphabets."
                 Just "A-Z" -> info (getId word) "Use '[:upper:]' to support accents and foreign alphabets."
-                Just s -> unless ("[:" `isPrefixOf` s) $
-                            when ("[" `isPrefixOf` s && "]" `isSuffixOf` s && (length s > 2)) $
-                                info (getId word) "Don't use [] around ranges in tr, it replaces literal square brackets."
+
+                Just s -> do  -- Eliminate false positives by only looking for dupes in SET2?
+                            when ((not $ "-" `isPrefixOf` s) && duplicated s) $
+                                info (getId word) "tr replaces sets of chars, not words (mentioned due to duplicates)."
+
+                            unless ("[:" `isPrefixOf` s) $
+                                when ("[" `isPrefixOf` s && "]" `isSuffixOf` s && (length s > 2)) $
+                                    info (getId word) "Don't use [] around ranges in tr, it replaces literal square brackets."
                 Nothing -> return ()
+
+    duplicated s =
+        let relevant = filter isAlpha s
+        in not $ relevant == nub relevant
+
 
 prop_checkFindNameGlob1 = verify checkFindNameGlob "find / -name *.php"
 prop_checkFindNameGlob2 = verify checkFindNameGlob "find / -type f -ipath *(foo)"
