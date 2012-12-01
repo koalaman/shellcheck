@@ -575,6 +575,8 @@ prop_checkTr1 = verify checkTr "tr [a-f] [A-F]"
 prop_checkTr2 = verify checkTr "tr 'a-z' 'A-Z'"
 prop_checkTr2a= verify checkTr "tr '[a-z]' '[A-Z]'"
 prop_checkTr3 = verifyNot checkTr "tr -d '[:lower:]'"
+prop_checkTr3a= verifyNot checkTr "tr -d '[:upper:]'"
+prop_checkTr3b= verifyNot checkTr "tr -d '|/_[:upper:]'"
 prop_checkTr4 = verifyNot checkTr "ls [a-z]"
 prop_checkTr5 = verify checkTr "tr foo bar"
 prop_checkTr6 = verify checkTr "tr 'hello' 'world'"
@@ -590,7 +592,7 @@ checkTr = checkCommand "tr" (mapM_ f)
                 Just "A-Z" -> info (getId word) "Use '[:upper:]' to support accents and foreign alphabets."
 
                 Just s -> do  -- Eliminate false positives by only looking for dupes in SET2?
-                            when ((not $ "-" `isPrefixOf` s) && duplicated s) $
+                            when ((not $ "-" `isPrefixOf` s || "[:" `isInfixOf` s) && duplicated s) $
                                 info (getId word) "tr replaces sets of chars, not words (mentioned due to duplicates)."
 
                             unless ("[:" `isPrefixOf` s) $
