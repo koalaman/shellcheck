@@ -1095,15 +1095,34 @@ readDoGroup loopPos = do
 
 prop_readForClause = isOk readForClause "for f in *; do rm \"$f\"; done"
 prop_readForClause3 = isOk readForClause "for f; do foo; done"
+prop_readForClause4 = isOk readForClause "for((i=0; i<10; i++)); do echo $i; done"
+prop_readForClause5 = isOk readForClause "for ((i=0;i<10 && n>x;i++,--n))\ndo \necho $i\ndone"
+prop_readForClause6 = isOk readForClause "for ((;;))\ndo echo $i\ndone"
 readForClause = called "for loop" $ do
     pos <- getPosition
     (T_For id) <- g_For
     spacing
-    name <- readVariableName
-    spacing
-    values <- readInClause <|> (readSequentialSep >> return [])
+    typ <- (readRegular <|> readArithmetic)
     group <- readDoGroup pos
-    return $ T_ForIn id name values group
+    typ id group
+  where
+    readArithmetic = called "arithmetic for condition" $ do
+        try $ string "(("
+        x <- readArithmeticContents
+        char ';' >> spacing
+        y <- readArithmeticContents
+        char ';' >> spacing
+        z <- readArithmeticContents
+        spacing
+        string "))"
+        readSequentialSep
+        return $ \id group -> (return $ T_ForArithmetic id x y z group)
+
+    readRegular = do
+        name <- readVariableName
+        spacing
+        values <- readInClause <|> (readSequentialSep >> return [])
+        return $ \id group -> (return $ T_ForIn id name values group)
 
 readInClause = do
     g_In
