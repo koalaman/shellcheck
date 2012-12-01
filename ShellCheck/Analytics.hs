@@ -583,6 +583,7 @@ prop_checkTr6 = verify checkTr "tr 'hello' 'world'"
 prop_checkTr8 = verifyNot checkTr "tr aeiou _____"
 prop_checkTr9 = verifyNot checkTr "a-z n-za-m"
 prop_checkTr10= verifyNot checkTr "tr --squeeze-repeats rl lr"
+prop_checkTr11= verifyNot checkTr "tr abc '[d*]'"
 checkTr = checkCommand "tr" (mapM_ f)
   where
     f w | isGlob w = do -- The user will go [ab] -> '[ab]' -> 'ab'. Fixme?
@@ -596,7 +597,7 @@ checkTr = checkCommand "tr" (mapM_ f)
                                 info (getId word) "tr replaces sets of chars, not words (mentioned due to duplicates)."
 
                             unless ("[:" `isPrefixOf` s) $
-                                when ("[" `isPrefixOf` s && "]" `isSuffixOf` s && (length s > 2)) $
+                                when ("[" `isPrefixOf` s && "]" `isSuffixOf` s && (length s > 2) && (not $ '*' `elem` s)) $
                                     info (getId word) "Don't use [] around ranges in tr, it replaces literal square brackets."
                 Nothing -> return ()
 
