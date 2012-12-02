@@ -205,8 +205,9 @@ called s p = do
 readConditionContents single = do
     readCondContents `attempting` (lookAhead $ do
                                 pos <- getPosition
-                                choice (map (try . string) commonCommands)
-                                parseProblemAt pos WarningC "Use 'if cmd; then ..' to check exit code, or 'if [[ $(cmd) == .. ]]' to check output.")
+                                s <- many1 letter
+                                when (s `elem` commonCommands) $
+                                    parseProblemAt pos WarningC "Use 'if cmd; then ..' to check exit code, or 'if [[ $(cmd) == .. ]]' to check output.")
 
   where
     typ = if single then SingleBracket else DoubleBracket
