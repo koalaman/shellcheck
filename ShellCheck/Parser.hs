@@ -212,13 +212,19 @@ readConditionContents single = do
   where
     typ = if single then SingleBracket else DoubleBracket
     readCondBinaryOp = try $ do
-        op <- choice $ (map tryOp ["-nt", "-ot", "-ef", "==", "!=", "<=", ">=", "-eq", "-ne", "-lt", "-le", "-gt", "-ge", "=~", ">", "<", "="])
+        id <- getNextId
+        op <- (choice $ (map tryOp ["==", "!=", "<=", ">=", "=~", ">", "<", "="])) <|> otherOp
         hardCondSpacing
         return op
-      where tryOp s = try $ do
-              id <- getNextId
-              string s
-              return $ TC_Binary id typ s
+      where
+        tryOp s = try $ do
+            id <- getNextId
+            string s
+            return $ TC_Binary id typ s
+        otherOp = try $ do
+            id <- getNextId
+            s <- readOp
+            return $ TC_Binary id typ s
 
     readCondUnaryExp = do
       op <- readCondUnaryOp
@@ -231,15 +237,15 @@ readConditionContents single = do
               fail "oops")
 
     readCondUnaryOp = try $ do
-        op <- choice $ (map tryOp [ "-a", "-b", "-c", "-d", "-e", "-f", "-g", "-h", "-L", "-k", "-p", "-r", "-s", "-S", "-t", "-u", "-w", "-x", "-O", "-G", "-N",
-                    "-z", "-n", "-o", "-v", "-R"
-                    ])
+        id <- getNextId
+        s <- readOp
         hardCondSpacing
-        return op
-      where tryOp s = try $ do
-              id <- getNextId
-              string s
-              return $ TC_Unary id typ s
+        return $ TC_Unary id typ s
+
+    readOp = try $ do
+        char '-'
+        s <- many1 letter
+        return ('-':s)
 
     readCondWord = do
         notFollowedBy2 (try (spacing >> (string "]")))
@@ -733,7 +739,7 @@ readDollarDoubleQuote = do
     x <- many doubleQuotedPart
     doubleQuote <?> "end of translated double quoted string"
     return $ T_DollarDoubleQuoted id x
-    
+
 
 prop_readDollarArithmetic = isOk readDollarArithmetic "$(( 3 * 4 +5))"
 prop_readDollarArithmetic2 = isOk readDollarArithmetic "$(((3*4)+(1*2+(3-1))))"

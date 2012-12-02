@@ -75,6 +75,7 @@ basicChecks = [
     ,checkQuotedCondRegex
     ,checkForInCat
     ,checkFindExec
+    ,checkValidCondOps
     ]
 
 modifyMap = modify
@@ -227,7 +228,7 @@ isMagicInQuotes _ = False
 prop_checkShebang1 = verifyFull checkShebang "#!/usr/bin/env bash -x\necho cow"
 prop_checkShebang2 = verifyNotFull checkShebang "#! /bin/sh  -l "
 checkShebang (T_Script id sb _) m =
-    if (length $ words sb) > 2 then 
+    if (length $ words sb) > 2 then
         let note = Note ErrorC $ "On most OS, shebangs can only specify a single parameter."
         in Map.adjust (\(Metadata pos notes) -> Metadata pos (note:notes)) id m
     else m
@@ -513,6 +514,18 @@ checkDollarArithmeticCommand (T_SimpleCommand _ [] [T_NormalWord _ [T_DollarArit
 checkDollarArithmeticCommand _ = return ()
 
 allModifiedVariables t = snd $ runState (doAnalysis (\x -> modify $ (++) (getModifiedVariables x)) t) []
+
+prop_checkValidCondOps1 = verify checkValidCondOps "[[ a -xz b ]]"
+prop_checkValidCondOps2 = verify checkValidCondOps "[ -M a ]"
+prop_checkValidCondOps3 = verifyNot checkValidCondOps "[ 1 = 2 -a 3 -ge 4 ]"
+prop_checkValidCondOps4 = verifyNot checkValidCondOps "[[ ! -v foo ]]"
+checkValidCondOps (TC_Binary id _ s _ _)
+    | not (s `elem` ["-nt", "-ot", "-ef", "==", "!=", "<=", ">=", "-eq", "-ne", "-lt", "-le", "-gt", "-ge", "=~", ">", "<", "="]) =
+        warn id "Unknown binary operator."
+checkValidCondOps (TC_Unary id _ s _)
+    | not (s `elem`  [ "!", "-a", "-b", "-c", "-d", "-e", "-f", "-g", "-h", "-L", "-k", "-p", "-r", "-s", "-S", "-t", "-u", "-w", "-x", "-O", "-G", "-N", "-z", "-n", "-o", "-v", "-R"]) =
+        warn id "Unknown unary operator."
+checkValidCondOps _ = return ()
 
 --- Context seeking
 
