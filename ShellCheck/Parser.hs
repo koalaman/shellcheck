@@ -1335,16 +1335,24 @@ wtf = do
     x <- many anyChar
     parseProblem ErrorC x
 
+readShebang = do
+    try $ string "#!"
+    str <- anyChar `reluctantlyTill` oneOf "\r\n"
+    optional $ carriageReturn
+    linefeed
+    return str
+
 readScript = do
     id <- getNextId
+    sb <- option "" readShebang
     do {
         allspacing;
         commands <- readTerm;
         eof <|> (parseProblem ErrorC "Parsing stopped here because of parsing errors.");
-        return $ T_Script id commands;
+        return $ T_Script id sb commands;
     } <|> do {
         parseProblem WarningC "Couldn't read any commands.";
-        return $ T_Script id $ [T_EOF id];
+        return $ T_Script id sb $ [T_EOF id];
     }
 
 rp p filename contents = Ms.runState (runParserT p initialState filename contents) ([], [])
