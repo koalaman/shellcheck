@@ -33,6 +33,7 @@ checks = concat [
     ,[subshellAssignmentCheck]
     ,[checkSpacefulness]
     ,[checkUnquotedExpansions]
+    ,[checkShebang]
     ]
 
 runAllAnalytics = checkList checks
@@ -222,6 +223,14 @@ indexOfSublists sub all = f 0 all
 bracedString l = concat $ deadSimple l
 isMagicInQuotes (T_DollarBraced _ l) | '@' `elem` (bracedString l) = True
 isMagicInQuotes _ = False
+
+prop_checkShebang1 = verifyFull checkShebang "#!/usr/bin/env bash -x\necho cow"
+prop_checkShebang2 = verifyNotFull checkShebang "#! /bin/sh  -l "
+checkShebang (T_Script id sb _) m =
+    if (length $ words sb) > 2 then 
+        let note = Note ErrorC $ "On most OS, shebangs can only specify a single parameter."
+        in Map.adjust (\(Metadata pos notes) -> Metadata pos (note:notes)) id m
+    else m
 
 prop_checkForInQuoted = verify checkForInQuoted "for f in \"$(ls)\"; do echo foo; done"
 prop_checkForInQuoted2 = verifyNot checkForInQuoted "for f in \"$@\"; do echo foo; done"

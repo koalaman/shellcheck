@@ -1338,8 +1338,8 @@ wtf = do
 readShebang = do
     try $ string "#!"
     str <- anyChar `reluctantlyTill` oneOf "\r\n"
-    optional $ carriageReturn
-    linefeed
+    optional carriageReturn
+    optional linefeed
     return str
 
 readScript = do
