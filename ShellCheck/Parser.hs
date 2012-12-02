@@ -713,7 +713,7 @@ readBraced = try $ do
     char '}'
     return $ T_BraceExpansion id $ concat str
 
-readDollar = readDollarArithmetic <|> readDollarBraced <|> readDollarExpansion <|> readDollarVariable <|> readDollarSingleQuote <|> readDollarLonely
+readDollar = readDollarArithmetic <|> readDollarBraced <|> readDollarExpansion <|> readDollarVariable <|> readDollarSingleQuote <|> readDollarDoubleQuote <|> readDollarLonely
 
 prop_readDollarSingleQuote = isOk readDollarSingleQuote "$'foo\\\'lol'"
 readDollarSingleQuote = called "$'..' expression" $ do
@@ -721,7 +721,18 @@ readDollarSingleQuote = called "$'..' expression" $ do
     try $ string "$'"
     str <- readGenericLiteral (char '\'')
     char '\''
-    return $ T_Literal id str
+    return $ T_DollarSingleQuoted id str
+
+prop_readDollarDoubleQuote = isOk readDollarDoubleQuote "$\"hello\""
+readDollarDoubleQuote = do
+    lookAhead . try $ string "$\""
+    id <- getNextId
+    char '$'
+    doubleQuote
+    x <- many doubleQuotedPart
+    doubleQuote <?> "end of translated double quoted string"
+    return $ T_DollarDoubleQuoted id x
+    
 
 prop_readDollarArithmetic = isOk readDollarArithmetic "$(( 3 * 4 +5))"
 prop_readDollarArithmetic2 = isOk readDollarArithmetic "$(((3*4)+(1*2+(3-1))))"

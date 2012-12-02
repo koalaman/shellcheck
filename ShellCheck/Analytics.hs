@@ -33,7 +33,7 @@ checks = concat [
     ,[subshellAssignmentCheck]
     ,[checkSpacefulness]
     ,[checkUnquotedExpansions]
-    ,[checkShebang]
+    ,[checkShebang, checkUndeclaredBash]
     ]
 
 runAllAnalytics = checkList checks
@@ -231,6 +231,24 @@ checkShebang (T_Script id sb _) m =
         let note = Note ErrorC $ "On most OS, shebangs can only specify a single parameter."
         in Map.adjust (\(Metadata pos notes) -> Metadata pos (note:notes)) id m
     else m
+
+prop_checkUndeclaredBash = verifyFull checkUndeclaredBash "#!/bin/sh -l\nwhile read a; do :; done < <(a)"
+prop_checkUndeclaredBash2 = verifyNotFull checkUndeclaredBash "#!/bin/bash\nwhile read a; do :; done < <(a)"
+checkUndeclaredBash t@(T_Script id sb _) m =
+    let tokens = words sb
+    in if (not $ null tokens) && "/sh" `isSuffixOf` (head tokens)
+        then runBasicAnalysis bashism t m
+        else m
+  where
+    errMsg id s = err id $ "The shebang specifies sh, so " ++ s ++ " is not supported, even if sh is bash."
+    warnMsg id s = warn id $ "The shebang specifies sh, so " ++ s ++ " may not be supported."
+    bashism (T_ProcSub id _ _) = errMsg id "process substitution"
+    bashism (T_Extglob id _ _) = warnMsg id "extglob"
+    bashism (T_DollarSingleQuoted id _) = warnMsg id "$'..'"
+    bashism (T_DollarDoubleQuoted id _) = warnMsg id "$\"..\""
+    bashism (T_ForArithmetic id _ _ _ _) = warnMsg id "arithmetic for loops"
+    bashism (T_Arithmetic id _) = warnMsg id "((..))"
+    bashism _ = return()
 
 prop_checkForInQuoted = verify checkForInQuoted "for f in \"$(ls)\"; do echo foo; done"
 prop_checkForInQuoted2 = verifyNot checkForInQuoted "for f in \"$@\"; do echo foo; done"
@@ -543,6 +561,7 @@ getLiteralString t = g t
   where
     allInList l = let foo = map g l in if all isJust foo then return $ concat (catMaybes foo) else Nothing
     g s@(T_DoubleQuoted _ l) = allInList l
+    g s@(T_DollarDoubleQuoted _ l) = allInList l
     g s@(T_NormalWord _ l) = allInList l
     g (T_SingleQuoted _ s) = return s
     g (T_Literal _ s) = return s
