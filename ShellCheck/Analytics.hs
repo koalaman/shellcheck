@@ -286,21 +286,39 @@ prop_checkFindExec2 = verify checkFindExec "find / -exec touch {} && ls {} \\;"
 prop_checkFindExec3 = verify checkFindExec "find / -execdir cat {} | grep lol +"
 prop_checkFindExec4 = verifyNot checkFindExec "find / -name '*.php' -exec foo {} +"
 prop_checkFindExec5 = verifyNot checkFindExec "find / -execdir bash -c 'a && b' \\;"
-checkFindExec (T_SimpleCommand _ _ t) | isBrokenFind t =
-    let wordId = getId $ last t in
-        err wordId "Missing ';' or + terminating -exec. You can't use |/||/&&, and ';' has to be a separate, quoted argument."
+prop_checkFindExec6 = verify checkFindExec "find / -type d -execdir rm *.jpg \\;"
+checkFindExec (T_SimpleCommand _ _ t@(h:r)) | h `isCommand` "find" = do
+    c <- broken r False
+    when c $ do
+        let wordId = getId $ last t in
+            err wordId "Missing ';' or + terminating -exec. You can't use |/||/&&, and ';' has to be a separate, quoted argument."
 
   where
-    isBrokenFind (w:r) = w `isCommand` "find" && broken r False
-    isBrokenFind _ = False
+    broken [] v = return v
+    broken (w:r) v = do
+        when v $ (mapM_ warnFor $ fromWord w)
+        case getLiteralString w of
+            Just "-exec" -> broken r True
+            Just "-execdir" -> broken r True
+            Just "+" -> broken r False
+            Just ";" -> broken r False
+            _ -> broken r v
 
-    broken [] v = v
-    broken (w:r) v = case getLiteralString w of
-                        Just "-exec" -> broken r True
-                        Just "-execdir" -> broken r True
-                        Just "+" -> broken r False
-                        Just ";" -> broken r False
-                        _ -> broken r v
+    shouldWarn x =
+      case x of
+        T_DollarExpansion _ _ -> True
+        T_Backticked _ _ -> True
+        T_Glob _ _ -> True
+        T_Extglob _ _ _ -> True
+        _ -> False
+
+    warnFor x =
+        if shouldWarn x
+        then info (getId x) "This will expand once before find runs, not per file found."
+        else return ()
+
+    fromWord (T_NormalWord _ l) = l
+    fromWord _ = []
 checkFindExec _ = return ()
 
 
@@ -859,10 +877,10 @@ checkSpacefulness t metaMap =
     headFirst _ = True
 
     endScope t =
-        if not $ headFirst t then performScope t else return () 
+        if not $ headFirst t then performScope t else return ()
 
     startScope t =
-        if headFirst t then performScope t else return () 
+        if headFirst t then performScope t else return ()
 
     performScope t = do
         (_, spaceMap) <- get
