@@ -475,12 +475,7 @@ readCondition = called "test expression" $ do
   condition <- readConditionContents single
 
   cpos <- getPosition
-  close <- (try $ string "]]") <|> (string "]") <|> do
-        let match = (if single then "]" else "]]")
-        parseProblemAt opos ErrorC $ "Couldn't find matching " ++ match ++ "."
-        parseProblem ErrorC $ "Expected " ++ match ++ "."
-        fail "condition"
-
+  close <- (try $ string "]]") <|> (string "]")
   when (open == "[[" && close /= "]]") $ parseProblemAt cpos ErrorC "Did you mean ]] ?"
   when (open == "[" && close /= "]" ) $ parseProblemAt opos ErrorC "Did you mean [[ ?"
   return $ T_Condition id (if single then SingleBracket else DoubleBracket) condition
