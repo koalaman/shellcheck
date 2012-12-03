@@ -494,13 +494,14 @@ readComment = do
 
 prop_readNormalWord = isOk readNormalWord "'foo'\"bar\"{1..3}baz$(lol)"
 prop_readNormalWord2 = isOk readNormalWord "foo**(foo)!!!(@@(bar))"
-readNormalWord = do
+readNormalWord = readNormalishWord ""
+
+readNormalishWord end = do
     id <- getNextId
     pos <- getPosition
-    x <- many1 readNormalWordPart
+    x <- many1 (readNormalWordPart end)
     checkPossibleTermination pos x
     return $ T_NormalWord id x
-
 
 checkPossibleTermination pos [T_Literal _ x] =
     if x `elem` ["do", "done", "then", "fi", "esac", "}"]
@@ -508,8 +509,7 @@ checkPossibleTermination pos [T_Literal _ x] =
         else return ()
 checkPossibleTermination _ _ = return ()
 
-
-readNormalWordPart = readSingleQuoted <|> readDoubleQuoted <|> readGlob <|> readDollar <|> readBraced <|> readBackTicked <|> readProcSub <|> readNormalLiteral
+readNormalWordPart end = readSingleQuoted <|> readDoubleQuoted <|> readGlob <|> readDollar <|> readBraced <|> readBackTicked <|> readProcSub <|> (readNormalLiteral end)
 readSpacePart = do
     id <- getNextId
     x <- many1 whitespace
@@ -601,10 +601,9 @@ readDoubleLiteralPart = do
     x <- (readDoubleEscaped <|> (anyChar >>= \x -> return [x])) `reluctantlyTill1` doubleQuotable
     return $ concat x
 
-prop_readNormalLiteral = isOk readNormalLiteral "hello\\ world"
-readNormalLiteral = do
+readNormalLiteral end = do
     id <- getNextId
-    s <- many1 readNormalLiteralPart
+    s <- many1 (readNormalLiteralPart end)
     return $ T_Literal id (concat s)
 
 prop_readGlob1 = isOk readGlob "*"
@@ -628,8 +627,8 @@ readGlob = readExtglob <|> readSimple <|> readClass <|> readGlobbyLiteral
             c <- extglobStart <|> char '['
             return $ T_Literal id [c]
 
-readNormalLiteralPart = do
-    readNormalEscaped <|> (anyChar `reluctantlyTill1` (quotable <|> extglobStart <|> char '['))
+readNormalLiteralPart end = do
+    readNormalEscaped <|> (anyChar `reluctantlyTill1` (quotable <|> extglobStart <|> char '[' <|> oneOf end))
 
 readNormalEscaped = called "escaped char" $ do
     pos <- getPosition
@@ -660,7 +659,7 @@ readExtglob = called "extglob" $ do
 
 readExtglobPart = do
     id <- getNextId
-    x <- many1 (readNormalWordPart <|> readSpacePart)
+    x <- many1 (readNormalWordPart "" <|> readSpacePart)
     return $ T_NormalWord id x
 
 
@@ -826,7 +825,7 @@ readHereDoc = called "here document" $ do
         let message = "Shells are space sensitive. Use '< <(cmd)', not '<<" ++ sp ++ "(cmd)'."
         parseProblemAt pos ErrorC message
     hid <- getNextId
-    (quoted, endToken) <- (readNormalLiteral >>= (\x -> return (False, stripLiteral x)) )
+    (quoted, endToken) <- (readNormalLiteral "" >>= (\x -> return (False, stripLiteral x)) )
                             <|> (readDoubleQuotedLiteral >>= return . (\x -> (True, stripLiteral x)))
                             <|> (readSingleQuotedLiteral >>= return . (\x -> (True, x)))
     spacing
@@ -1254,10 +1253,13 @@ prop_readAssignmentWord3 = isWarning readAssignmentWord "$b = 13"
 prop_readAssignmentWord4 = isWarning readAssignmentWord "b = $(lol)"
 prop_readAssignmentWord5 = isOk readAssignmentWord "b+=lol"
 prop_readAssignmentWord6 = isWarning readAssignmentWord "b += (1 2 3)"
+prop_readAssignmentWord7 = isOk readAssignmentWord "a[3$n'']=42"
+prop_readAssignmentWord8 = isOk readAssignmentWord "a[4''$(cat foo)]=42"
 readAssignmentWord = try $ do
     id <- getNextId
     optional (char '$' >> parseNote ErrorC "Don't use $ on the left side of assignments.")
     variable <- readVariableName
+    optional readArrayIndex -- Throws away the index. Fixme?
     space <- spacing
     pos <- getPosition
     op <- string "+=" <|> string "="  -- analysis doesn't treat += as a reference. fixme?
@@ -1268,6 +1270,14 @@ readAssignmentWord = try $ do
     when (space == "" && space2 /= "") $ parseNoteAt pos StyleC "Use var='' if you intended to assign the empty string."
     return $ T_Assignment id variable value
 
+-- This is only approximate. Fixme?
+readArrayIndex = do
+    char '['
+    optional space
+    x <- readNormalishWord "]"
+    optional space
+    char ']'
+
 readArray = called "array assignment" $ do
     id <- getNextId
     char '('
@@ -1275,7 +1285,6 @@ readArray = called "array assignment" $ do
     words <- (readNormalWord `thenSkip` allspacing) `reluctantlyTill` (char ')')
     char ')'
     return $ T_Array id words
-
 
 tryToken s t = try $ do
     id <- getNextId
