@@ -824,6 +824,7 @@ prop_checkSpacefulness1 = verifyFull checkSpacefulness "a='cow moo'; echo $a"
 prop_checkSpacefulness2 = verifyNotFull checkSpacefulness "a='cow moo'; [[ $a ]]"
 prop_checkSpacefulness3 = verifyNotFull checkSpacefulness "a='cow*.mp3'; echo \"$a\""
 prop_checkSpacefulness4 = verifyFull checkSpacefulness "for f in *.mp3; do echo $f; done"
+prop_checkSpacefulness4a= verifyNotFull checkSpacefulness "foo=$(echo $foo)"
 prop_checkSpacefulness5 = verifyFull checkSpacefulness "a='*'; b=$a; c=lol${b//foo/bar}; echo $c"
 prop_checkSpacefulness6 = verifyFull checkSpacefulness "a=foo$(lol); echo $a"
 prop_checkSpacefulness7 = verifyFull checkSpacefulness "a=foo\\ bar; rm $a"
@@ -854,9 +855,16 @@ checkSpacefulness t metaMap =
     parents = getParentTree t
     items = getTokenMap t
 
-    endScope _ = return ()
+    headFirst (T_SimpleCommand _ _ _) = False
+    headFirst _ = True
 
-    startScope t = do
+    endScope t =
+        if not $ headFirst t then performScope t else return () 
+
+    startScope t =
+        if headFirst t then performScope t else return () 
+
+    performScope t = do
         (_, spaceMap) <- get
         let
             isSpaceful id = (Map.findWithDefault Spaceless id spaceMap) /= Spaceless
