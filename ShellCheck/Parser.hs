@@ -465,20 +465,22 @@ readArithmeticContents =
 prop_readCondition = isOk readCondition "[ \\( a = b \\) -a \\( c = d \\) ]"
 prop_readCondition2 = isOk readCondition "[[ (a = b) || (c = d) ]]"
 readCondition = called "test expression" $ do
-  opos <- getPosition
-  id <- getNextId
-  open <- (try $ string "[[") <|> (string "[")
-  let single = open == "["
-  condSpacingMsg False $ if single
-        then "You need spaces after the opening [ and before the closing ]."
-        else "You need spaces after the opening [[ and before the closing ]]."
-  condition <- readConditionContents single
+    opos <- getPosition
+    id <- getNextId
+    open <- (try $ string "[[") <|> (string "[")
+    let single = open == "["
+    condSpacingMsg False $ if single
+          then "You need spaces after the opening [ and before the closing ]."
+          else "You need spaces after the opening [[ and before the closing ]]."
+    condition <- readConditionContents single
 
-  cpos <- getPosition
-  close <- (try $ string "]]") <|> (string "]")
-  when (open == "[[" && close /= "]]") $ parseProblemAt cpos ErrorC "Did you mean ]] ?"
-  when (open == "[" && close /= "]" ) $ parseProblemAt opos ErrorC "Did you mean [[ ?"
-  return $ T_Condition id (if single then SingleBracket else DoubleBracket) condition
+    cpos <- getPosition
+    close <- (try $ string "]]") <|> (string "]")
+    when (open == "[[" && close /= "]]") $ parseProblemAt cpos ErrorC "Did you mean ]] ?"
+    when (open == "[" && close /= "]" ) $ parseProblemAt opos ErrorC "Did you mean [[ ?"
+    spacing
+    many readCmdWord -- Read and throw away remainders to get then/do warnings. Fixme?
+    return $ T_Condition id (if single then SingleBracket else DoubleBracket) condition
 
 
 hardCondSpacing = condSpacingMsg False "You need a space here."
