@@ -467,7 +467,7 @@ checkNoaryWasBinary _ = return ()
 
 prop_checkBraceExpansionVars = verify checkBraceExpansionVars "echo {1..$n}"
 checkBraceExpansionVars (T_BraceExpansion id s) | '$' `elem` s =
-    warn id $ "You can't use variables in brace expansions."
+    warn id $ "Bash doesn't support variables in brace expansions."
 checkBraceExpansionVars _ = return ()
 
 prop_checkForDecimals = verify checkForDecimals "((3.14*c))"
