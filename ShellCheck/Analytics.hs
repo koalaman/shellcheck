@@ -113,6 +113,7 @@ deadSimple (T_DollarBraced _ _) = ["${VAR}"]
 deadSimple (T_DollarArithmetic _ _) = ["${VAR}"]
 deadSimple (T_DollarExpansion _ _) = ["${VAR}"]
 deadSimple (T_Backticked _ _) = ["${VAR}"]
+deadSimple (T_Glob _ s) = [s]
 deadSimple (T_Pipeline _ [x]) = deadSimple x
 deadSimple (T_Literal _ x) = [x]
 deadSimple (T_SimpleCommand _ vars words) = concatMap (deadSimple) words
@@ -276,7 +277,7 @@ checkForInCat _ = return ()
 prop_checkForInLs = verify checkForInLs "for f in $(ls *.mp3); do mplayer \"$f\"; done"
 checkForInLs (T_ForIn _ f [T_NormalWord _ [T_DollarExpansion id [x]]] _) =
     case deadSimple x of ("ls":n) -> let args = (if n == [] then ["*"] else n) in
-                                        err id $ "Don't use 'for "++f++" in $(ls " ++ (intercalate " " n) ++ ")'. Use 'for "++f++" in "++ (intercalate " " args) ++ "' ."
+                                        err id $ "Don't use 'for "++f++" in $(ls " ++ (intercalate " " n) ++ ")'. Use 'for "++f++" in "++ (intercalate " " args) ++ "'."
                          _ -> return ()
 checkForInLs _ = return ()
 
