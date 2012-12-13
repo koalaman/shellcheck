@@ -30,13 +30,14 @@ import Data.Maybe
 
 checks = concat [
     map runBasicAnalysis basicChecks
+    ,[runBasicTreeAnalysis treeChecks]
     ,[subshellAssignmentCheck]
     ,[checkSpacefulness]
-    ,[checkUnquotedExpansions]
     ,[checkShebang, checkUndeclaredBash]
     ]
 
 runAllAnalytics = checkList checks
+checkList l t m = foldl (\x f -> f t x) m l
 checkList l t m = foldl (\x f -> f t x) m l
 
 runBasicAnalysis f t m = snd $ runState (doAnalysis f t) m
@@ -50,7 +51,6 @@ basicChecks = [
     ,checkDollarStar
     ,checkUnquotedDollarAt
     ,checkStderrRedirect
-    ,checkSingleQuotedVariables
     ,checkUnquotedN
     ,checkNumberComparisons
     ,checkNoaryWasBinary
@@ -77,6 +77,16 @@ basicChecks = [
     ,checkFindExec
     ,checkValidCondOps
     ]
+treeChecks = [
+    checkUnquotedExpansions
+    ,checkSingleQuotedVariables
+    ]
+
+runBasicTreeAnalysis checks token metaMap =
+    checkList (map runTree checks) token metaMap
+  where
+    parentTree = getParentTree token
+    runTree f t m = runBasicAnalysis (flip f $ parentTree) t m
 
 modifyMap = modify
 addNoteFor id note = modifyMap $ Map.adjust (\(Metadata pos notes) -> Metadata pos (note:notes)) id
@@ -124,8 +134,11 @@ verify f s = checkBasic f s == Just True
 verifyNot f s = checkBasic f s == Just False
 verifyFull f s = checkFull f s == Just True
 verifyNotFull f s = checkFull f s == Just False
+verifyTree f s = checkTree f s == Just True
+verifyNotTree f s = checkTree f s == Just False
 
 checkBasic f s = checkFull (runBasicAnalysis f) s
+checkTree f s = checkFull (runBasicTreeAnalysis [f]) s
 checkFull f s = case parseShell "-" s of
         (ParseResult (Just (t, m)) _) -> Just . not $ (notesFromMap $ f t m) == (notesFromMap m)
         _ -> Nothing
@@ -323,16 +336,15 @@ checkFindExec (T_SimpleCommand _ _ t@(h:r)) | h `isCommand` "find" = do
 checkFindExec _ = return ()
 
 
-prop_checkUnquotedExpansions1 = verifyFull checkUnquotedExpansions "rm $(ls)"
-prop_checkUnquotedExpansions2 = verifyFull checkUnquotedExpansions "rm foo$(date)"
-prop_checkUnquotedExpansions3 = verifyFull checkUnquotedExpansions "[ $(foo) == cow ]"
-prop_checkUnquotedExpansions3a= verifyFull checkUnquotedExpansions "[ ! $(foo) ]"
-prop_checkUnquotedExpansions4 = verifyNotFull checkUnquotedExpansions "[[ $(foo) == cow ]]"
-prop_checkUnquotedExpansions5 = verifyNotFull checkUnquotedExpansions "for f in $(cmd); do echo $f; done"
-checkUnquotedExpansions t metaMap =
-    runBasicAnalysis check t metaMap
+prop_checkUnquotedExpansions1 = verifyTree checkUnquotedExpansions "rm $(ls)"
+prop_checkUnquotedExpansions2 = verifyTree checkUnquotedExpansions "rm foo$(date)"
+prop_checkUnquotedExpansions3 = verifyTree checkUnquotedExpansions "[ $(foo) == cow ]"
+prop_checkUnquotedExpansions3a= verifyTree checkUnquotedExpansions "[ ! $(foo) ]"
+prop_checkUnquotedExpansions4 = verifyNotTree checkUnquotedExpansions "[[ $(foo) == cow ]]"
+prop_checkUnquotedExpansions5 = verifyNotTree checkUnquotedExpansions "for f in $(cmd); do echo $f; done"
+checkUnquotedExpansions t tree =
+    check t
   where
-    tree = getParentTree t
     msg id = warn id "Quote this to prevent word splitting."
     check (T_NormalWord _ l) = mapM_ check' l
     check _ = return ()
@@ -396,14 +408,17 @@ lt x = trace ("FAILURE " ++ (show x)) x
 ltt t x = trace ("FAILURE " ++ (show t)) x
 
 
-prop_checkSingleQuotedVariables = verify checkSingleQuotedVariables "echo '$foo'"
-prop_checkSingleQuotedVariables2 = verify checkSingleQuotedVariables "echo 'lol$1.jpg'"
-prop_checkSingleQuotedVariables3 = verifyNot checkSingleQuotedVariables "sed 's/foo$/bar/'"
-checkSingleQuotedVariables (T_SingleQuoted id s) =
+prop_checkSingleQuotedVariables  = verifyTree checkSingleQuotedVariables "echo '$foo'"
+prop_checkSingleQuotedVariables2 = verifyTree checkSingleQuotedVariables "echo 'lol$1.jpg'"
+prop_checkSingleQuotedVariables3 = verifyNotTree checkSingleQuotedVariables "sed 's/foo$/bar/'"
+prop_checkSingleQuotedVariables4 = verifyNotTree checkSingleQuotedVariables "awk '{print $1}'"
+checkSingleQuotedVariables t@(T_SingleQuoted id s) parents =
             case matchRegex checkSingleQuotedVariablesRe s of
-                Just [var] -> info id $ var ++ " won't be expanded in single quotes."
+                Just [var] -> unless (probablyOk t) $ info id $ var ++ " won't be expanded in single quotes."
                 _          -> return ()
-checkSingleQuotedVariables _ = return ()
+  where
+    probablyOk t = isParamTo parents "awk" t
+checkSingleQuotedVariables _ _ = return ()
 checkSingleQuotedVariablesRe = mkRegex "(\\$[0-9a-zA-Z_]+)"
 
 
@@ -580,6 +595,21 @@ inUnquotableContext tree t =
         x -> case Map.lookup (getId x) tree of
                 Nothing -> False
                 Just parent -> inUnquotableContext tree parent
+
+isParamTo tree cmd t =
+    go t
+  where
+    go x = case Map.lookup (getId x) tree of
+                Nothing -> False
+                Just parent -> check parent
+    check t =
+        case t of
+            T_SingleQuoted _ _ -> go t
+            T_DoubleQuoted _ _ -> go t
+            T_NormalWord _ _ -> go t
+            T_SimpleCommand _ _ _ -> isCommand t cmd
+            T_Redirecting _ _ _ -> isCommand t cmd
+            _ -> False
 
 --- Command specific checks
 
