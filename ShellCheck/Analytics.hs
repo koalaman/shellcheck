@@ -38,7 +38,6 @@ checks = concat [
 
 runAllAnalytics = checkList checks
 checkList l t m = foldl (\x f -> f t x) m l
-checkList l t m = foldl (\x f -> f t x) m l
 
 runBasicAnalysis f t m = snd $ runState (doAnalysis f t) m
 basicChecks = [
@@ -58,6 +57,7 @@ basicChecks = [
     ,checkForDecimals
     ,checkDivBeforeMult
     ,checkArithmeticDeref
+    ,checkArithmeticBadOctal
     ,checkComparisonAgainstGlob
     ,checkPrintfVar
     ,checkCommarrays
@@ -211,7 +211,7 @@ checkPipePitfalls (T_Pipeline id commands) = do
     for [["grep"], ["sed"]] $  \id -> style id "You don't need grep | sed, sed can filter lines by itself."
     for [["grep"], ["awk"]] $  \id -> style id "You don't need grep | awk, awk can filter lines by itself."
     for [["ls"], ["?"]] $      \id -> warn id "Don't parse ls output; it mangles filenames."
-    for [["ls"], ["grep"]] $   \id -> warn id "Don't use ls | grep. Use a for loop with a condition in it."
+    for [["ls"], ["grep"]] $   \id -> warn id "Don't use ls | grep. Use a glob or a for loop with a condition."
     for [["ls"], ["xargs"]] $  \id -> warn id "Don't use ls | xargs. Use find -exec .. +"
     for [["find"], ["xargs"]]$ \id -> warn id "Don't use find | xargs cmd. find -exec cmd {} + handles whitespace."
     for [["?"], ["echo"]] $    \id -> info id "echo doesn't read from stdin, are you sure you should be piping to it?"
@@ -263,6 +263,7 @@ checkUndeclaredBash t@(T_Script id sb _) m =
     bashism (T_DollarDoubleQuoted id _) = warnMsg id "$\"..\""
     bashism (T_ForArithmetic id _ _ _ _) = warnMsg id "arithmetic for loops"
     bashism (T_Arithmetic id _) = warnMsg id "((..))"
+    bashism (T_SelectIn id _ _ _) = warnMsg id "select loops"
     bashism _ = return()
 
 prop_checkForInQuoted = verify checkForInQuoted "for f in \"$(ls)\"; do echo foo; done"
@@ -509,6 +510,12 @@ checkArithmeticDeref (TA_Expansion _ (T_DollarBraced id l)) | not . excepting $ 
     excepting s = (any (`elem` "/.:#%?*@") s) || (isDigit $ head s)
 checkArithmeticDeref _ = return ()
 
+prop_checkArithmeticBadOctal1 = verify checkArithmeticBadOctal "(( 0192 ))"
+prop_checkArithmeticBadOctal2 = verifyNot checkArithmeticBadOctal "(( 0x192 ))"
+prop_checkArithmeticBadOctal3 = verifyNot checkArithmeticBadOctal "(( 1 ^ 0777 ))"
+checkArithmeticBadOctal (TA_Base id "0" (TA_Literal _ str)) | '9' `elem` str || '8' `elem` str =
+    err id $ "Numbers with leading 0 are considered octal."
+checkArithmeticBadOctal _ = return ()
 
 prop_checkComparisonAgainstGlob = verify checkComparisonAgainstGlob "[[ $cow == $bar ]]"
 prop_checkComparisonAgainstGlob2 = verifyNot checkComparisonAgainstGlob "[[ $cow == \"$bar\" ]]"
@@ -782,7 +789,8 @@ getModifiedVariablesWithType spacefulF t =
                                                     else []
 
         --Points to 'for' rather than variable
-        T_ForIn id str words _ -> [(id, str, if any (isSpaceful spacefulF) words then Spaceful else Spaceless)]
+        T_ForIn id str words _ -> [(id, str, if any (isSpaceful spacefulF) words || null words then Spaceful else Spaceless)]
+        T_SelectIn id str words _ -> [(id, str, if any (isSpaceful spacefulF) words || null words then Spaceful else Spaceless)]
         _ -> []
 
 isSpaceful :: (String -> Bool) -> Token -> Bool

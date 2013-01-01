@@ -343,6 +343,7 @@ prop_a7 = isOk readArithmeticContents "3*2**10"
 prop_a8 = isOk readArithmeticContents "3"
 prop_a9 = isOk readArithmeticContents "a^!-b"
 prop_aA = isOk readArithmeticContents "! $?"
+prop_aB = isOk readArithmeticContents "10#08 * 16#f"
 readArithmeticContents =
     readSequence
   where
@@ -381,9 +382,35 @@ readArithmeticContents =
     readNumber = do
         id <- getNextId
         num <- many1 $ oneOf "0123456789."
-        return $ TA_Literal id num
+        return $ TA_Literal id (num)
 
-    readArithTerm = readGroup <|> readExpansion <|> readNumber <|> readVar
+    readBased = getArbitrary <|> getHex <|> getOct
+      where
+        getThing prefix litchars = try $ do
+            id <- getNextId
+            x <- prefix
+            t <- readExpansion <|> (do
+                i <- getNextId
+                stuff <- many1 litchars
+                return $ TA_Literal i stuff)
+            return $ TA_Base id x t
+
+        getArbitrary = getThing arbitrary variableChars
+        getHex = getThing hex hexDigit
+        getOct = getThing oct digit
+
+        arbitrary = try $ do
+            b <- many1 digit
+            s <- char '#'
+            return (b ++ [s])
+        hex = try $ do
+            z <- char '0'
+            x <- oneOf "xX"
+            return (z:x:[])
+        oct = string "0"
+
+    readArithTerm = readBased <|> readArithTermUnit
+    readArithTermUnit = readGroup <|> readExpansion <|> readNumber <|> readVar
 
     readSequence = do
         spacing
@@ -1138,6 +1165,22 @@ readForClause = called "for loop" $ do
         values <- readInClause <|> (readSequentialSep >> return [])
         return $ \id group -> (return $ T_ForIn id name values group)
 
+prop_readSelectClause1 = isOk readSelectClause "select foo in *; do echo $foo; done"
+prop_readSelectClause2 = isOk readSelectClause "select foo; do echo $foo; done"
+readSelectClause = called "select loop" $ do
+    pos <- getPosition
+    (T_Select id) <- g_Select
+    spacing
+    typ <- readRegular
+    group <- readDoGroup pos
+    typ id group
+  where
+    readRegular = do
+        name <- readVariableName
+        spacing
+        values <- readInClause <|> (readSequentialSep >> return [])
+        return $ \id group -> (return $ T_SelectIn id name values group)
+
 readInClause = do
     g_In
     things <- (readCmdWord) `reluctantlyTill`
@@ -1232,7 +1275,7 @@ readPattern = (readNormalWord `thenSkip` spacing) `sepBy1` (char '|' `thenSkip` 
 
 readCompoundCommand = do
     id <- getNextId
-    cmd <- choice [ readBraceGroup, readArithmeticExpression, readSubshell, readCondition, readWhileClause, readUntilClause, readIfClause, readForClause, readCaseClause, readFunctionDefinition]
+    cmd <- choice [ readBraceGroup, readArithmeticExpression, readSubshell, readCondition, readWhileClause, readUntilClause, readIfClause, readForClause, readSelectClause, readCaseClause, readFunctionDefinition]
     spacing
     redirs <- many readIoRedirect
     when (not . null $ redirs) $ optional $ do
@@ -1334,6 +1377,7 @@ g_Esac = tryWordToken "esac" T_Esac
 g_While = tryWordToken "while" T_While
 g_Until = tryWordToken "until" T_Until
 g_For = tryWordToken "for" T_For
+g_Select = tryWordToken "select" T_Select
 g_In = tryWordToken "in" T_In
 g_Lbrace = tryWordToken "{" T_Lbrace
 g_Rbrace = tryWordToken "}" T_Rbrace
