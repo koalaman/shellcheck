@@ -344,6 +344,7 @@ prop_a8 = isOk readArithmeticContents "3"
 prop_a9 = isOk readArithmeticContents "a^!-b"
 prop_aA = isOk readArithmeticContents "! $?"
 prop_aB = isOk readArithmeticContents "10#08 * 16#f"
+prop_aC = isOk readArithmeticContents "\"$((3+2))\" + '37'"
 readArithmeticContents =
     readSequence
   where
@@ -410,7 +411,9 @@ readArithmeticContents =
         oct = string "0"
 
     readArithTerm = readBased <|> readArithTermUnit
-    readArithTermUnit = readGroup <|> readExpansion <|> readNumber <|> readVar
+    readArithTermUnit = readGroup <|> readExpansion <|> readQuoted <|> readNumber <|> readVar
+    
+    readQuoted = readDoubleQuoted <|> readSingleQuoted
 
     readSequence = do
         spacing
