@@ -477,9 +477,10 @@ checkConstantIfs _ = return ()
 
 prop_checkNoaryWasBinary = verify checkNoaryWasBinary "[[ a==$foo ]]"
 prop_checkNoaryWasBinary2 = verify checkNoaryWasBinary "[ $foo=3 ]"
+prop_checkNoaryWasBinary3 = verify checkNoaryWasBinary "[ foo!=3 ]"
 checkNoaryWasBinary (TC_Noary _ _ t@(T_NormalWord id l)) = do
     let str = concat $ deadSimple t
-    when ('=' `elem` str) $ err id $ "Always true because you didn't put spaces around the = ."
+    when ('=' `elem` str) $ err id $ "Always true because you didn't put spaces around the operator."
 checkNoaryWasBinary _ = return ()
 
 prop_checkBraceExpansionVars = verify checkBraceExpansionVars "echo {1..$n}"
