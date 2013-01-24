@@ -1130,6 +1130,10 @@ readDoGroup loopPos = do
     acceptButWarn g_Semi ErrorC "No semicolons directly after 'do'."
     allspacing
 
+    optional (do
+                try . lookAhead $ g_Done
+                parseProblemAt loopPos ErrorC "Can't have empty do clauses (use 'true' as a no-op).")
+
     commands <- readCompoundList
     g_Done `orFail` do
             parseProblemAt pos ErrorC "Couldn't find 'done' for this 'do'."
