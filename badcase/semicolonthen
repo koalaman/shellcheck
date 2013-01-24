@@ -1,1 +1,0 @@
-if [[ foo ]]; then; echo lol; fi

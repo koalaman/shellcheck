@@ -1,1 +1,0 @@
-wget url &; echo "It's backgrounded."

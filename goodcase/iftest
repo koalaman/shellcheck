@@ -1,1 +1,0 @@
-if [[ $B == 3 ]]; then echo cow; fi

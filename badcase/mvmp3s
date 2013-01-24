@@ -1,4 +1,0 @@
-for f in *.mp3
-do
-  mv $f /music
-done

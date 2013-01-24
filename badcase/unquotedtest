@@ -1,1 +1,0 @@
-if [ -f $foo ]; then echo cow; fi

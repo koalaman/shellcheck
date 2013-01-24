@@ -1,1 +1,0 @@
-strace foo 2>&1 > allmessages

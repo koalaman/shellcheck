@@ -1,1 +1,0 @@
-until [ $var > $foo ]; do var=$(cow); done

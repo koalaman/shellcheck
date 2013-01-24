@@ -1,2 +1,0 @@
-foo=bar
-echo $file | sed -e 's/$foo/baz/g'

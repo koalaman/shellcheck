@@ -1,1 +1,0 @@
-sed 's/foo/bar/g' myfile > myfile

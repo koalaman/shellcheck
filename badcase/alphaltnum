@@ -1,1 +1,0 @@
-if [[ $V < 3 ]]; then echo foo; fi

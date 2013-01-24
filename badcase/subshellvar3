@@ -1,3 +1,0 @@
-export lol=32 &
-wait
-echo "$lol"

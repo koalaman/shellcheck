@@ -1,2 +1,0 @@
-echo cow | read foo
-echo "$foo"
