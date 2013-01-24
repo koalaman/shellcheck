@@ -1063,6 +1063,12 @@ readIfPart = do
 
         acceptButWarn g_Semi ErrorC "No semicolons directly after 'then'."
         allspacing
+
+        optional (do
+                    emptyPos <- getPosition
+                    try . lookAhead $ (g_Fi <|> g_Elif)
+                    parseProblemAt emptyPos ErrorC "Can't have empty then clauses (use 'true' as a no-op).")
+
         action <- readTerm
         return (condition, action)
 
