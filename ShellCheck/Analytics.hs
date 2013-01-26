@@ -77,6 +77,7 @@ basicChecks = [
     ,checkFindExec
     ,checkValidCondOps
     ,checkGlobbedRegex
+    ,checkTrapQuotes
     ]
 treeChecks = [
     checkUnquotedExpansions
@@ -754,6 +755,20 @@ checkGrepRe = checkCommand "grep" f where
     f (re:_) = do
         when (isGlob re) $ do
             warn (getId re) $ "Quote the grep pattern so the shell won't interpret it."
+
+prop_checkTrapQuotes1 = verify checkTrapQuotes "trap \"echo $num\" INT"
+prop_checkTrapQuotes2 = verifyNot checkTrapQuotes "trap 'echo $num' INT"
+prop_checkTrapQuotes3 = verify checkTrapQuotes "trap \"echo $((1+num))\" EXIT DEBUG"
+checkTrapQuotes = checkCommand "trap" f where
+    f (x:_) = checkTrap x
+    f _ = return ()
+    checkTrap (T_NormalWord _ [T_DoubleQuoted _ rs]) = mapM_ checkExpansions rs
+    checkTrap _ = return ()
+    warning id = warn id $ "Use single quotes, otherwise this expands now rather than when signalled."
+    checkExpansions (T_DollarExpansion id _) = warning id
+    checkExpansions (T_DollarBraced id _) = warning id
+    checkExpansions (T_DollarArithmetic id _) = warning id
+    checkExpansions _ = return ()
 
 
 --- Subshell detection
