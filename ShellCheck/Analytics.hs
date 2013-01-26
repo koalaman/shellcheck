@@ -76,6 +76,7 @@ basicChecks = [
     ,checkForInCat
     ,checkFindExec
     ,checkValidCondOps
+    ,checkGlobbedRegex
     ]
 treeChecks = [
     checkUnquotedExpansions
@@ -460,6 +461,18 @@ checkQuotedCondRegex (TC_Binary _ _ "=~" _ rhs) =
   where
     error id = err id $ "Don't quote rhs of =~, it'll match literally rather than as a regex."
 checkQuotedCondRegex _ = return ()
+
+prop_checkGlobbedRegex1 = verify checkGlobbedRegex "[[ $foo =~ *foo* ]]"
+prop_checkGlobbedRegex2 = verify checkGlobbedRegex "[[ $foo =~ f* ]]"
+prop_checkGlobbedRegex2a = verify checkGlobbedRegex "[[ $foo =~ \\#* ]]"
+prop_checkGlobbedRegex3 = verifyNot checkGlobbedRegex "[[ $foo =~ $foo ]]"
+prop_checkGlobbedRegex4 = verifyNot checkGlobbedRegex "[[ $foo =~ ^c.* ]]"
+checkGlobbedRegex (TC_Binary _ DoubleBracket "=~" _ rhs) =
+    case rhs of
+        T_NormalWord id ((T_Glob _ "*"):_) -> warn id $ "=~ is for regex. Use == for globs."
+        T_NormalWord id ([(T_Literal _ [c]), (T_Glob _ "*")]) -> warn id $ "=~ is for regex. Either ^anchor$ this, or treat it as a glob with == ."
+        _ -> return ()
+checkGlobbedRegex _ = return ()
 
 
 prop_checkConstantIfs1 = verify checkConstantIfs "[[ foo != bar ]]"
