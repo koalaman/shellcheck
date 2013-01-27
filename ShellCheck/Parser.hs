@@ -1048,6 +1048,12 @@ readIfClause = called "if expression" $ do
 
     return $ T_IfExpression id ((condition, action):elifs) elses
 
+
+verifyNotEmptyIf s = 
+    optional (do
+                emptyPos <- getPosition
+                try . lookAhead $ (g_Fi <|> g_Elif <|> g_Else)
+                parseProblemAt emptyPos ErrorC $ "Can't have empty " ++ s ++ " clauses (use 'true' as a no-op).")
 readIfPart = do
     pos <- getPosition
     g_If
@@ -1063,11 +1069,7 @@ readIfPart = do
 
         acceptButWarn g_Semi ErrorC "No semicolons directly after 'then'."
         allspacing
-
-        optional (do
-                    emptyPos <- getPosition
-                    try . lookAhead $ (g_Fi <|> g_Elif)
-                    parseProblemAt emptyPos ErrorC "Can't have empty then clauses (use 'true' as a no-op).")
+        verifyNotEmptyIf "then"
 
         action <- readTerm
         return (condition, action)
@@ -1080,6 +1082,7 @@ readElifPart = called "elif clause" $ do
     g_Then
     acceptButWarn g_Semi ErrorC "No semicolons directly after 'then'."
     allspacing
+    verifyNotEmptyIf "then"
     action <- readTerm
     return (condition, action)
 
@@ -1087,6 +1090,7 @@ readElsePart = called "else clause" $ do
     g_Else
     acceptButWarn g_Semi ErrorC "No semicolons directly after 'else'."
     allspacing
+    verifyNotEmptyIf "else"
     readTerm
 
 prop_readSubshell = isOk readSubshell "( cd /foo; tar cf stuff.tar * )"
