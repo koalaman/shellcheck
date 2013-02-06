@@ -541,7 +541,17 @@ checkPossibleTermination pos [T_Literal _ x] =
         else return ()
 checkPossibleTermination _ _ = return ()
 
-readNormalWordPart end = readSingleQuoted <|> readDoubleQuoted <|> readGlob <|> readDollar <|> readBraced <|> readBackTicked <|> readProcSub <|> (readNormalLiteral end)
+readNormalWordPart end = do
+    checkForParenthesis
+    readSingleQuoted <|> readDoubleQuoted <|> readGlob <|> readDollar <|> readBraced <|> readBackTicked <|> readProcSub <|> (readNormalLiteral end)
+  where
+    checkForParenthesis = do
+        return () `attempting` do
+            pos <- getPosition
+            lookAhead $ char '('
+            parseProblemAt pos ErrorC "'(' is invalid here. Did you forget to escape it?"
+        
+
 readSpacePart = do
     id <- getNextId
     x <- many1 whitespace
