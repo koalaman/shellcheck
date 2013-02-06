@@ -52,6 +52,7 @@ basicChecks = [
     ,checkStderrRedirect
     ,checkUnquotedN
     ,checkNumberComparisons
+    ,checkSingleBracketOperators
     ,checkNoaryWasBinary
     ,checkBraceExpansionVars
     ,checkForDecimals
@@ -442,12 +443,9 @@ checkUnquotedN _ = return ()
 prop_checkNumberComparisons1 = verify checkNumberComparisons "[[ $foo < 3 ]]"
 prop_checkNumberComparisons2 = verify checkNumberComparisons "[[ 0 >= $(cmd) ]]"
 prop_checkNumberComparisons3 = verifyNot checkNumberComparisons "[[ $foo ]] > 3"
-prop_checkNumberComparisons4 = verify checkNumberComparisons "[ $foo > $bar ]"
-prop_checkNumberComparisons5 = verify checkNumberComparisons "until [ $n <= $z ]; do echo foo; done"
 checkNumberComparisons (TC_Binary id typ op lhs rhs)
     | op `elem` ["<", ">", "<=", ">="] = do
         when (isNum lhs || isNum rhs) $ err id $ "\"" ++ op ++ "\" is for string comparisons. Use " ++ (eqv op) ++" ."
-        when (typ == SingleBracket) $ err id $ "Can't use " ++ op ++" in [ ]. Use [[ ]]."
     where
         isNum t = case deadSimple t of [v] -> all isDigit v
                                        _ -> False
@@ -457,6 +455,16 @@ checkNumberComparisons (TC_Binary id typ op lhs rhs)
         eqv ">=" = "-ge"
         eqv _ = "the numerical equivalent"
 checkNumberComparisons _ = return ()
+
+prop_checkSingleBracketOperators1 = verify checkSingleBracketOperators "[ test =~ foo ]"
+prop_checkSingleBracketOperators2 = verify checkSingleBracketOperators "[ $foo > $bar ]"
+prop_checkSingleBracketOperators3 = verifyNot checkSingleBracketOperators "[[ foo < bar ]]"
+prop_checkSingleBracketOperators5 = verify checkSingleBracketOperators "until [ $n <= $z ]; do echo foo; done"
+checkSingleBracketOperators (TC_Binary id typ op lhs rhs)
+    | typ == SingleBracket && op `elem` ["<", ">", "<=", ">=", "=~"] =
+        err id $ "Can't use " ++ op ++" in [ ]. Use [[ ]]."
+
+checkSingleBracketOperators _ = return ()
 
 prop_checkQuotedCondRegex1 = verify checkQuotedCondRegex "[[ $foo =~ \"bar\" ]]"
 prop_checkQuotedCondRegex2 = verify checkQuotedCondRegex "[[ $foo =~ 'cow' ]]"
