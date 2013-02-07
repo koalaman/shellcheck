@@ -398,9 +398,17 @@ checkDollarStar _ = return ()
 
 
 prop_checkUnquotedDollarAt = verify checkUnquotedDollarAt "ls $@"
-prop_checkUnquotedDollarAt2 = verifyNot checkUnquotedDollarAt "ls \"$@\""
-checkUnquotedDollarAt (T_NormalWord _ [T_DollarBraced id l]) | '@' `elem` (bracedString l) =
-    err id $ "Add double quotes around ${" ++ (bracedString l) ++ "}, otherwise it's just like $* and breaks on spaces."
+prop_checkUnquotedDollarAt1= verifyNot checkUnquotedDollarAt "ls ${#@}"
+prop_checkUnquotedDollarAt2 = verify checkUnquotedDollarAt "ls ${foo[@]}"
+prop_checkUnquotedDollarAt3 = verifyNot checkUnquotedDollarAt "ls ${#foo[@]}"
+prop_checkUnquotedDollarAt4 = verifyNot checkUnquotedDollarAt "ls \"$@\""
+prop_checkUnquotedDollarAt5 = verifyNot checkUnquotedDollarAt "ls ${foo/@/ at }"
+checkUnquotedDollarAt (T_NormalWord _ [T_DollarBraced id l]) =
+    let string = bracedString l
+        failing = err id $ "Add double quotes around ${" ++ string ++ "}, otherwise it's just like $* and breaks on spaces."
+        in do
+            when ("@" `isPrefixOf` string) failing
+            when (not ("#" `isPrefixOf` string) && "[@]" `isInfixOf` string) failing
 checkUnquotedDollarAt _ = return ()
 
 prop_checkStderrRedirect = verify checkStderrRedirect "test 2>&1 > cow"
