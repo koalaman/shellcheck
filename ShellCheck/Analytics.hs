@@ -430,15 +430,18 @@ ltt t x = trace ("FAILURE " ++ (show t)) x
 prop_checkSingleQuotedVariables  = verifyTree checkSingleQuotedVariables "echo '$foo'"
 prop_checkSingleQuotedVariables2 = verifyTree checkSingleQuotedVariables "echo 'lol$1.jpg'"
 prop_checkSingleQuotedVariables3 = verifyNotTree checkSingleQuotedVariables "sed 's/foo$/bar/'"
+prop_checkSingleQuotedVariables3a= verifyTree checkSingleQuotedVariables "sed 's/${foo}/bar/'"
+prop_checkSingleQuotedVariables3b= verifyTree checkSingleQuotedVariables "sed 's/$(echo cow)/bar/'"
+prop_checkSingleQuotedVariables3c= verifyTree checkSingleQuotedVariables "sed 's/$((1+foo))/bar/'"
 prop_checkSingleQuotedVariables4 = verifyNotTree checkSingleQuotedVariables "awk '{print $1}'"
 checkSingleQuotedVariables t@(T_SingleQuoted id s) parents =
             case matchRegex checkSingleQuotedVariablesRe s of
-                Just [var] -> unless (probablyOk t) $ info id $ var ++ " won't be expanded in single quotes."
+                Just [] -> unless (probablyOk t) $ info id $ "Expressions don't expand in single quotes, use double quotes for that."
                 _          -> return ()
   where
     probablyOk t = isParamTo parents "awk" t
 checkSingleQuotedVariables _ _ = return ()
-checkSingleQuotedVariablesRe = mkRegex "(\\$[0-9a-zA-Z_]+)"
+checkSingleQuotedVariablesRe = mkRegex "\\$[{(0-9a-zA-Z_]"
 
 
 prop_checkUnquotedN = verify checkUnquotedN "if [ -n $foo ]; then echo cow; fi"
