@@ -36,10 +36,11 @@ checks = concat [
     ,[checkShebang, checkUndeclaredBash]
     ]
 
-runAllAnalytics = checkList checks
-checkList l t m = foldl (\x f -> f t x) m l
+runAllAnalytics root m = addToMap (checkList checks root) m
+checkList l t = concatMap (\f -> f t) l
+addToMap list map = foldr (\(id,note) m -> Map.adjust (\(Metadata pos notes) -> Metadata pos (note:notes)) id m) map list
 
-runBasicAnalysis f t m = snd $ runState (doAnalysis f t) m
+runBasicAnalysis f t = snd $ runState (doAnalysis f t) []
 basicChecks = [
     checkUuoc
     ,checkPipePitfalls
@@ -85,14 +86,13 @@ treeChecks = [
     ,checkSingleQuotedVariables
     ]
 
-runBasicTreeAnalysis checks token metaMap =
-    checkList (map runTree checks) token metaMap
+runBasicTreeAnalysis checks token =
+    checkList (map runTree checks) token
   where
     parentTree = getParentTree token
-    runTree f t m = runBasicAnalysis (flip f $ parentTree) t m
+    runTree f t = runBasicAnalysis (flip f $ parentTree) t
 
-modifyMap = modify
-addNoteFor id note = modifyMap $ Map.adjust (\(Metadata pos notes) -> Metadata pos (note:notes)) id
+addNoteFor id note = modify ((id, note):)
 warn id note = addNoteFor id $ Note WarningC $ note
 err id note = addNoteFor id $ Note ErrorC $ note
 info id note = addNoteFor id $ Note InfoC $ note
@@ -143,7 +143,7 @@ verifyNotTree f s = checkTree f s == Just False
 checkBasic f s = checkFull (runBasicAnalysis f) s
 checkTree f s = checkFull (runBasicTreeAnalysis [f]) s
 checkFull f s = case parseShell "-" s of
-        (ParseResult (Just (t, m)) _) -> Just . not $ (notesFromMap $ f t m) == (notesFromMap m)
+        (ParseResult (Just (t, m)) _) -> Just . not . null $ f t
         _ -> Nothing
 
 
@@ -244,19 +244,19 @@ isMagicInQuotes _ = False
 
 prop_checkShebang1 = verifyFull checkShebang "#!/usr/bin/env bash -x\necho cow"
 prop_checkShebang2 = verifyNotFull checkShebang "#! /bin/sh  -l "
-checkShebang (T_Script id sb _) m =
+checkShebang (T_Script id sb _) =
     if (length $ words sb) > 2 then
         let note = Note ErrorC $ "On most OS, shebangs can only specify a single parameter."
-        in Map.adjust (\(Metadata pos notes) -> Metadata pos (note:notes)) id m
-    else m
+        in [(id, note)]
+    else []
 
 prop_checkUndeclaredBash = verifyFull checkUndeclaredBash "#!/bin/sh -l\nwhile read a; do :; done < <(a)"
 prop_checkUndeclaredBash2 = verifyNotFull checkUndeclaredBash "#!/bin/bash\nwhile read a; do :; done < <(a)"
-checkUndeclaredBash t@(T_Script id sb _) m =
+checkUndeclaredBash t@(T_Script id sb _) =
     let tokens = words sb
     in if (not $ null tokens) && "/sh" `isSuffixOf` (head tokens)
-        then runBasicAnalysis bashism t m
-        else m
+        then runBasicAnalysis bashism t
+        else []
   where
     errMsg id s = err id $ "The shebang specifies sh, so " ++ s ++ " is not supported, even if sh is bash."
     warnMsg id s = warn id $ "The shebang specifies sh, so " ++ s ++ " may not be supported."
@@ -802,10 +802,10 @@ prop_subshellAssignmentCheck7 = verifyFull    subshellAssignmentCheck "cmd | whi
 prop_subshellAssignmentCheck8 = verifyFull    subshellAssignmentCheck "n=3 & echo $((n++))"
 prop_subshellAssignmentCheck9 = verifyFull    subshellAssignmentCheck "read n & n=foo$n"
 prop_subshellAssignmentCheck10 = verifyFull    subshellAssignmentCheck "(( n <<= 3 )) & (( n |= 4 )) &"
-subshellAssignmentCheck t map =
+subshellAssignmentCheck t =
     let flow = getVariableFlow t
         check = findSubshelled flow [("oops",[])] Map.empty
-    in snd $ runState check map
+    in snd $ runState check []
 
 
 data Scope = SubshellScope String | NoneScope deriving (Show, Eq)
@@ -911,7 +911,7 @@ getVariableFlow t =
             mapM_ (\v -> modify ((Reference v):)) read
             mapM_ (\v -> modify ((Assignment v):)) written
 
-findSubshelled :: [StackData] -> [(String, [(Id,String)])] -> (Map.Map String VariableState) -> State (Map.Map Id Metadata) ()
+findSubshelled :: [StackData] -> [(String, [(Id,String)])] -> (Map.Map String VariableState) -> State [(Id, Note)] ()
 findSubshelled [] _ _ = return ()
 findSubshelled ((Assignment x@(id, str)):rest) ((reason,scope):lol) deadVars =
     findSubshelled rest ((reason, x:scope):lol) $ Map.insert str Alive deadVars
@@ -947,22 +947,22 @@ prop_checkSpacefulnessC = verifyNotFull checkSpacefulness "(( $1 + 3 ))"
 prop_checkSpacefulnessD = verifyNotFull checkSpacefulness "if [[ $2 -gt 14 ]]; then true; fi"
 prop_checkSpacefulnessE = verifyNotFull checkSpacefulness "foo=$3 env"
 
-checkSpacefulness t metaMap =
-    let (_, (newMetaMap, spaceMap)) = runState (doStackAnalysis startScope endScope t) (metaMap, Map.empty)
+checkSpacefulness t =
+    let (_, (newMetaMap, spaceMap)) = runState (doStackAnalysis startScope endScope t) ([], Map.empty)
     in newMetaMap
   where
     isSpaceless m s = (not $ all isDigit s) && (Map.findWithDefault Spaceless s m) == Spaceless
-    addInfo :: (Id, String) -> State (Map.Map Id Metadata, Map.Map String VariableType) ()
+    addInfo :: (Id, String) -> State ([(Id,Note)], Map.Map String VariableType) ()
     addInfo (id, s) = do
-        (metaMap, spaceMap) <- get
+        (list, spaceMap) <- get
         when (not (inUnquotableContext parents (Map.findWithDefault undefined id items)) && not (isSpaceless spaceMap s)) $ do
             let note = Note InfoC "This variable may contain spaces/globs. Quote it unless you want splitting."
-            let mm = Map.adjust (\(Metadata pos notes) -> Metadata pos (note:notes)) id metaMap
-            put (mm, spaceMap)
+            let newlist = (id, note):list
+            put (newlist, spaceMap)
 
     registerSpacing (id, s, typ) = do
-        (metaMap, spaceMap) <- get
-        put (metaMap, Map.insert s typ spaceMap)
+        (list, spaceMap) <- get
+        put (list, Map.insert s typ spaceMap)
 
     parents = getParentTree t
     items = getTokenMap t
