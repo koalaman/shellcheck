@@ -55,6 +55,7 @@ basicChecks = [
     ,checkNumberComparisons
     ,checkSingleBracketOperators
     ,checkNoaryWasBinary
+    ,checkConstantNoary
     ,checkBraceExpansionVars
     ,checkForDecimals
     ,checkDivBeforeMult
@@ -113,6 +114,22 @@ isGlob (T_Extglob _ _ _) = True
 isGlob (T_Glob _ _) = True
 isGlob (T_NormalWord _ l) = any isGlob l
 isGlob _ = False
+
+isConstant token =
+    case token of
+        T_NormalWord _ l   -> all isConstant l
+        T_DoubleQuoted _ l -> all isConstant l
+        T_SingleQuoted _ _ -> True
+        T_Literal _ _ -> True
+        _ -> False
+
+isEmpty token =
+    case token of
+        T_NormalWord _ l   -> all isEmpty l
+        T_DoubleQuoted _ l -> all isEmpty l
+        T_SingleQuoted _ "" -> True
+        T_Literal _ "" -> True
+        _ -> False
 
 makeSimple (T_NormalWord _ [f]) = f
 makeSimple (T_Redirecting _ _ f) = f
@@ -522,6 +539,15 @@ checkNoaryWasBinary (TC_Noary _ _ t@(T_NormalWord id l)) = do
     let str = concat $ deadSimple t
     when ('=' `elem` str) $ err id $ "Always true because you didn't put spaces around the operator."
 checkNoaryWasBinary _ = return ()
+
+prop_checkConstantNoary = verify checkConstantNoary "[[ '$(foo)' ]]"
+prop_checkConstantNoary2 = verify checkConstantNoary "[ \"-f lol\" ]"
+prop_checkConstantNoary3 = verify checkConstantNoary "[[ cmd ]]"
+prop_checkConstantNoary4 = verify checkConstantNoary "[[ ! cmd ]]"
+checkConstantNoary (TC_Noary _ _ t@(T_NormalWord id _)) | isConstant t = do
+    err id $ if isEmpty t then "Always false, just checks the non-emptyness of the literal word."
+                          else "Always true, just checks the non-emptyness of the literal word."
+checkConstantNoary _ = return ()
 
 prop_checkBraceExpansionVars = verify checkBraceExpansionVars "echo {1..$n}"
 checkBraceExpansionVars (T_BraceExpansion id s) | '$' `elem` s =
