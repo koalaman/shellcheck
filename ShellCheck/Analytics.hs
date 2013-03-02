@@ -115,6 +115,14 @@ isGlob (T_Glob _ _) = True
 isGlob (T_NormalWord _ l) = any isGlob l
 isGlob _ = False
 
+
+isConfusedGlobRegex ('*':_) = True
+isConfusedGlobRegex _ = False
+
+isPotentiallyConfusedGlobRegex =
+    let re = mkRegex "[a-z1-9]\\*" in
+        isJust . matchRegex re
+
 isConstant token =
     case token of
         T_NormalWord _ l   -> all isConstant l
@@ -791,6 +799,10 @@ prop_checkGrepRe3 = verify checkGrepRe "grep --regex=*.mp3 file"
 prop_checkGrepRe4 = verifyNot checkGrepRe "grep foo *.mp3"
 prop_checkGrepRe5 = verifyNot checkGrepRe "grep-v  --regex=moo *"
 prop_checkGrepRe6 = verifyNot checkGrepRe "grep foo \\*.mp3"
+prop_checkGrepRe7 = verify checkGrepRe "grep *foo* file"
+prop_checkGrepRe8 = verify checkGrepRe "ls | grep foo*.jpg"
+prop_checkGrepRe9 = verifyNot checkGrepRe "grep '[0-9]*' file"
+
 checkGrepRe = checkCommand "grep" f where
     -- --regex=*(extglob) doesn't work. Fixme?
     skippable (Just s) = not ("--regex=" `isPrefixOf` s) && "-" `isPrefixOf` s
@@ -800,6 +812,14 @@ checkGrepRe = checkCommand "grep" f where
     f (re:_) = do
         when (isGlob re) $ do
             warn (getId re) $ "Quote the grep pattern so the shell won't interpret it."
+        let string = concat $ deadSimple re
+        if isConfusedGlobRegex string then
+            warn (getId re) $ "Grep uses regex, but this looks like a glob."
+          else
+            if (isPotentiallyConfusedGlobRegex string)
+            then info (getId re) "Note that c* does not mean \"c followed by anything\" in regex."
+            else return ()
+
 
 prop_checkTrapQuotes1 = verify checkTrapQuotes "trap \"echo $num\" INT"
 prop_checkTrapQuotes2 = verifyNot checkTrapQuotes "trap 'echo $num' INT"
