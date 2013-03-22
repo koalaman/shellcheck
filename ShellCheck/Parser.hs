@@ -345,6 +345,7 @@ prop_a9 = isOk readArithmeticContents "a^!-b"
 prop_aA = isOk readArithmeticContents "! $?"
 prop_aB = isOk readArithmeticContents "10#08 * 16#f"
 prop_aC = isOk readArithmeticContents "\"$((3+2))\" + '37'"
+prop_aD = isOk readArithmeticContents "foo[9*y+x]++"
 readArithmeticContents =
     readSequence
   where
@@ -364,8 +365,17 @@ readArithmeticContents =
 
     readVar = do
         id <- getNextId
-        x <- readVariableName `thenSkip` spacing
-        return $ TA_Variable id x
+        x <- readVariableName
+        y <- readArrayIndex <|> return ""
+        optional spacing
+        return $ TA_Variable id (x ++ y)
+
+    -- Doesn't help with foo[foo]
+    readArrayIndex = do
+        char '['
+        x <- anyChar `reluctantlyTill1` (char ']')
+        char ']'
+        return $ "[" ++ x ++ "]"
 
     readExpansion = do
         id <- getNextId
