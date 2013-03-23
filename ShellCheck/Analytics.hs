@@ -479,17 +479,30 @@ checkUnquotedN _ = return ()
 prop_checkNumberComparisons1 = verify checkNumberComparisons "[[ $foo < 3 ]]"
 prop_checkNumberComparisons2 = verify checkNumberComparisons "[[ 0 >= $(cmd) ]]"
 prop_checkNumberComparisons3 = verifyNot checkNumberComparisons "[[ $foo ]] > 3"
-checkNumberComparisons (TC_Binary id typ op lhs rhs)
-    | op `elem` ["<", ">", "<=", ">="] = do
+prop_checkNumberComparisons4 = verify checkNumberComparisons "[[ $foo > 2.72 ]]"
+prop_checkNumberComparisons5 = verify checkNumberComparisons "[[ $foo -le 2.72 ]]"
+prop_checkNumberComparisons6 = verify checkNumberComparisons "[[ 3.14 = $foo ]]"
+checkNumberComparisons (TC_Binary id typ op lhs rhs) = do
+    when (op `elem` ["<", ">", "<=", ">="]) $ do
         when (isNum lhs || isNum rhs) $ err id $ "\"" ++ op ++ "\" is for string comparisons. Use " ++ (eqv op) ++" ."
-    where
-        isNum t = case deadSimple t of [v] -> all isDigit v
-                                       _ -> False
-        eqv "<" = "-lt"
-        eqv ">" = "-gt"
-        eqv "<=" = "-le"
-        eqv ">=" = "-ge"
-        eqv _ = "the numerical equivalent"
+        mapM_ checkDecimals [lhs, rhs]
+
+    when (op `elem` ["-lt", "-gt", "-le", "-ge", "-eq", "=", "=="]) $ do
+        mapM_ checkDecimals [lhs, rhs]
+
+  where
+      checkDecimals hs = when (isFraction hs) $ err (getId hs) $ decimalError
+      decimalError = "Decimals are not supported. Either use integers only, or use bc or awk to compare."
+      isNum t = case deadSimple t of [v] -> all isDigit v
+                                     _ -> False
+      isFraction t = case deadSimple t of [v] -> isJust $ matchRegex floatRegex v
+                                          _ -> False
+      eqv "<" = "-lt"
+      eqv ">" = "-gt"
+      eqv "<=" = "-le"
+      eqv ">=" = "-ge"
+      eqv _ = "the numerical equivalent"
+      floatRegex = mkRegex "^[0-9]+\\.[0-9]+$"
 checkNumberComparisons _ = return ()
 
 prop_checkSingleBracketOperators1 = verify checkSingleBracketOperators "[ test =~ foo ]"
