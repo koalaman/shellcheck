@@ -99,6 +99,8 @@ err id note = addNoteFor id $ Note ErrorC $ note
 info id note = addNoteFor id $ Note InfoC $ note
 style id note = addNoteFor id $ Note StyleC $ note
 
+isVariableChar x = x == '_' || x >= 'a' && x <= 'z' || x >= 'A' && x <= 'Z' || x >= '0' && x <= '9'
+
 willSplit x =
   case x of
     T_DollarBraced _ _ -> True
@@ -861,6 +863,8 @@ prop_subshellAssignmentCheck7 = verifyFull    subshellAssignmentCheck "cmd | whi
 prop_subshellAssignmentCheck8 = verifyFull    subshellAssignmentCheck "n=3 & echo $((n++))"
 prop_subshellAssignmentCheck9 = verifyFull    subshellAssignmentCheck "read n & n=foo$n"
 prop_subshellAssignmentCheck10 = verifyFull    subshellAssignmentCheck "(( n <<= 3 )) & (( n |= 4 )) &"
+prop_subshellAssignmentCheck11 = verifyFull subshellAssignmentCheck "cat /etc/passwd | while read line; do let n=n+1; done\necho $n"
+prop_subshellAssignmentCheck12 = verifyFull subshellAssignmentCheck "cat /etc/passwd | while read line; do let ++n; done\necho $n"
 subshellAssignmentCheck t =
     let flow = getVariableFlow t
         check = findSubshelled flow [("oops",[])] Map.empty
@@ -931,6 +935,7 @@ getModifiedVariableCommand (T_SimpleCommand _ _ ((T_NormalWord _ ((T_Literal _ x
     case x of
         "read" -> concatMap getLiteral rest
         "export" -> concatMap exportParamToLiteral rest
+        "let" -> concatMap letParamToLiteral rest
         _ -> []
 getModifiedVariableCommand _ = []
 
@@ -942,6 +947,10 @@ exportParamToLiteral (T_NormalWord _ ((T_Literal id s):_)) =
     [(id,prefix,Spaceless)] -- Todo, make this determine spacefulness
     where prefix = takeWhile (/= '=') s
 exportParamToLiteral _ = []
+
+letParamToLiteral token = if var == "" then [] else [(id,var,Spaceless)] -- Todo, is number
+    where var = takeWhile (isVariableChar) $ dropWhile (\x -> x `elem` "+-") $ concat $ deadSimple token
+          id = getId token
 
 -- TODO:
 getBracedReference s = takeWhile (\x -> not $ x `elem` ":[#%/^,") $ dropWhile (== '#') s
