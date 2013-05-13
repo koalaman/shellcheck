@@ -422,7 +422,7 @@ readArithmeticContents =
 
     readArithTerm = readBased <|> readArithTermUnit
     readArithTermUnit = readGroup <|> readExpansion <|> readQuoted <|> readNumber <|> readVar
-    
+
     readQuoted = readDoubleQuoted <|> readSingleQuoted
 
     readSequence = do
@@ -560,7 +560,7 @@ readNormalWordPart end = do
             pos <- getPosition
             lookAhead $ char '('
             parseProblemAt pos ErrorC "'(' is invalid here. Did you forget to escape it?"
-        
+
 
 readSpacePart = do
     id <- getNextId
@@ -691,8 +691,15 @@ readNormalEscaped = called "escaped char" $ do
       <|>
         do
             next <- anyChar
-            parseNoteAt pos WarningC $ "Did you mean \"$(printf \"\\" ++ [next] ++ "\")\"? The shell just ignores the \\ here."
+            case escapedChar next of
+                Just name -> parseNoteAt pos WarningC $ "\\" ++ [next] ++ " is just literal '" ++ [next] ++ "' here. For " ++ name ++ ", use \"$(printf \"\\" ++ [next] ++ "\")\"."
+                Nothing -> parseNoteAt pos InfoC $ "This \\" ++ [next] ++ " will be a regular '" ++ [next] ++ "' in this context."
             return [next]
+  where
+    escapedChar 'n' = Just "line feed"
+    escapedChar 't' = Just "tab"
+    escapedChar 'r' = Just "carriage return"
+    escapedChar _ = Nothing
 
 
 prop_readExtglob1 = isOk readExtglob "!(*.mp3)"
@@ -1069,7 +1076,7 @@ readIfClause = called "if expression" $ do
     return $ T_IfExpression id ((condition, action):elifs) elses
 
 
-verifyNotEmptyIf s = 
+verifyNotEmptyIf s =
     optional (do
                 emptyPos <- getPosition
                 try . lookAhead $ (g_Fi <|> g_Elif <|> g_Else)
