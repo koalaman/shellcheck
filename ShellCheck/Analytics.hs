@@ -81,6 +81,7 @@ basicChecks = [
     ,checkValidCondOps
     ,checkGlobbedRegex
     ,checkTrapQuotes
+    ,checkTestRedirects
     ]
 treeChecks = [
     checkUnquotedExpansions
@@ -850,6 +851,12 @@ checkTrapQuotes = checkCommand "trap" f where
     checkExpansions (T_DollarArithmetic id _) = warning id
     checkExpansions _ = return ()
 
+prop_checkTestRedirects1 = verify checkTestRedirects "test 3 > 1"
+prop_checkTestRedirects2 = verifyNot checkTestRedirects "test 3 \\> 1"
+prop_checkTestRedirects3 = verify checkTestRedirects "/usr/bin/test $var > $foo"
+checkTestRedirects (T_Redirecting id redirs@(redir:_) cmd) | cmd `isCommand` "test" =
+    warn (getId redir) $ "This is interpretted as a shell file redirection, not a comparison."
+checkTestRedirects _ = return ()
 
 --- Subshell detection
 
