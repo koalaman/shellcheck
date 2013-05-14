@@ -54,6 +54,7 @@ basicChecks = [
     ,checkUnquotedN
     ,checkNumberComparisons
     ,checkSingleBracketOperators
+    ,checkDoubleBracketOperators
     ,checkNoaryWasBinary
     ,checkConstantNoary
     ,checkBraceExpansionVars
@@ -486,7 +487,7 @@ prop_checkNumberComparisons4 = verify checkNumberComparisons "[[ $foo > 2.72 ]]"
 prop_checkNumberComparisons5 = verify checkNumberComparisons "[[ $foo -le 2.72 ]]"
 prop_checkNumberComparisons6 = verify checkNumberComparisons "[[ 3.14 = $foo ]]"
 checkNumberComparisons (TC_Binary id typ op lhs rhs) = do
-    when (op `elem` ["<", ">", "<=", ">="]) $ do
+    when (op `elem` ["<", ">", "<=", ">=", "\\<", "\\>", "\\<=", "\\>="]) $ do
         when (isNum lhs || isNum rhs) $ err id $ "\"" ++ op ++ "\" is for string comparisons. Use " ++ (eqv op) ++" ."
         mapM_ checkDecimals [lhs, rhs]
 
@@ -500,6 +501,7 @@ checkNumberComparisons (TC_Binary id typ op lhs rhs) = do
                                      _ -> False
       isFraction t = case deadSimple t of [v] -> isJust $ matchRegex floatRegex v
                                           _ -> False
+      eqv ('\\':s) = eqv s
       eqv "<" = "-lt"
       eqv ">" = "-gt"
       eqv "<=" = "-le"
@@ -513,10 +515,19 @@ prop_checkSingleBracketOperators2 = verify checkSingleBracketOperators "[ $foo >
 prop_checkSingleBracketOperators3 = verifyNot checkSingleBracketOperators "[[ foo < bar ]]"
 prop_checkSingleBracketOperators5 = verify checkSingleBracketOperators "until [ $n <= $z ]; do echo foo; done"
 checkSingleBracketOperators (TC_Binary id typ op lhs rhs)
-    | typ == SingleBracket && op `elem` ["<", ">", "<=", ">=", "=~"] =
-        err id $ "Can't use " ++ op ++" in [ ]. Use [[ ]]."
-
+    | typ == SingleBracket && op `elem` ["<", ">", "<=", ">="] =
+        err id $ "Can't use " ++ op ++" in [ ]. Escape it or use [[..]]."
+checkSingleBracketOperators (TC_Binary id typ op lhs rhs)
+    | typ == SingleBracket && op == "=~" =
+        err id $ "Can't use " ++ op ++" in [ ]. Use [[..]] instead."
 checkSingleBracketOperators _ = return ()
+
+prop_checkDoubleBracketOperators1 = verify checkDoubleBracketOperators "[[ 3 \\< 4 ]]"
+prop_checkDoubleBracketOperators3 = verifyNot checkDoubleBracketOperators "[[ foo < bar ]]"
+checkDoubleBracketOperators x@(TC_Binary id typ op lhs rhs)
+    | typ == DoubleBracket && op `elem` ["\\<", "\\>", "\\<=", "\\>="] =
+        err id $ "Escaping " ++ op ++" is required in [..], but invalid in [[..]]"
+checkDoubleBracketOperators _ = return ()
 
 prop_checkQuotedCondRegex1 = verify checkQuotedCondRegex "[[ $foo =~ \"bar\" ]]"
 prop_checkQuotedCondRegex2 = verify checkQuotedCondRegex "[[ $foo =~ 'cow' ]]"
@@ -649,10 +660,11 @@ allModifiedVariables t = snd $ runState (doAnalysis (\x -> modify $ (++) (getMod
 
 prop_checkValidCondOps1 = verify checkValidCondOps "[[ a -xz b ]]"
 prop_checkValidCondOps2 = verify checkValidCondOps "[ -M a ]"
+prop_checkValidCondOps2a= verifyNot checkValidCondOps "[ 3 \\> 2 ]"
 prop_checkValidCondOps3 = verifyNot checkValidCondOps "[ 1 = 2 -a 3 -ge 4 ]"
 prop_checkValidCondOps4 = verifyNot checkValidCondOps "[[ ! -v foo ]]"
 checkValidCondOps (TC_Binary id _ s _ _)
-    | not (s `elem` ["-nt", "-ot", "-ef", "==", "!=", "<=", ">=", "-eq", "-ne", "-lt", "-le", "-gt", "-ge", "=~", ">", "<", "="]) =
+    | not (s `elem` ["-nt", "-ot", "-ef", "==", "!=", "<=", ">=", "-eq", "-ne", "-lt", "-le", "-gt", "-ge", "=~", ">", "<", "=", "\\<", "\\>", "\\<=", "\\>="]) =
         warn id "Unknown binary operator."
 checkValidCondOps (TC_Unary id _ s _)
     | not (s `elem`  [ "!", "-a", "-b", "-c", "-d", "-e", "-f", "-g", "-h", "-L", "-k", "-p", "-r", "-s", "-S", "-t", "-u", "-w", "-x", "-O", "-G", "-N", "-z", "-n", "-o", "-v", "-R"]) =

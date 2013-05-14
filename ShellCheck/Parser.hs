@@ -213,7 +213,7 @@ readConditionContents single = do
     typ = if single then SingleBracket else DoubleBracket
     readCondBinaryOp = try $ do
         id <- getNextId
-        op <- (choice $ (map tryOp ["==", "!=", "<=", ">=", "=~", ">", "<", "="])) <|> otherOp
+        op <- (choice $ (map tryOp ["==", "!=", "<=", ">=", "=~", ">", "<", "=", "\\<=", "\\>=", "\\<", "\\>"])) <|> otherOp
         hardCondSpacing
         return op
       where
