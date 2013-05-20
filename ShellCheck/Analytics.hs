@@ -698,7 +698,7 @@ inUnquotableContext tree t =
         TA_Trinary _ _ _ _ -> True
         TA_Expansion _ _ -> True
         T_Assignment _ _ _ -> True
-        T_Redirecting _ _ _ -> False
+        T_Redirecting _ _ _ -> or $ map (isCommand t) ["local", "declare"]
         T_DoubleQuoted _ _ -> True
         T_CaseExpression _ _ _ -> True
         T_ForIn _ _ _ _ -> True -- Pragmatically assume it's desirable here
@@ -1033,6 +1033,9 @@ prop_checkSpacefulnessB = verifyFull checkSpacefulness "rm ${10//foo/bar}"
 prop_checkSpacefulnessC = verifyNotFull checkSpacefulness "(( $1 + 3 ))"
 prop_checkSpacefulnessD = verifyNotFull checkSpacefulness "if [[ $2 -gt 14 ]]; then true; fi"
 prop_checkSpacefulnessE = verifyNotFull checkSpacefulness "foo=$3 env"
+prop_checkSpacefulnessF = verifyNotFull checkSpacefulness "local foo=$1"
+prop_checkSpacefulnessG = verifyNotFull checkSpacefulness "declare foo=$1"
+prop_checkSpacefulnessH = verifyFull checkSpacefulness "echo foo=$1"
 
 checkSpacefulness t =
     let (_, (newMetaMap, spaceMap)) = runState (doStackAnalysis startScope endScope t) ([], Map.empty)
