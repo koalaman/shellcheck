@@ -84,6 +84,7 @@ basicChecks = [
     ,checkTrapQuotes
     ,checkTestRedirects
     ,checkIndirectExpansion
+    ,checkTimeParameters
     ]
 treeChecks = [
     checkUnquotedExpansions
@@ -730,6 +731,12 @@ checkCommand str f (T_SimpleCommand id _ cmd) =
         _ -> return ()
 checkCommand _ _ _ = return ()
 
+checkUnqualifiedCommand str f (T_SimpleCommand id _ cmd) =
+    case cmd of
+        (w:rest) -> if w `isUnqualifiedCommand` str then f rest else return ()
+        _ -> return ()
+checkUnqualifiedCommand _ _ _ = return ()
+
 getLiteralString t = g t
   where
     allInList l = let foo = map g l in if all isJust foo then return $ concat (catMaybes foo) else Nothing
@@ -742,19 +749,22 @@ getLiteralString t = g t
 
 isLiteral t = isJust $ getLiteralString t
 
-isCommand (T_Redirecting _ _ w) str =
-    isCommand w str
-isCommand (T_SimpleCommand _ _ (w:_)) str =
-    isCommand w str
-isCommand token str =
+isCommand token str = isCommandMatch token (\cmd -> cmd  == str || ("/" ++ str) `isSuffixOf` cmd)
+isUnqualifiedCommand token str = isCommandMatch token (\cmd -> cmd  == str)
+
+isCommandMatch (T_Redirecting _ _ w) matcher =
+    isCommandMatch w matcher
+isCommandMatch (T_SimpleCommand _ _ (w:_)) matcher =
+    isCommandMatch w matcher
+isCommandMatch token matcher =
     case getLiteralString token of
-        Just cmd -> cmd == str || ("/" ++ str) `isSuffixOf` cmd
+        Just cmd -> matcher cmd
         Nothing -> False
 
 prop_checkPrintfVar1 = verify checkPrintfVar "printf \"Lol: $s\""
 prop_checkPrintfVar2 = verifyNot checkPrintfVar "printf 'Lol: $s'"
 prop_checkPrintfVar3 = verify checkPrintfVar "printf -v cow $(cmd)"
-checkPrintfVar = checkCommand "printf" f where
+checkPrintfVar = checkUnqualifiedCommand "printf" f where
     f (dashv:var:rest) | getLiteralString dashv == (Just "-v") = f rest
     f (format:params) = check format
     f _ = return ()
@@ -766,7 +776,7 @@ checkPrintfVar = checkCommand "printf" f where
 prop_checkUuoe1 = verify checkUuoe "echo $(date)"
 prop_checkUuoe2 = verify checkUuoe "echo \"$(date)\""
 prop_checkUuoe3 = verifyNot checkUuoe "echo \"The time is $(date)\""
-checkUuoe = checkCommand "echo" f where
+checkUuoe = checkUnqualifiedCommand "echo" f where
     msg id = style id "Useless echo? Instead of 'echo $(cmd)', just use 'cmd'."
     f [T_NormalWord id [(T_DollarExpansion _ _)]] = msg id
     f [T_NormalWord id [T_DoubleQuoted _ [(T_DollarExpansion _ _)]]] = msg id
@@ -863,6 +873,16 @@ checkTrapQuotes = checkCommand "trap" f where
     checkExpansions (T_DollarBraced id _) = warning id
     checkExpansions (T_DollarArithmetic id _) = warning id
     checkExpansions _ = return ()
+
+prop_checkTimeParameters1 = verify checkTimeParameters "time -f lol sleep 10"
+prop_checkTimeParameters2 = verifyNot checkTimeParameters "time sleep 10"
+prop_checkTimeParameters3 = verifyNot checkTimeParameters "time -p foo"
+checkTimeParameters = checkUnqualifiedCommand "time" f where -- TODO make bash specific
+    f (x:_) = let s = concat $ deadSimple x in
+                if "-" `isPrefixOf` s && s /= "-p" then
+                    info (getId x) "Bash overrides 'time' as seen in man time(1). Use 'command time ..' for that one."
+                  else return ()
+    f _ = return ()
 
 prop_checkTestRedirects1 = verify checkTestRedirects "test 3 > 1"
 prop_checkTestRedirects2 = verifyNot checkTestRedirects "test 3 \\> 1"
