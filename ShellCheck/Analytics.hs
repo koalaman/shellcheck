@@ -83,6 +83,7 @@ basicChecks = [
     ,checkGlobbedRegex
     ,checkTrapQuotes
     ,checkTestRedirects
+    ,checkIndirectExpansion
     ]
 treeChecks = [
     checkUnquotedExpansions
@@ -869,6 +870,19 @@ prop_checkTestRedirects3 = verify checkTestRedirects "/usr/bin/test $var > $foo"
 checkTestRedirects (T_Redirecting id redirs@(redir:_) cmd) | cmd `isCommand` "test" =
     warn (getId redir) $ "This is interpretted as a shell file redirection, not a comparison."
 checkTestRedirects _ = return ()
+
+prop_checkIndirectExpansion1 = verify checkIndirectExpansion "${foo$n}"
+prop_checkIndirectExpansion2 = verifyNot checkIndirectExpansion "${foo//$n/lol}"
+checkIndirectExpansion (T_DollarBraced id (T_NormalWord _ ((T_Literal _ s):attempt:_))) =
+    case attempt of T_DollarExpansion _ _ -> doit
+                    T_DollarBraced _ _ -> doit
+                    T_DollarArithmetic _ _ -> doit
+                    _ -> return ()
+  where
+    doit = if all isVariableChar s
+            then err id "To expand via indirection, use name=\"foo$n\"; echo \"${!name}\""
+            else return ()
+checkIndirectExpansion _ = return ()
 
 --- Subshell detection
 
