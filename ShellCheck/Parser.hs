@@ -504,6 +504,7 @@ readArithmeticContents =
 
 prop_readCondition = isOk readCondition "[ \\( a = b \\) -a \\( c = d \\) ]"
 prop_readCondition2 = isOk readCondition "[[ (a = b) || (c = d) ]]"
+prop_readCondition3 = isOk readCondition "[[ $c = [[:alpha:].~-] ]]"
 readCondition = called "test expression" $ do
     opos <- getPosition
     id <- getNextId
@@ -660,6 +661,9 @@ readNormalLiteral end = do
 
 prop_readGlob1 = isOk readGlob "*"
 prop_readGlob2 = isOk readGlob "[^0-9]"
+prop_readGlob3 = isOk readGlob "[a[:alpha:]]"
+prop_readGlob4 = isOk readGlob "[[:alnum:]]"
+prop_readGlob5 = isOk readGlob "[^[:alpha:]1-9]"
 readGlob = readExtglob <|> readSimple <|> readClass <|> readGlobbyLiteral
     where
         readSimple = do
@@ -670,9 +674,16 @@ readGlob = readExtglob <|> readSimple <|> readClass <|> readGlobbyLiteral
         readClass = try $ do
             id <- getNextId
             char '['
-            s <- many1 (letter <|> digit <|> oneOf "^-_:")
+            s <- many1 (predefined <|> (liftM return $ letter <|> digit <|> oneOf globchars))
             char ']'
-            return $ T_Glob id $ "[" ++ s ++ "]"
+            return $ T_Glob id $ "[" ++ (concat s) ++ "]"
+          where
+           globchars = "^-_:?*.,!~@#$%=+{}/~"
+           predefined = do
+              try $ string "[:"
+              s <- many1 letter
+              string ":]"
+              return $ "[:" ++ s ++ ":]"
 
         readGlobbyLiteral = do
             id <- getNextId
