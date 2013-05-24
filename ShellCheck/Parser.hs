@@ -1355,10 +1355,14 @@ prop_readAssignmentWord5 = isOk readAssignmentWord "b+=lol"
 prop_readAssignmentWord6 = isWarning readAssignmentWord "b += (1 2 3)"
 prop_readAssignmentWord7 = isOk readAssignmentWord "a[3$n'']=42"
 prop_readAssignmentWord8 = isOk readAssignmentWord "a[4''$(cat foo)]=42"
+prop_readAssignmentWord0 = isWarning readAssignmentWord "foo$n=42"
 readAssignmentWord = try $ do
     id <- getNextId
+    pos <- getPosition
     optional (char '$' >> parseNote ErrorC "Don't use $ on the left side of assignments.")
     variable <- readVariableName
+    optional (readDollar >> parseNoteAt pos ErrorC 
+                                "For indirection, use (associative) arrays or 'read \"var$n\" <<< \"value\"'")
     optional readArrayIndex -- Throws away the index. Fixme?
     space <- spacing
     pos <- getPosition
