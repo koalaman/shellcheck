@@ -39,7 +39,10 @@ genericChecks = concat [
     ,[checkShebang]
     ]
 
-checksFor Sh = map runBasicAnalysis [ checkBashisms ]
+checksFor Sh = map runBasicAnalysis [
+    checkBashisms
+    ,checkTimeParameters
+    ]
 checksFor Ksh = [ ]
 checksFor Zsh = map runBasicAnalysis [ checkTimeParameters ]
 checksFor Bash = map runBasicAnalysis [
@@ -916,7 +919,7 @@ prop_checkTimeParameters3 = verifyNot checkTimeParameters "time -p foo"
 checkTimeParameters = checkUnqualifiedCommand "time" f where -- TODO make bash specific
     f (x:_) = let s = concat $ deadSimple x in
                 if "-" `isPrefixOf` s && s /= "-p" then
-                    info (getId x) "The shell overrides 'time' as seen in man time(1). Use 'command time ..' for that one."
+                    info (getId x) "The shell may override 'time' as seen in man time(1). Use 'command time ..' for that one."
                   else return ()
     f _ = return ()
 
