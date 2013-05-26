@@ -28,17 +28,48 @@ import Debug.Trace
 import Text.Regex
 import Data.Maybe
 
-checks = concat [
+data Shell = Ksh | Zsh | Sh | Bash
+    deriving (Show, Eq)
+
+genericChecks = concat [
     map runBasicAnalysis basicChecks
     ,[runBasicTreeAnalysis treeChecks]
     ,[subshellAssignmentCheck]
     ,[checkSpacefulness]
-    ,[checkShebang, checkUndeclaredBash]
+    ,[checkShebang]
     ]
 
-runAllAnalytics root m = addToMap (checkList checks root) m
+checksFor Sh = map runBasicAnalysis [ checkBashisms ]
+checksFor Ksh = [ ]
+checksFor Zsh = map runBasicAnalysis [ checkTimeParameters ]
+checksFor Bash = map runBasicAnalysis [
+    checkTimeParameters
+    ,checkBraceExpansionVars
+    ]
+
+runAllAnalytics root m = addToMap notes m
+    where shell = determineShell root
+          unsupported = (getId root, Note ErrorC "ShellCheck only handles Bourne based shells, sorry!")
+          notes = case shell of
+                    Nothing -> [ unsupported ]
+                    Just sh -> checkList ((checksFor sh) ++ genericChecks) root
+
 checkList l t = concatMap (\f -> f t) l
 addToMap list map = foldr (\(id,note) m -> Map.adjust (\(Metadata pos notes) -> Metadata pos (note:notes)) id m) map list
+
+prop_determineShell0 = determineShell (T_Script (Id 0) "#!/bin/sh" []) == Just Sh
+prop_determineShell1 = determineShell (T_Script (Id 0) "#!/usr/bin/env ksh" []) == Just Ksh
+prop_determineShell2 = determineShell (T_Script (Id 0) "" []) == Just Bash
+determineShell (T_Script _ shebang _) = normalize $ shellFor shebang
+    where shellFor s | "/env " `isInfixOf` s = head ((drop 1 $ words s)++[""])
+          shellFor s = reverse . takeWhile (/= '/') . reverse $ s
+          normalize "csh" = Nothing
+          normalize "tcsh" = Nothing
+          normalize "sh" = return Sh
+          normalize "ksh" = return Ksh
+          normalize "zsh" = return Zsh
+          normalize "bash" = return Bash
+          normalize _ = return Bash
 
 runBasicAnalysis f t = snd $ runState (doAnalysis f t) []
 basicChecks = [
@@ -57,7 +88,6 @@ basicChecks = [
     ,checkDoubleBracketOperators
     ,checkNoaryWasBinary
     ,checkConstantNoary
-    ,checkBraceExpansionVars
     ,checkForDecimals
     ,checkDivBeforeMult
     ,checkArithmeticDeref
@@ -84,7 +114,6 @@ basicChecks = [
     ,checkTrapQuotes
     ,checkTestRedirects
     ,checkIndirectExpansion
-    ,checkTimeParameters
     ]
 treeChecks = [
     checkUnquotedExpansions
@@ -281,23 +310,30 @@ checkShebang (T_Script id sb _) =
         in [(id, note)]
     else []
 
-prop_checkUndeclaredBash = verifyFull checkUndeclaredBash "#!/bin/sh -l\nwhile read a; do :; done < <(a)"
-prop_checkUndeclaredBash2 = verifyNotFull checkUndeclaredBash "#!/bin/bash\nwhile read a; do :; done < <(a)"
-checkUndeclaredBash t@(T_Script id sb _) =
-    let tokens = words sb
-    in if (not $ null tokens) && "/sh" `isSuffixOf` (head tokens)
-        then runBasicAnalysis bashism t
-        else []
+prop_checkBashisms = verify checkBashisms "while read a; do :; done < <(a)"
+prop_checkBashisms2 = verify checkBashisms "[ foo -nt bar ]"
+prop_checkBashisms3 = verify checkBashisms "echo $((i++))"
+prop_checkBashisms4 = verify checkBashisms "rm !(*.hs)"
+checkBashisms = bashism
   where
-    errMsg id s = err id $ "The shebang specifies sh, so " ++ s ++ " is not supported, even if sh is bash."
-    warnMsg id s = warn id $ "The shebang specifies sh, so " ++ s ++ " may not be supported."
+    errMsg id s = err id $ "#!/bin/sh was specified, so " ++ s ++ " is not supported, even when sh is actually bash."
+    warnMsg id s = warn id $ "#!/bin/sh was specified, but " ++ s ++ " is not standard."
     bashism (T_ProcSub id _ _) = errMsg id "process substitution"
     bashism (T_Extglob id _ _) = warnMsg id "extglob"
     bashism (T_DollarSingleQuoted id _) = warnMsg id "$'..'"
     bashism (T_DollarDoubleQuoted id _) = warnMsg id "$\"..\""
-    bashism (T_ForArithmetic id _ _ _ _) = warnMsg id "arithmetic for loops"
-    bashism (T_Arithmetic id _) = warnMsg id "((..))"
-    bashism (T_SelectIn id _ _ _) = warnMsg id "select loops"
+    bashism (T_ForArithmetic id _ _ _ _) = warnMsg id "arithmetic for loop"
+    bashism (T_Arithmetic id _) = warnMsg id "standalone ((..))"
+    bashism (T_SelectIn id _ _ _) = warnMsg id "select loop"
+    bashism (T_BraceExpansion id _) = warnMsg id "brace expansion"
+    bashism (T_Condition id DoubleBracket _) = warnMsg id "[[ ]]"
+    bashism (T_HereString id _) = warnMsg id "here-string"
+    bashism (TC_Binary id SingleBracket op _ _)
+        | op `elem` [ "-nt", "-ef", "\\<", "\\>", "==" ] =
+            warnMsg id op
+    bashism (TA_Unary id op _)
+        | op `elem` [ "|++", "|--", "++|", "--|"] =
+            warnMsg id (filter (/= '|') op)
     bashism _ = return()
 
 prop_checkForInQuoted = verify checkForInQuoted "for f in \"$(ls)\"; do echo foo; done"
@@ -880,7 +916,7 @@ prop_checkTimeParameters3 = verifyNot checkTimeParameters "time -p foo"
 checkTimeParameters = checkUnqualifiedCommand "time" f where -- TODO make bash specific
     f (x:_) = let s = concat $ deadSimple x in
                 if "-" `isPrefixOf` s && s /= "-p" then
-                    info (getId x) "Bash overrides 'time' as seen in man time(1). Use 'command time ..' for that one."
+                    info (getId x) "The shell overrides 'time' as seen in man time(1). Use 'command time ..' for that one."
                   else return ()
     f _ = return ()
 
