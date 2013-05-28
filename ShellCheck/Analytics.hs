@@ -964,9 +964,17 @@ subshellAssignmentCheck t =
 
 
 data Scope = SubshellScope String | NoneScope deriving (Show, Eq)
-data StackData = StackScope Scope | StackScopeEnd | Assignment (Id, String) | Reference (Id, String) deriving (Show, Eq)
-data VariableState = Dead Id String | Alive deriving (Show, Eq)
-data VariableType = Spaceful | Spaceless deriving (Show, Eq)
+data StackData =
+    StackScope Scope
+    | StackScopeEnd
+    -- (Base expression, specific position, var name, assigned values)
+    | Assignment (Token, Token, String, DataSource)
+    | Reference (Token, Token, String)
+  deriving (Show, Eq)
+data DataSource = DataFrom [Token] | DataExternal
+  deriving (Show, Eq)
+
+data VariableState = Dead Token String | Alive deriving (Show, Eq)
 
 leadType t =
     case t of
@@ -979,78 +987,68 @@ leadType t =
 
 
 getModifiedVariables t =
-    let l = getModifiedVariablesWithType (const False) t
-    in map (\(id, name, typ) -> (id, name)) l
-
-getModifiedVariablesWithType spacefulF t =
     case t of
         T_SimpleCommand _ vars [] ->
             concatMap (\x -> case x of
-                                T_Assignment id name w -> [(id, name, if isSpaceful spacefulF w then Spaceful else Spaceless)]
+                                T_Assignment id name w ->
+                                    [(x, x, name, DataFrom [w])]
                                 _ -> []
                       ) vars
         c@(T_SimpleCommand _ _ _) ->
             getModifiedVariableCommand c
 
-        TA_Unary _ "++|" (TA_Variable id name) -> [(id, name, Spaceless)]
-        TA_Unary _ "|++" (TA_Variable id name) -> [(id, name, Spaceless)]
-        TA_Binary _ op (TA_Variable id name) _ -> if any (==op) ["=", "*=", "/=", "%=", "+=", "-=", "<<=", ">>=", "&=", "^=", "|="]
-                                                    then [(id,name, Spaceless)]
-                                                    else []
+        TA_Unary _ "++|" (TA_Variable id name) -> [(t, t, name, DataFrom [t])]
+        TA_Unary _ "|++" (TA_Variable id name) -> [(t, t, name, DataFrom [t])]
+        TA_Binary _ op (TA_Variable id name) rhs ->
+            if any (==op) ["=", "*=", "/=", "%=", "+=", "-=", "<<=", ">>=", "&=", "^=", "|="]
+                then [(t, t, name, DataFrom [rhs])]
+                else []
 
         --Points to 'for' rather than variable
-        T_ForIn id str words _ -> [(id, str, if any (isSpaceful spacefulF) words || null words then Spaceful else Spaceless)]
-        T_SelectIn id str words _ -> [(id, str, if any (isSpaceful spacefulF) words || null words then Spaceful else Spaceless)]
+        T_ForIn id str words _ -> [(t, t, str, DataFrom words)]
+        T_SelectIn id str words _ -> [(t, t, str, DataFrom words)]
         _ -> []
 
-isSpaceful :: (String -> Bool) -> Token -> Bool
-isSpaceful spacefulF x =
-    case x of
-      T_DollarExpansion  _ _ -> True
-      T_Glob _ _         -> True
-      T_Extglob _ _ _    -> True
-      T_Literal _ s      -> s `containsAny` globspace
-      T_SingleQuoted _ s -> s `containsAny` globspace
-      T_DollarBraced _ l -> spacefulF $ getBracedReference $ bracedString l
-      T_NormalWord _ w   -> isSpacefulWord spacefulF w
-      T_DoubleQuoted _ w -> isSpacefulWord spacefulF w
-      _ -> False
-  where
-    globspace = "*? \t\n"
-    containsAny s chars = any (\c -> c `elem` s) chars
-
-isSpacefulWord :: (String -> Bool) -> [Token] -> Bool
-isSpacefulWord f words =
-    any (isSpaceful f) words
-
-getModifiedVariableCommand (T_SimpleCommand _ _ ((T_NormalWord _ ((T_Literal _ x):_)):rest)) =
+getModifiedVariableCommand base@(T_SimpleCommand _ _ ((T_NormalWord _ ((T_Literal _ x):_)):rest)) =
     case x of
         "read" -> concatMap getLiteral rest
         "export" -> concatMap exportParamToLiteral rest
         "let" -> concatMap letParamToLiteral rest
         _ -> []
+  where
+    stripEquals s = let rest = dropWhile (/= '=') s in
+        if rest == "" then "" else tail rest
+    stripEqualsFrom (T_NormalWord id1 ((T_Literal id2 s):rs)) =
+        (T_NormalWord id1 ((T_Literal id2 (stripEquals s)):rs))
+    stripEqualsFrom (T_NormalWord id1 [T_DoubleQuoted id2 [T_Literal id3 s]]) =
+        (T_NormalWord id1 [T_DoubleQuoted id2 [T_Literal id3 (stripEquals s)]])
+    stripEqualsFrom t = t
+
+    getLiteral t@(T_NormalWord _ [T_Literal _ s]) =
+        [(base, t, s, DataExternal)]
+    getLiteral t@(T_NormalWord _ [T_DoubleQuoted _ [T_Literal id s]]) =
+        [(base, t, s, DataExternal)]
+    getLiteral x = []
+    exportParamToLiteral t@(T_NormalWord _ ((T_Literal _ s):_)) =
+        if '=' `elem` s
+            then [(base, t, prefix, DataFrom [stripEqualsFrom t])]
+            else []
+      where prefix = takeWhile (/= '=') s
+    exportParamToLiteral _ = []
+    letParamToLiteral token =
+          if var == ""
+            then []
+            else [(base, token, var, DataFrom [stripEqualsFrom token])]
+        where var = takeWhile (isVariableChar) $ dropWhile (\x -> x `elem` "+-") $ concat $ deadSimple token
 getModifiedVariableCommand _ = []
-
-getLiteral (T_NormalWord _ [T_Literal id s]) = [(id,s, Spaceful)]
-getLiteral (T_NormalWord _ [T_DoubleQuoted _ [T_Literal id s]]) = [(id,s,Spaceful)]
-getLiteral x = []
-
-exportParamToLiteral (T_NormalWord _ ((T_Literal id s):_)) =
-    [(id,prefix,Spaceless)] -- Todo, make this determine spacefulness
-    where prefix = takeWhile (/= '=') s
-exportParamToLiteral _ = []
-
-letParamToLiteral token = if var == "" then [] else [(id,var,Spaceless)] -- Todo, is number
-    where var = takeWhile (isVariableChar) $ dropWhile (\x -> x `elem` "+-") $ concat $ deadSimple token
-          id = getId token
 
 -- TODO:
 getBracedReference s = takeWhile (\x -> not $ x `elem` ":[#%/^,") $ dropWhile (== '#') s
 
 getReferencedVariables t =
     case t of
-        T_DollarBraced id l -> map (\x -> (id, x)) $ [getBracedReference $ bracedString l]
-        TA_Variable id str -> [(id,str)]
+        T_DollarBraced id l -> map (\x -> (t, t, x)) $ [getBracedReference $ bracedString l]
+        TA_Variable id str -> [(t, t, str)]
         x -> []
 
 getVariableFlow t =
@@ -1061,37 +1059,58 @@ getVariableFlow t =
         let scopeType = leadType t
         in do
             when (scopeType /= NoneScope) $ modify ((StackScope scopeType):)
+            if assignFirst t then setWritten t else return ()
 
     endScope t =
         let scopeType = leadType t
-            read    = getReferencedVariables t
-            written = getModifiedVariables t
         in do
+            setRead t
+            if assignFirst t then return () else setWritten t
             when (scopeType /= NoneScope) $ modify ((StackScopeEnd):)
-            mapM_ (\v -> modify ((Reference v):)) read
-            mapM_ (\v -> modify ((Assignment v):)) written
 
-findSubshelled :: [StackData] -> [(String, [(Id,String)])] -> (Map.Map String VariableState) -> State [(Id, Note)] ()
+    assignFirst (T_ForIn _ _ _ _) = True
+    assignFirst (T_SelectIn _ _ _ _) = True
+    assignFirst _ = False
+
+    setRead t =
+        let read    = getReferencedVariables t
+        in mapM_ (\v -> modify ((Reference v):)) read
+
+    setWritten t =
+        let written = getModifiedVariables t
+        in mapM_ (\v -> modify ((Assignment v):)) written
+
 findSubshelled [] _ _ = return ()
-findSubshelled ((Assignment x@(id, str)):rest) ((reason,scope):lol) deadVars =
+findSubshelled ((Assignment x@(_, _, str, _)):rest) ((reason,scope):lol) deadVars =
     findSubshelled rest ((reason, x:scope):lol) $ Map.insert str Alive deadVars
-findSubshelled ((Reference (readId, str)):rest) scopes deadVars = do
+findSubshelled ((Reference (_, readToken, str)):rest) scopes deadVars = do
     case Map.findWithDefault Alive str deadVars of
         Alive -> return ()
-        Dead writeId reason -> do
-                    info writeId $ "Modification of " ++ str ++ " is local (to subshell caused by "++ reason ++")."
-                    info readId $ str ++ " was modified in a subshell. That change might be lost."
+        Dead writeToken reason -> do
+                    info (getId writeToken) $ "Modification of " ++ str ++ " is local (to subshell caused by "++ reason ++")."
+                    info (getId readToken) $ str ++ " was modified in a subshell. That change might be lost."
     findSubshelled rest scopes deadVars
 
 findSubshelled ((StackScope (SubshellScope reason)):rest) scopes deadVars =
     findSubshelled rest ((reason,[]):scopes) deadVars
 
 findSubshelled ((StackScopeEnd):rest) ((reason, scope):oldScopes) deadVars =
-    findSubshelled rest oldScopes $ foldl (\m (id, var) -> Map.insert var (Dead id reason) m) deadVars scope
+    findSubshelled rest oldScopes $ foldl (\m (_, token, var, _) -> Map.insert var (Dead token reason) m) deadVars scope
 
+doVariableFlowAnalysis readFunc writeFunc empty t = fst $ runState (
+    foldM (\list x -> do { l <- doFlow x;  return $ l ++ list; }) [] flow
+    ) empty
+  where
+    flow = getVariableFlow t
+    doFlow (Reference (base, token, name)) =
+        readFunc base token name
+    doFlow (Assignment (base, token, name, values)) =
+        writeFunc base token name values
+    doFlow _ = return []
 
 ---- Spacefulness detection
 
+prop_checkSpacefulness0 = verifyFull checkSpacefulness "for f in *.mp3; do echo $f; done"
 prop_checkSpacefulness1 = verifyFull checkSpacefulness "a='cow moo'; echo $a"
 prop_checkSpacefulness2 = verifyNotFull checkSpacefulness "a='cow moo'; [[ $a ]]"
 prop_checkSpacefulness3 = verifyNotFull checkSpacefulness "a='cow*.mp3'; echo \"$a\""
@@ -1111,41 +1130,53 @@ prop_checkSpacefulnessG = verifyNotFull checkSpacefulness "declare foo=$1"
 prop_checkSpacefulnessH = verifyFull checkSpacefulness "echo foo=$1"
 
 checkSpacefulness t =
-    let (_, (newMetaMap, spaceMap)) = runState (doStackAnalysis startScope endScope t) ([], Map.empty)
-    in newMetaMap
+    doVariableFlowAnalysis readF writeF (Map.fromList defaults) t
   where
-    isSpaceless m s = (not $ all isDigit s) && (Map.findWithDefault Spaceless s m) == Spaceless
-    addInfo :: (Id, String) -> State ([(Id,Note)], Map.Map String VariableType) ()
-    addInfo (id, s) = do
-        (list, spaceMap) <- get
-        when (not (inUnquotableContext parents (Map.findWithDefault undefined id items)) && not (isSpaceless spaceMap s)) $ do
-            let note = Note InfoC "This variable may contain spaces/globs. Quote it unless you want splitting."
-            let newlist = (id, note):list
-            put (newlist, spaceMap)
+    defaults = map (\x -> (show x, True)) [0..10]
 
-    registerSpacing (id, s, typ) = do
-        (list, spaceMap) <- get
-        put (list, Map.insert s typ spaceMap)
+    hasSpaces name = do
+        map <- get
+        return $ Map.findWithDefault False name map
+
+    setSpaces name bool = do
+        modify $ Map.insert name bool
+
+    readF _ token name = do
+        spaced <- hasSpaces name
+        if spaced && (not $ inUnquotableContext parents token)
+            then return [(getId token, Note InfoC warning)]
+            else return []
+      where
+        warning = "Unquoted variable may contain spaces/globs, and will word split."
+
+    writeF _ _ name DataExternal = do
+        setSpaces name True
+        return []
+
+    writeF _ _ name (DataFrom vals) = do
+        map <- get
+        setSpaces name
+            (isSpacefulWord (\x -> Map.findWithDefault False x map) vals)
+        return []
 
     parents = getParentTree t
-    items = getTokenMap t
+    isSpacefulWord :: (String -> Bool) -> [Token] -> Bool
+    isSpacefulWord f words =
+        any (isSpaceful f) words
+    isSpaceful :: (String -> Bool) -> Token -> Bool
+    isSpaceful spacefulF x =
+        case x of
+          T_DollarExpansion  _ _ -> True
+          T_Glob _ _         -> True
+          T_Extglob _ _ _    -> True
+          T_Literal _ s      -> s `containsAny` globspace
+          T_SingleQuoted _ s -> s `containsAny` globspace
+          T_DollarBraced _ l -> spacefulF $ getBracedReference $ bracedString l
+          T_NormalWord _ w   -> isSpacefulWord spacefulF w
+          T_DoubleQuoted _ w -> isSpacefulWord spacefulF w
+          _ -> False
+      where
+        globspace = "*? \t\n"
+        containsAny s chars = any (\c -> c `elem` s) chars
 
-    headFirst (T_SimpleCommand _ _ _) = False
-    headFirst _ = True
-
-    endScope t =
-        if not $ headFirst t then performScope t else return ()
-
-    startScope t =
-        if headFirst t then performScope t else return ()
-
-    performScope t = do
-        (_, spaceMap) <- get
-        let
-            isSpaceful id = (Map.findWithDefault Spaceless id spaceMap) /= Spaceless
-            read    = getReferencedVariables t
-            written = getModifiedVariablesWithType isSpaceful t
-
-        mapM_ addInfo read
-        mapM_ registerSpacing written
 
