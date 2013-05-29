@@ -155,6 +155,7 @@ isGlob _ = False
 
 
 isConfusedGlobRegex ('*':_) = True
+isConfusedGlobRegex [x,'*'] | x /= '\\' = True
 isConfusedGlobRegex _ = False
 
 isPotentiallyConfusedGlobRegex =
@@ -588,10 +589,10 @@ prop_checkGlobbedRegex2a = verify checkGlobbedRegex "[[ $foo =~ \\#* ]]"
 prop_checkGlobbedRegex3 = verifyNot checkGlobbedRegex "[[ $foo =~ $foo ]]"
 prop_checkGlobbedRegex4 = verifyNot checkGlobbedRegex "[[ $foo =~ ^c.* ]]"
 checkGlobbedRegex (TC_Binary _ DoubleBracket "=~" _ rhs) =
-    case rhs of
-        T_NormalWord id ((T_Glob _ "*"):_) -> warn id $ "=~ is for regex. Use == for globs."
-        T_NormalWord id ([(T_Literal _ [c]), (T_Glob _ "*")]) -> warn id $ "=~ is for regex. Either ^anchor$ this, or treat it as a glob with == ."
-        _ -> return ()
+    let s = concat $ deadSimple rhs in
+        if isConfusedGlobRegex s 
+            then warn (getId rhs) $ "=~ is for regex. Use == for globs."
+            else return ()
 checkGlobbedRegex _ = return ()
 
 

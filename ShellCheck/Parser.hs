@@ -291,8 +291,11 @@ readConditionContents single = do
             )
       (do
             pos <- getPosition
+            isRegex <- regexOperatorAhead
             op <- readCondBinaryOp
-            y <- readCondWord <|> ( (parseProblemAt pos ErrorC $ "Expected another argument for this operator.") >> mzero)
+            y <- if isRegex
+                    then readRegex
+                    else  readCondWord <|> ( (parseProblemAt pos ErrorC $ "Expected another argument for this operator.") >> mzero)
             return (x `op` y)
           ) <|> (return $ TC_Noary id typ x)
 
@@ -315,6 +318,28 @@ readConditionContents single = do
         isEscaped ('\\':_) = True
         isEscaped _ = False
         xor x y = x && not y || not x && y
+
+    -- Currently a bit of a hack since parsing rules are obscure
+    regexOperatorAhead = (lookAhead $ do
+        try (string "=~") <|> try (string "~=")
+        return True) 
+          <|> return False
+    readRegex =  called "regex" $ do
+        id <- getNextId
+        parts <- many1 (readGroup <|> readSingleQuoted <|> readDoubleQuoted <|> readDollar <|> readNormalLiteral "( " <|> readGlobLiteral)
+        disregard spacing
+        return $ T_NormalWord id parts
+      where
+        readGlobLiteral = do
+            id <- getNextId
+            s <- many1 extglobStart
+            return $ T_Literal id s
+        readGroup = do -- Fixme: account for vars and quotes in groups
+            id <- getNextId
+            char '('
+            s <- readGenericLiteral (char ')')
+            char ')'
+            return $ T_Literal id $ "(" ++ s ++ ")"
 
     readCondTerm = readCondNot <|> readCondExpr
     readCondNot = do
@@ -505,6 +530,8 @@ readArithmeticContents =
 prop_readCondition = isOk readCondition "[ \\( a = b \\) -a \\( c = d \\) ]"
 prop_readCondition2 = isOk readCondition "[[ (a = b) || (c = d) ]]"
 prop_readCondition3 = isOk readCondition "[[ $c = [[:alpha:].~-] ]]"
+prop_readCondition4 = isOk readCondition "[[ $c =~ *foo* ]]"
+prop_readCondition5 = isOk readCondition "[[ $c =~ f( ]] )* ]]"
 readCondition = called "test expression" $ do
     opos <- getPosition
     id <- getNextId
