@@ -35,7 +35,7 @@ genericChecks = concat [
     map runBasicAnalysis basicChecks
     ,[runBasicTreeAnalysis treeChecks]
     ,[subshellAssignmentCheck]
-    ,[checkSpacefulness]
+    ,[checkSpacefulness, checkQuotesInLiterals]
     ,[checkShebang]
     ]
 
@@ -1095,7 +1095,9 @@ findSubshelled ((StackScope (SubshellScope reason)):rest) scopes deadVars =
     findSubshelled rest ((reason,[]):scopes) deadVars
 
 findSubshelled ((StackScopeEnd):rest) ((reason, scope):oldScopes) deadVars =
-    findSubshelled rest oldScopes $ foldl (\m (_, token, var, _) -> Map.insert var (Dead token reason) m) deadVars scope
+    findSubshelled rest oldScopes $
+        foldl (\m (_, token, var, _) ->
+            Map.insert var (Dead token reason) m) deadVars scope
 
 doVariableFlowAnalysis readFunc writeFunc empty t = fst $ runState (
     foldM (\list x -> do { l <- doFlow x;  return $ l ++ list; }) [] flow
@@ -1180,3 +1182,37 @@ checkSpacefulness t =
         containsAny s chars = any (\c -> c `elem` s) chars
 
 
+prop_checkQuotesInLiterals1 = verifyFull checkQuotesInLiterals "param='--foo=\"bar\"'; app $param"
+prop_checkQuotesInLiterals1a= verifyFull checkQuotesInLiterals "param=\"--foo='lolbar'\"; app $param"
+prop_checkQuotesInLiterals2 = verifyNotFull checkQuotesInLiterals "param='--foo=\"bar\"'; app \"$param\""
+prop_checkQuotesInLiterals3 =verifyNotFull checkQuotesInLiterals "param=('--foo='); app \"${param[@]}\""
+prop_checkQuotesInLiterals4 = verifyNotFull checkQuotesInLiterals "param=\"don't bother with this one\"; app $param"
+checkQuotesInLiterals t =
+    doVariableFlowAnalysis readF writeF Map.empty t
+  where
+    getQuotes name = get >>= (return . Map.lookup name)
+    setQuotes name ref = modify $ Map.insert name ref
+    deleteQuotes = modify . Map.delete
+    parents = getParentTree t
+    quoteRegex = mkRegex "\"|([= ]|^)'|'( |$)"
+    containsQuotes s = isJust $ matchRegex quoteRegex s
+
+    -- Just catch the most blatant cases of foo='--cow="lol bert"'; cmd $foo, since that's 99%
+    writeF _ _ name (DataFrom values) = do
+        let quotedVars = filter (\v -> containsQuotes (concat $ deadSimple v)) values
+        case quotedVars of
+            [] -> deleteQuotes name
+            x:_ -> setQuotes name (getId x)
+        return []
+    writeF _ _ _ _ = return []
+
+    readF _ expr name = do
+        assignment <- getQuotes name
+        if isJust assignment && not (inUnquotableContext parents expr)
+            then return [
+                    (fromJust assignment,
+                        Note WarningC "Word splitting will treat quotes as literals. Use an array."),
+                    (getId expr,
+                        Note WarningC "Embedded quotes in this variable will not be respected.")
+                    ]
+            else return []
