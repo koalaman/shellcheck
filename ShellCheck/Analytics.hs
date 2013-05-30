@@ -153,6 +153,7 @@ isGlob (T_Glob _ _) = True
 isGlob (T_NormalWord _ l) = any isGlob l
 isGlob _ = False
 
+wouldHaveBeenGlob s = '*' `elem` s
 
 isConfusedGlobRegex ('*':_) = True
 isConfusedGlobRegex [x,'*'] | x /= '\\' = True
@@ -343,11 +344,13 @@ checkBashisms = bashism
 prop_checkForInQuoted = verify checkForInQuoted "for f in \"$(ls)\"; do echo foo; done"
 prop_checkForInQuoted2 = verifyNot checkForInQuoted "for f in \"$@\"; do echo foo; done"
 prop_checkForInQuoted2a = verifyNot checkForInQuoted "for f in *.mp3; do echo foo; done"
+prop_checkForInQuoted2b = verify checkForInQuoted "for f in \"*.mp3\"; do echo foo; done"
 prop_checkForInQuoted3 = verify checkForInQuoted "for f in 'find /'; do true; done"
 prop_checkForInQuoted4 = verify checkForInQuoted "for f in 1,2,3; do true; done"
 prop_checkForInQuoted5 = verify checkForInQuoted "for f in ls; do true; done"
-checkForInQuoted (T_ForIn _ f [T_NormalWord _ [T_DoubleQuoted id list]] _) =
-    when (any (\x -> willSplit x && not (isMagicInQuotes x)) list) $
+checkForInQuoted (T_ForIn _ f [T_NormalWord _ [word@(T_DoubleQuoted id list)]] _) =
+    when (any (\x -> willSplit x && not (isMagicInQuotes x)) list
+            || (getLiteralString word >>= (return . wouldHaveBeenGlob)) == Just True) $
         err id $ "Since you double quoted this, it will not word split, and the loop will only run once."
 checkForInQuoted (T_ForIn _ f [T_NormalWord _ [T_SingleQuoted id s]] _) =
     warn id $ "This is a literal string. To run as a command, use $(" ++ s ++ ")."
