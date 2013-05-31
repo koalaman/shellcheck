@@ -326,13 +326,13 @@ readConditionContents single = do
           <|> return False
     readRegex =  called "regex" $ do
         id <- getNextId
-        parts <- many1 (readGroup <|> readSingleQuoted <|> readDoubleQuoted <|> readDollar <|> readNormalLiteral "( " <|> readGlobLiteral)
+        parts <- many1 (readGroup <|> readSingleQuoted <|> readDoubleQuoted <|> readDollarExpression <|> readNormalLiteral "( " <|> readGlobLiteral)
         disregard spacing
         return $ T_NormalWord id parts
       where
         readGlobLiteral = do
             id <- getNextId
-            s <- many1 extglobStart
+            s <- many1 (extglobStart <|> oneOf "[]$")
             return $ T_Literal id s
         readGroup = do -- Fixme: account for vars and quotes in groups
             id <- getNextId
@@ -532,6 +532,7 @@ prop_readCondition2 = isOk readCondition "[[ (a = b) || (c = d) ]]"
 prop_readCondition3 = isOk readCondition "[[ $c = [[:alpha:].~-] ]]"
 prop_readCondition4 = isOk readCondition "[[ $c =~ *foo* ]]"
 prop_readCondition5 = isOk readCondition "[[ $c =~ f( ]] )* ]]"
+prop_readCondition6 = isOk readCondition "[[ $c =~ ^[yY]$ ]]"
 readCondition = called "test expression" $ do
     opos <- getPosition
     id <- getNextId
@@ -811,7 +812,8 @@ readBraced = try $ do
     char '}'
     return $ T_BraceExpansion id $ concat str
 
-readDollar = readDollarArithmetic <|> readDollarBraced <|> readDollarExpansion <|> readDollarVariable <|> readDollarSingleQuote <|> readDollarDoubleQuote <|> readDollarLonely
+readDollar = readDollarExpression <|> readDollarLonely
+readDollarExpression = readDollarArithmetic <|> readDollarBraced <|> readDollarExpansion <|> readDollarVariable <|> readDollarSingleQuote <|> readDollarDoubleQuote
 
 prop_readDollarSingleQuote = isOk readDollarSingleQuote "$'foo\\\'lol'"
 readDollarSingleQuote = called "$'..' expression" $ do
