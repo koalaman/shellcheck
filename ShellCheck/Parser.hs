@@ -43,7 +43,7 @@ variableStart = upper <|> lower <|> oneOf "_"
 variableChars = upper <|> lower <|> digit <|> oneOf "_"
 specialVariable = oneOf "@*#?-$!"
 tokenDelimiter = oneOf "&|;<> \t\n"
-quotable = oneOf "#|&;<>()$`\\ \"'\t\n"
+quotable = oneOf "|&;<>()$`\\ \"'\t\n"
 bracedQuotable = oneOf "}\"$`'"
 doubleQuotable = oneOf "\"$`"
 whitespace = oneOf " \t\n"
@@ -56,6 +56,9 @@ spacing = do
     optional readComment
     return $ concat x
 
+prop_allspacing = isOk allspacing "#foo"
+prop_allspacing2 = isOk allspacing " #foo\n # bar\n#baz\n"
+prop_allspacing3 = isOk allspacing "#foo\n#bar\n#baz\n"
 allspacing = do
     spacing
     x <- option False ((linefeed <|> carriageReturn) >> return True)
@@ -533,6 +536,7 @@ prop_readCondition3 = isOk readCondition "[[ $c = [[:alpha:].~-] ]]"
 prop_readCondition4 = isOk readCondition "[[ $c =~ *foo* ]]"
 prop_readCondition5 = isOk readCondition "[[ $c =~ f( ]] )* ]]"
 prop_readCondition6 = isOk readCondition "[[ $c =~ ^[yY]$ ]]"
+prop_readCondition7 = isOk readCondition "[[ ${line} =~ ^[[:space:]]*# ]]"
 readCondition = called "test expression" $ do
     opos <- getPosition
     id <- getNextId
@@ -565,6 +569,7 @@ readComment = do
 
 prop_readNormalWord = isOk readNormalWord "'foo'\"bar\"{1..3}baz$(lol)"
 prop_readNormalWord2 = isOk readNormalWord "foo**(foo)!!!(@@(bar))"
+prop_readNormalWord3 = isOk readNormalWord "foo#"
 readNormalWord = readNormalishWord ""
 
 readNormalishWord end = do
