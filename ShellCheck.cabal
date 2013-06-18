@@ -1,0 +1,20 @@
+Name:             ShellCheck
+Version:          0.0.0
+Description:      Shell script analysis tool
+License-file:     LICENSE
+Author:           Vidar Holen
+Maintainer:       vidar@vidarholen.net
+Homepage:         http://www.shellcheck.net/
+Build-Type:       Simple
+Cabal-Version:    >= 1.2
+
+library
+    build-depends: base >= 4, parsec, containers, regex-compat, mtl, directory
+    exposed-modules: ShellCheck.AST, ShellCheck.Parser, ShellCheck.Analytics, ShellCheck.Simple
+
+executable shellcheck
+    main-is: shellcheck.hs
+
+executable jsoncheck
+    build-depends: json
+    main-is: jsoncheck.hs

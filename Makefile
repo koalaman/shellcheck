@@ -1,3 +1,5 @@
+# TODO: Phase out Makefile in favor of Cabal
+
 GHCFLAGS=-O9
 
 all: shellcheck jsoncheck .tests

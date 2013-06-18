@@ -15,13 +15,12 @@ The goals of ShellCheck are:
   - To point out subtle caveats, corner cases and pitfalls, that may cause an
     advanced user's otherwise working script to fail under future circumstances.
 
-
 ShellCheck is written in Haskell, and requires GHC, Parsec3 and Text.Regex. 
 To build the JSON interface and run the unit tests, it also requires QuickCheck2 and JSON.
 
 On Ubuntu and similar, these are called:
   ghc6 libghc6-parsec3-dev libghc6-quickcheck2-dev libghc6-json-dev libghc-regex-compat-dev
 
-Build with 'make'. 
+Executables can be built with cabal. Tests currently still rely on a Makefile.
 
 Happy ShellChecking!
