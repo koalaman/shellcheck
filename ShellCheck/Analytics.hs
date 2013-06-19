@@ -117,6 +117,7 @@ basicChecks = [
     ,checkTrapQuotes
     ,checkTestRedirects
     ,checkIndirectExpansion
+    ,checkSudoRedirect
     ]
 treeChecks = [
     checkUnquotedExpansions
@@ -933,6 +934,31 @@ prop_checkTestRedirects3 = verify checkTestRedirects "/usr/bin/test $var > $foo"
 checkTestRedirects (T_Redirecting id redirs@(redir:_) cmd) | cmd `isCommand` "test" =
     warn (getId redir) $ "This is interpretted as a shell file redirection, not a comparison."
 checkTestRedirects _ = return ()
+
+prop_checkSudoRedirect1 = verify checkSudoRedirect "sudo echo 3 > /proc/file"
+prop_checkSudoRedirect2 = verify checkSudoRedirect "sudo cmd < input"
+prop_checkSudoRedirect3 = verify checkSudoRedirect "sudo cmd >> file"
+prop_checkSudoRedirect4 = verify checkSudoRedirect "sudo cmd &> file"
+prop_checkSudoRedirect5 = verifyNot checkSudoRedirect "sudo cmd 2>&1"
+prop_checkSudoRedirect6 = verifyNot checkSudoRedirect "sudo cmd 2> log"
+checkSudoRedirect (T_Redirecting _ redirs cmd) | cmd `isCommand` "sudo" =
+    mapM_ warnAbout redirs
+  where
+    warnAbout (T_FdRedirect _ s (T_IoFile id op file)) 
+        | s == "" || s == "&" = 
+        case op of 
+            T_Less _ -> 
+              info (getId op) $
+                "sudo doesn't affect redirects. Use sudo cat file | .."
+            T_Greater _ ->
+              warn (getId op) $
+                "sudo doesn't affect redirects. Use ..| sudo tee file"
+            T_DGREAT _ ->
+              warn (getId op) $
+                "sudo doesn't affect redirects. Use .. | sudo tee -a file"
+            _ -> return ()
+    warnAbout _ = return ()
+checkSudoRedirect _ = return ()
 
 prop_checkIndirectExpansion1 = verify checkIndirectExpansion "${foo$n}"
 prop_checkIndirectExpansion2 = verifyNot checkIndirectExpansion "${foo//$n/lol}"
