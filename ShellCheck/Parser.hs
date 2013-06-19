@@ -969,13 +969,14 @@ readIoFile = called "redirection" $ do
     return $ T_FdRedirect id "" $ T_IoFile id op file
 
 readIoNumber = try $ do
-    x <- many1 digit
+    x <- many1 digit <|> string "&"
     lookAhead readIoFileOp
     return x
 
 prop_readIoNumberRedirect = isOk readIoNumberRedirect "3>&2"
 prop_readIoNumberRedirect2 = isOk readIoNumberRedirect "2> lol"
 prop_readIoNumberRedirect3 = isOk readIoNumberRedirect "4>&-"
+prop_readIoNumberRedirect4 = isOk readIoNumberRedirect "&> lol"
 readIoNumberRedirect = do
     id <- getNextId
     n <- readIoNumber
@@ -1004,6 +1005,7 @@ prop_roflol = isWarning readScript "a &; b"
 prop_roflol2 = isOk readScript "a & b"
 readSeparatorOp = do
     notFollowedBy2 (g_AND_IF <|> g_DSEMI)
+    notFollowedBy2 (string "&>")
     f <- (try $ do
                     char '&'
                     spacing
@@ -1032,6 +1034,7 @@ makeSimpleCommand id1 id2 tokens =
        in T_Redirecting id1 redirections $ T_SimpleCommand id2 assignment rest2
 
 prop_readSimpleCommand = isOk readSimpleCommand "echo test > file"
+prop_readSimpleCommand2 = isOk readSimpleCommand "cmd &> file"
 readSimpleCommand = called "simple command" $ do
     id1 <- getNextId
     id2 <- getNextId
