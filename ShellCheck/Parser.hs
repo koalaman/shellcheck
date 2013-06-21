@@ -1289,11 +1289,12 @@ readInClause = do
     return things
 
 prop_readCaseClause = isOk readCaseClause "case foo in a ) lol; cow;; b|d) fooo; esac"
+prop_readCaseClause2 = isOk readCaseClause "case foo\n in * ) echo bar;; esac"
 readCaseClause = called "case expression" $ do
     id <- getNextId
     g_Case
     word <- readNormalWord
-    spacing
+    allspacing
     g_In
     readLineBreak
     list <- readCaseList
