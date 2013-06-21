@@ -325,7 +325,7 @@ readConditionContents single = do
     -- Currently a bit of a hack since parsing rules are obscure
     regexOperatorAhead = (lookAhead $ do
         try (string "=~") <|> try (string "~=")
-        return True) 
+        return True)
           <|> return False
     readRegex =  called "regex" $ do
         id <- getNextId
@@ -407,7 +407,7 @@ readArithmeticContents =
 
     readExpansion = do
         id <- getNextId
-        x <- readDollar
+        x <- readNormalDollar
         spacing
         return $ TA_Expansion id x
 
@@ -587,7 +587,7 @@ checkPossibleTermination _ _ = return ()
 
 readNormalWordPart end = do
     checkForParenthesis
-    readSingleQuoted <|> readDoubleQuoted <|> readGlob <|> readDollar <|> readBraced <|> readBackTicked <|> readProcSub <|> (readNormalLiteral end)
+    readSingleQuoted <|> readDoubleQuoted <|> readGlob <|> readNormalDollar <|> readBraced <|> readBackTicked <|> readProcSub <|> (readNormalLiteral end)
   where
     checkForParenthesis = do
         return () `attempting` do
@@ -606,7 +606,7 @@ readDollarBracedWord = do
     list <- many readDollarBracedPart
     return $ T_NormalWord id list
 
-readDollarBracedPart = readSingleQuoted <|> readDoubleQuoted <|> readExtglob <|> readDollar <|> readBackTicked <|> readDollarBracedLiteral
+readDollarBracedPart = readSingleQuoted <|> readDoubleQuoted <|> readExtglob <|> readNormalDollar <|> readBackTicked <|> readDollarBracedLiteral
 
 readDollarBracedLiteral = do
     id <- getNextId
@@ -670,7 +670,7 @@ readDoubleQuoted = called "double quoted string" $ do
     doubleQuote <?> "end of double quoted string"
     return $ T_DoubleQuoted id x
 
-doubleQuotedPart = readDoubleLiteral <|> readDollar <|> readBackTicked
+doubleQuotedPart = readDoubleLiteral <|> readDoubleQuotedDollar <|> readBackTicked
 
 readDoubleQuotedLiteral = do
     doubleQuote
@@ -817,8 +817,9 @@ readBraced = try $ do
     char '}'
     return $ T_BraceExpansion id $ concat str
 
-readDollar = readDollarExpression <|> readDollarLonely
-readDollarExpression = readDollarArithmetic <|> readDollarBraced <|> readDollarExpansion <|> readDollarVariable <|> readDollarSingleQuote <|> readDollarDoubleQuote
+readNormalDollar = readDollarExpression <|> readDollarLonely <|> readDollarDoubleQuote
+readDoubleQuotedDollar = readDollarExpression <|> readDollarLonely
+readDollarExpression = readDollarArithmetic <|> readDollarBraced <|> readDollarExpansion <|> readDollarVariable <|> readDollarSingleQuote
 
 prop_readDollarSingleQuote = isOk readDollarSingleQuote "$'foo\\\'lol'"
 readDollarSingleQuote = called "$'..' expression" $ do
@@ -908,9 +909,10 @@ readVariableName = do
 
 readDollarLonely = do
     id <- getNextId
+    pos <- getPosition
     char '$'
     n <- lookAhead (anyChar <|> (eof >> return '_'))
-    when (n /= '\'') $ parseNote StyleC "$ is not used specially and should therefore be escaped."
+    when (n /= '\'') $ parseNoteAt pos StyleC "$ is not used specially and should therefore be escaped."
     return $ T_Literal id "$"
 
 prop_readHereDoc = isOk readHereDoc "<< foo\nlol\ncow\nfoo"
@@ -1399,7 +1401,7 @@ readAssignmentWord = try $ do
     pos <- getPosition
     optional (char '$' >> parseNote ErrorC "Don't use $ on the left side of assignments.")
     variable <- readVariableName
-    optional (readDollar >> parseNoteAt pos ErrorC 
+    optional (readNormalDollar >> parseNoteAt pos ErrorC
                                 "For indirection, use (associative) arrays or 'read \"var$n\" <<< \"value\"'")
     optional readArrayIndex -- Throws away the index. Fixme?
     space <- spacing
