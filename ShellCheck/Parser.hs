@@ -36,18 +36,18 @@ import GHC.Exts (sortWith)
 
 
 backslash = char '\\'
-linefeed = char '\n'
+linefeed = (optional carriageReturn) >> char '\n'
 singleQuote = char '\''
 doubleQuote = char '"'
 variableStart = upper <|> lower <|> oneOf "_"
 variableChars = upper <|> lower <|> digit <|> oneOf "_"
 specialVariable = oneOf "@*#?-$!"
-tokenDelimiter = oneOf "&|;<> \t\n"
-quotable = oneOf "|&;<>()$`\\ \"'\t\n"
+tokenDelimiter = oneOf "&|;<> \t\n\r" <|> nbsp
+quotable = oneOf "|&;<>()$`\\ \"'\t\n\r" <|> nbsp
 bracedQuotable = oneOf "}\"$`'"
 doubleQuotable = oneOf "\"$`"
-whitespace = oneOf " \t\n"
-linewhitespace = oneOf " \t"
+whitespace = oneOf " \t\n" <|> carriageReturn <|> nbsp
+linewhitespace = oneOf " \t" <|> nbsp
 extglobStart = oneOf "?*@!+"
 
 prop_spacing = isOk spacing "  \\\n # Comment"
@@ -61,12 +61,17 @@ prop_allspacing2 = isOk allspacing " #foo\n # bar\n#baz\n"
 prop_allspacing3 = isOk allspacing "#foo\n#bar\n#baz\n"
 allspacing = do
     spacing
-    x <- option False ((linefeed <|> carriageReturn) >> return True)
+    x <- option False (linefeed >> return True)
     when x allspacing
 
 carriageReturn = do
     parseNote ErrorC "Literal carriage return. Run script through tr -d '\\r' ."
     char '\r'
+
+nbsp = do
+    parseNote ErrorC "This is a &nbsp;. Delete it and retype as space."
+    char '\xA0'
+    return ' '
 
 --------- Message/position annotation on top of user state
 data Note = Note Severity String deriving (Show, Eq)
@@ -1509,6 +1514,9 @@ readShebang = do
     optional linefeed
     return str
 
+prop_readScript1 = isOk readScript "#!/bin/bash\necho hello world\n"
+prop_readScript2 = isWarning readScript "#!/bin/bash\r\necho hello world\n"
+prop_readScript3 = isWarning readScript "#!/bin/bash\necho hello\xA0world"
 readScript = do
     id <- getNextId
     sb <- option "" readShebang
