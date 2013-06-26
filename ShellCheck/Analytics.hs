@@ -118,6 +118,7 @@ basicChecks = [
     ,checkTestRedirects
     ,checkIndirectExpansion
     ,checkSudoRedirect
+    ,checkPS1Assignments
     ]
 treeChecks = [
     checkUnquotedExpansions
@@ -197,6 +198,7 @@ deadSimple (T_Pipeline _ [x]) = deadSimple x
 deadSimple (T_Literal _ x) = [x]
 deadSimple (T_SimpleCommand _ vars words) = concatMap (deadSimple) words
 deadSimple (T_Redirecting _ _ foo) = deadSimple foo
+deadSimple (T_DollarSingleQuoted _ s) = [s]
 deadSimple _ = []
 
 verify f s = checkBasic f s == Just True
@@ -594,7 +596,7 @@ prop_checkGlobbedRegex3 = verifyNot checkGlobbedRegex "[[ $foo =~ $foo ]]"
 prop_checkGlobbedRegex4 = verifyNot checkGlobbedRegex "[[ $foo =~ ^c.* ]]"
 checkGlobbedRegex (TC_Binary _ DoubleBracket "=~" _ rhs) =
     let s = concat $ deadSimple rhs in
-        if isConfusedGlobRegex s 
+        if isConfusedGlobRegex s
             then warn (getId rhs) $ "=~ is for regex. Use == for globs."
             else return ()
 checkGlobbedRegex _ = return ()
@@ -944,10 +946,10 @@ prop_checkSudoRedirect6 = verifyNot checkSudoRedirect "sudo cmd 2> log"
 checkSudoRedirect (T_Redirecting _ redirs cmd) | cmd `isCommand` "sudo" =
     mapM_ warnAbout redirs
   where
-    warnAbout (T_FdRedirect _ s (T_IoFile id op file)) 
-        | s == "" || s == "&" = 
-        case op of 
-            T_Less _ -> 
+    warnAbout (T_FdRedirect _ s (T_IoFile id op file))
+        | s == "" || s == "&" =
+        case op of
+            T_Less _ ->
               info (getId op) $
                 "sudo doesn't affect redirects. Use sudo cat file | .."
             T_Greater _ ->
@@ -959,6 +961,33 @@ checkSudoRedirect (T_Redirecting _ redirs cmd) | cmd `isCommand` "sudo" =
             _ -> return ()
     warnAbout _ = return ()
 checkSudoRedirect _ = return ()
+
+prop_checkPS11 = verify checkPS1Assignments "PS1='\\033[1;35m\\$ '"
+prop_checkPS11a= verify checkPS1Assignments "export PS1='\\033[1;35m\\$ '"
+prop_checkPSf2 = verify checkPS1Assignments "PS1='\\h \\e[0m\\$ '"
+prop_checkPS13 = verify checkPS1Assignments "PS1=$'\\x1b[c '"
+prop_checkPS14 = verify checkPS1Assignments "PS1=$'\\e[3m; '"
+prop_checkPS14a= verify checkPS1Assignments "export PS1=$'\\e[3m; '"
+prop_checkPS15 = verifyNot checkPS1Assignments "PS1='\\[\\033[1;35m\\]\\$ '"
+prop_checkPS16 = verifyNot checkPS1Assignments "PS1='\\[\\e1m\\e[1m\\]\\$ '"
+checkPS1Assignments t =
+    case t of
+        (T_Assignment _ "PS1" word) -> warnFor [word]
+        (T_SimpleCommand id _ tokens) ->
+            when (t `isCommand` "export") $
+                warnFor (filter isPS1Token tokens)
+        _ -> return ()
+  where
+    isPS1Token t = "PS1" `isPrefixOf` (concat $ deadSimple t)
+    warnFor words =
+        let contents = concat $ concatMap deadSimple words in
+            when (not (null words) && containsUnescaped contents) $
+                info (getId $ head words) "Make sure all escape sequences are enclosed in \\[..\\] to prevent line wrapping issues"
+    containsUnescaped s =
+        let unenclosed = subRegex enclosedRegex s "" in
+           isJust $ matchRegex escapeRegex unenclosed
+    enclosedRegex = mkRegex "\\\\\\[.*\\\\\\]" -- FIXME: shouldn't be eager
+    escapeRegex = mkRegex "\\x1[Bb]|\\e|\x1B|\\033"
 
 prop_checkIndirectExpansion1 = verify checkIndirectExpansion "${foo$n}"
 prop_checkIndirectExpansion2 = verifyNot checkIndirectExpansion "${foo//$n/lol}"
