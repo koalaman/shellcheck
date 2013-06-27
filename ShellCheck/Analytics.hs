@@ -119,6 +119,7 @@ basicChecks = [
     ,checkIndirectExpansion
     ,checkSudoRedirect
     ,checkPS1Assignments
+    ,checkBackticks
     ]
 treeChecks = [
     checkUnquotedExpansions
@@ -364,23 +365,36 @@ checkForInQuoted (T_ForIn _ f [T_NormalWord _ [T_Literal id s]] _) =
 checkForInQuoted _ = return ()
 
 prop_checkForInCat1 = verify checkForInCat "for f in $(cat foo); do stuff; done"
+prop_checkForInCat1a= verify checkForInCat "for f in `cat foo`; do stuff; done"
 prop_checkForInCat2 = verify checkForInCat "for f in $(cat foo | grep lol); do stuff; done"
+prop_checkForInCat2a= verify checkForInCat "for f in `cat foo | grep lol`; do stuff; done"
 prop_checkForInCat3 = verifyNot checkForInCat "for f in $(cat foo | grep bar | wc -l); do stuff; done"
 checkForInCat (T_ForIn _ f [T_NormalWord _ w] _) = mapM_ checkF w
   where
     checkF (T_DollarExpansion id [T_Pipeline _ r])
         | all isLineBased r =
             info id $ "To read lines rather than words, pipe/redirect to a 'while read' loop."
+    checkF (T_Backticked id cmds) = checkF (T_DollarExpansion id cmds)
     checkF _ = return ()
     isLineBased cmd = any (cmd `isCommand`) ["grep", "sed", "cat"]
 checkForInCat _ = return ()
 
 prop_checkForInLs = verify checkForInLs "for f in $(ls *.mp3); do mplayer \"$f\"; done"
-checkForInLs (T_ForIn _ f [T_NormalWord _ [T_DollarExpansion id [x]]] _) =
-    case deadSimple x of ("ls":n) -> let args = (if n == [] then ["*"] else n) in
-                                        err id $ "Don't use 'for "++f++" in $(ls " ++ (intercalate " " n) ++ ")'. Use 'for "++f++" in "++ (intercalate " " args) ++ "'."
-                         _ -> return ()
-checkForInLs _ = return ()
+prop_checkForInLs2 = verify checkForInLs "for f in `ls *.mp3`; do mplayer \"$f\"; done"
+checkForInLs t = try t
+  where
+   try (T_ForIn _ f [T_NormalWord _ [T_DollarExpansion id [x]]] _) =
+        check id f x
+   try (T_ForIn _ f [T_NormalWord _ [T_Backticked id [x]]] _) =
+        check id f x
+   try _ = return ()
+   check id f x =
+    case deadSimple x of
+      ("ls":n) ->
+        let args = (if n == [] then ["*"] else n) in
+          err id $ "Don't use 'for "++f++" in $(ls " ++ (intercalate " " n)
+            ++ ")'. Use 'for "++f++" in "++ (intercalate " " args) ++ "'."
+      _ -> return ()
 
 
 prop_checkFindExec1 = verify checkFindExec "find / -name '*.php' -exec rm {};"
@@ -425,6 +439,7 @@ checkFindExec _ = return ()
 
 
 prop_checkUnquotedExpansions1 = verifyTree checkUnquotedExpansions "rm $(ls)"
+prop_checkUnquotedExpansions1a= verifyTree checkUnquotedExpansions "rm `ls`"
 prop_checkUnquotedExpansions2 = verifyTree checkUnquotedExpansions "rm foo$(date)"
 prop_checkUnquotedExpansions3 = verifyTree checkUnquotedExpansions "[ $(foo) == cow ]"
 prop_checkUnquotedExpansions3a= verifyTree checkUnquotedExpansions "[ ! $(foo) ]"
@@ -438,6 +453,7 @@ checkUnquotedExpansions t tree =
     check _ = return ()
 
     check' t@(T_DollarExpansion id _) = unless (inUnquotableContext tree t) $ msg id
+    check' t@(T_Backticked id _) = unless (inUnquotableContext tree t) $ msg id
     check' _ = return ()
 
 prop_checkRedirectToSame = verify checkRedirectToSame "cat foo > foo"
@@ -820,12 +836,16 @@ checkPrintfVar = checkUnqualifiedCommand "printf" f where
           else return ()
 
 prop_checkUuoe1 = verify checkUuoe "echo $(date)"
+prop_checkUuoe1a= verify checkUuoe "echo `date`"
 prop_checkUuoe2 = verify checkUuoe "echo \"$(date)\""
+prop_checkUuoe2a= verify checkUuoe "echo \"`date`\""
 prop_checkUuoe3 = verifyNot checkUuoe "echo \"The time is $(date)\""
 checkUuoe = checkUnqualifiedCommand "echo" f where
     msg id = style id "Useless echo? Instead of 'echo $(cmd)', just use 'cmd'."
     f [T_NormalWord id [(T_DollarExpansion _ _)]] = msg id
     f [T_NormalWord id [T_DoubleQuoted _ [(T_DollarExpansion _ _)]]] = msg id
+    f [T_NormalWord id [(T_Backticked _ _)]] = msg id
+    f [T_NormalWord id [T_DoubleQuoted _ [(T_Backticked _ _)]]] = msg id
     f _ = return ()
 
 prop_checkTr1 = verify checkTr "tr [a-f] [A-F]"
@@ -907,6 +927,7 @@ checkGrepRe = checkCommand "grep" f where
 
 
 prop_checkTrapQuotes1 = verify checkTrapQuotes "trap \"echo $num\" INT"
+prop_checkTrapQuotes1a= verify checkTrapQuotes "trap \"echo `ls`\" INT"
 prop_checkTrapQuotes2 = verifyNot checkTrapQuotes "trap 'echo $num' INT"
 prop_checkTrapQuotes3 = verify checkTrapQuotes "trap \"echo $((1+num))\" EXIT DEBUG"
 checkTrapQuotes = checkCommand "trap" f where
@@ -916,6 +937,7 @@ checkTrapQuotes = checkCommand "trap" f where
     checkTrap _ = return ()
     warning id = warn id $ "Use single quotes, otherwise this expands now rather than when signalled."
     checkExpansions (T_DollarExpansion id _) = warning id
+    checkExpansions (T_Backticked id _) = warning id
     checkExpansions (T_DollarBraced id _) = warning id
     checkExpansions (T_DollarArithmetic id _) = warning id
     checkExpansions _ = return ()
@@ -989,10 +1011,17 @@ checkPS1Assignments t =
     enclosedRegex = mkRegex "\\\\\\[.*\\\\\\]" -- FIXME: shouldn't be eager
     escapeRegex = mkRegex "\\x1[Bb]|\\e|\x1B|\\033"
 
+prop_checkBackticks1 = verify checkBackticks "echo `foo`"
+prop_checkBackticks2 = verifyNot checkBackticks "echo $(foo)"
+checkBackticks (T_Backticked id _) =
+    style id "Use $(..) instead of deprecated `..`"
+checkBackticks _ = return ()
+
 prop_checkIndirectExpansion1 = verify checkIndirectExpansion "${foo$n}"
 prop_checkIndirectExpansion2 = verifyNot checkIndirectExpansion "${foo//$n/lol}"
 checkIndirectExpansion (T_DollarBraced id (T_NormalWord _ ((T_Literal _ s):attempt:_))) =
     case attempt of T_DollarExpansion _ _ -> doit
+                    T_Backticked _ _ -> doit
                     T_DollarBraced _ _ -> doit
                     T_DollarArithmetic _ _ -> doit
                     _ -> return ()
@@ -1038,6 +1067,7 @@ data VariableState = Dead Token String | Alive deriving (Show, Eq)
 leadType t =
     case t of
         T_DollarExpansion _ _  -> SubshellScope "$(..) expansion"
+        T_Backticked _ _  -> SubshellScope "`..` expansion"
         T_Backgrounded _ _  -> SubshellScope "backgrounding &"
         T_Subshell _ _  -> SubshellScope "(..) group"
         -- This considers the whole pipeline one subshell. Consider fixing.
@@ -1227,7 +1257,8 @@ checkSpacefulness t =
     isSpaceful :: (String -> Bool) -> Token -> Bool
     isSpaceful spacefulF x =
         case x of
-          T_DollarExpansion  _ _ -> True
+          T_DollarExpansion _ _ -> True
+          T_Backticked _ _ -> True
           T_Glob _ _         -> True
           T_Extglob _ _ _    -> True
           T_Literal _ s      -> s `containsAny` globspace

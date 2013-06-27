@@ -656,16 +656,27 @@ readSingleQuotedPart =
     readSingleEscaped
     <|> anyChar `reluctantlyTill1` (singleQuote <|> backslash)
 
-prop_readBackTicked = isWarning readBackTicked "`ls *.mp3`"
+prop_readBackTicked = isOk readBackTicked "`ls *.mp3`"
 readBackTicked = called "backtick expansion" $ do
     id <- getNextId
-    parseNote WarningC "Use $(..) instead of deprecated `..` backtick expansion."
     pos <- getPosition
     char '`'
-    f <- readGenericLiteral (char '`')
+    subStart <- getPosition
+    subString <- readGenericLiteral (char '`')
     char '`'
-    return $ T_Backticked id f
-
+    result <- subParse subStart readCompoundList subString
+    return $ T_Backticked id result
+  where
+    -- Position may be off due to escapes
+    subParse pos parser input = do
+        lastPosition <- getPosition
+        lastInput <- getInput
+        setPosition pos
+        setInput input
+        result <- parser
+        setInput lastInput
+        setPosition lastPosition
+        return result
 
 prop_readDoubleQuoted = isOk readDoubleQuoted "\"Hello $FOO\""
 readDoubleQuoted = called "double quoted string" $ do
