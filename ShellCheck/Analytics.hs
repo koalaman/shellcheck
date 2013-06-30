@@ -323,6 +323,19 @@ prop_checkBashisms = verify checkBashisms "while read a; do :; done < <(a)"
 prop_checkBashisms2 = verify checkBashisms "[ foo -nt bar ]"
 prop_checkBashisms3 = verify checkBashisms "echo $((i++))"
 prop_checkBashisms4 = verify checkBashisms "rm !(*.hs)"
+prop_checkBashisms5 = verify checkBashisms "source file"
+prop_checkBashisms6 = verify checkBashisms "[ \"$a\" == 42 ]"
+prop_checkBashisms7 = verify checkBashisms "echo ${var[1]}"
+prop_checkBashisms8 = verify checkBashisms "echo ${!var[@]}"
+prop_checkBashisms9 = verify checkBashisms "echo ${!var*}"
+prop_checkBashisms10= verify checkBashisms "echo ${var:4:12}"
+prop_checkBashisms11= verifyNot checkBashisms "echo ${var:-4}"
+prop_checkBashisms12= verify checkBashisms "echo ${var//foo/bar}"
+prop_checkBashisms13= verify checkBashisms "exec -c env"
+prop_checkBashisms14= verify checkBashisms "echo -n \"Foo: \""
+prop_checkBashisms15= verify checkBashisms "let n++"
+prop_checkBashisms16= verify checkBashisms "echo $RANDOM"
+prop_checkBashisms17= verify checkBashisms "echo $((RANDOM%6+1))"
 checkBashisms = bashism
   where
     errMsg id s = err id $ "#!/bin/sh was specified, so " ++ s ++ " is not supported, even when sh is actually bash."
@@ -343,7 +356,38 @@ checkBashisms = bashism
     bashism (TA_Unary id op _)
         | op `elem` [ "|++", "|--", "++|", "--|"] =
             warnMsg id (filter (/= '|') op)
+    bashism t@(T_SimpleCommand id _ _)
+        | t `isCommand` "source" =
+            warnMsg id "'source' in place of '.'"
+    bashism (T_DollarBraced id token) =
+        mapM_ check expansion
+      where
+        str = concat $ deadSimple token
+        check (regex, feature) =
+            when (isJust $ matchRegex regex str) $ warnMsg id feature
+
+    bashism t@(T_SimpleCommand _ _ (cmd:arg:_))
+        | t `isCommand` "echo" && "-" `isPrefixOf` (concat $ deadSimple arg) =
+            warnMsg (getId arg) "echo flag"
+    bashism t@(T_SimpleCommand _ _ (cmd:arg:_))
+        | t `isCommand` "exec" && "-" `isPrefixOf` (concat $ deadSimple arg) =
+            warnMsg (getId arg) "exec flag"
+    bashism t@(T_SimpleCommand id _ _)
+        | t `isCommand` "let" = warnMsg id "'let'"
+    bashism t@(TA_Variable id "RANDOM") =
+        warnMsg id "RANDOM"
+
     bashism _ = return()
+
+    varChars="_0-9a-zA-Z"
+    expansion = let re = mkRegex in [
+        (re $ "^[" ++ varChars ++ "]+\\[.*\\]$", "array references"),
+        (re $ "^![" ++ varChars ++ "]+\\[[*@]]$", "array key expansion"),
+        (re $ "^![" ++ varChars ++ "]+[*@]$", "name matching prefix"),
+        (re $ "^[" ++ varChars ++ "]+:[^-=?+]", "string indexing"),
+        (re $ "^[" ++ varChars ++ "]+(\\[.*\\])?/", "string replacement"),
+        (re $ "^RANDOM$", "$RANDOM")
+        ]
 
 prop_checkForInQuoted = verify checkForInQuoted "for f in \"$(ls)\"; do echo foo; done"
 prop_checkForInQuoted2 = verifyNot checkForInQuoted "for f in \"$@\"; do echo foo; done"
