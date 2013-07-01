@@ -644,7 +644,7 @@ readSingleQuoted = called "single quoted string" $ do
     let string = concat s
     return (T_SingleQuoted id string) `attempting` do
         x <- lookAhead anyChar
-        when (isAlpha x && isAlpha (last string)) $ parseProblemAt pos WarningC "This apostrophe terminated the single quoted string!"
+        when (isAlpha x && not (null string) && isAlpha (last string)) $ parseProblemAt pos WarningC "This apostrophe terminated the single quoted string!"
 
 readSingleQuotedLiteral = do
     singleQuote
