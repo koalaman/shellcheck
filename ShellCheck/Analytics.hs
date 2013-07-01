@@ -120,6 +120,7 @@ basicChecks = [
     ,checkSudoRedirect
     ,checkPS1Assignments
     ,checkBackticks
+    ,checkInexplicablyUnquoted
     ]
 treeChecks = [
     checkUnquotedExpansions
@@ -1074,6 +1075,17 @@ checkIndirectExpansion (T_DollarBraced id (T_NormalWord _ ((T_Literal _ s):attem
             then err id "To expand via indirection, use name=\"foo$n\"; echo \"${!name}\""
             else return ()
 checkIndirectExpansion _ = return ()
+
+prop_checkInexplicablyUnquoted1 = verify checkInexplicablyUnquoted "echo 'var='value';'"
+prop_checkInexplicablyUnquoted2 = verifyNot checkInexplicablyUnquoted "'foo'*"
+prop_checkInexplicablyUnquoted3 = verifyNot checkInexplicablyUnquoted "wget --user-agent='something'"
+checkInexplicablyUnquoted (T_NormalWord id tokens) = mapM_ check (tails tokens)
+  where
+    check ((T_SingleQuoted _ _):(T_Literal id str):_)
+        | all isAlphaNum str =
+        info id $ "This word is outside of quotes. Did you intend to 'nest '\"'single quotes'\"' instead'? "
+    check _ = return ()
+checkInexplicablyUnquoted _ = return ()
 
 --- Subshell detection
 
