@@ -60,9 +60,17 @@ prop_allspacing = isOk allspacing "#foo"
 prop_allspacing2 = isOk allspacing " #foo\n # bar\n#baz\n"
 prop_allspacing3 = isOk allspacing "#foo\n#bar\n#baz\n"
 allspacing = do
-    spacing
-    x <- option False (linefeed >> return True)
-    when x allspacing
+    s <- spacing
+    more <- option False (linefeed >> return True)
+    if more then do
+        rest <- allspacing
+        return $ s ++ "\n" ++ rest
+      else
+        return s
+
+allspacingOrFail = do
+    s <- allspacing
+    when (null s) $ fail "Expected spaces"
 
 carriageReturn = do
     parseNote ErrorC "Literal carriage return. Run script through tr -d '\\r' ."
@@ -1066,10 +1074,11 @@ readSimpleCommand = called "simple command" $ do
             return $ makeSimpleCommand id1 id2 (prefix ++ cmd ++ suffix)
 
 prop_readPipeline = isOk readPipeline "! cat /etc/issue | grep -i ubuntu"
+prop_readPipeline2 = isWarning readPipeline "!cat /etc/issue | grep -i ubuntu"
 readPipeline = do
     unexpecting "keyword/token" readKeyword
     do
-        (T_Bang id) <- g_Bang `thenSkip` spacing
+        (T_Bang id) <- g_Bang
         pipe <- readPipeSequence
         return $ T_Banged id pipe
       <|> do
@@ -1091,7 +1100,7 @@ readTerm' current =
     do
         id <- getNextId
         sep <- readSeparator
-        more <- (option (T_EOF id)$ readAndOr)
+        more <- (option (T_EOF id) readAndOr)
         case more of (T_EOF _) -> return [transformWithSeparator id sep current]
                      _         -> do
                                 list <- readTerm' more
@@ -1197,13 +1206,19 @@ readSubshell = called "explicit subshell" $ do
     return $ T_Subshell id list
 
 prop_readBraceGroup = isOk readBraceGroup "{ a; b | c | d; e; }"
+prop_readBraceGroup2 = isWarning readBraceGroup "{foo;}"
 readBraceGroup = called "brace group" $ do
     id <- getNextId
     char '{'
-    allspacing
+    allspacingOrFail <|> parseProblem ErrorC "You need a space after the '{'."
+    optional $ do
+        pos <- getPosition
+        lookAhead $ char '}'
+        parseProblemAt pos ErrorC "You need at least one command here. Use 'true;' as a no-op."
     list <- readTerm
-    allspacing
-    char '}'
+    char '}' <|> do
+        parseProblem ErrorC "Expected a '}'. If you have one, try a ; or \\n in front of it."
+        fail "Unable to parse"
     return $ T_BraceGroup id list
 
 prop_readWhileClause = isOk readWhileClause "while [[ -e foo ]]; do sleep 1; done"
@@ -1342,7 +1357,7 @@ readFunctionDefinition = called "function" $ do
     id <- getNextId
     name <- try readFunctionSignature
     allspacing
-    (disregard (lookAhead g_Lbrace) <|> parseProblem ErrorC "Expected a { to open the function definition.")
+    (disregard (lookAhead $ char '{') <|> parseProblem ErrorC "Expected a { to open the function definition.")
     group <- readBraceGroup
     return $ T_Function id name group
 
@@ -1393,7 +1408,6 @@ readCompoundCommand = do
         lookAhead $ try (spacing >> needsSeparator)
         parseProblem WarningC "Bash requires ; or \\n here, after redirecting nested compound commands."
     return $ T_Redirecting id redirs $ cmd
-
   where
     needsSeparator = choice [ g_Then, g_Else, g_Elif, g_Fi, g_Do, g_Done, g_Esac, g_Rbrace ]
 
@@ -1499,7 +1513,11 @@ g_Rbrace = tryWordToken "}" T_Rbrace
 
 g_Lparen = tryToken "(" T_Lparen
 g_Rparen = tryToken ")" T_Rparen
-g_Bang = tryToken "!" T_Bang
+g_Bang = do
+    id <- getNextId
+    char '!'
+    softCondSpacing
+    return $ T_Bang id
 
 commonCommands = [ "admin", "alias", "ar", "asa", "at", "awk", "basename", "batch", "bc", "bg", "break", "c99", "cal", "cat", "cd", "cflow", "chgrp", "chmod", "chown", "cksum", "cmp", "colon", "comm", "command", "compress", "continue", "cp", "crontab", "csplit", "ctags", "cut", "cxref", "date", "dd", "delta", "df", "diff", "dirname", "dot", "du", "echo", "ed", "env", "eval", "ex", "exec", "exit", "expand", "export", "expr", "fc", "fg", "file", "find", "fold", "fort77", "fuser", "gencat", "get", "getconf", "getopts", "grep", "hash", "head", "iconv", "ipcrm", "ipcs", "jobs", "join", "kill", "lex", "link", "ln", "locale", "localedef", "logger", "logname", "lp", "ls", "m4", "mailx", "make", "man", "mesg", "mkdir", "mkfifo", "more", "mv", "newgrp", "nice", "nl", "nm", "nohup", "od", "paste", "patch", "pathchk", "pax", "pr", "printf", "prs", "ps", "pwd", "qalter", "qdel", "qhold", "qmove", "qmsg", "qrerun", "qrls", "qselect", "qsig", "qstat", "qsub", "read", "readonly", "renice", "return", "rm", "rmdel", "rmdir", "sact", "sccs", "sed", "set", "sh", "shift", "sleep", "sort", "split", "strings", "strip", "stty", "tabs", "tail", "talk", "tee", "test", "time", "times", "touch", "tput", "tr", "trap", "tsort", "tty", "type", "ulimit", "umask", "unalias", "uname", "uncompress", "unexpand", "unget", "uniq", "unlink", "unset", "uucp", "uudecode", "uuencode", "uustat", "uux", "val", "vi", "wait", "wc", "what", "who", "write", "xargs", "yacc", "zcat" ]
 
