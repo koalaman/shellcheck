@@ -125,6 +125,7 @@ basicChecks = [
     ,checkInexplicablyUnquoted
     ,checkTildeInQuotes
     ,checkLonelyDotDash
+    ,checkSpuriousExec
     ]
 treeChecks = [
     checkUnquotedExpansions
@@ -1120,6 +1121,40 @@ checkLonelyDotDash t@(T_Redirecting id _ _)
     | isUnqualifiedCommand t "./" =
         err id "Don't add spaces after the slash in './file'."
 checkLonelyDotDash _ = return ()
+
+
+prop_checkSpuriousExec1 = verify checkSpuriousExec "exec foo; true"
+prop_checkSpuriousExec2 = verify checkSpuriousExec "if a; then exec b; exec c; fi"
+prop_checkSpuriousExec3 = verifyNot checkSpuriousExec "echo cow; exec foo"
+prop_checkSpuriousExec4 = verifyNot checkSpuriousExec "if a; then exec b; fi"
+prop_checkSpuriousExec5 = verifyNot checkSpuriousExec "exec > file; cmd"
+prop_checkSpuriousExec6 = verify checkSpuriousExec "exec foo > file; cmd"
+checkSpuriousExec = doLists
+  where
+    doLists (T_Script _ _ cmds) = doList cmds
+    doLists (T_BraceGroup _ cmds) = doList cmds
+    doLists (T_WhileExpression _ _ cmds) = doList cmds
+    doLists (T_UntilExpression _ _ cmds) = doList cmds
+    doLists (T_ForIn _ _ _ cmds) = doList cmds
+    doLists (T_IfExpression _ thens elses) = do
+        mapM_ (\(_, l) -> doList l) thens
+        doList elses
+    doLists _ = return ()
+
+    doList t@(current:following:_) = do
+        commentIfExec current
+        doList (tail t)
+    doList _ = return ()
+
+    commentIfExec (T_Pipeline id list) =
+      mapM_ commentIfExec list
+    commentIfExec (T_Redirecting _ _ f@(
+      T_SimpleCommand id _ (cmd:arg:_))) =
+        when (f `isUnqualifiedCommand` "exec") $
+          warn (id) $
+            "Remove \"exec \" if script should continue after this command."
+    commentIfExec _ = return ()
+
 
 --- Subshell detection
 
