@@ -38,6 +38,7 @@ genericChecks = [
     ,checkSpacefulness
     ,checkQuotesInLiterals
     ,checkShebang
+    ,checkFunctionsUsedExternally
     ]
 
 checksFor Sh = map runBasicAnalysis [
@@ -871,6 +872,11 @@ isCommandMatch token matcher =
         Just cmd -> matcher cmd
         Nothing -> False
 
+getCommandFor word =
+    case getLiteralString word of
+        Just str -> reverse . (takeWhile (/= '/')) . reverse $ str
+        Nothing -> ""
+
 prop_checkPrintfVar1 = verify checkPrintfVar "printf \"Lol: $s\""
 prop_checkPrintfVar2 = verifyNot checkPrintfVar "printf 'Lol: $s'"
 prop_checkPrintfVar3 = verify checkPrintfVar "printf -v cow $(cmd)"
@@ -1390,3 +1396,47 @@ checkQuotesInLiterals t =
                         Note WarningC "Embedded quotes in this variable will not be respected.")
                     ]
             else return []
+
+
+prop_checkFunctionsUsedExternally1 =
+  verifyFull checkFunctionsUsedExternally "foo() { :; }; sudo foo"
+prop_checkFunctionsUsedExternally2 =
+  verifyFull checkFunctionsUsedExternally "alias f='a'; xargs -n 1 f"
+prop_checkFunctionsUsedExternally3 =
+  verifyNotFull checkFunctionsUsedExternally "f() { :; }; echo f"
+checkFunctionsUsedExternally t =
+    runBasicAnalysis checkCommand t
+  where
+    invokingCmds = [
+        "chroot",
+        "find",
+        "screen",
+        "ssh",
+        "su",
+        "sudo",
+        "xargs"
+        ]
+    checkCommand t@(T_SimpleCommand _ _ (cmd:args)) =
+        let name = getCommandFor cmd in
+          when (name `elem` invokingCmds) $
+            mapM_ (checkArg name) args
+    checkCommand _ = return ()
+
+    functions = Map.fromList $ runBasicAnalysis findFunctions t
+    findFunctions (T_Function id name _) = modify ((name, id):)
+    findFunctions t@(T_SimpleCommand id _ (_:args))
+        | t `isUnqualifiedCommand` "alias" = mapM_ getAlias args
+    findFunctions _ = return ()
+    getAlias arg =
+        let string = concat $ deadSimple arg
+        in when ('=' `elem` string) $
+            modify ((takeWhile (/= '=') string, getId arg):)
+    checkArg cmd arg =
+        case Map.lookup (concat $ deadSimple arg) functions of
+            Nothing -> return ()
+            Just id -> do
+              warn (getId arg) $
+                "Shell functions can't be passed to external commands."
+              info id $
+                "Use own script or sh -c '..' to run this from " ++ cmd ++ "."
+
