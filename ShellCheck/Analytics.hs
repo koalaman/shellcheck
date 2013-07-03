@@ -121,6 +121,7 @@ basicChecks = [
     ,checkPS1Assignments
     ,checkBackticks
     ,checkInexplicablyUnquoted
+    ,checkTildeInQuotes
     ]
 treeChecks = [
     checkUnquotedExpansions
@@ -1086,6 +1087,24 @@ checkInexplicablyUnquoted (T_NormalWord id tokens) = mapM_ check (tails tokens)
         info id $ "This word is outside of quotes. Did you intend to 'nest '\"'single quotes'\"' instead'? "
     check _ = return ()
 checkInexplicablyUnquoted _ = return ()
+
+prop_checkTildeInQuotes1 = verify checkTildeInQuotes "var=\"~/out.txt\""
+prop_checkTildeInQuotes2 = verify checkTildeInQuotes "foo > '~/dir'"
+prop_checkTildeInQuotes3 = verify checkTildeInQuotes "args='-s ~/dir'"
+prop_checkTildeInQuotes4 = verifyNot checkTildeInQuotes "~/file"
+prop_checkTildeInQuotes5 = verifyNot checkTildeInQuotes "echo '/~foo/cow'"
+checkTildeInQuotes = check
+  where
+    post f = f "Note that ~ does not expand in quotes"
+    verify id ('~':_) = post (warn id)
+    verify id str =
+        when (isJust $ matchRegex re str) $ post (info id)
+    re = mkRegex "\\s~"
+    check (T_NormalWord _ ((T_SingleQuoted id str):_)) =
+        verify id str
+    check (T_NormalWord _ ((T_DoubleQuoted _ ((T_Literal id str):_)):_)) =
+        verify id str
+    check _ = return ()
 
 --- Subshell detection
 
