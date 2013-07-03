@@ -122,6 +122,7 @@ basicChecks = [
     ,checkBackticks
     ,checkInexplicablyUnquoted
     ,checkTildeInQuotes
+    ,checkLonelyDotDash
     ]
 treeChecks = [
     checkUnquotedExpansions
@@ -991,7 +992,7 @@ checkTrapQuotes = checkCommand "trap" f where
 prop_checkTimeParameters1 = verify checkTimeParameters "time -f lol sleep 10"
 prop_checkTimeParameters2 = verifyNot checkTimeParameters "time sleep 10"
 prop_checkTimeParameters3 = verifyNot checkTimeParameters "time -p foo"
-checkTimeParameters = checkUnqualifiedCommand "time" f where -- TODO make bash specific
+checkTimeParameters = checkUnqualifiedCommand "time" f where
     f (x:_) = let s = concat $ deadSimple x in
                 if "-" `isPrefixOf` s && s /= "-p" then
                     info (getId x) "The shell may override 'time' as seen in man time(1). Use 'command time ..' for that one."
@@ -1105,6 +1106,13 @@ checkTildeInQuotes = check
     check (T_NormalWord _ ((T_DoubleQuoted _ ((T_Literal id str):_)):_)) =
         verify id str
     check _ = return ()
+
+prop_checkLonelyDotDash1 = verify checkLonelyDotDash "./ file"
+prop_checkLonelyDotDash2 = verifyNot checkLonelyDotDash "./file"
+checkLonelyDotDash t@(T_Redirecting id _ _)
+    | isUnqualifiedCommand t "./" =
+        err id "Don't add spaces after the slash in './file'."
+checkLonelyDotDash _ = return ()
 
 --- Subshell detection
 
