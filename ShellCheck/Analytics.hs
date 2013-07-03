@@ -31,12 +31,13 @@ import Data.Maybe
 data Shell = Ksh | Zsh | Sh | Bash
     deriving (Show, Eq)
 
-genericChecks = concat [
-    map runBasicAnalysis basicChecks
-    ,[runBasicTreeAnalysis treeChecks]
-    ,[subshellAssignmentCheck]
-    ,[checkSpacefulness, checkQuotesInLiterals]
-    ,[checkShebang]
+genericChecks = [
+    runBasicAnalysis (\x -> mapM_ (flip ($) x) basicChecks)
+    ,runBasicTreeAnalysis treeChecks
+    ,subshellAssignmentCheck
+    ,checkSpacefulness
+    ,checkQuotesInLiterals
+    ,checkShebang
     ]
 
 checksFor Sh = map runBasicAnalysis [
