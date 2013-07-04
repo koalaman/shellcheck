@@ -126,6 +126,7 @@ basicChecks = [
     ,checkLonelyDotDash
     ,checkSpuriousExec
     ,checkSpuriousExpansion
+    ,checkUnusedEchoEscapes
     ]
 treeChecks = [
     checkUnquotedExpansions
@@ -171,6 +172,8 @@ isConfusedGlobRegex _ = False
 isPotentiallyConfusedGlobRegex =
     let re = mkRegex "[a-z1-9]\\*" in
         isJust . matchRegex re
+
+matches string regex = isJust $ matchRegex regex string
 
 isConstant token =
     case token of
@@ -904,7 +907,7 @@ checkPrintfVar = checkUnqualifiedCommand "printf" f where
     f _ = return ()
     check format =
         if not $ isLiteral format
-          then warn (getId format) $ "Don't use variables in the printf format string. Use printf \"%s\" \"$foo\"."
+          then warn (getId format) $ "Don't use variables in the printf format string. Use printf \"..%s..\" \"$foo\"."
           else return ()
 
 prop_checkUuoe1 = verify checkUuoe "echo $(date)"
@@ -1186,6 +1189,30 @@ checkSpuriousExpansion (T_SimpleCommand _ _ [T_NormalWord _ [word]]) = check wor
         T_DoubleQuoted id [subword] -> check subword
         _ -> return ()
 checkSpuriousExpansion _ = return ()
+
+
+prop_checkUnusedEchoEscapes1 = verify checkUnusedEchoEscapes "echo 'foo\\nbar\\n'"
+prop_checkUnusedEchoEscapes2 = verifyNot checkUnusedEchoEscapes "echo -e 'foi\\nbar'"
+prop_checkUnusedEchoEscapes3 = verify checkUnusedEchoEscapes "echo \"n:\\t42\""
+prop_checkUnusedEchoEscapes4 = verifyNot checkUnusedEchoEscapes "echo lol"
+checkUnusedEchoEscapes = checkCommand "echo" f
+  where
+    isDashE = mkRegex "^-.*e"
+    hasEscapes = mkRegex "\\\\[rnt]"
+    f (arg:_) | (concat $ deadSimple arg) `matches` isDashE = return ()
+    f args = mapM_ checkEscapes args
+
+    checkEscapes (T_NormalWord _ args) =
+        mapM_ checkEscapes args
+    checkEscapes (T_DoubleQuoted id args) =
+        mapM_ checkEscapes args
+    checkEscapes (T_Literal id str) = examine id str
+    checkEscapes (T_SingleQuoted id str) = examine id str
+    checkEscapes _ = return ()
+
+    examine id str =
+        when (str `matches` hasEscapes) $
+            info id "echo won't expand escape sequences. Consider printf."
 
 
 --- Subshell detection
