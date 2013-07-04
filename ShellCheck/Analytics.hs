@@ -1383,8 +1383,7 @@ doVariableFlowAnalysis readFunc writeFunc empty t = fst $ runState (
         writeFunc base token name values
     doFlow _ = return []
 
----- Spacefulness detection
-
+---- Check whether variables could have spaces/globs
 prop_checkSpacefulness0 = verifyFull checkSpacefulness "for f in *.mp3; do echo $f; done"
 prop_checkSpacefulness1 = verifyFull checkSpacefulness "a='cow moo'; echo $a"
 prop_checkSpacefulness2 = verifyNotFull checkSpacefulness "a='cow moo'; [[ $a ]]"
@@ -1403,6 +1402,7 @@ prop_checkSpacefulnessE = verifyNotFull checkSpacefulness "foo=$3 env"
 prop_checkSpacefulnessF = verifyNotFull checkSpacefulness "local foo=$1"
 prop_checkSpacefulnessG = verifyNotFull checkSpacefulness "declare foo=$1"
 prop_checkSpacefulnessH = verifyFull checkSpacefulness "echo foo=$1"
+prop_checkSpacefulnessI = verifyNotFull checkSpacefulness "$1 --flags"
 
 checkSpacefulness t =
     doVariableFlowAnalysis readF writeF (Map.fromList defaults) t
@@ -1418,7 +1418,9 @@ checkSpacefulness t =
 
     readF _ token name = do
         spaced <- hasSpaces name
-        if spaced && (not $ inUnquotableContext parents token)
+        if spaced 
+          && (not $ inUnquotableContext parents token) 
+          && (not $ usedAsCommandName parents token)
             then return [(getId token, Note InfoC warning)]
             else return []
       where
