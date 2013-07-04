@@ -273,7 +273,8 @@ checkAssignAteCommand _ = return ()
 prop_checkUuoc1 = verify checkUuoc "cat foo | grep bar"
 prop_checkUuoc2 = verifyNot checkUuoc "cat * | grep bar"
 prop_checkUuoc3 = verify checkUuoc "cat $var | grep bar"
-checkUuoc = checkCommand "cat" f
+prop_checkUuoc4 = verifyNot checkUuoc "cat $var"
+checkUuoc (T_Pipeline _ ((T_Redirecting _ _ cmd):_:_)) = checkCommand "cat" f cmd
   where
     f [word] = when (isSimple word) $
         style (getId word) "Useless cat. Consider 'cmd < file | ..' or 'cmd file | ..' instead."
@@ -281,6 +282,7 @@ checkUuoc = checkCommand "cat" f
     isSimple (T_NormalWord _ parts) = all isSimple parts
     isSimple (T_DollarBraced _ _) = True
     isSimple x = not $ willSplit x
+checkUuoc _ = return ()
 
 prop_checkNeedlessCommands = verify checkNeedlessCommands "foo=$(expr 3 + 2)"
 checkNeedlessCommands (T_SimpleCommand id _ (w:_)) | w `isCommand` "expr" =
@@ -1418,8 +1420,8 @@ checkSpacefulness t =
 
     readF _ token name = do
         spaced <- hasSpaces name
-        if spaced 
-          && (not $ inUnquotableContext parents token) 
+        if spaced
+          && (not $ inUnquotableContext parents token)
           && (not $ usedAsCommandName parents token)
             then return [(getId token, Note InfoC warning)]
             else return []
