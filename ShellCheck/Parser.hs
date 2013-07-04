@@ -977,7 +977,12 @@ verifyHereDoc dashed quoted spacing hereInfo = do
 
 debugHereDoc pos endToken doc =
     if endToken `isInfixOf` doc
-        then parseProblemAt pos ErrorC ("Found " ++ endToken ++ " further down, but not by itself at the start of the line.")
+        then
+              let lookAt line = when (endToken `isInfixOf` line) $
+                        parseProblemAt pos ErrorC ("Close matches include '" ++ line ++ "' (!= '" ++ endToken ++ "').")
+              in do
+                    parseProblemAt pos ErrorC ("Found '" ++ endToken ++ "' further down, but not entirely by itself.")
+                    mapM_ lookAt (lines doc)
         else if (map toLower endToken) `isInfixOf` (map toLower doc)
             then parseProblemAt pos ErrorC ("Found " ++ endToken ++ " further down, but with wrong casing.")
             else parseProblemAt pos ErrorC ("Couldn't find end token `" ++ endToken ++ "' in the here document.")
