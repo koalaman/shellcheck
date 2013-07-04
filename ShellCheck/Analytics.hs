@@ -267,11 +267,17 @@ checkAssignAteCommand (T_SimpleCommand id ((T_Assignment _ _ assignmentTerm):[])
 checkAssignAteCommand _ = return ()
 
 
-prop_checkUuoc = verify checkUuoc "cat foo | grep bar"
-checkUuoc (T_Pipeline _ (T_Redirecting _ _ f@(T_SimpleCommand id _ _):_:_)) =
-    case deadSimple f of ["cat", _] -> style id "Useless cat. Consider 'cmd < file | ..' or 'cmd file | ..' instead."
-                         _ -> return ()
-checkUuoc _ = return ()
+prop_checkUuoc1 = verify checkUuoc "cat foo | grep bar"
+prop_checkUuoc2 = verifyNot checkUuoc "cat * | grep bar"
+prop_checkUuoc3 = verify checkUuoc "cat $var | grep bar"
+checkUuoc = checkCommand "cat" f
+  where
+    f [word] = when (isSimple word) $
+        style (getId word) "Useless cat. Consider 'cmd < file | ..' or 'cmd file | ..' instead."
+    f _ = return ()
+    isSimple (T_NormalWord _ parts) = all isSimple parts
+    isSimple (T_DollarBraced _ _) = True
+    isSimple x = not $ willSplit x
 
 prop_checkNeedlessCommands = verify checkNeedlessCommands "foo=$(expr 3 + 2)"
 checkNeedlessCommands (T_SimpleCommand id _ (w:_)) | w `isCommand` "expr" =
