@@ -109,7 +109,6 @@ basicChecks = [
     ,checkUuoe
     ,checkFindNameGlob
     ,checkGrepRe
-    ,checkDollarArithmeticCommand
     ,checkNeedlessCommands
     ,checkQuotedCondRegex
     ,checkForInCat
@@ -126,6 +125,7 @@ basicChecks = [
     ,checkTildeInQuotes
     ,checkLonelyDotDash
     ,checkSpuriousExec
+    ,checkSpuriousExpansion
     ]
 treeChecks = [
     checkUnquotedExpansions
@@ -495,16 +495,17 @@ prop_checkUnquotedExpansions3 = verifyTree checkUnquotedExpansions "[ $(foo) == 
 prop_checkUnquotedExpansions3a= verifyTree checkUnquotedExpansions "[ ! $(foo) ]"
 prop_checkUnquotedExpansions4 = verifyNotTree checkUnquotedExpansions "[[ $(foo) == cow ]]"
 prop_checkUnquotedExpansions5 = verifyNotTree checkUnquotedExpansions "for f in $(cmd); do echo $f; done"
+prop_checkUnquotedExpansions6 = verifyNotTree checkUnquotedExpansions "$(cmd)"
 checkUnquotedExpansions t tree =
     check t
   where
-    msg id = warn id "Quote this to prevent word splitting."
-    check (T_NormalWord _ l) = mapM_ check' l
+    check t@(T_DollarExpansion _ _) = examine t
+    check t@(T_Backticked _ _) = examine t
     check _ = return ()
+    examine t =
+        unless (inUnquotableContext tree t || usedAsCommandName tree t) $
+            warn (getId t) "Quote this to prevent word splitting."
 
-    check' t@(T_DollarExpansion id _) = unless (inUnquotableContext tree t) $ msg id
-    check' t@(T_Backticked id _) = unless (inUnquotableContext tree t) $ msg id
-    check' _ = return ()
 
 prop_checkRedirectToSame = verify checkRedirectToSame "cat foo > foo"
 prop_checkRedirectToSame2 = verify checkRedirectToSame "cat lol | sed -e 's/a/b/g' > lol"
@@ -762,14 +763,6 @@ checkOrNeq (TA_Binary id "||" (TA_Binary _ "!=" word1 _) (TA_Binary _ "!=" word2
 checkOrNeq _ = return ()
 
 
-prop_checkDollarArithmeticCommand1 = verify checkDollarArithmeticCommand "while $((n>10)); do echo foo; done"
-prop_checkDollarArithmeticCommand2 = verify checkDollarArithmeticCommand "$(( n++ ))"
-prop_checkDollarArithmeticCommand3 = verifyNot checkDollarArithmeticCommand "if (( n > 10 )); then echo foo; fi"
-prop_checkDollarArithmeticCommand4 = verifyNot checkDollarArithmeticCommand "echo $((n+3))"
-checkDollarArithmeticCommand (T_SimpleCommand _ [] [T_NormalWord _ [T_DollarArithmetic id _]]) =
-    err id "Use ((..)) instead of $((..)) when running as a command."
-checkDollarArithmeticCommand _ = return ()
-
 allModifiedVariables t = snd $ runState (doAnalysis (\x -> modify $ (++) (getModifiedVariables x)) t) []
 
 prop_checkValidCondOps1 = verify checkValidCondOps "[[ a -xz b ]]"
@@ -834,6 +827,22 @@ isParamTo tree cmd t =
             T_SimpleCommand _ _ _ -> isCommand t cmd
             T_Redirecting _ _ _ -> isCommand t cmd
             _ -> False
+
+usedAsCommandName tree token = go (getId token) (tail $ getPath tree token)
+  where
+    go currentId ((T_NormalWord id [word]):rest)
+        | currentId == (getId word) = go id rest
+    go currentId ((T_DoubleQuoted id [word]):rest)
+        | currentId == (getId word) = go id rest
+    go currentId ((T_SimpleCommand _ _ (word:_)):_)
+        | currentId == (getId word) = True
+    go _ _ = False
+
+-- A list of the element and all its parents
+getPath tree t = t :
+    case Map.lookup (getId t) tree of
+        Nothing -> []
+        Just parent -> getPath tree parent
 
 --- Command specific checks
 
@@ -1154,6 +1163,24 @@ checkSpuriousExec = doLists
           warn (id) $
             "Remove \"exec \" if script should continue after this command."
     commentIfExec _ = return ()
+
+
+prop_checkSpuriousExpansion1 = verify checkSpuriousExpansion "if $(true); then true; fi"
+prop_checkSpuriousExpansion2 = verify checkSpuriousExpansion "while \"$(cmd)\"; do :; done"
+prop_checkSpuriousExpansion3 = verifyNot checkSpuriousExpansion "$(cmd) --flag1 --flag2"
+prop_checkSpuriousExpansion4 = verify checkSpuriousExpansion "$((i++))"
+checkSpuriousExpansion (T_SimpleCommand _ _ [T_NormalWord _ [word]]) = check word
+  where
+    check word = case word of
+        T_DollarExpansion id _ ->
+            warn id "Remove surrounding $() to avoid executing output."
+        T_Backticked id _ ->
+            warn id "Remove backticks to avoid executing output."
+        T_DollarArithmetic id _ ->
+            err id "Remove '$' or use '_=$((expr))' to avoid executing output."
+        T_DoubleQuoted id [subword] -> check subword
+        _ -> return ()
+checkSpuriousExpansion _ = return ()
 
 
 --- Subshell detection
