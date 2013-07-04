@@ -1608,8 +1608,11 @@ parseShell filename contents = do
         (Left err, (p, context)) -> ParseResult Nothing (nub $ sortNotes $ p ++ (notesForContext context) ++ ([makeErrorFor err]))
 
   where
-    notesForContext r = map contextNote $ take 1 r
-    contextNote (pos, str) = ParseNote pos ErrorC $ "This " ++ str ++" is malformed."
+    notesForContext list = zipWith ($) [first, second] list
+    first (pos, str) = ParseNote pos ErrorC $
+        "Couldn't parse this " ++ str ++ "."
+    second (pos, str) = ParseNote pos InfoC $
+        "The mentioned parser error was in this " ++ str ++ "."
 
 lt x = trace (show x) x
 ltt t x = trace (show t) x
