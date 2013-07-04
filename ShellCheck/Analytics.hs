@@ -1108,16 +1108,13 @@ checkInexplicablyUnquoted _ = return ()
 
 prop_checkTildeInQuotes1 = verify checkTildeInQuotes "var=\"~/out.txt\""
 prop_checkTildeInQuotes2 = verify checkTildeInQuotes "foo > '~/dir'"
-prop_checkTildeInQuotes3 = verify checkTildeInQuotes "args='-s ~/dir'"
 prop_checkTildeInQuotes4 = verifyNot checkTildeInQuotes "~/file"
 prop_checkTildeInQuotes5 = verifyNot checkTildeInQuotes "echo '/~foo/cow'"
+prop_checkTildeInQuotes6 = verifyNot checkTildeInQuotes "awk '$0 ~ /foo/'"
 checkTildeInQuotes = check
   where
-    post f = f "Note that ~ does not expand in quotes"
-    verify id ('~':_) = post (warn id)
-    verify id str =
-        when (isJust $ matchRegex re str) $ post (info id)
-    re = mkRegex "\\s~"
+    verify id ('~':_) = warn id "Note that ~ does not expand in quotes."
+    verify _ _ = return ()
     check (T_NormalWord _ ((T_SingleQuoted id str):_)) =
         verify id str
     check (T_NormalWord _ ((T_DoubleQuoted _ ((T_Literal id str):_)):_)) =
