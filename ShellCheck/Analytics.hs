@@ -516,10 +516,11 @@ checkUnquotedExpansions t tree =
 prop_checkRedirectToSame = verify checkRedirectToSame "cat foo > foo"
 prop_checkRedirectToSame2 = verify checkRedirectToSame "cat lol | sed -e 's/a/b/g' > lol"
 prop_checkRedirectToSame3 = verifyNot checkRedirectToSame "cat lol | sed -e 's/a/b/g' > foo.bar && mv foo.bar lol"
+prop_checkRedirectToSame4 = verifyNot checkRedirectToSame "foo > /dev/null 2> /dev/null"
 checkRedirectToSame s@(T_Pipeline _ list) =
     mapM_ (\l -> (mapM_ (\x -> doAnalysis (checkOccurences x) l) (getAllRedirs list))) list
-  where checkOccurences (T_NormalWord exceptId x) (T_NormalWord newId y) =
-            when (x == y && exceptId /= newId) (do
+  where checkOccurences t@(T_NormalWord exceptId x) (T_NormalWord newId y) =
+            when (x == y && exceptId /= newId && not (special t)) (do
                 let note = Note InfoC $ "Make sure not to read and write the same file in the same pipeline."
                 addNoteFor newId $ note
                 addNoteFor exceptId $ note)
@@ -531,6 +532,7 @@ checkRedirectToSame s@(T_Pipeline _ list) =
                            T_DGREAT _  -> [file]
                            _ -> []
         getRedirs _ = []
+        special x = (deadSimple x == ["/dev/null"])
 checkRedirectToSame _ = return ()
 
 
