@@ -1096,16 +1096,26 @@ checkBackticks _ = return ()
 
 prop_checkIndirectExpansion1 = verify checkIndirectExpansion "${foo$n}"
 prop_checkIndirectExpansion2 = verifyNot checkIndirectExpansion "${foo//$n/lol}"
-checkIndirectExpansion (T_DollarBraced id (T_NormalWord _ ((T_Literal _ s):attempt:_))) =
-    case attempt of T_DollarExpansion _ _ -> doit
-                    T_Backticked _ _ -> doit
-                    T_DollarBraced _ _ -> doit
-                    T_DollarArithmetic _ _ -> doit
-                    _ -> return ()
+prop_checkIndirectExpansion3 = verify checkIndirectExpansion "${$#}"
+prop_checkIndirectExpansion4 = verify checkIndirectExpansion "${var${n}_$((i%2))}"
+prop_checkIndirectExpansion5 = verifyNot checkIndirectExpansion "${bar}"
+checkIndirectExpansion (T_DollarBraced i (T_NormalWord _ contents)) =
+    when (isIndirection contents) $
+        err i "To expand via indirection, use name=\"foo$n\"; echo \"${!name}\"."
   where
-    doit = if all isVariableChar s
-            then err id "To expand via indirection, use name=\"foo$n\"; echo \"${!name}\""
-            else return ()
+    isIndirection vars =
+        let list = catMaybes (map isIndirectionPart vars) in
+            not (null list) && all id list
+    isIndirectionPart t =
+        case t of T_DollarExpansion _ _ ->  Just True
+                  T_Backticked _ _ ->       Just True
+                  T_DollarBraced _ _ ->     Just True
+                  T_DollarArithmetic _ _ -> Just True
+                  T_Literal _ s -> if all isVariableChar s
+                                    then Nothing
+                                    else Just False
+                  _ -> Just False
+
 checkIndirectExpansion _ = return ()
 
 prop_checkInexplicablyUnquoted1 = verify checkInexplicablyUnquoted "echo 'var='value';'"
