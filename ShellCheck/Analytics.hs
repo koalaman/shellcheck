@@ -127,6 +127,7 @@ basicChecks = [
     ,checkSpuriousExec
     ,checkSpuriousExpansion
     ,checkUnusedEchoEscapes
+    ,checkDollarBrackets
     ]
 treeChecks = [
     checkUnquotedExpansions
@@ -363,6 +364,7 @@ checkBashisms = bashism
     bashism (T_DollarDoubleQuoted id _) = warnMsg id "$\"..\""
     bashism (T_ForArithmetic id _ _ _ _) = warnMsg id "arithmetic for loop"
     bashism (T_Arithmetic id _) = warnMsg id "standalone ((..))"
+    bashism (T_DollarBracket id _) = warnMsg id "$[..] in place of $((..))"
     bashism (T_SelectIn id _ _ _) = warnMsg id "select loop"
     bashism (T_BraceExpansion id _) = warnMsg id "brace expansion"
     bashism (T_Condition id DoubleBracket _) = warnMsg id "[[ ]]"
@@ -1227,8 +1229,14 @@ checkUnusedEchoEscapes = checkCommand "echo" f
             info id "echo won't expand escape sequences. Consider printf."
 
 
---- Subshell detection
+prop_checkDollarBrackets1 = verify checkDollarBrackets "echo $[1+2]"
+prop_checkDollarBrackets2 = verifyNot checkDollarBrackets "echo $((1+2))"
+checkDollarBrackets (T_DollarBracket id _) =
+    style id "Use $((..)) instead of deprecated $[..]"
+checkDollarBrackets _ = return ()
 
+
+--- Subshell detection
 prop_subshellAssignmentCheck = verifyFull     subshellAssignmentCheck "cat foo | while read bar; do a=$bar; done; echo \"$a\""
 prop_subshellAssignmentCheck2 = verifyNotFull subshellAssignmentCheck "while read bar; do a=$bar; done < file; echo \"$a\""
 prop_subshellAssignmentCheck3 = verifyFull    subshellAssignmentCheck "( A=foo; ); rm $A"

@@ -843,7 +843,7 @@ readBraced = try $ do
 
 readNormalDollar = readDollarExpression <|> readDollarLonely <|> readDollarDoubleQuote
 readDoubleQuotedDollar = readDollarExpression <|> readDollarLonely
-readDollarExpression = readDollarArithmetic <|> readDollarBraced <|> readDollarExpansion <|> readDollarVariable <|> readDollarSingleQuote
+readDollarExpression = readDollarArithmetic <|> readDollarBracket <|> readDollarBraced <|> readDollarExpansion <|> readDollarVariable <|> readDollarSingleQuote
 
 prop_readDollarSingleQuote = isOk readDollarSingleQuote "$'foo\\\'lol'"
 readDollarSingleQuote = called "$'..' expression" $ do
@@ -872,6 +872,13 @@ readDollarArithmetic = called "$((..)) expression" $ do
     c <- readArithmeticContents
     string "))"
     return (T_DollarArithmetic id c)
+
+readDollarBracket = called "$[..] expression" $ do
+    id <- getNextId
+    try (string "$[")
+    c <- readArithmeticContents
+    string "]"
+    return (T_DollarBracket id c)
 
 readArithmeticExpression = called "((..)) command" $ do
     id <- getNextId

@@ -60,6 +60,7 @@ data Token =
     | T_Do Id
     | T_DollarArithmetic Id Token
     | T_DollarBraced Id Token
+    | T_DollarBracket Id Token
     | T_DollarDoubleQuoted Id [Token]
     | T_DollarExpansion Id [Token]
     | T_DollarSingleQuoted Id String
