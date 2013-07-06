@@ -1071,6 +1071,8 @@ prop_checkPS14 = verify checkPS1Assignments "PS1=$'\\e[3m; '"
 prop_checkPS14a= verify checkPS1Assignments "export PS1=$'\\e[3m; '"
 prop_checkPS15 = verifyNot checkPS1Assignments "PS1='\\[\\033[1;35m\\]\\$ '"
 prop_checkPS16 = verifyNot checkPS1Assignments "PS1='\\[\\e1m\\e[1m\\]\\$ '"
+prop_checkPS17 = verifyNot checkPS1Assignments "PS1='e033x1B'"
+prop_checkPS18 = verifyNot checkPS1Assignments "PS1='\\[\\e\\]'"
 checkPS1Assignments t =
     case t of
         (T_Assignment _ "PS1" word) -> warnFor [word]
@@ -1088,7 +1090,7 @@ checkPS1Assignments t =
         let unenclosed = subRegex enclosedRegex s "" in
            isJust $ matchRegex escapeRegex unenclosed
     enclosedRegex = mkRegex "\\\\\\[.*\\\\\\]" -- FIXME: shouldn't be eager
-    escapeRegex = mkRegex "\\x1[Bb]|\\e|\x1B|\\033"
+    escapeRegex = mkRegex "\\\\x1[Bb]|\\\\e|\x1B|\\\\033"
 
 prop_checkBackticks1 = verify checkBackticks "echo `foo`"
 prop_checkBackticks2 = verifyNot checkBackticks "echo $(foo)"

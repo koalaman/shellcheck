@@ -829,7 +829,7 @@ readGenericLiteral1 endExp = do
 readGenericEscaped = do
     backslash
     x <- anyChar
-    return $ if x == '\n' then [] else [x]
+    return $ if x == '\n' then [] else ['\\', x]
 
 prop_readBraced = isOk readBraced "{1..4}"
 prop_readBraced2 = isOk readBraced "{foo,bar,\"baz lol\"}"
