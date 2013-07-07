@@ -74,6 +74,14 @@ determineShell (T_Script _ shebang _) = normalize $ shellFor shebang
           normalize "ksh" = return Ksh
           normalize "zsh" = return Zsh
           normalize "bash" = return Bash
+          normalize x | any (`isPrefixOf` x) [
+            "csh"
+            ,"tcsh"
+            ,"perl"
+            ,"awk"
+            ,"python"
+            ,"ruby"
+            ] = Nothing
           normalize _ = return Bash
 
 runBasicAnalysis f t = snd $ runState (doAnalysis f t) []
