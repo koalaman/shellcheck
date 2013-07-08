@@ -155,6 +155,7 @@ analyze f g i t =
     delve (T_DollarExpansion id list) = dl list $ T_DollarExpansion id
     delve (T_Backticked id list) = dl list $ T_Backticked id
     delve (T_DollarArithmetic id c) = d1 c $ T_DollarArithmetic id
+    delve (T_DollarBracket id c) = d1 c $ T_DollarBracket id
     delve (T_IoFile id op file) = d2 op file $ T_IoFile id
     delve (T_HereString id word) = d1 word $ T_HereString id
     delve (T_FdRedirect id v t) = d1 t $ T_FdRedirect id v
@@ -316,6 +317,7 @@ getId t = case t of
         T_ForArithmetic id _ _ _ _ -> id
         T_DollarSingleQuoted id _ -> id
         T_DollarDoubleQuoted id _ -> id
+        T_DollarBracket id _ -> id
 
 blank :: Monad m => Token -> m ()
 blank = const $ return ()
