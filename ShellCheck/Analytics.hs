@@ -54,35 +54,22 @@ checksFor Bash = map runBasicAnalysis [
 
 runAllAnalytics root m = addToMap notes m
     where shell = determineShell root
-          unsupported = (getId root, Note ErrorC "ShellCheck only handles Bourne based shells, sorry!")
-          notes = case shell of
-                    Nothing -> [ unsupported ]
-                    Just sh -> checkList ((checksFor sh) ++ genericChecks) root
+          notes =  checkList ((checksFor shell) ++ genericChecks) root
 
 checkList l t = concatMap (\f -> f t) l
 addToMap list map = foldr (\(id,note) m -> Map.adjust (\(Metadata pos notes) -> Metadata pos (note:notes)) id m) map list
 
-prop_determineShell0 = determineShell (T_Script (Id 0) "#!/bin/sh" []) == Just Sh
-prop_determineShell1 = determineShell (T_Script (Id 0) "#!/usr/bin/env ksh" []) == Just Ksh
-prop_determineShell2 = determineShell (T_Script (Id 0) "" []) == Just Bash
+prop_determineShell0 = determineShell (T_Script (Id 0) "#!/bin/sh" []) == Sh
+prop_determineShell1 = determineShell (T_Script (Id 0) "#!/usr/bin/env ksh" []) == Ksh
+prop_determineShell2 = determineShell (T_Script (Id 0) "" []) == Bash
 determineShell (T_Script _ shebang _) = normalize $ shellFor shebang
     where shellFor s | "/env " `isInfixOf` s = head ((drop 1 $ words s)++[""])
           shellFor s = reverse . takeWhile (/= '/') . reverse $ s
-          normalize "csh" = Nothing
-          normalize "tcsh" = Nothing
-          normalize "sh" = return Sh
-          normalize "ksh" = return Ksh
-          normalize "zsh" = return Zsh
-          normalize "bash" = return Bash
-          normalize x | any (`isPrefixOf` x) [
-            "csh"
-            ,"tcsh"
-            ,"perl"
-            ,"awk"
-            ,"python"
-            ,"ruby"
-            ] = Nothing
-          normalize _ = return Bash
+          normalize "sh" = Sh
+          normalize "ksh" = Ksh
+          normalize "zsh" = Zsh
+          normalize "bash" = Bash
+          normalize _ = Bash
 
 runBasicAnalysis f t = snd $ runState (doAnalysis f t) []
 basicChecks = [

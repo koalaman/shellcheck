@@ -24,7 +24,7 @@ import Text.Parsec
 import Debug.Trace
 import Control.Monad
 import Data.Char
-import Data.List (isInfixOf, isSuffixOf, partition, sortBy, intercalate, nub)
+import Data.List (isPrefixOf, isInfixOf, isSuffixOf, partition, sortBy, intercalate, nub)
 import qualified Data.Map as Map
 import qualified Control.Monad.State as Ms
 import Data.Maybe
@@ -1558,18 +1558,68 @@ readShebang = do
 prop_readScript1 = isOk readScript "#!/bin/bash\necho hello world\n"
 prop_readScript2 = isWarning readScript "#!/bin/bash\r\necho hello world\n"
 prop_readScript3 = isWarning readScript "#!/bin/bash\necho hello\xA0world"
+prop_readScript4 = isWarning readScript "#!/usr/bin/perl\nfoo=("
 readScript = do
     id <- getNextId
+    pos <- getPosition
     sb <- option "" readShebang
-    do {
-        allspacing;
-        commands <- readTerm;
-        eof <|> (parseProblem ErrorC "Parsing stopped here because of parsing errors.");
-        return $ T_Script id sb commands;
-    } <|> do {
-        parseProblem WarningC "Couldn't read any commands.";
+    verifyShell pos (getShell sb)
+    if (isValidShell $ getShell sb) /= Just False
+      then
+        do {
+            allspacing;
+            commands <- readTerm;
+            eof <|> (parseProblem ErrorC "Parsing stopped here because of parsing errors.");
+            return $ T_Script id sb commands;
+        } <|> do {
+            parseProblem WarningC "Couldn't read any commands.";
+            return $ T_Script id sb $ [T_EOF id];
+        }
+      else do
+        many anyChar
         return $ T_Script id sb $ [T_EOF id];
-    }
+
+  where
+    basename s = reverse . takeWhile (/= '/') . reverse $ s
+    getShell sb =
+        case words sb of
+            [] -> ""
+            [x] -> basename x
+            (first:second:_) ->
+                if basename first == "env"
+                    then second
+                    else basename first
+
+    verifyShell pos s =
+        case isValidShell s of
+            Just True -> return ()
+            Just False -> parseProblemAt pos ErrorC "ShellCheck only supports Bourne based shell scripts, sorry!"
+            Nothing -> parseProblemAt pos InfoC "This shebang was unrecognized. Note that ShellCheck only handles Bourne based shells."
+
+    isValidShell s =
+        let good = s == "" || any (`isPrefixOf` s) goodShells
+            bad = any (`isPrefixOf` s) badShells
+        in
+            if good
+                then Just True
+                else if bad
+                        then Just False
+                        else Nothing
+
+    goodShells = [
+        "sh",
+        "bash",
+        "ksh",
+        "zsh"
+        ]
+    badShells = [
+        "awk",
+        "csh",
+        "perl",
+        "python",
+        "ruby",
+        "tcsh"
+        ]
 
 rp p filename contents = Ms.runState (runParserT p initialState filename contents) ([], [])
 
