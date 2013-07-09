@@ -746,8 +746,13 @@ checkArithmeticBadOctal _ = return ()
 
 prop_checkComparisonAgainstGlob = verify checkComparisonAgainstGlob "[[ $cow == $bar ]]"
 prop_checkComparisonAgainstGlob2 = verifyNot checkComparisonAgainstGlob "[[ $cow == \"$bar\" ]]"
+prop_checkComparisonAgainstGlob3 = verify checkComparisonAgainstGlob "[ $cow = *foo* ]"
+prop_checkComparisonAgainstGlob4 = verifyNot checkComparisonAgainstGlob "[ $cow = foo ]"
 checkComparisonAgainstGlob (TC_Binary _ DoubleBracket op _ (T_NormalWord id [T_DollarBraced _ _])) | op == "=" || op == "==" =
     warn id $ "Quote the rhs of = in [[ ]] to prevent glob interpretation."
+checkComparisonAgainstGlob (TC_Binary _ SingleBracket op _ word) 
+        | (op == "=" || op == "==") && isGlob word =
+    err (getId word) $ "[ .. ] can't match globs. Use [[ .. ]] or grep."
 checkComparisonAgainstGlob _ = return ()
 
 prop_checkCommarrays1 = verify checkCommarrays "a=(1, 2)"
