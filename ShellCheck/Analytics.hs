@@ -592,12 +592,14 @@ prop_checkSingleQuotedVariables3a= verifyTree checkSingleQuotedVariables "sed 's
 prop_checkSingleQuotedVariables3b= verifyTree checkSingleQuotedVariables "sed 's/$(echo cow)/bar/'"
 prop_checkSingleQuotedVariables3c= verifyTree checkSingleQuotedVariables "sed 's/$((1+foo))/bar/'"
 prop_checkSingleQuotedVariables4 = verifyNotTree checkSingleQuotedVariables "awk '{print $1}'"
+prop_checkSingleQuotedVariables5 = verifyNotTree checkSingleQuotedVariables "trap 'echo $SECONDS' EXIT"
 checkSingleQuotedVariables t@(T_SingleQuoted id s) parents =
             case matchRegex checkSingleQuotedVariablesRe s of
                 Just [] -> unless (probablyOk t) $ info id $ "Expressions don't expand in single quotes, use double quotes for that."
                 _          -> return ()
   where
-    probablyOk t = isParamTo parents "awk" t
+    probablyOk t =
+        isParamTo parents "awk" t || isParamTo parents "trap" t
 checkSingleQuotedVariables _ _ = return ()
 checkSingleQuotedVariablesRe = mkRegex "\\$[{(0-9a-zA-Z_]"
 
