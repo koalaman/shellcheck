@@ -434,11 +434,13 @@ checkForInCat (T_ForIn _ f [T_NormalWord _ w] _) = mapM_ checkF w
             info id $ "To read lines rather than words, pipe/redirect to a 'while read' loop."
     checkF (T_Backticked id cmds) = checkF (T_DollarExpansion id cmds)
     checkF _ = return ()
-    isLineBased cmd = any (cmd `isCommand`) ["grep", "sed", "cat"]
+    isLineBased cmd = any (cmd `isCommand`)
+                        ["grep", "sed", "cat", "awk", "cut", "sort"]
 checkForInCat _ = return ()
 
 prop_checkForInLs = verify checkForInLs "for f in $(ls *.mp3); do mplayer \"$f\"; done"
 prop_checkForInLs2 = verify checkForInLs "for f in `ls *.mp3`; do mplayer \"$f\"; done"
+prop_checkForInLs3 = verify checkForInLs "for f in `find / -name '*.mp3'`; do mplayer \"$f\"; done"
 checkForInLs t = try t
   where
    try (T_ForIn _ f [T_NormalWord _ [T_DollarExpansion id [x]]] _) =
@@ -452,6 +454,8 @@ checkForInLs t = try t
         let args = (if n == [] then ["*"] else n) in
           err id $ "Don't use 'for "++f++" in $(ls " ++ (intercalate " " n)
             ++ ")'. Use 'for "++f++" in "++ (intercalate " " args) ++ "'."
+      ("find":_) -> warn id $ "Don't use 'for " ++ f ++ " in $(find ...). "
+                        ++ "Use find -exec or a while read loop."
       _ -> return ()
 
 
@@ -750,7 +754,7 @@ prop_checkComparisonAgainstGlob3 = verify checkComparisonAgainstGlob "[ $cow = *
 prop_checkComparisonAgainstGlob4 = verifyNot checkComparisonAgainstGlob "[ $cow = foo ]"
 checkComparisonAgainstGlob (TC_Binary _ DoubleBracket op _ (T_NormalWord id [T_DollarBraced _ _])) | op == "=" || op == "==" =
     warn id $ "Quote the rhs of = in [[ ]] to prevent glob interpretation."
-checkComparisonAgainstGlob (TC_Binary _ SingleBracket op _ word) 
+checkComparisonAgainstGlob (TC_Binary _ SingleBracket op _ word)
         | (op == "=" || op == "==") && isGlob word =
     err (getId word) $ "[ .. ] can't match globs. Use [[ .. ]] or grep."
 checkComparisonAgainstGlob _ = return ()
