@@ -672,7 +672,7 @@ readBackTicked = called "backtick expansion" $ do
     subStart <- getPosition
     subString <- readGenericLiteral (char '`')
     char '`'
-    result <- subParse subStart readCompoundList subString
+    result <- subParse subStart readCompoundList (unEscape subString)
     return $ T_Backticked id result
   where
     -- Position may be off due to escapes
@@ -685,6 +685,11 @@ readBackTicked = called "backtick expansion" $ do
         setInput lastInput
         setPosition lastPosition
         return result
+    unEscape [] = []
+    unEscape ('\\':x:rest) | x `elem` "\"$`\\" = x : unEscape rest
+    unEscape ('\\':'\n':rest) = unEscape rest
+    unEscape (c:rest) = c : unEscape rest
+    
 
 prop_readDoubleQuoted = isOk readDoubleQuoted "\"Hello $FOO\""
 readDoubleQuoted = called "double quoted string" $ do
