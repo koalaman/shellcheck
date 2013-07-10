@@ -350,6 +350,7 @@ prop_checkBashisms14= verify checkBashisms "echo -n \"Foo: \""
 prop_checkBashisms15= verify checkBashisms "let n++"
 prop_checkBashisms16= verify checkBashisms "echo $RANDOM"
 prop_checkBashisms17= verify checkBashisms "echo $((RANDOM%6+1))"
+prop_checkBashisms18= verify checkBashisms "foo &> /dev/null"
 checkBashisms = bashism
   where
     errMsg id s = err id $ "#!/bin/sh was specified, so " ++ s ++ " is not supported, even when sh is actually bash."
@@ -374,6 +375,7 @@ checkBashisms = bashism
     bashism t@(T_SimpleCommand id _ _)
         | t `isCommand` "source" =
             warnMsg id "'source' in place of '.'"
+    bashism (T_FdRedirect id "&" (T_IoFile _ (T_Greater _) _)) = warnMsg id "&>"
     bashism (T_DollarBraced id token) =
         mapM_ check expansion
       where
