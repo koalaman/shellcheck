@@ -1254,6 +1254,7 @@ prop_subshellAssignmentCheck3 = verifyFull    subshellAssignmentCheck "( A=foo; 
 prop_subshellAssignmentCheck4 = verifyNotFull subshellAssignmentCheck "( A=foo; rm $A; )"
 prop_subshellAssignmentCheck5 = verifyFull    subshellAssignmentCheck "cat foo | while read cow; do true; done; echo $cow;"
 prop_subshellAssignmentCheck6 = verifyFull    subshellAssignmentCheck "( export lol=$(ls); ); echo $lol;"
+prop_subshellAssignmentCheck6a= verifyFull    subshellAssignmentCheck "( typeset -a lol=a; ); echo $lol;"
 prop_subshellAssignmentCheck7 = verifyFull    subshellAssignmentCheck "cmd | while read foo; do (( n++ )); done; echo \"$n lines\""
 prop_subshellAssignmentCheck8 = verifyFull    subshellAssignmentCheck "n=3 & echo $((n++))"
 prop_subshellAssignmentCheck9 = verifyFull    subshellAssignmentCheck "read n & n=foo$n"
@@ -1316,8 +1317,12 @@ getModifiedVariables t =
 getModifiedVariableCommand base@(T_SimpleCommand _ _ ((T_NormalWord _ ((T_Literal _ x):_)):rest)) =
     case x of
         "read" -> concatMap getLiteral rest
-        "export" -> concatMap exportParamToLiteral rest
         "let" -> concatMap letParamToLiteral rest
+
+        "export" -> concatMap getModifierParam rest
+        "declare" -> concatMap getModifierParam rest
+        "typeset" -> concatMap getModifierParam rest
+
         _ -> []
   where
     stripEquals s = let rest = dropWhile (/= '=') s in
@@ -1333,12 +1338,11 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ ((T_NormalWord _ ((T_Litera
     getLiteral t@(T_NormalWord _ [T_DoubleQuoted _ [T_Literal id s]]) =
         [(base, t, s, DataExternal)]
     getLiteral x = []
-    exportParamToLiteral t@(T_NormalWord _ ((T_Literal _ s):_)) =
-        if '=' `elem` s
-            then [(base, t, prefix, DataFrom [stripEqualsFrom t])]
-            else []
-      where prefix = takeWhile (/= '=') s
-    exportParamToLiteral _ = []
+
+    getModifierParam t@(T_Assignment _ name value) =
+        [(base, t, name, DataFrom [value])]
+    getModifierParam _ = []
+
     letParamToLiteral token =
           if var == ""
             then []

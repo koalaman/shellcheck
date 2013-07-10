@@ -689,7 +689,7 @@ readBackTicked = called "backtick expansion" $ do
     unEscape ('\\':x:rest) | x `elem` "\"$`\\" = x : unEscape rest
     unEscape ('\\':'\n':rest) = unEscape rest
     unEscape (c:rest) = c : unEscape rest
-    
+
 
 prop_readDoubleQuoted = isOk readDoubleQuoted "\"Hello $FOO\""
 readDoubleQuoted = called "double quoted string" $ do
@@ -1071,24 +1071,46 @@ readSeparator =
             readNewlineList
             return '\n'
 
-makeSimpleCommand id1 id2 tokens =
-    let (assignment, rest) = partition (\x -> case x of T_Assignment _ _ _ -> True; _ -> False) tokens
-    in let (redirections, rest2) = partition (\x -> case x of T_FdRedirect _ _ _ -> True; _ -> False) rest
-       in T_Redirecting id1 redirections $ T_SimpleCommand id2 assignment rest2
+makeSimpleCommand id1 id2 prefix cmd suffix =
+    let
+        (preAssigned, preRest) = partition assignment prefix
+        (preRedirected, preRest2) = partition redirection preRest
+        (postRedirected, postRest) = partition redirection suffix
+
+        redirs = preRedirected ++ postRedirected
+        assigns = preAssigned
+        args = cmd ++ preRest2 ++ postRest
+    in
+        T_Redirecting id1 redirs $ T_SimpleCommand id2 assigns args
+  where
+    assignment (T_Assignment _ _ _) = True
+    assignment _ = False
+    redirection (T_FdRedirect _ _ _) = True
+    redirection _ = False
+
 
 prop_readSimpleCommand = isOk readSimpleCommand "echo test > file"
 prop_readSimpleCommand2 = isOk readSimpleCommand "cmd &> file"
+prop_readSimpleCommand3 = isOk readSimpleCommand "export foo=(bar baz)"
+prop_readSimpleCommand4 = isOk readSimpleCommand "typeset -a foo=(lol)"
 readSimpleCommand = called "simple command" $ do
     id1 <- getNextId
     id2 <- getNextId
     prefix <- option [] readCmdPrefix
-    cmd <- option [] $ do { f <- readCmdName; return [f]; }
-    when (null prefix && null cmd) $ fail "No command"
-    if null cmd
-        then return $ makeSimpleCommand id1 id2 prefix
-        else do
-            suffix <- option [] readCmdSuffix
-            return $ makeSimpleCommand id1 id2 (prefix ++ cmd ++ suffix)
+    cmd <- option Nothing $ do { f <- readCmdName; return $ Just f; }
+    when (null prefix && isNothing cmd) $ fail "No command"
+    case cmd of
+      Nothing -> return $ makeSimpleCommand id1 id2 prefix [] []
+      Just cmd -> do
+            suffix <- option [] $
+                        if isModifierCommand cmd
+                        then readModifierSuffix
+                        else readCmdSuffix
+            return $ makeSimpleCommand id1 id2 prefix [cmd] suffix
+  where
+    isModifierCommand (T_NormalWord _ [T_Literal _ s]) =
+        s `elem` ["declare", "export", "local", "typeset"]
+    isModifierCommand _ = False
 
 prop_readPipeline = isOk readPipeline "! cat /etc/issue | grep -i ubuntu"
 prop_readPipeline2 = isWarning readPipeline "!cat /etc/issue | grep -i ubuntu"
@@ -1433,6 +1455,7 @@ readCompoundList = readTerm
 
 readCmdPrefix = many1 (readIoRedirect <|> readAssignmentWord)
 readCmdSuffix = many1 (readIoRedirect <|> readCmdWord)
+readModifierSuffix = many1 (readIoRedirect <|> readAssignmentWord <|> readCmdWord)
 
 prop_readAssignmentWord = isOk readAssignmentWord "a=42"
 prop_readAssignmentWord2 = isOk readAssignmentWord "b=(1 2 3)"
