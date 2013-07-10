@@ -1455,7 +1455,7 @@ checkSpacefulness t =
             then return [(getId token, Note InfoC warning)]
             else return []
       where
-        warning = "Unquoted variable may contain spaces/globs, and will word split."
+        warning = "Double quote to prevent globbing and word splitting."
 
     writeF _ _ name DataExternal = do
         setSpaces name True
