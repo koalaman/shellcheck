@@ -1082,24 +1082,18 @@ prop_checkPS15 = verifyNot checkPS1Assignments "PS1='\\[\\033[1;35m\\]\\$ '"
 prop_checkPS16 = verifyNot checkPS1Assignments "PS1='\\[\\e1m\\e[1m\\]\\$ '"
 prop_checkPS17 = verifyNot checkPS1Assignments "PS1='e033x1B'"
 prop_checkPS18 = verifyNot checkPS1Assignments "PS1='\\[\\e\\]'"
-checkPS1Assignments t =
-    case t of
-        (T_Assignment _ "PS1" word) -> warnFor [word]
-        (T_SimpleCommand id _ tokens) ->
-            when (t `isCommand` "export") $
-                warnFor (filter isPS1Token tokens)
-        _ -> return ()
+checkPS1Assignments (T_Assignment _ "PS1" word) = warnFor word
   where
-    isPS1Token t = "PS1" `isPrefixOf` (concat $ deadSimple t)
-    warnFor words =
-        let contents = concat $ concatMap deadSimple words in
-            when (not (null words) && containsUnescaped contents) $
-                info (getId $ head words) "Make sure all escape sequences are enclosed in \\[..\\] to prevent line wrapping issues"
+    warnFor word =
+        let contents = concat $ deadSimple word in
+            when (containsUnescaped contents) $
+                info (getId word) "Make sure all escape sequences are enclosed in \\[..\\] to prevent line wrapping issues"
     containsUnescaped s =
         let unenclosed = subRegex enclosedRegex s "" in
            isJust $ matchRegex escapeRegex unenclosed
     enclosedRegex = mkRegex "\\\\\\[.*\\\\\\]" -- FIXME: shouldn't be eager
     escapeRegex = mkRegex "\\\\x1[Bb]|\\\\e|\x1B|\\\\033"
+checkPS1Assignments _ = return ()
 
 prop_checkBackticks1 = verify checkBackticks "echo `foo`"
 prop_checkBackticks2 = verifyNot checkBackticks "echo $(foo)"
