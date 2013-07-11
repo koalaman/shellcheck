@@ -1111,7 +1111,7 @@ readSimpleCommand = called "simple command" $ do
             return $ makeSimpleCommand id1 id2 prefix [cmd] suffix
   where
     isModifierCommand (T_NormalWord _ [T_Literal _ s]) =
-        s `elem` ["declare", "export", "local", "typeset"]
+        s `elem` ["declare", "export", "local", "readonly", "typeset"]
     isModifierCommand _ = False
 
 prop_readPipeline = isOk readPipeline "! cat /etc/issue | grep -i ubuntu"
