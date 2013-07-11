@@ -341,7 +341,7 @@ readConditionContents single = do
         try (string "=~") <|> try (string "~=")
         return True)
           <|> return False
-    readRegex =  called "regex" $ do
+    readRegex = called "regex" $ do
         id <- getNextId
         parts <- many1 (readGroup <|> readSingleQuoted <|> readDoubleQuoted <|> readDollarExpression <|> readNormalLiteral "( " <|> readGlobLiteral)
         disregard spacing
@@ -351,12 +351,16 @@ readConditionContents single = do
             id <- getNextId
             s <- many1 (extglobStart <|> oneOf "[]$")
             return $ T_Literal id s
-        readGroup = do -- Fixme: account for vars and quotes in groups
+        readGroup = called "regex grouping" $ do
             id <- getNextId
             char '('
-            s <- readGenericLiteral (char ')')
+            parts <- many (readGroup <|> readSingleQuoted <|> readDoubleQuoted <|> readDollarExpression <|> readRegexLiteral <|> readGlobLiteral)
             char ')'
-            return $ T_Literal id $ "(" ++ s ++ ")"
+            return $ T_NormalWord id parts
+        readRegexLiteral = do
+            id <- getNextId
+            str <- readGenericLiteral1 (singleQuote <|> doubleQuotable <|> oneOf "()")
+            return $ T_Literal id str
 
     readCondTerm = readCondNot <|> readCondExpr
     readCondNot = do
@@ -549,6 +553,8 @@ prop_readCondition2 = isOk readCondition "[[ (a = b) || (c = d) ]]"
 prop_readCondition3 = isOk readCondition "[[ $c = [[:alpha:].~-] ]]"
 prop_readCondition4 = isOk readCondition "[[ $c =~ *foo* ]]"
 prop_readCondition5 = isOk readCondition "[[ $c =~ f( ]] )* ]]"
+prop_readCondition5a= isOk readCondition "[[ $c =~ a(b) ]]"
+prop_readCondition5b= isOk readCondition "[[ $c =~ f( ($var ]]) )* ]]"
 prop_readCondition6 = isOk readCondition "[[ $c =~ ^[yY]$ ]]"
 prop_readCondition7 = isOk readCondition "[[ ${line} =~ ^[[:space:]]*# ]]"
 readCondition = called "test expression" $ do
