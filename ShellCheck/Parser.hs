@@ -692,6 +692,7 @@ readBackTicked = called "backtick expansion" $ do
 
 
 prop_readDoubleQuoted = isOk readDoubleQuoted "\"Hello $FOO\""
+prop_readDoubleQuoted2 = isOk readDoubleQuoted "\"$'\""
 readDoubleQuoted = called "double quoted string" $ do
     id <- getNextId
     doubleQuote
@@ -846,9 +847,9 @@ readBraced = try $ do
     char '}'
     return $ T_BraceExpansion id $ concat str
 
-readNormalDollar = readDollarExpression <|> readDollarLonely <|> readDollarDoubleQuote
+readNormalDollar = readDollarExpression <|> readDollarLonely <|> readDollarDoubleQuote <|> readDollarSingleQuote
 readDoubleQuotedDollar = readDollarExpression <|> readDollarLonely
-readDollarExpression = readDollarArithmetic <|> readDollarBracket <|> readDollarBraced <|> readDollarExpansion <|> readDollarVariable <|> readDollarSingleQuote
+readDollarExpression = readDollarArithmetic <|> readDollarBracket <|> readDollarBraced <|> readDollarExpansion <|> readDollarVariable 
 
 prop_readDollarSingleQuote = isOk readDollarSingleQuote "$'foo\\\'lol'"
 readDollarSingleQuote = called "$'..' expression" $ do
