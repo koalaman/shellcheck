@@ -590,6 +590,7 @@ readComment = do
 prop_readNormalWord = isOk readNormalWord "'foo'\"bar\"{1..3}baz$(lol)"
 prop_readNormalWord2 = isOk readNormalWord "foo**(foo)!!!(@@(bar))"
 prop_readNormalWord3 = isOk readNormalWord "foo#"
+prop_readNormalWord4 = isOk readNormalWord "$\"foo\"$'foo\nbar'"
 readNormalWord = readNormalishWord ""
 
 readNormalishWord end = do
@@ -854,7 +855,7 @@ readBraced = try $ do
     char '}'
     return $ T_BraceExpansion id $ concat str
 
-readNormalDollar = readDollarExpression <|> readDollarLonely <|> readDollarDoubleQuote <|> readDollarSingleQuote
+readNormalDollar = readDollarExpression <|> readDollarDoubleQuote <|> readDollarSingleQuote <|> readDollarLonely 
 readDoubleQuotedDollar = readDollarExpression <|> readDollarLonely
 readDollarExpression = readDollarArithmetic <|> readDollarBracket <|> readDollarBraced <|> readDollarExpansion <|> readDollarVariable 
 
