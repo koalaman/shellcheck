@@ -267,17 +267,20 @@ readConditionContents single = do
         notFollowedBy2 (try (spacing >> (string "]")))
         x <- readNormalWord
         pos <- getPosition
-        if (endedWithBracket x)
-            then do
-                lookAhead (try $ (many whitespace) >> (eof <|> disregard readSeparator <|> disregard (g_Then <|> g_Do)))
-                parseProblemAt pos ErrorC $ "You need a space before the " ++ (if single then "]" else "]]") ++ "."
-            else
-                disregard spacing
+        when (endedWith "]" x) $ do
+            lookAhead (try $
+                (many whitespace) >> (eof <|> disregard readSeparator <|> disregard (g_Then <|> g_Do)))
+            parseProblemAt pos ErrorC $
+                "You need a space before the " ++ (if single then "]" else "]]") ++ "."
+        when (single && endedWith ")" x) $ do
+            parseProblemAt pos ErrorC $
+                "You need a space before the \\)"
+        disregard spacing
         return x
-      where endedWithBracket (T_NormalWord id s@(_:_)) =
-                case (last s) of T_Literal id s -> "]" `isSuffixOf` s
+      where endedWith str (T_NormalWord id s@(_:_)) =
+                case (last s) of T_Literal id s -> str `isSuffixOf` s
                                  _ -> False
-            endedWithBracket _ = False
+            endedWith _ _ = False
 
     readCondAndOp = do
         id <- getNextId
@@ -318,14 +321,14 @@ readConditionContents single = do
     readCondGroup = do
           id <- getNextId
           pos <- getPosition
-          lparen <- string "(" <|> string "\\("
+          lparen <- try $ string "(" <|> string "\\("
           when (single && lparen == "(") $ parseProblemAt pos ErrorC "In [..] you have to escape (). Use [[..]] instead."
           when (not single && lparen == "\\(") $ parseProblemAt pos ErrorC "In [[..]] you shouldn't escape ()."
-          if single then softCondSpacing else disregard spacing
+          if single then hardCondSpacing else disregard spacing
           x <- readCondContents
           cpos <- getPosition
           rparen <- string ")" <|> string "\\)"
-          if single then softCondSpacing else disregard spacing
+          if single then hardCondSpacing else disregard spacing
           when (single && rparen == ")") $ parseProblemAt cpos ErrorC "In [..] you have to escape (). Use [[..]] instead."
           when (not single && rparen == "\\)") $ parseProblemAt cpos ErrorC "In [[..]] you shouldn't escape ()."
           when (isEscaped lparen `xor` isEscaped rparen) $ parseProblemAt pos ErrorC "Did you just escape one half of () but not the other?"
