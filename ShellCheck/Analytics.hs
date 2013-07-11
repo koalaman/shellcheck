@@ -45,11 +45,17 @@ checksFor Sh = map runBasicAnalysis [
     checkBashisms
     ,checkTimeParameters
     ]
-checksFor Ksh = [ ]
-checksFor Zsh = map runBasicAnalysis [ checkTimeParameters ]
+checksFor Ksh = map runBasicAnalysis [
+    checkEchoSed
+    ]
+checksFor Zsh = map runBasicAnalysis [
+    checkTimeParameters
+    ,checkEchoSed
+    ]
 checksFor Bash = map runBasicAnalysis [
     checkTimeParameters
     ,checkBraceExpansionVars
+    ,checkEchoSed
     ]
 
 runAllAnalytics root m = addToMap notes m
@@ -96,7 +102,7 @@ basicChecks = [
     ,checkPrintfVar
     ,checkCommarrays
     ,checkOrNeq
-    ,checkEcho
+    ,checkEchoWc
     ,checkConstantIfs
     ,checkTr
     ,checkPipedAssignment
@@ -221,28 +227,36 @@ checkFull f s = case parseShell "-" s of
         _ -> Nothing
 
 
-prop_checkEcho1 = verify checkEcho "FOO=$(echo \"$cow\" | sed 's/foo/bar/g')"
-prop_checkEcho2 = verify checkEcho "rm $(echo $cow | sed -e 's,foo,bar,')"
-prop_checkEcho3 = verify checkEcho "n=$(echo $foo | wc -c)"
-checkEcho (T_Pipeline id [a, b]) =
+prop_checkEchoWc3 = verify checkEchoWc "n=$(echo $foo | wc -c)"
+checkEchoWc (T_Pipeline id [a, b]) =
     when (acmd == ["echo", "${VAR}"]) $
         case bcmd of
-            ["sed", v] -> checkIn v
-            ["sed", "-e", v] -> checkIn v
             ["wc", "-c"] -> countMsg
             ["wc", "-m"] -> countMsg
             _ -> return ()
   where
     acmd = deadSimple a
     bcmd = deadSimple b
+    countMsg = style id $ "See if you can use ${#variable} instead."
+checkEchoWc _ = return ()
+
+prop_checkEchoSed1 = verify checkEchoSed "FOO=$(echo \"$cow\" | sed 's/foo/bar/g')"
+prop_checkEchoSed2 = verify checkEchoSed "rm $(echo $cow | sed -e 's,foo,bar,')"
+checkEchoSed (T_Pipeline id [a, b]) =
+    when (acmd == ["echo", "${VAR}"]) $
+        case bcmd of
+            ["sed", v] -> checkIn v
+            ["sed", "-e", v] -> checkIn v
+            _ -> return ()
+  where
+    sedRe = mkRegex "^s(.)(.*)\\1(.*)\\1g?$"
+    acmd = deadSimple a
+    bcmd = deadSimple b
     checkIn s =
-        case matchRegex checkEchoSedRe s of
+        case matchRegex sedRe s of
                 Just _ -> style id $ "See if you can use ${variable//search/replace} instead."
                 _        -> return ()
-    countMsg = style id $ "See if you can use ${#variable} instead."
-checkEcho _ = return ()
-checkEchoSedRe = mkRegex "^s(.)(.*)\\1(.*)\\1g?$"
-
+checkEchoSed _ = return ()
 
 prop_checkPipedAssignment1 = verify checkPipedAssignment "A=ls | grep foo"
 prop_checkPipedAssignment2 = verifyNot checkPipedAssignment "A=foo cmd | grep foo"
