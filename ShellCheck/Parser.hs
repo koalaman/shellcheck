@@ -268,8 +268,6 @@ readConditionContents single = do
         x <- readNormalWord
         pos <- getPosition
         when (endedWith "]" x) $ do
-            lookAhead (try $
-                (many whitespace) >> (eof <|> disregard readSeparator <|> disregard (g_Then <|> g_Do)))
             parseProblemAt pos ErrorC $
                 "You need a space before the " ++ (if single then "]" else "]]") ++ "."
         when (single && endedWith ")" x) $ do
@@ -305,8 +303,8 @@ readConditionContents single = do
               pos <- getPosition
               lookAhead (char '[')
               parseProblemAt pos ErrorC $ if single
-                  then "Don't use [] for grouping. Use \\( .. \\)."
-                  else "Don't use [] for grouping. Use ()."
+                  then "If grouping expressions inside [..], use \\( ..\\)."
+                  else "If grouping expressions inside [[..]], use ( .. )."
             )
       (do
             pos <- getPosition
