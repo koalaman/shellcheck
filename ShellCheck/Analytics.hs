@@ -454,7 +454,7 @@ checkForInCat (T_ForIn _ f [T_NormalWord _ w] _) = mapM_ checkF w
     checkF (T_Backticked id cmds) = checkF (T_DollarExpansion id cmds)
     checkF _ = return ()
     isLineBased cmd = any (cmd `isCommand`)
-                        ["grep", "sed", "cat", "awk", "cut", "sort"]
+                        ["grep", "fgrep", "egrep", "sed", "cat", "awk", "cut", "sort"]
 checkForInCat _ = return ()
 
 prop_checkForInLs = verify checkForInLs "for f in $(ls *.mp3); do mplayer \"$f\"; done"
@@ -1148,7 +1148,16 @@ checkInexplicablyUnquoted (T_NormalWord id tokens) = mapM_ check (tails tokens)
     check ((T_SingleQuoted _ _):(T_Literal id str):_)
         | all isAlphaNum str =
         info id $ "This word is outside of quotes. Did you intend to 'nest '\"'single quotes'\"' instead'? "
+
+    check ((T_DoubleQuoted _ _):trapped:(T_DoubleQuoted _ _):_) =
+        case trapped of
+            T_DollarExpansion id _ -> warnAbout id
+            T_DollarBraced id _ -> warnAbout id
+            _ -> return ()
+
     check _ = return ()
+    warnAbout id =
+        info id $ "Surrounding quotes actually unquotes this (\"inside\"$outside\"inside\"). Did you forget your quote level?"
 checkInexplicablyUnquoted _ = return ()
 
 prop_checkTildeInQuotes1 = verify checkTildeInQuotes "var=\"~/out.txt\""
