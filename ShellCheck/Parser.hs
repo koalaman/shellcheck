@@ -1312,6 +1312,7 @@ prop_readForClause3 = isOk readForClause "for f; do foo; done"
 prop_readForClause4 = isOk readForClause "for((i=0; i<10; i++)); do echo $i; done"
 prop_readForClause5 = isOk readForClause "for ((i=0;i<10 && n>x;i++,--n))\ndo \necho $i\ndone"
 prop_readForClause6 = isOk readForClause "for ((;;))\ndo echo $i\ndone"
+prop_readForClause7 = isOk readForClause "for ((;;)) do echo $i\ndone"
 readForClause = called "for loop" $ do
     pos <- getPosition
     (T_For id) <- g_For
@@ -1329,7 +1330,7 @@ readForClause = called "for loop" $ do
         z <- readArithmeticContents
         spacing
         string "))"
-        readSequentialSep
+        readSequentialSep <|> disregard spacing
         return $ \id group -> (return $ T_ForArithmetic id x y z group)
 
     readRegular = do
