@@ -768,7 +768,7 @@ readNormalEscaped = called "escaped char" $ do
     pos <- getPosition
     backslash
     do
-        next <- (quotable <|> oneOf "?*@!+[]{}")
+        next <- (quotable <|> oneOf "?*@!+[]{}.,")
         return $ if next == '\n' then "" else [next]
       <|>
         do
