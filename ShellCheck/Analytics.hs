@@ -398,8 +398,10 @@ checkBashisms = bashism
             when (isJust $ matchRegex regex str) $ warnMsg id feature
 
     bashism t@(T_SimpleCommand _ _ (cmd:arg:_))
-        | t `isCommand` "echo" && "-" `isPrefixOf` (concat $ deadSimple arg) =
-            warnMsg (getId arg) "echo flag"
+        | t `isCommand` "echo" && "-" `isPrefixOf` argString =
+            when (not $ "--" `isPrefixOf` argString) $ -- echo "-------"
+                warnMsg (getId arg) "echo flag"
+      where argString = (concat $ deadSimple arg)
     bashism t@(T_SimpleCommand _ _ (cmd:arg:_))
         | t `isCommand` "exec" && "-" `isPrefixOf` (concat $ deadSimple arg) =
             warnMsg (getId arg) "exec flag"
