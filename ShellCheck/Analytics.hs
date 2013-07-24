@@ -718,10 +718,10 @@ checkConstantIfs _ = return ()
 
 prop_checkNoaryWasBinary = verify checkNoaryWasBinary "[[ a==$foo ]]"
 prop_checkNoaryWasBinary2 = verify checkNoaryWasBinary "[ $foo=3 ]"
-prop_checkNoaryWasBinary3 = verify checkNoaryWasBinary "[ foo!=3 ]"
-checkNoaryWasBinary (TC_Noary _ _ t@(T_NormalWord id l)) = do
+prop_checkNoaryWasBinary3 = verify checkNoaryWasBinary "[ $foo!=3 ]"
+checkNoaryWasBinary (TC_Noary _ _ t@(T_NormalWord id l)) | not $ isConstant t = do
     let str = concat $ deadSimple t
-    when ('=' `elem` str) $ err id $ "Always true because you didn't put spaces around the operator."
+    when ('=' `elem` str) $ err id $ "You need spaces around the comparison operator."
 checkNoaryWasBinary _ = return ()
 
 prop_checkConstantNoary = verify checkConstantNoary "[[ '$(foo)' ]]"
@@ -729,8 +729,7 @@ prop_checkConstantNoary2 = verify checkConstantNoary "[ \"-f lol\" ]"
 prop_checkConstantNoary3 = verify checkConstantNoary "[[ cmd ]]"
 prop_checkConstantNoary4 = verify checkConstantNoary "[[ ! cmd ]]"
 checkConstantNoary (TC_Noary _ _ t@(T_NormalWord id _)) | isConstant t = do
-    err id $ if isEmpty t then "Always false, just checks the non-emptyness of the literal word."
-                          else "Always true, just checks the non-emptyness of the literal word."
+    err id $ "This expression is constant. Did you forget a $ somewhere?"
 checkConstantNoary _ = return ()
 
 prop_checkBraceExpansionVars = verify checkBraceExpansionVars "echo {1..$n}"
