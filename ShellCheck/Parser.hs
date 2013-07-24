@@ -855,9 +855,9 @@ readBraced = try $ do
     char '}'
     return $ T_BraceExpansion id $ concat str
 
-readNormalDollar = readDollarExpression <|> readDollarDoubleQuote <|> readDollarSingleQuote <|> readDollarLonely 
+readNormalDollar = readDollarExpression <|> readDollarDoubleQuote <|> readDollarSingleQuote <|> readDollarLonely
 readDoubleQuotedDollar = readDollarExpression <|> readDollarLonely
-readDollarExpression = readDollarArithmetic <|> readDollarBracket <|> readDollarBraced <|> readDollarExpansion <|> readDollarVariable 
+readDollarExpression = readDollarArithmetic <|> readDollarBracket <|> readDollarBraced <|> readDollarExpansion <|> readDollarVariable
 
 prop_readDollarSingleQuote = isOk readDollarSingleQuote "$'foo\\\'lol'"
 readDollarSingleQuote = called "$'..' expression" $ do
@@ -1474,6 +1474,7 @@ prop_readAssignmentWord5 = isOk readAssignmentWord "b+=lol"
 prop_readAssignmentWord6 = isWarning readAssignmentWord "b += (1 2 3)"
 prop_readAssignmentWord7 = isOk readAssignmentWord "a[3$n'']=42"
 prop_readAssignmentWord8 = isOk readAssignmentWord "a[4''$(cat foo)]=42"
+prop_readAssignmentWord9 = isOk readAssignmentWord "IFS= read"
 prop_readAssignmentWord0 = isWarning readAssignmentWord "foo$n=42"
 readAssignmentWord = try $ do
     id <- getNextId
@@ -1489,8 +1490,13 @@ readAssignmentWord = try $ do
     space2 <- spacing
     value <- readArray <|> readNormalWord
     spacing
-    when (space ++ space2 /= "") $ parseNoteAt pos ErrorC "Don't put spaces around the = in assignments."
-    when (space == "" && space2 /= "") $ parseNoteAt pos StyleC "Use var='' if you intended to assign the empty string."
+    if space == "" && space2 /= ""
+      then
+        when (variable /= "IFS") $
+            parseNoteAt pos InfoC $ "Because of the space after '=', this is equivalent to '" ++ variable ++ "=\"\" ..'"
+      else
+        when (space /= "" && space2 /= "") $
+            parseNoteAt pos ErrorC "Don't put spaces around the = in assignments."
     return $ T_Assignment id variable value
 
 -- This is only approximate. Fixme?
