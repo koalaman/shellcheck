@@ -468,9 +468,8 @@ checkForInLs t = try t
    check id f x =
     case deadSimple x of
       ("ls":n) ->
-        let args = (if n == [] then ["*"] else n) in
-          err id $ "Don't use 'for "++f++" in $(ls " ++ (intercalate " " n)
-            ++ ")'. Use 'for "++f++" in "++ (intercalate " " args) ++ "'."
+        let warntype = if any ("-" `isPrefixOf`) n then warn else err in
+          warntype id $ "Iterate over globs (e.g. 'for f in */*.wav') whenever possible, as ls only works for simple, alphanumeric filenames."
       ("find":_) -> warn id $ "Don't use 'for " ++ f ++ " in $(find ...). "
                         ++ "Use find -exec or a while read loop."
       _ -> return ()
@@ -611,14 +610,14 @@ prop_checkSingleQuotedVariables3c= verifyTree checkSingleQuotedVariables "sed 's
 prop_checkSingleQuotedVariables4 = verifyNotTree checkSingleQuotedVariables "awk '{print $1}'"
 prop_checkSingleQuotedVariables5 = verifyNotTree checkSingleQuotedVariables "trap 'echo $SECONDS' EXIT"
 checkSingleQuotedVariables t@(T_SingleQuoted id s) parents =
-            case matchRegex checkSingleQuotedVariablesRe s of
+            case matchRegex re s of
                 Just [] -> unless (probablyOk t) $ info id $ "Expressions don't expand in single quotes, use double quotes for that."
                 _          -> return ()
   where
     probablyOk t =
-        isParamTo parents "awk" t || isParamTo parents "trap" t
+        any (\x -> isParamTo parents x t) ["awk", "trap"]
+    re = mkRegex "\\$[{(0-9a-zA-Z_]"
 checkSingleQuotedVariables _ _ = return ()
-checkSingleQuotedVariablesRe = mkRegex "\\$[{(0-9a-zA-Z_]"
 
 
 prop_checkUnquotedN = verify checkUnquotedN "if [ -n $foo ]; then echo cow; fi"
