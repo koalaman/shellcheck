@@ -1445,11 +1445,14 @@ prop_checkSpacefulnessF = verifyNotFull checkSpacefulness "local foo=$1"
 prop_checkSpacefulnessG = verifyNotFull checkSpacefulness "declare foo=$1"
 prop_checkSpacefulnessH = verifyFull checkSpacefulness "echo foo=$1"
 prop_checkSpacefulnessI = verifyNotFull checkSpacefulness "$1 --flags"
+prop_checkSpacefulnessJ = verifyFull checkSpacefulness "echo $PWD"
 
 checkSpacefulness t =
     doVariableFlowAnalysis readF writeF (Map.fromList defaults) t
   where
-    defaults = map (\x -> (show x, True)) [0..10]
+    defaults = 
+        let values = ["PWD"] ++ (map show [0..10]) in
+            zip values (repeat True)
 
     hasSpaces name = do
         map <- get
