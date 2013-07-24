@@ -297,7 +297,7 @@ checkUuoc _ = return ()
 prop_checkNeedlessCommands = verify checkNeedlessCommands "foo=$(expr 3 + 2)"
 prop_checkNeedlessCommands2 = verify checkNeedlessCommands "foo=`echo \\`expr 3 + 2\\``"
 checkNeedlessCommands (T_SimpleCommand id _ (w:_)) | w `isCommand` "expr" =
-    style id "Use $((..)), ${} or [[ ]] in place of antiquated expr."
+    style id "expr is antiquated. Consider rewriting this using $((..)), ${} or [[ ]]."
 checkNeedlessCommands (T_SimpleCommand id _ (w:_)) | w `isCommand` "dirname" =
     style id "Use parameter expansion instead, such as ${var%/*}."
 checkNeedlessCommands (T_SimpleCommand id _ (w:_)) | w `isCommand` "basename" =
