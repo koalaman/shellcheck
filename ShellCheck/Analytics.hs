@@ -752,11 +752,12 @@ prop_checkArithmeticDeref2 = verify checkArithmeticDeref "cow=14; (( s+= $cow ))
 prop_checkArithmeticDeref3 = verifyNot checkArithmeticDeref "cow=1/40; (( s+= ${cow%%/*} ))"
 prop_checkArithmeticDeref4 = verifyNot checkArithmeticDeref "(( ! $? ))"
 prop_checkArithmeticDeref5 = verifyNot checkArithmeticDeref "(($1))"
+prop_checkArithmeticDeref6 = verifyNot checkArithmeticDeref "(( ${a[$i]} ))"
 checkArithmeticDeref (TA_Expansion _ (T_DollarBraced id l)) | not . excepting $ bracedString l =
     style id $ "Don't use $ on variables in (( ))."
   where
     excepting [] = True
-    excepting s = (any (`elem` "/.:#%?*@") s) || (isDigit $ head s)
+    excepting s = (any (`elem` "/.:#%?*@[]") s) || (isDigit $ head s)
 checkArithmeticDeref _ = return ()
 
 prop_checkArithmeticBadOctal1 = verify checkArithmeticBadOctal "(( 0192 ))"
@@ -1450,7 +1451,7 @@ prop_checkSpacefulnessJ = verifyFull checkSpacefulness "echo $PWD"
 checkSpacefulness t =
     doVariableFlowAnalysis readF writeF (Map.fromList defaults) t
   where
-    defaults = 
+    defaults =
         let values = ["PWD"] ++ (map show [0..10]) in
             zip values (repeat True)
 
