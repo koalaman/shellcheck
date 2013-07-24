@@ -1067,11 +1067,12 @@ prop_checkSudoRedirect3 = verify checkSudoRedirect "sudo cmd >> file"
 prop_checkSudoRedirect4 = verify checkSudoRedirect "sudo cmd &> file"
 prop_checkSudoRedirect5 = verifyNot checkSudoRedirect "sudo cmd 2>&1"
 prop_checkSudoRedirect6 = verifyNot checkSudoRedirect "sudo cmd 2> log"
+prop_checkSudoRedirect7 = verifyNot checkSudoRedirect "sudo cmd > /dev/null 2>&1"
 checkSudoRedirect (T_Redirecting _ redirs cmd) | cmd `isCommand` "sudo" =
     mapM_ warnAbout redirs
   where
     warnAbout (T_FdRedirect _ s (T_IoFile id op file))
-        | s == "" || s == "&" =
+        | (s == "" || s == "&") && (not $ special file) =
         case op of
             T_Less _ ->
               info (getId op) $
@@ -1084,6 +1085,7 @@ checkSudoRedirect (T_Redirecting _ redirs cmd) | cmd `isCommand` "sudo" =
                 "sudo doesn't affect redirects. Use .. | sudo tee -a file"
             _ -> return ()
     warnAbout _ = return ()
+    special file = (concat $ deadSimple file) == "/dev/null"
 checkSudoRedirect _ = return ()
 
 prop_checkPS11 = verify checkPS1Assignments "PS1='\\033[1;35m\\$ '"
