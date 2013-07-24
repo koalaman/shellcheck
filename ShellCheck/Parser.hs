@@ -1474,7 +1474,7 @@ prop_readAssignmentWord5 = isOk readAssignmentWord "b+=lol"
 prop_readAssignmentWord6 = isWarning readAssignmentWord "b += (1 2 3)"
 prop_readAssignmentWord7 = isOk readAssignmentWord "a[3$n'']=42"
 prop_readAssignmentWord8 = isOk readAssignmentWord "a[4''$(cat foo)]=42"
-prop_readAssignmentWord9 = isOk readAssignmentWord "IFS= read"
+prop_readAssignmentWord9 = isOk readAssignmentWord "IFS= "
 prop_readAssignmentWord0 = isWarning readAssignmentWord "foo$n=42"
 readAssignmentWord = try $ do
     id <- getNextId
@@ -1488,16 +1488,22 @@ readAssignmentWord = try $ do
     pos <- getPosition
     op <- string "+=" <|> string "="  -- analysis doesn't treat += as a reference. fixme?
     space2 <- spacing
-    value <- readArray <|> readNormalWord
-    spacing
     if space == "" && space2 /= ""
-      then
+      then do
         when (variable /= "IFS") $
-            parseNoteAt pos InfoC $ "Because of the space after '=', this is equivalent to '" ++ variable ++ "=\"\" ..'"
-      else
-        when (space /= "" && space2 /= "") $
+            parseNoteAt pos InfoC $ "Note that 'var= value' (with space after equals sign) is similar to 'var=\"\"; value'."
+        value <- readEmptyLiteral
+        return $ T_Assignment id variable value
+      else do
+        when (space /= "" || space2 /= "") $
             parseNoteAt pos ErrorC "Don't put spaces around the = in assignments."
-    return $ T_Assignment id variable value
+        value <- readArray <|> readNormalWord
+        spacing
+        return $ T_Assignment id variable value
+  where
+    readEmptyLiteral = do
+        id <- getNextId
+        return $ T_Literal id ""
 
 -- This is only approximate. Fixme?
 readArrayIndex = do
