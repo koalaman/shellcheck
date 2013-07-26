@@ -177,6 +177,9 @@ isPotentiallyConfusedGlobRegex =
 
 matches string regex = isJust $ matchRegex regex string
 
+headOrDefault _ (a:_) = a
+headOrDefault def _ = def
+
 isConstant token =
     case token of
         T_NormalWord _ l   -> all isConstant l
@@ -304,21 +307,40 @@ checkNeedlessCommands (T_SimpleCommand id _ (w:_)) | w `isCommand` "basename" =
     style id "Use parameter expansion instead, such as ${var##*/}."
 checkNeedlessCommands _ = return ()
 
-prop_checkPipePitfalls1 = verify checkPipePitfalls "foo | grep foo | awk bar"
-prop_checkPipePitfalls2 = verifyNot checkPipePitfalls "foo | awk bar | grep foo"
 prop_checkPipePitfalls3 = verify checkPipePitfalls "ls | grep -v mp3"
+prop_checkPipePitfalls4 = verifyNot checkPipePitfalls "find . -print0 | xargs -0 foo"
+prop_checkPipePitfalls5 = verifyNot checkPipePitfalls "ls -N | foo"
+prop_checkPipePitfalls6 = verify checkPipePitfalls "find . | xargs foo"
 checkPipePitfalls (T_Pipeline id commands) = do
-    for [["grep"], ["sed"]] $  \id -> style id "You don't need grep | sed, sed can filter lines by itself."
-    for [["grep"], ["awk"]] $  \id -> style id "You don't need grep | awk, awk can filter lines by itself."
-    for [["ls"], ["?"]] $      \id -> warn id "Don't parse ls output; it mangles filenames."
-    for [["ls"], ["grep"]] $   \id -> warn id "Don't use ls | grep. Use a glob or a for loop with a condition."
-    for [["ls"], ["xargs"]] $  \id -> warn id "Don't use ls | xargs. Use find -exec .. +"
-    for [["find"], ["xargs"]]$ \id -> warn id "Don't use find | xargs cmd. find -exec cmd {} + handles whitespace."
-    for [["?"], ["echo"]] $    \id -> info id "echo doesn't read from stdin, are you sure you should be piping to it?"
+    for ["find", "xargs"] $
+        \(find:xargs:_) -> let args = deadSimple xargs in
+            when (not $ hasShortParameter args '0') $
+                warn (getId find) "Use either 'find .. -print0 | xargs -0 ..' or 'find .. -exec .. +' to allow for non-alphanumeric filenames."
+
+    for ["?", "echo"] $
+        \(_:echo:_) -> info (getId echo) "echo doesn't read from stdin, are you sure you should be piping to it?"
+
+    didLs <- liftM or . sequence $ [
+        for' ["ls", "grep"] $
+            flip warn "Don't use ls | grep. Use a glob or a for loop with a condition to allow non-alphanumeric filenames.",
+        for' ["ls", "xargs"] $
+            flip warn "Use 'find .. -print0 | xargs -0 ..' or 'find .. -exec .. +' to allow non-alphanumeric filenames."
+        ]
+    when (not didLs) $ do
+        for ["ls", "?"] $
+            \(ls:_) -> (when (not $ hasShortParameter (deadSimple ls) 'N') $
+                info (getId ls) "Use find instead of ls to better handle non-alphanumeric filenames.")
+        return ()
   where
     for l f =
-        let indices = indexOfSublists l (map (take 1 . deadSimple) commands)
-        in mapM_ f (map (\n -> getId $ commands !! n) indices)
+        let indices = indexOfSublists l (map (headOrDefault "" . deadSimple) commands)
+        in do
+            mapM_ f (map (\n -> take (length l) $ drop n $ commands) indices)
+            return . not . null $ indices
+    for' l f = for l (first f)
+    first func (x:_) = func (getId x)
+    first _ _ = return ()
+    hasShortParameter list char = any (\x -> "-" `isPrefixOf` x && char `elem` x) list
 checkPipePitfalls _ = return ()
 
 indexOfSublists sub all = f 0 all
@@ -326,12 +348,12 @@ indexOfSublists sub all = f 0 all
     f _ [] = []
     f n a@(r:rest) =
         let others = f (n+1) rest in
-            if match sub (take (length sub) a)
+            if match sub a
               then n:others
               else others
-    match [] [] = True
-    match (["?"]:r1) (_:r2) = match r1 r2
+    match ("?":r1) (_:r2) = match r1 r2
     match (x1:r1) (x2:r2) | x1 == x2 = match r1 r2
+    match [] _ = True
     match _ _ = False
 
 
