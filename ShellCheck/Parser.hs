@@ -41,6 +41,7 @@ singleQuote = char '\''
 doubleQuote = char '"'
 variableStart = upper <|> lower <|> oneOf "_"
 variableChars = upper <|> lower <|> digit <|> oneOf "_"
+functionChars = variableChars <|> oneOf ":+-"
 specialVariable = oneOf "@*#?-$!"
 tokenDelimiter = oneOf "&|;<> \t\n\r" <|> nbsp
 quotable = oneOf "|&;<>()$`\\ \"'\t\n\r" <|> nbsp
@@ -1402,6 +1403,7 @@ prop_readFunctionDefinition1 = isOk readFunctionDefinition "foo   (){ command fo
 prop_readFunctionDefinition2 = isWarning readFunctionDefinition "function foo() { command foo --lol \"$@\"; }"
 prop_readFunctionDefinition3 = isWarning readFunctionDefinition "function foo { lol; }"
 prop_readFunctionDefinition4 = isWarning readFunctionDefinition "foo(a, b) { true; }"
+prop_readFunctionDefinition5 = isOk readFunctionDefinition ":(){ :|:;}"
 readFunctionDefinition = called "function" $ do
     id <- getNextId
     name <- try readFunctionSignature
@@ -1421,7 +1423,7 @@ readFunctionSignature = do
             whitespace
         parseProblemAt pos InfoC "Drop the keyword 'function'. It's optional in Bash but invalid in other shells."
         spacing
-        name <- readVariableName
+        name <- readFunctionName
         optional spacing
         pos <- getPosition
         readParens <|> do
@@ -1429,7 +1431,7 @@ readFunctionSignature = do
         return name
 
     readWithoutFunction = try $ do
-        name <- readVariableName
+        name <- readFunctionName
         optional spacing
         readParens
         return name
@@ -1442,6 +1444,8 @@ readFunctionSignature = do
             anyChar `reluctantlyTill` oneOf "\n){"
             g_Rparen
         return ()
+
+    readFunctionName = many1 functionChars
 
 
 
