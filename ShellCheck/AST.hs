@@ -80,7 +80,7 @@ data Token =
     | T_GREATAND Id
     | T_Glob Id String
     | T_Greater Id
-    | T_HereDoc Id Bool Bool String
+    | T_HereDoc Id Bool Bool String String
     | T_HereString Id Token
     | T_If Id
     | T_IfExpression Id [([Token],[Token])] [Token]
@@ -272,7 +272,7 @@ getId t = case t of
         T_DollarArithmetic id _  -> id
         T_BraceExpansion id _  -> id
         T_IoFile id _ _  -> id
-        T_HereDoc id _ _ _ -> id
+        T_HereDoc id _ _ _ _ -> id
         T_HereString id _  -> id
         T_FdRedirect id _ _  -> id
         T_Assignment id _ _  -> id

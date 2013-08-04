@@ -129,6 +129,8 @@ basicChecks = [
     ,checkSpuriousExpansion
     ,checkUnusedEchoEscapes
     ,checkDollarBrackets
+    ,checkSshHereDoc
+    ,checkSshCommandString
     ]
 treeChecks = [
     checkUnquotedExpansions
@@ -1286,6 +1288,38 @@ prop_checkDollarBrackets2 = verifyNot checkDollarBrackets "echo $((1+2))"
 checkDollarBrackets (T_DollarBracket id _) =
     style id "Use $((..)) instead of deprecated $[..]"
 checkDollarBrackets _ = return ()
+
+prop_checkSshHereDoc1 = verify checkSshHereDoc "ssh host << foo\necho $PATH\nfoo"
+prop_checkSshHereDoc2 = verifyNot checkSshHereDoc "ssh host << 'foo'\necho $PATH\nfoo"
+checkSshHereDoc (T_Redirecting _ redirs cmd)
+        | cmd `isCommand` "ssh" =
+    mapM_ checkHereDoc redirs
+  where
+    hasVariables = mkRegex "[`$]"
+    checkHereDoc (T_FdRedirect _ _ (T_HereDoc id _ False token str))
+        | isJust $ matchRegex hasVariables str =
+        warn id $ "Quote '" ++ token ++ "' to make here document expansions happen on the server side rather than on the client."
+    checkHereDoc _ = return ()
+checkSshHereDoc _ = return ()
+
+-- This is hard to get right without properly parsing ssh args
+prop_checkSshCmdStr1 = verify checkSshCommandString "ssh host \"echo $PS1\""
+prop_checkSshCmdStr2 = verifyNot checkSshCommandString "ssh host \"ls foo\""
+prop_checkSshCmdStr3 = verifyNot checkSshCommandString "ssh \"$host\""
+checkSshCommandString = checkCommand "ssh" f
+  where
+    nonOptions args =
+        filter (\x -> not $ "-" `isPrefixOf` (concat $ deadSimple x)) args
+    f args =
+        case nonOptions args of
+            (hostport:r@(_:_)) -> checkArg $ last r
+            _ -> return ()
+    checkArg (T_NormalWord _ [T_DoubleQuoted id parts]) =
+        case filter (not . isConstant) parts of
+            [] -> return ()
+            (x:_) -> info (getId x) $
+                "Note that, unescaped, this expands on the client side."
+    checkArg _ = return ()
 
 
 --- Subshell detection

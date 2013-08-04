@@ -989,7 +989,7 @@ readHereDoc = called "here document" $ do
         spaces <- spacing
         verifyHereDoc dashed quoted spaces hereInfo
         token <- string endToken
-        return $ T_FdRedirect fid "" $ T_HereDoc hid dashed quoted hereInfo
+        return $ T_FdRedirect fid "" $ T_HereDoc hid dashed quoted endToken hereInfo
      `attempting` (eof >> debugHereDoc tokenPosition endToken hereInfo)
 
 verifyHereDoc dashed quoted spacing hereInfo = do
