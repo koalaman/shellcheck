@@ -39,6 +39,7 @@ genericChecks = [
     ,checkQuotesInLiterals
     ,checkShebang
     ,checkFunctionsUsedExternally
+    ,checkUnusedAssignments
     ]
 
 checksFor Sh = map runBasicAnalysis [
@@ -136,6 +137,47 @@ treeChecks = [
     checkUnquotedExpansions
     ,checkSingleQuotedVariables
     ]
+
+internalVariables = [
+    -- Generic
+    "_",
+
+    -- Bash
+    "BASH", "BASHOPTS", "BASHPID", "BASH_ALIASES", "BASH_ARGC",
+    "BASH_ARGV", "BASH_CMDS", "BASH_COMMAND", "BASH_EXECUTION_STRING",
+    "BASH_LINENO", "BASH_REMATCH", "BASH_SOURCE", "BASH_SUBSHELL",
+    "BASH_VERSINFO", "BASH_VERSION", "COMP_CWORD", "COMP_KEY",
+    "COMP_LINE", "COMP_POINT", "COMP_TYPE", "COMP_WORDBREAKS",
+    "COMP_WORDS", "COPROC", "DIRSTACK", "EUID", "FUNCNAME", "GROUPS",
+    "HISTCMD", "HOSTNAME", "HOSTTYPE", "LINENO", "MACHTYPE", "MAPFILE",
+    "OLDPWD", "OPTARG", "OPTIND", "OSTYPE", "PIPESTATUS", "PPID", "PWD",
+    "RANDOM", "READLINE_LINE", "READLINE_POINT", "REPLY", "SECONDS",
+    "SHELLOPTS", "SHLVL", "UID", "BASH_ENV", "BASH_XTRACEFD", "CDPATH",
+    "COLUMNS", "COMPREPLY", "EMACS", "ENV", "FCEDIT", "FIGNORE",
+    "FUNCNEST", "GLOBIGNORE", "HISTCONTROL", "HISTFILE", "HISTFILESIZE",
+    "HISTIGNORE", "HISTSIZE", "HISTTIMEFORMAT", "HOME", "HOSTFILE", "IFS",
+    "IGNOREEOF", "INPUTRC", "LANG", "LC_ALL", "LC_COLLATE", "LC_CTYPE",
+    "LC_MESSAGES", "LC_NUMERIC", "LINES", "MAIL", "MAILCHECK", "MAILPATH",
+    "OPTERR", "PATH", "POSIXLY_CORRECT", "PROMPT_COMMAND",
+    "PROMPT_DIRTRIM", "PS1", "PS2", "PS3", "PS4", "SHELL", "TIMEFORMAT",
+    "TMOUT", "TMPDIR", "auto_resume", "histchars",
+
+    -- Zsh
+    "ARGV0", "BAUD", "cdpath", "COLUMNS", "CORRECT_IGNORE",
+    "DIRSTACKSIZE", "ENV", "FCEDIT", "fignore", "fpath", "histchars",
+    "HISTCHARS", "HISTFILE", "HISTSIZE", "HOME", "IFS", "KEYBOARD_HACK",
+    "KEYTIMEOUT", "LANG", "LC_ALL", "LC_COLLATE", "LC_CTYPE",
+    "LC_MESSAGES", "LC_NUMERIC", "LC_TIME", "LINES", "LISTMAX",
+    "LOGCHECK", "MAIL", "MAILCHECK", "mailpath", "manpath", "module_path",
+    "NULLCMD", "path", "POSTEDIT", "PROMPT", "PROMPT2", "PROMPT3",
+    "PROMPT4", "prompt", "PROMPT_EOL_MARK", "PS1", "PS2", "PS3", "PS4",
+    "psvar", "READNULLCMD", "REPORTTIME", "REPLY", "reply", "RPROMPT",
+    "RPS1", "RPROMPT2", "RPS2", "SAVEHIST", "SPROMPT", "STTY", "TERM",
+    "TERMINFO", "TIMEFMT", "TMOUT", "TMPPREFIX", "watch", "WATCHFMT",
+    "WORDCHARS", "ZBEEP", "ZDOTDIR", "ZLE_LINE_ABORTED",
+    "ZLE_REMOVE_SUFFIX_CHARS", "ZLE_SPACE_SUFFIX_CHARS"
+  ]
+
 
 runBasicTreeAnalysis checks token =
     checkList (map runTree checks) token
@@ -868,7 +910,8 @@ inUnquotableContext tree t =
         TA_Trinary _ _ _ _ -> True
         TA_Expansion _ _ -> True
         T_Assignment _ _ _ -> True
-        T_Redirecting _ _ _ -> or $ map (isCommand t) ["local", "declare"]
+        T_Redirecting _ _ _ ->
+            any (isCommand t) ["local", "declare", "typeset", "export"]
         T_DoubleQuoted _ _ -> True
         T_CaseExpression _ _ _ -> True
         T_HereDoc _ _ _ _ _ -> True
@@ -1391,14 +1434,28 @@ getModifiedVariables t =
         T_SelectIn id str words _ -> [(t, t, str, DataFrom words)]
         _ -> []
 
-getModifiedVariableCommand base@(T_SimpleCommand _ _ ((T_NormalWord _ ((T_Literal _ x):_)):rest)) =
+-- Consider 'export' a reference, since it makes the var available
+getReferencedVariableCommand base@(T_SimpleCommand _ _ ((T_NormalWord _ ((T_Literal _ x):_)):rest)) =
     case x of
-        "read" -> concatMap getLiteral rest
+        "export" -> concatMap getReference rest
+        _ -> [(base,base, x)]
+  where
+    getReference t@(T_Assignment _ name value) = [(t, t, name)]
+    getReference t@(T_NormalWord _ [T_Literal _ name]) | not ("-" `isPrefixOf` name) = [(t, t, name)]
+    getReference _ = []
+
+getReferencedVariableCommand _ = []
+
+getModifiedVariableCommand base@(T_SimpleCommand _ _ ((T_NormalWord _ ((T_Literal _ x):_)):rest)) =
+   filter (\(_,_,s,_) -> not ("-" `isPrefixOf` s)) $
+    case x of
+        "read" ->  concatMap getLiteral rest
         "let" -> concatMap letParamToLiteral rest
 
         "export" -> concatMap getModifierParam rest
         "declare" -> concatMap getModifierParam rest
         "typeset" -> concatMap getModifierParam rest
+        "local" -> concatMap getModifierParam rest
 
         _ -> []
   where
@@ -1411,6 +1468,8 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ ((T_NormalWord _ ((T_Litera
     stripEqualsFrom t = t
 
     getLiteral t@(T_NormalWord _ [T_Literal _ s]) =
+        [(base, t, s, DataExternal)]
+    getLiteral t@(T_NormalWord _ [T_SingleQuoted _ s]) =
         [(base, t, s, DataExternal)]
     getLiteral t@(T_NormalWord _ [T_DoubleQuoted _ [T_Literal id s]]) =
         [(base, t, s, DataExternal)]
@@ -1434,7 +1493,7 @@ getReferencedVariables t =
     case t of
         T_DollarBraced id l -> map (\x -> (t, t, x)) $ [getBracedReference $ bracedString l]
         TA_Variable id str -> [(t, t, str)]
-        x -> []
+        x -> getReferencedVariableCommand x
 
 getVariableFlow t =
     let (_, stack) = runState (doStackAnalysis startScope endScope t) []
@@ -1650,4 +1709,31 @@ checkFunctionsUsedExternally t =
                 "Shell functions can't be passed to external commands."
               info id $
                 "Use own script or sh -c '..' to run this from " ++ cmd ++ "."
+
+prop_checkUnused0 = verifyNotFull checkUnusedAssignments "var=foo; echo $var"
+prop_checkUnused1 = verifyFull checkUnusedAssignments "var=foo; echo $bar"
+prop_checkUnused2 = verifyNotFull checkUnusedAssignments "var=foo; export var;"
+prop_checkUnused3 = verifyFull checkUnusedAssignments "for f in *; do echo '$f'; done"
+prop_checkUnused4 = verifyFull checkUnusedAssignments "local i=0"
+prop_checkUnused5 = verifyNotFull checkUnusedAssignments "read lol; echo $lol"
+prop_checkUnused6 = verifyNotFull checkUnusedAssignments "var=4; (( var++ ))"
+prop_checkUnused7 = verifyNotFull checkUnusedAssignments "var=2; $((var))"
+prop_checkUnused8 = verifyFull checkUnusedAssignments "var=2; var=3;"
+checkUnusedAssignments t = snd $ runState (mapM_ checkAssignment flow) []
+  where
+    flow = getVariableFlow t
+    references = foldl (flip ($)) defaultMap (map insertRef flow)
+    insertRef (Reference (base, token, name)) =
+        Map.insert name ()
+    insertRef _ = id
+
+    checkAssignment (Assignment (_, token, name, _)) =
+        case Map.lookup name references of
+            Just _ -> return ()
+            Nothing -> do
+                info (getId token) $
+                    name ++ " appears unused. Verify it or export it."
+    checkAssignment _ = return ()
+
+    defaultMap = Map.fromList $ zip internalVariables $ repeat ()
 
