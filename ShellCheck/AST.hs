@@ -23,6 +23,9 @@ import qualified Text.Regex as Re
 
 data Id = Id Int deriving (Show, Eq, Ord)
 
+data Quoted = Quoted | Unquoted deriving (Show, Eq)
+data Dashed = Dashed | Undashed deriving (Show, Eq)
+
 data Token =
     TA_Base Id String Token
     | TA_Binary Id String Token Token
@@ -80,7 +83,7 @@ data Token =
     | T_GREATAND Id
     | T_Glob Id String
     | T_Greater Id
-    | T_HereDoc Id Bool Bool String String
+    | T_HereDoc Id Dashed Quoted String [Token]
     | T_HereString Id Token
     | T_If Id
     | T_IfExpression Id [([Token],[Token])] [Token]
@@ -208,6 +211,7 @@ analyze f g i t =
     delve (T_Condition id typ token) = d1 token $ T_Condition id typ
     delve (T_Extglob id str l) = dl l $ T_Extglob id str
     delve (T_DollarBraced id op) = d1 op $ T_DollarBraced id
+    delve (T_HereDoc id d q str l) = dl l $ T_HereDoc id d q str
 
     delve (TC_And id typ str t1 t2) = d2 t1 t2 $ TC_And id typ str
     delve (TC_Or id typ str t1 t2) = d2 t1 t2 $ TC_Or id typ str

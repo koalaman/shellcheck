@@ -681,24 +681,24 @@ readBackTicked = called "backtick expansion" $ do
     subStart <- getPosition
     subString <- readGenericLiteral (char '`')
     char '`'
+    -- Result positions may be off due to escapes
     result <- subParse subStart readCompoundList (unEscape subString)
     return $ T_Backticked id result
   where
-    -- Position may be off due to escapes
-    subParse pos parser input = do
-        lastPosition <- getPosition
-        lastInput <- getInput
-        setPosition pos
-        setInput input
-        result <- parser
-        setInput lastInput
-        setPosition lastPosition
-        return result
     unEscape [] = []
     unEscape ('\\':x:rest) | x `elem` "\"$`\\" = x : unEscape rest
     unEscape ('\\':'\n':rest) = unEscape rest
     unEscape (c:rest) = c : unEscape rest
 
+subParse pos parser input = do
+    lastPosition <- getPosition
+    lastInput <- getInput
+    setPosition pos
+    setInput input
+    result <- parser
+    setInput lastInput
+    setPosition lastPosition
+    return result
 
 prop_readDoubleQuoted = isOk readDoubleQuoted "\"Hello $FOO\""
 prop_readDoubleQuoted2 = isOk readDoubleQuoted "\"$'\""
@@ -969,7 +969,7 @@ readHereDoc = called "here document" $ do
     fid <- getNextId
     pos <- getPosition
     try $ string "<<"
-    dashed <- (char '-' >> return True) <|> return False
+    dashed <- (char '-' >> return Dashed) <|> return Undashed
     tokenPosition <- getPosition
     sp <- spacing
     optional $ do
@@ -977,37 +977,56 @@ readHereDoc = called "here document" $ do
         let message = "Shells are space sensitive. Use '< <(cmd)', not '<<" ++ sp ++ "(cmd)'."
         parseProblemAt pos ErrorC message
     hid <- getNextId
-    (quoted, endToken) <- (readNormalLiteral "" >>= (\x -> return (False, stripLiteral x)) )
-                            <|> (readDoubleQuotedLiteral >>= return . (\x -> (True, stripLiteral x)))
-                            <|> (readSingleQuotedLiteral >>= return . (\x -> (True, x)))
+    (quoted, endToken) <- (readNormalLiteral "" >>= (\x -> return (Unquoted, stripLiteral x)) )
+                            <|> (readDoubleQuotedLiteral >>= return . (\x -> (Quoted, stripLiteral x)))
+                            <|> (readSingleQuotedLiteral >>= return . (\x -> (Quoted, x)))
     spacing
 
-    hereInfo <- anyChar `reluctantlyTill` (linefeed >> spacing >> (string endToken) >> (disregard whitespace <|> eof))
+    startPos <- getPosition
+    hereData <- anyChar `reluctantlyTill` (linefeed >> spacing >> (string endToken) >> (disregard whitespace <|> eof))
 
     do
         linefeed
         spaces <- spacing
-        verifyHereDoc dashed quoted spaces hereInfo
-        token <- string endToken
-        return $ T_FdRedirect fid "" $ T_HereDoc hid dashed quoted endToken hereInfo
-     `attempting` (eof >> debugHereDoc tokenPosition endToken hereInfo)
+        verifyHereDoc dashed quoted spaces hereData
+        string endToken
+        parsedData <- parseHereData quoted startPos hereData
+        return $ T_FdRedirect fid "" $ T_HereDoc hid dashed quoted endToken parsedData
+     `attempting` (eof >> debugHereDoc tokenPosition endToken hereData)
 
-verifyHereDoc dashed quoted spacing hereInfo = do
-    when (not dashed && spacing /= "") $ parseNote ErrorC "Use <<- instead of << if you want to indent the end token."
-    when (dashed && filter (/= '\t') spacing /= "" ) $ parseNote ErrorC "When using <<-, you can only indent with tabs."
-    return ()
+  where
+    parseHereData Quoted startPos hereData = do
+        id <- getNextIdAt startPos
+        return $ [T_Literal id hereData]
 
-debugHereDoc pos endToken doc =
-    if endToken `isInfixOf` doc
-        then
-              let lookAt line = when (endToken `isInfixOf` line) $
-                        parseProblemAt pos ErrorC ("Close matches include '" ++ line ++ "' (!= '" ++ endToken ++ "').")
-              in do
-                    parseProblemAt pos ErrorC ("Found '" ++ endToken ++ "' further down, but not entirely by itself.")
-                    mapM_ lookAt (lines doc)
-        else if (map toLower endToken) `isInfixOf` (map toLower doc)
-            then parseProblemAt pos ErrorC ("Found " ++ endToken ++ " further down, but with wrong casing.")
-            else parseProblemAt pos ErrorC ("Couldn't find end token `" ++ endToken ++ "' in the here document.")
+    parseHereData Unquoted startPos hereData = do
+        subParse startPos readHereData hereData
+
+    readHereData = many $ readNormalDollar <|> readBackTicked <|> readHereLiteral
+
+    readHereLiteral = do
+        id <- getNextId
+        chars <- anyChar `reluctantlyTill1` oneOf "`$"
+        return $ T_Literal id chars
+
+    verifyHereDoc dashed quoted spacing hereInfo = do
+        when (dashed == Undashed && spacing /= "") $
+            parseNote ErrorC "Use <<- instead of << if you want to indent the end token."
+        when (dashed == Dashed && filter (/= '\t') spacing /= "" ) $
+            parseNote ErrorC "When using <<-, you can only indent with tabs."
+        return ()
+
+    debugHereDoc pos endToken doc =
+        if endToken `isInfixOf` doc
+            then
+                  let lookAt line = when (endToken `isInfixOf` line) $
+                            parseProblemAt pos ErrorC ("Close matches include '" ++ line ++ "' (!= '" ++ endToken ++ "').")
+                  in do
+                        parseProblemAt pos ErrorC ("Found '" ++ endToken ++ "' further down, but not entirely by itself.")
+                        mapM_ lookAt (lines doc)
+            else if (map toLower endToken) `isInfixOf` (map toLower doc)
+                then parseProblemAt pos ErrorC ("Found " ++ endToken ++ " further down, but with wrong casing.")
+                else parseProblemAt pos ErrorC ("Couldn't find end token `" ++ endToken ++ "' in the here document.")
 
 
 readFilename = readNormalWord

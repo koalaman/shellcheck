@@ -549,6 +549,7 @@ prop_checkUnquotedExpansions3a= verifyTree checkUnquotedExpansions "[ ! $(foo) ]
 prop_checkUnquotedExpansions4 = verifyNotTree checkUnquotedExpansions "[[ $(foo) == cow ]]"
 prop_checkUnquotedExpansions5 = verifyNotTree checkUnquotedExpansions "for f in $(cmd); do echo $f; done"
 prop_checkUnquotedExpansions6 = verifyNotTree checkUnquotedExpansions "$(cmd)"
+prop_checkUnquotedExpansions7 = verifyNotTree checkUnquotedExpansions "cat << foo\n$(ls)\nfoo"
 checkUnquotedExpansions t tree =
     check t
   where
@@ -870,6 +871,7 @@ inUnquotableContext tree t =
         T_Redirecting _ _ _ -> or $ map (isCommand t) ["local", "declare"]
         T_DoubleQuoted _ _ -> True
         T_CaseExpression _ _ _ -> True
+        T_HereDoc _ _ _ _ _ -> True
         T_ForIn _ _ _ _ -> True -- Pragmatically assume it's desirable here
         x -> case Map.lookup (getId x) tree of
                 Nothing -> False
@@ -1296,8 +1298,8 @@ checkSshHereDoc (T_Redirecting _ redirs cmd)
     mapM_ checkHereDoc redirs
   where
     hasVariables = mkRegex "[`$]"
-    checkHereDoc (T_FdRedirect _ _ (T_HereDoc id _ False token str))
-        | isJust $ matchRegex hasVariables str =
+    checkHereDoc (T_FdRedirect _ _ (T_HereDoc id _ Unquoted token tokens))
+        | not (all isConstant tokens) =
         warn id $ "Quote '" ++ token ++ "' to make here document expansions happen on the server side rather than on the client."
     checkHereDoc _ = return ()
 checkSshHereDoc _ = return ()
