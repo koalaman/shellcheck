@@ -364,6 +364,9 @@ checkPipePitfalls (T_Pipeline id commands) = do
     for ["?", "echo"] $
         \(_:echo:_) -> info (getId echo) "echo doesn't read from stdin, are you sure you should be piping to it?"
 
+    for' ["ps", "grep"] $
+        flip info "Consider using pgrep instead of grepping ps output."
+
     didLs <- liftM or . sequence $ [
         for' ["ls", "grep"] $
             flip warn "Don't use ls | grep. Use a glob or a for loop with a condition to allow non-alphanumeric filenames.",
