@@ -19,6 +19,8 @@ ShellCheck is written in Haskell, and requires GHC, Parsec3 and Text.Regex.
 To build the JSON interface and run the unit tests, it also requires QuickCheck2 and JSON.
 
 On Ubuntu and similar, these are called:
+  ghc libghc-parsec3-dev libghc-json-dev libghc-regex-compat-dev libghc-quickcheck2-dev
+For older releases of Ubuntu and similar use instead:
   ghc6 libghc6-parsec3-dev libghc6-quickcheck2-dev libghc6-json-dev libghc-regex-compat-dev
 
 Executables can be built with cabal. Tests currently still rely on a Makefile.
