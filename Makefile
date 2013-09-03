@@ -18,7 +18,6 @@ jsoncheck: regardless
 	./test/runQuack && touch .tests
 
 clean:
-	rm -f .tests shellcheck  *.hi *.o  ShellCheck/*.hi ShellCheck/*.o
+	rm -f .tests shellcheck jsoncheck *.hi *.o  ShellCheck/*.hi ShellCheck/*.o
 
 regardless:
-	
