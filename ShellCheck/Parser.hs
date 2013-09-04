@@ -789,6 +789,9 @@ prop_readExtglob1 = isOk readExtglob "!(*.mp3)"
 prop_readExtglob2 = isOk readExtglob "!(*.mp3|*.wmv)"
 prop_readExtglob4 = isOk readExtglob "+(foo \\) bar)"
 prop_readExtglob5 = isOk readExtglob "+(!(foo *(bar)))"
+prop_readExtglob6 = isOk readExtglob "*(((||))|())"
+prop_readExtglob7 = isOk readExtglob "*(<>)"
+prop_readExtglob8 = isOk readExtglob "@(|*())"
 readExtglob = called "extglob" $ do
     id <- getNextId
     c <- try $ do
@@ -801,8 +804,19 @@ readExtglob = called "extglob" $ do
 
 readExtglobPart = do
     id <- getNextId
-    x <- many1 (readNormalWordPart "" <|> readSpacePart)
+    x <- many (readExtglobGroup <|> readNormalWordPart "" <|> readSpacePart <|> readExtglobLiteral)
     return $ T_NormalWord id x
+  where
+    readExtglobGroup = do
+        id <- getNextId
+        char '('
+        contents <- readExtglobPart `sepBy` (char '|')
+        char ')'
+        return $ T_Extglob id "" contents
+    readExtglobLiteral = do
+        id <- getNextId
+        str <- many1 (oneOf "<>#;&")
+        return $ T_Literal id str        
 
 
 readSingleEscaped = do
