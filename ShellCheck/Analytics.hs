@@ -18,6 +18,7 @@
 module ShellCheck.Analytics where
 
 import ShellCheck.AST
+import ShellCheck.Data
 import ShellCheck.Parser
 import Control.Monad
 import Control.Monad.State
@@ -137,46 +138,6 @@ treeChecks = [
     checkUnquotedExpansions
     ,checkSingleQuotedVariables
     ]
-
-internalVariables = [
-    -- Generic
-    "_",
-
-    -- Bash
-    "BASH", "BASHOPTS", "BASHPID", "BASH_ALIASES", "BASH_ARGC",
-    "BASH_ARGV", "BASH_CMDS", "BASH_COMMAND", "BASH_EXECUTION_STRING",
-    "BASH_LINENO", "BASH_REMATCH", "BASH_SOURCE", "BASH_SUBSHELL",
-    "BASH_VERSINFO", "BASH_VERSION", "COMP_CWORD", "COMP_KEY",
-    "COMP_LINE", "COMP_POINT", "COMP_TYPE", "COMP_WORDBREAKS",
-    "COMP_WORDS", "COPROC", "DIRSTACK", "EUID", "FUNCNAME", "GROUPS",
-    "HISTCMD", "HOSTNAME", "HOSTTYPE", "LINENO", "MACHTYPE", "MAPFILE",
-    "OLDPWD", "OPTARG", "OPTIND", "OSTYPE", "PIPESTATUS", "PPID", "PWD",
-    "RANDOM", "READLINE_LINE", "READLINE_POINT", "REPLY", "SECONDS",
-    "SHELLOPTS", "SHLVL", "UID", "BASH_ENV", "BASH_XTRACEFD", "CDPATH",
-    "COLUMNS", "COMPREPLY", "EMACS", "ENV", "FCEDIT", "FIGNORE",
-    "FUNCNEST", "GLOBIGNORE", "HISTCONTROL", "HISTFILE", "HISTFILESIZE",
-    "HISTIGNORE", "HISTSIZE", "HISTTIMEFORMAT", "HOME", "HOSTFILE", "IFS",
-    "IGNOREEOF", "INPUTRC", "LANG", "LC_ALL", "LC_COLLATE", "LC_CTYPE",
-    "LC_MESSAGES", "LC_NUMERIC", "LINES", "MAIL", "MAILCHECK", "MAILPATH",
-    "OPTERR", "PATH", "POSIXLY_CORRECT", "PROMPT_COMMAND",
-    "PROMPT_DIRTRIM", "PS1", "PS2", "PS3", "PS4", "SHELL", "TIMEFORMAT",
-    "TMOUT", "TMPDIR", "auto_resume", "histchars",
-
-    -- Zsh
-    "ARGV0", "BAUD", "cdpath", "COLUMNS", "CORRECT_IGNORE",
-    "DIRSTACKSIZE", "ENV", "FCEDIT", "fignore", "fpath", "histchars",
-    "HISTCHARS", "HISTFILE", "HISTSIZE", "HOME", "IFS", "KEYBOARD_HACK",
-    "KEYTIMEOUT", "LANG", "LC_ALL", "LC_COLLATE", "LC_CTYPE",
-    "LC_MESSAGES", "LC_NUMERIC", "LC_TIME", "LINES", "LISTMAX",
-    "LOGCHECK", "MAIL", "MAILCHECK", "mailpath", "manpath", "module_path",
-    "NULLCMD", "path", "POSTEDIT", "PROMPT", "PROMPT2", "PROMPT3",
-    "PROMPT4", "prompt", "PROMPT_EOL_MARK", "PS1", "PS2", "PS3", "PS4",
-    "psvar", "READNULLCMD", "REPORTTIME", "REPLY", "reply", "RPROMPT",
-    "RPS1", "RPROMPT2", "RPS2", "SAVEHIST", "SPROMPT", "STTY", "TERM",
-    "TERMINFO", "TIMEFMT", "TMOUT", "TMPPREFIX", "watch", "WATCHFMT",
-    "WORDCHARS", "ZBEEP", "ZDOTDIR", "ZLE_LINE_ABORTED",
-    "ZLE_REMOVE_SUFFIX_CHARS", "ZLE_SPACE_SUFFIX_CHARS"
-  ]
 
 
 runBasicTreeAnalysis checks token =
