@@ -1683,6 +1683,7 @@ prop_checkUnused5 = verifyNotFull checkUnusedAssignments "read lol; echo $lol"
 prop_checkUnused6 = verifyNotFull checkUnusedAssignments "var=4; (( var++ ))"
 prop_checkUnused7 = verifyNotFull checkUnusedAssignments "var=2; $((var))"
 prop_checkUnused8 = verifyFull checkUnusedAssignments "var=2; var=3;"
+prop_checkUnused9 = verifyNotFull checkUnusedAssignments "read ''"
 checkUnusedAssignments t = snd $ runState (mapM_ checkAssignment flow) []
   where
     flow = getVariableFlow t

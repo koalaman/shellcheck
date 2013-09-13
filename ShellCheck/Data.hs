@@ -2,7 +2,7 @@ module ShellCheck.Data where
 
 internalVariables = [
     -- Generic
-    "_",
+    "", "_",
 
     -- Bash
     "BASH", "BASHOPTS", "BASHPID", "BASH_ALIASES", "BASH_ARGC",
