@@ -978,6 +978,8 @@ readDollarLonely = do
 
 prop_readHereDoc = isOk readHereDoc "<< foo\nlol\ncow\nfoo"
 prop_readHereDoc2 = isWarning readHereDoc "<<- EOF\n  cow\n  EOF"
+prop_readHereDoc3 = isOk readHereDoc "<< foo\n$\"\nfoo"
+prop_readHereDoc4 = isOk readHereDoc "<< foo\n`\nfoo"
 readHereDoc = called "here document" $ do
     let stripLiteral (T_Literal _ x) = x
         stripLiteral (T_SingleQuoted _ x) = x
@@ -1017,7 +1019,7 @@ readHereDoc = called "here document" $ do
     parseHereData Unquoted startPos hereData = do
         subParse startPos readHereData hereData
 
-    readHereData = many $ readNormalDollar <|> readBackTicked <|> readHereLiteral
+    readHereData = many $ try readNormalDollar <|> try readBackTicked <|> readHereLiteral
 
     readHereLiteral = do
         id <- getNextId
