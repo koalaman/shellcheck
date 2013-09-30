@@ -1139,6 +1139,7 @@ prop_readSimpleCommand = isOk readSimpleCommand "echo test > file"
 prop_readSimpleCommand2 = isOk readSimpleCommand "cmd &> file"
 prop_readSimpleCommand3 = isOk readSimpleCommand "export foo=(bar baz)"
 prop_readSimpleCommand4 = isOk readSimpleCommand "typeset -a foo=(lol)"
+prop_readSimpleCommand5 = isOk readSimpleCommand "eval foo=(bar baz)"
 readSimpleCommand = called "simple command" $ do
     id1 <- getNextId
     id2 <- getNextId
@@ -1155,7 +1156,7 @@ readSimpleCommand = called "simple command" $ do
             return $ makeSimpleCommand id1 id2 prefix [cmd] suffix
   where
     isModifierCommand (T_NormalWord _ [T_Literal _ s]) =
-        s `elem` ["declare", "export", "local", "readonly", "typeset"]
+        s `elem` ["declare", "export", "local", "readonly", "typeset", "eval"]
     isModifierCommand _ = False
 
 prop_readPipeline = isOk readPipeline "! cat /etc/issue | grep -i ubuntu"
