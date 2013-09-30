@@ -38,16 +38,16 @@ import GHC.Exts (sortWith)
 
 backslash = char '\\'
 linefeed = (optional carriageReturn) >> char '\n'
-singleQuote = char '\''
-doubleQuote = char '"'
+singleQuote = char '\'' <|> unicodeSingleQuote
+doubleQuote = char '"' <|> unicodeDoubleQuote
 variableStart = upper <|> lower <|> oneOf "_"
 variableChars = upper <|> lower <|> digit <|> oneOf "_"
 functionChars = variableChars <|> oneOf ":+-"
 specialVariable = oneOf "@*#?-$!"
 tokenDelimiter = oneOf "&|;<> \t\n\r" <|> nbsp
-quotable = oneOf "|&;<>()$`\\ \"'\t\n\r" <|> nbsp
+quotable = oneOf "|&;<>()$`\\ \"'\t\n\r" <|> nbsp <|> unicodeDoubleQuote
 bracedQuotable = oneOf "}\"$`'"
-doubleQuotable = oneOf "\"$`"
+doubleQuotable = oneOf "\"$`" <|> unicodeDoubleQuote
 whitespace = oneOf " \t\n" <|> carriageReturn <|> nbsp
 linewhitespace = oneOf " \t" <|> nbsp
 extglobStart = oneOf "?*@!+"
@@ -73,6 +73,18 @@ allspacing = do
 allspacingOrFail = do
     s <- allspacing
     when (null s) $ fail "Expected spaces"
+
+unicodeDoubleQuote = do
+    pos <- getPosition
+    char '\x201C' <|> char '\x201D'
+    parseProblemAt pos WarningC "This is a unicode double quote. Delete and retype it."
+    return '"'
+
+unicodeSingleQuote = do
+    pos <- getPosition
+    char '\x2018' <|> char '\x2019'
+    parseProblemAt pos WarningC "This is a unicode single quote. Delete and retype it."
+    return '"'
 
 carriageReturn = do
     parseNote ErrorC "Literal carriage return. Run script through tr -d '\\r' ."
@@ -652,6 +664,7 @@ readProcSub = called "process substitution" $ do
 
 prop_readSingleQuoted = isOk readSingleQuoted "'foo bar'"
 prop_readSingleQuoted2 = isWarning readSingleQuoted "'foo bar\\'"
+prop_readsingleQuoted3 = isWarning readSingleQuoted "\x2018hello\x2019"
 readSingleQuoted = called "single quoted string" $ do
     id <- getNextId
     singleQuote
@@ -703,6 +716,7 @@ subParse pos parser input = do
 
 prop_readDoubleQuoted = isOk readDoubleQuoted "\"Hello $FOO\""
 prop_readDoubleQuoted2 = isOk readDoubleQuoted "\"$'\""
+prop_readDoubleQuoted3 = isWarning readDoubleQuoted "\x201Chello\x201D"
 readDoubleQuoted = called "double quoted string" $ do
     id <- getNextId
     doubleQuote
@@ -817,7 +831,7 @@ readExtglobPart = do
     readExtglobLiteral = do
         id <- getNextId
         str <- many1 (oneOf "<>#;&")
-        return $ T_Literal id str        
+        return $ T_Literal id str
 
 
 readSingleEscaped = do
