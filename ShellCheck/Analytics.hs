@@ -152,7 +152,14 @@ err id note = addNoteFor id $ Note ErrorC $ note
 info id note = addNoteFor id $ Note InfoC $ note
 style id note = addNoteFor id $ Note StyleC $ note
 
-isVariableChar x = x == '_' || x >= 'a' && x <= 'z' || x >= 'A' && x <= 'Z' || x >= '0' && x <= '9'
+isVariableStartChar x = x == '_' || x >= 'a' && x <= 'z' || x >= 'A' && x <= 'Z'
+isVariableChar x = isVariableStartChar x || x >= '0' && x <= '9'
+
+prop_isVariableName1 = isVariableName "_fo123"
+prop_isVariableName2 = not $ isVariableName "4"
+prop_isVariableName3 = not $ isVariableName "test: "
+isVariableName (x:r) = isVariableStartChar x && all isVariableChar r
+isVariableName _ = False
 
 willSplit x =
   case x of
@@ -1684,6 +1691,7 @@ prop_checkUnused6 = verifyNotFull checkUnusedAssignments "var=4; (( var++ ))"
 prop_checkUnused7 = verifyNotFull checkUnusedAssignments "var=2; $((var))"
 prop_checkUnused8 = verifyFull checkUnusedAssignments "var=2; var=3;"
 prop_checkUnused9 = verifyNotFull checkUnusedAssignments "read ''"
+prop_checkUnused10= verifyNotFull checkUnusedAssignments "read -p 'test: '"
 checkUnusedAssignments t = snd $ runState (mapM_ checkAssignment flow) []
   where
     flow = getVariableFlow t
@@ -1692,7 +1700,7 @@ checkUnusedAssignments t = snd $ runState (mapM_ checkAssignment flow) []
         Map.insert name ()
     insertRef _ = id
 
-    checkAssignment (Assignment (_, token, name, _)) =
+    checkAssignment (Assignment (_, token, name, _)) | isVariableName name =
         case Map.lookup name references of
             Just _ -> return ()
             Nothing -> do
