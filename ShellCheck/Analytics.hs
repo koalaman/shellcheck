@@ -285,7 +285,7 @@ prop_checkAssignAteCommand2 = verify checkAssignAteCommand "A=ls --sort=$foo"
 prop_checkAssignAteCommand3 = verify checkAssignAteCommand "A=cat foo | grep bar"
 prop_checkAssignAteCommand4 = verifyNot checkAssignAteCommand "A=foo ls -l"
 prop_checkAssignAteCommand5 = verifyNot checkAssignAteCommand "PAGER=cat grep bar"
-checkAssignAteCommand (T_SimpleCommand id ((T_Assignment _ _ assignmentTerm):[]) (firstWord:_)) =
+checkAssignAteCommand (T_SimpleCommand id ((T_Assignment _ _ _ _ assignmentTerm):[]) (firstWord:_)) =
     when ("-" `isPrefixOf` (concat $ deadSimple firstWord) ||
         (isCommonCommand (getLiteralString assignmentTerm) && not (isCommonCommand (getLiteralString firstWord)))) $
             warn id "To assign the output of a command, use var=$(cmd) ."
@@ -880,7 +880,7 @@ inUnquotableContext tree t =
         TA_Binary _ _ _ _ -> True
         TA_Trinary _ _ _ _ -> True
         TA_Expansion _ _ -> True
-        T_Assignment _ _ _ -> True
+        T_Assignment _ _ _ _ _ -> True
         T_Redirecting _ _ _ ->
             any (isCommand t) ["local", "declare", "typeset", "export"]
         T_DoubleQuoted _ _ -> True
@@ -1138,7 +1138,7 @@ prop_checkPS15 = verifyNot checkPS1Assignments "PS1='\\[\\033[1;35m\\]\\$ '"
 prop_checkPS16 = verifyNot checkPS1Assignments "PS1='\\[\\e1m\\e[1m\\]\\$ '"
 prop_checkPS17 = verifyNot checkPS1Assignments "PS1='e033x1B'"
 prop_checkPS18 = verifyNot checkPS1Assignments "PS1='\\[\\e\\]'"
-checkPS1Assignments (T_Assignment _ "PS1" word) = warnFor word
+checkPS1Assignments (T_Assignment _ _ "PS1" _ word) = warnFor word
   where
     warnFor word =
         let contents = concat $ deadSimple word in
@@ -1386,7 +1386,7 @@ getModifiedVariables t =
     case t of
         T_SimpleCommand _ vars [] ->
             concatMap (\x -> case x of
-                                T_Assignment id name w ->
+                                T_Assignment id _ name _ w ->
                                     [(x, x, name, DataFrom [w])]
                                 _ -> []
                       ) vars
@@ -1411,7 +1411,7 @@ getReferencedVariableCommand base@(T_SimpleCommand _ _ ((T_NormalWord _ ((T_Lite
         "export" -> concatMap getReference rest
         _ -> [(base,base, x)]
   where
-    getReference t@(T_Assignment _ name value) = [(t, t, name)]
+    getReference t@(T_Assignment _ _ name _ value) = [(t, t, name)]
     getReference t@(T_NormalWord _ [T_Literal _ name]) | not ("-" `isPrefixOf` name) = [(t, t, name)]
     getReference _ = []
 
@@ -1446,7 +1446,7 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ ((T_NormalWord _ ((T_Litera
         [(base, t, s, DataExternal)]
     getLiteral x = []
 
-    getModifierParam t@(T_Assignment _ name value) =
+    getModifierParam t@(T_Assignment _ _ name _ value) =
         [(base, t, name, DataFrom [value])]
     getModifierParam _ = []
 
@@ -1464,6 +1464,7 @@ getReferencedVariables t =
     case t of
         T_DollarBraced id l -> map (\x -> (t, t, x)) $ [getBracedReference $ bracedString l]
         TA_Variable id str -> [(t, t, str)]
+        T_Assignment id Append str _ _ -> [(t, t, str)]
         x -> getReferencedVariableCommand x
 
 getVariableFlow t =
@@ -1692,6 +1693,7 @@ prop_checkUnused7 = verifyNotFull checkUnusedAssignments "var=2; $((var))"
 prop_checkUnused8 = verifyFull checkUnusedAssignments "var=2; var=3;"
 prop_checkUnused9 = verifyNotFull checkUnusedAssignments "read ''"
 prop_checkUnused10= verifyNotFull checkUnusedAssignments "read -p 'test: '"
+prop_checkUnused11= verifyNotFull checkUnusedAssignments "bar=5; export foo[$bar]=3"
 checkUnusedAssignments t = snd $ runState (mapM_ checkAssignment flow) []
   where
     flow = getVariableFlow t

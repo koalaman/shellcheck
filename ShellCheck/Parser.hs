@@ -1143,7 +1143,7 @@ makeSimpleCommand id1 id2 prefix cmd suffix =
     in
         T_Redirecting id1 redirs $ T_SimpleCommand id2 assigns args
   where
-    assignment (T_Assignment _ _ _) = True
+    assignment (T_Assignment _ _ _ _ _) = True
     assignment _ = False
     redirection (T_FdRedirect _ _ _) = True
     redirection _ = False
@@ -1538,35 +1538,40 @@ readAssignmentWord = try $ do
     variable <- readVariableName
     optional (readNormalDollar >> parseNoteAt pos ErrorC
                                 "For indirection, use (associative) arrays or 'read \"var$n\" <<< \"value\"'")
-    optional readArrayIndex -- Throws away the index. Fixme?
+    index <- optionMaybe readArrayIndex
     space <- spacing
     pos <- getPosition
-    op <- string "+=" <|> string "="  -- analysis doesn't treat += as a reference. fixme?
+    op <- readAssignmentOp
     space2 <- spacing
     if space == "" && space2 /= ""
       then do
         when (variable /= "IFS") $
             parseNoteAt pos InfoC $ "Note that 'var= value' (with space after equals sign) is similar to 'var=\"\"; value'."
         value <- readEmptyLiteral
-        return $ T_Assignment id variable value
+        return $ T_Assignment id op variable index value
       else do
         when (space /= "" || space2 /= "") $
             parseNoteAt pos ErrorC "Don't put spaces around the = in assignments."
         value <- readArray <|> readNormalWord
         spacing
-        return $ T_Assignment id variable value
+        return $ T_Assignment id op variable index value
   where
+    readAssignmentOp =
+        (string "+=" >> return Append) <|> (string "=" >> return Assign)
     readEmptyLiteral = do
         id <- getNextId
         return $ T_Literal id ""
 
 -- This is only approximate. Fixme?
+-- * Bash allows foo[' ' "" $(true) 2 ``]=var
+-- * foo[bar] dereferences bar
 readArrayIndex = do
     char '['
     optional space
     x <- readNormalishWord "]"
     optional space
     char ']'
+    return x
 
 readArray = called "array assignment" $ do
     id <- getNextId

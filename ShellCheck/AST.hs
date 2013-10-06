@@ -25,6 +25,7 @@ data Id = Id Int deriving (Show, Eq, Ord)
 
 data Quoted = Quoted | Unquoted deriving (Show, Eq)
 data Dashed = Dashed | Undashed deriving (Show, Eq)
+data AssignmentMode = Assign | Append deriving (Show, Eq)
 
 data Token =
     TA_Base Id String Token
@@ -45,7 +46,7 @@ data Token =
     | T_AndIf Id (Token) (Token)
     | T_Arithmetic Id Token
     | T_Array Id [Token]
-    | T_Assignment Id String Token
+    | T_Assignment Id AssignmentMode String (Maybe Token) Token
     | T_Backgrounded Id Token
     | T_Backticked Id [Token]
     | T_Bang Id
@@ -137,6 +138,11 @@ analyze f g i t =
         return . i $ newT
     roundAll = mapM round
 
+    roundMaybe Nothing = return Nothing
+    roundMaybe (Just v) = do
+        s <- round v
+        return (Just s)
+
     dl l v = do
         x <- roundAll l
         return $ v x
@@ -162,7 +168,10 @@ analyze f g i t =
     delve (T_IoFile id op file) = d2 op file $ T_IoFile id
     delve (T_HereString id word) = d1 word $ T_HereString id
     delve (T_FdRedirect id v t) = d1 t $ T_FdRedirect id v
-    delve (T_Assignment id v t) = d1 t $ T_Assignment id v
+    delve (T_Assignment id mode var index value) = do
+        a <- roundMaybe index
+        b <- round value
+        return $ T_Assignment id mode var a b
     delve (T_Array id t) = dl t $ T_Array id
     delve (T_Redirecting id redirs cmd) = do
         a <- roundAll redirs
@@ -279,7 +288,7 @@ getId t = case t of
         T_HereDoc id _ _ _ _ -> id
         T_HereString id _  -> id
         T_FdRedirect id _ _  -> id
-        T_Assignment id _ _  -> id
+        T_Assignment id _ _ _ _  -> id
         T_Array id _  -> id
         T_Redirecting id _ _  -> id
         T_SimpleCommand id _ _  -> id
