@@ -133,6 +133,7 @@ basicChecks = [
     ,checkDollarBrackets
     ,checkSshHereDoc
     ,checkSshCommandString
+    ,checkGlobsAsOptions
     ]
 treeChecks = [
     checkUnquotedExpansions
@@ -1712,3 +1713,23 @@ checkUnusedAssignments t = snd $ runState (mapM_ checkAssignment flow) []
 
     defaultMap = Map.fromList $ zip internalVariables $ repeat ()
 
+prop_checkGlobsAsOptions1 = verify checkGlobsAsOptions "rm *.txt"
+prop_checkGlobsAsOptions2 = verify checkGlobsAsOptions "ls ??.*"
+prop_checkGlobsAsOptions3 = verifyNot checkGlobsAsOptions "rm -- *.txt"
+checkGlobsAsOptions (T_SimpleCommand _ _ args) =
+    mapM_ check $ takeWhile (not . isEndOfArgs) args
+  where
+    check v@(T_NormalWord _ ((T_Glob id s):_)) | s == "*" || s == "?" =
+        info id $
+            "Use ./" ++ (concat $ deadSimple v)
+                ++ " so names with dashes won't become options."
+    check _ = return ()
+
+    isEndOfArgs t =
+        case concat $ deadSimple t of
+            "--" -> True
+            ":::" -> True
+            "::::" -> True
+            _ -> False
+
+checkGlobsAsOptions _ = return ()
