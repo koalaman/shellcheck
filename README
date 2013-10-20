@@ -25,4 +25,10 @@ For older releases, you may have to use:
 
 Executables can be built with cabal. Tests currently still rely on a Makefile.
 
+Install:
+  cabal install
+
+  which shellcheck
+  ~/.cabal/bin/shellcheck
+
 Happy ShellChecking!
