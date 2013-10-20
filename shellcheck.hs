@@ -24,7 +24,6 @@ import System.Environment
 import System.Exit
 import System.IO
 
-
 clear = ansi 0
 ansi n = "\x1B[" ++ (show n) ++ "m"
 
@@ -45,27 +44,26 @@ doFile path colorFunc = do
         contents <- readFile actualPath
         doInput path contents colorFunc
       else do
-        putStrLn (colorFunc "error" $ "No such file: " ++ actualPath)
+        hPutStrLn stderr (colorFunc "error" $ "No such file: " ++ actualPath)
+        return False
 
 doInput filename contents colorFunc = do
     let fileLines = lines contents
     let lineCount = length fileLines
     let comments = shellCheck contents
     let groups = groupWith scLine comments
-    if not $ null comments then do
-        mapM_ (\x -> do
-            let lineNum = scLine (head x)
-            let line = if lineNum < 1 || lineNum > lineCount
-                            then ""
-                            else fileLines !! (lineNum - 1)
-            putStrLn ""
-            putStrLn $ colorFunc "message" ("In " ++ filename ++" line " ++ (show $ lineNum) ++ ":")
-            putStrLn (colorFunc "source" line)
-            mapM (\c -> putStrLn (colorFunc (scSeverity c) $ cuteIndent c)) x
-            putStrLn ""
-          ) groups
-      else do
-        putStrLn ("No comments for " ++ filename)
+    mapM_ (\x -> do
+        let lineNum = scLine (head x)
+        let line = if lineNum < 1 || lineNum > lineCount
+                        then ""
+                        else fileLines !! (lineNum - 1)
+        putStrLn ""
+        putStrLn $ colorFunc "message" ("In " ++ filename ++" line " ++ (show $ lineNum) ++ ":")
+        putStrLn (colorFunc "source" line)
+        mapM (\c -> putStrLn (colorFunc (scSeverity c) $ cuteIndent c)) x
+        putStrLn ""
+      ) groups
+    return $ null comments
 
 cuteIndent comment =
     (replicate ((scColumn comment) - 1) ' ') ++ "^-- " ++ (scMessage comment)
@@ -81,6 +79,7 @@ main = do
         hPutStrLn stderr "shellcheck -- bash/sh script static analysis tool"
         hPutStrLn stderr "Usage: shellcheck filenames..."
         exitFailure
-      else
-        mapM (\f -> doFile f colors) args
+      else do
+        statuses <- mapM (\f -> doFile f colors) args
+        if and statuses then exitSuccess else exitFailure
 
