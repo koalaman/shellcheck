@@ -1504,10 +1504,11 @@ readFunctionSignature = do
 readPattern = (readNormalWord `thenSkip` spacing) `sepBy1` (char '|' `thenSkip` spacing)
 
 
+prop_readCompoundCommand = isOk readCompoundCommand "{ echo foo; }>/dev/null"
 readCompoundCommand = do
     id <- getNextId
     cmd <- choice [ readBraceGroup, readArithmeticExpression, readSubshell, readCondition, readWhileClause, readUntilClause, readIfClause, readForClause, readSelectClause, readCaseClause, readFunctionDefinition]
-    spacing
+    optional spacing
     redirs <- many readIoRedirect
     when (not . null $ redirs) $ optional $ do
         lookAhead $ try (spacing >> needsSeparator)
@@ -1647,7 +1648,8 @@ g_Semi = do
     notFollowedBy2 g_DSEMI
     tryToken ";" T_Semi
 
-keywordSeparator = eof <|> disregard whitespace <|> (disregard $ oneOf ";()[")
+keywordSeparator =
+    eof <|> disregard whitespace <|> (disregard $ oneOf ";()[<>&")
 
 readKeyword = choice [ g_Then, g_Else, g_Elif, g_Fi, g_Do, g_Done, g_Esac, g_Rbrace, g_Rparen, g_DSEMI ]
 
