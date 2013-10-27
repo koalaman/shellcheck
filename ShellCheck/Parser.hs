@@ -1014,7 +1014,11 @@ readHereDoc = called "here document" $ do
     spacing
 
     startPos <- getPosition
-    hereData <- anyChar `reluctantlyTill` (linefeed >> spacing >> (string endToken) >> (disregard whitespace <|> eof))
+    hereData <- anyChar `reluctantlyTill` do
+                    linefeed
+                    spacing
+                    string endToken
+                    disregard linefeed  <|> eof
 
     do
         linefeed
