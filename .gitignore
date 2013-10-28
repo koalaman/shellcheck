@@ -1,0 +1,6 @@
+*.hi
+*.o
+.tests
+jsoncheck
+shellcheck
+dist
