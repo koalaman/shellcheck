@@ -312,7 +312,9 @@ checkUuoc _ = return ()
 
 prop_checkNeedlessCommands = verify checkNeedlessCommands "foo=$(expr 3 + 2)"
 prop_checkNeedlessCommands2 = verify checkNeedlessCommands "foo=`echo \\`expr 3 + 2\\``"
-checkNeedlessCommands (T_SimpleCommand id _ (w:_)) | w `isCommand` "expr" =
+prop_checkNeedlessCommands3 = verifyNot checkNeedlessCommands "foo=$(expr foo : regex)"
+checkNeedlessCommands cmd@(T_SimpleCommand id _ (w:_)) | 
+        w `isCommand` "expr" && (not $ ":" `elem` deadSimple cmd) =
     style id "expr is antiquated. Consider rewriting this using $((..)), ${} or [[ ]]."
 checkNeedlessCommands _ = return ()
 
