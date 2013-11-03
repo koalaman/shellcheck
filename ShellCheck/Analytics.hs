@@ -651,7 +651,7 @@ checkSingleQuotedVariables t@(T_SingleQuoted id s) parents =
                 _          -> return ()
   where
     probablyOk t =
-        any (\x -> isParamTo parents x t) ["awk", "trap"]
+        any (\x -> isParamTo parents x t) ["awk", "trap", "perl"]
     re = mkRegex "\\$[{(0-9a-zA-Z_]"
 checkSingleQuotedVariables _ _ = return ()
 
