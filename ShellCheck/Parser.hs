@@ -42,7 +42,7 @@ singleQuote = char '\'' <|> unicodeSingleQuote
 doubleQuote = char '"' <|> unicodeDoubleQuote
 variableStart = upper <|> lower <|> oneOf "_"
 variableChars = upper <|> lower <|> digit <|> oneOf "_"
-functionChars = variableChars <|> oneOf ":+-"
+functionChars = variableChars <|> oneOf ":+-.?"
 specialVariable = oneOf "@*#?-$!"
 tokenDelimiter = oneOf "&|;<> \t\n\r" <|> nbsp
 quotable = oneOf "|&;<>()$`\\ \"'\t\n\r" <|> nbsp <|> unicodeDoubleQuote
@@ -1472,6 +1472,8 @@ prop_readFunctionDefinition2 = isWarning readFunctionDefinition "function foo() 
 prop_readFunctionDefinition3 = isWarning readFunctionDefinition "function foo { lol; }"
 prop_readFunctionDefinition4 = isWarning readFunctionDefinition "foo(a, b) { true; }"
 prop_readFunctionDefinition5 = isOk readFunctionDefinition ":(){ :|:;}"
+prop_readFunctionDefinition6 = isOk readFunctionDefinition "?(){ foo; }"
+prop_readFunctionDefinition7 = isOk readFunctionDefinition "..(){ cd ..; }"
 readFunctionDefinition = called "function" $ do
     id <- getNextId
     name <- try readFunctionSignature
