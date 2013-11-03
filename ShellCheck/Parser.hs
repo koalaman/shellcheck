@@ -357,7 +357,14 @@ readConditionContents single = do
           <|> return False
     readRegex = called "regex" $ do
         id <- getNextId
-        parts <- many1 (readGroup <|> readSingleQuoted <|> readDoubleQuoted <|> readDollarExpression <|> readNormalLiteral "( " <|> readGlobLiteral)
+        parts <- many1 (
+                readGroup <|>
+                readSingleQuoted <|>
+                readDoubleQuoted <|>
+                readDollarExpression <|>
+                readNormalLiteral "( " <|>
+                readPipeLiteral <|>
+                readGlobLiteral)
         disregard spacing
         return $ T_NormalWord id parts
       where
@@ -374,6 +381,10 @@ readConditionContents single = do
         readRegexLiteral = do
             id <- getNextId
             str <- readGenericLiteral1 (singleQuote <|> doubleQuotable <|> oneOf "()")
+            return $ T_Literal id str
+        readPipeLiteral = do
+            id <- getNextId
+            str <- string "|"
             return $ T_Literal id str
 
     readCondTerm = readCondNot <|> readCondExpr
@@ -571,6 +582,7 @@ prop_readCondition5a= isOk readCondition "[[ $c =~ a(b) ]]"
 prop_readCondition5b= isOk readCondition "[[ $c =~ f( ($var ]]) )* ]]"
 prop_readCondition6 = isOk readCondition "[[ $c =~ ^[yY]$ ]]"
 prop_readCondition7 = isOk readCondition "[[ ${line} =~ ^[[:space:]]*# ]]"
+prop_readCondition8 = isOk readCondition "[[ $l =~ ogg|flac ]]"
 readCondition = called "test expression" $ do
     opos <- getPosition
     id <- getNextId
