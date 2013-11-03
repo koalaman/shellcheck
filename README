@@ -18,8 +18,12 @@ The goals of ShellCheck are:
 ShellCheck is written in Haskell, and requires GHC, Parsec3 and Text.Regex. 
 To build the JSON interface and run the unit tests, it also requires QuickCheck2 and JSON.
 
-On Ubuntu and similar, these are called:
+On Fedora, these can be installed with:
+  yum install cabal-install ghc ghc-parsec-devel ghc-QuickCheck-devel ghc-json-devel ghc-regex-compat-devel
+
+On Ubuntu and similar, use:
   ghc libghc-parsec3-dev libghc-json-dev libghc-regex-compat-dev libghc-quickcheck2-dev
+
 For older releases, you may have to use:
   ghc6 libghc6-parsec3-dev libghc6-quickcheck2-dev libghc6-json-dev libghc-regex-compat-dev
 
