@@ -34,10 +34,10 @@ shellCheck script =
         in
             map formatNote $ nub $ sortNotes allNotes
 
-data ShellCheckComment = ShellCheckComment { scLine :: Int, scColumn :: Int, scSeverity :: String, scMessage :: String }
+data ShellCheckComment = ShellCheckComment { scLine :: Int, scColumn :: Int, scSeverity :: String, scCode :: Int, scMessage :: String }
 
 instance Show ShellCheckComment where
-    show c = concat ["(", show $ scLine c, ",", show $ scColumn c, ") ", scSeverity c, ": ", scMessage c]
+    show c = concat ["(", show $ scLine c, ",", show $ scColumn c, ") ", scSeverity c, ": ", show (scCode c), " ", scMessage c]
 
 severityToString s =
     case s of
@@ -46,4 +46,5 @@ severityToString s =
         InfoC -> "info"
         StyleC -> "style"
 
-formatNote (ParseNote pos severity text) = ShellCheckComment (sourceLine pos) (sourceColumn pos) (severityToString severity) text
+formatNote (ParseNote pos severity code text) =
+    ShellCheckComment (sourceLine pos) (sourceColumn pos) (severityToString severity) (fromIntegral code) text
