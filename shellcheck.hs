@@ -66,7 +66,9 @@ doInput filename contents colorFunc = do
     return $ null comments
 
 cuteIndent comment =
-    (replicate ((scColumn comment) - 1) ' ') ++ "^-- " ++ (scMessage comment)
+    (replicate ((scColumn comment) - 1) ' ') ++ "^-- " ++ (code $ scCode comment) ++ ": " ++ (scMessage comment)
+
+code code = "SC" ++ (show code)
 
 getColorFunc = do
     term <- hIsTerminalDevice stdout

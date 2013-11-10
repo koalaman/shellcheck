@@ -15,7 +15,7 @@
     You should have received a copy of the GNU Affero General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -}
-module ShellCheck.Simple (shellCheck, ShellCheckComment, scLine, scColumn, scSeverity, scMessage) where
+module ShellCheck.Simple (shellCheck, ShellCheckComment, scLine, scColumn, scSeverity, scCode, scMessage) where
 
 import ShellCheck.Parser
 import ShellCheck.Analytics

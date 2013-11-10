@@ -23,6 +23,7 @@ instance JSON ShellCheckComment where
       ("line", showJSON $ scLine c), 
       ("column", showJSON $ scColumn c),
       ("level", showJSON $ scSeverity c),
+      ("code", showJSON $ scCode c),
       ("message", showJSON $ scMessage c)
       ]
   readJSON = undefined
