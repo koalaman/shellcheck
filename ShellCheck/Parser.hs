@@ -701,6 +701,7 @@ readSingleQuotedPart =
     <|> anyChar `reluctantlyTill1` (singleQuote <|> backslash)
 
 prop_readBackTicked = isOk readBackTicked "`ls *.mp3`"
+prop_readBackTicked2 = isOk readBackTicked "`grep \"\\\"\"`"
 readBackTicked = called "backtick expansion" $ do
     id <- getNextId
     pos <- getPosition
@@ -713,7 +714,7 @@ readBackTicked = called "backtick expansion" $ do
     return $ T_Backticked id result
   where
     unEscape [] = []
-    unEscape ('\\':x:rest) | x `elem` "\"$`\\" = x : unEscape rest
+    unEscape ('\\':x:rest) | x `elem` "$`\\" = x : unEscape rest
     unEscape ('\\':'\n':rest) = unEscape rest
     unEscape (c:rest) = c : unEscape rest
 
