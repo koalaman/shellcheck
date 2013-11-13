@@ -9,12 +9,8 @@ Build-Type:       Simple
 Cabal-Version:    >= 1.2
 
 library
-    build-depends: base >= 4, parsec, containers, regex-compat, mtl, directory
+    build-depends: base >= 4, parsec, containers, regex-compat, mtl, directory, json
     exposed-modules: ShellCheck.AST, ShellCheck.Data, ShellCheck.Parser, ShellCheck.Analytics, ShellCheck.Simple
 
 executable shellcheck
     main-is: shellcheck.hs
-
-executable jsoncheck
-    build-depends: json
-    main-is: jsoncheck.hs

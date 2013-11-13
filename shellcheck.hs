@@ -24,6 +24,7 @@ import System.Directory
 import System.Environment
 import System.Exit
 import System.IO
+import Text.JSON
 import qualified Data.Map as Map
 
 data Flag = Flag String String
@@ -35,6 +36,16 @@ options = [
     ]
 
 printErr = hPutStrLn stderr
+
+instance JSON ShellCheckComment where
+  showJSON c = makeObj [
+      ("line", showJSON $ scLine c),
+      ("column", showJSON $ scColumn c),
+      ("level", showJSON $ scSeverity c),
+      ("code", showJSON $ scCode c),
+      ("message", showJSON $ scMessage c)
+      ]
+  readJSON = undefined
 
 parseArguments argv =
     case getOpt Permute options argv of
@@ -55,6 +66,7 @@ parseArguments argv =
     specials x = x
 
 formats = Map.fromList [
+    ("json", forJson),
     ("tty", forTty)
     ]
 
@@ -113,6 +125,16 @@ forTty options files = do
     getColorFunc = do
         term <- hIsTerminalDevice stdout
         return $ if term then colorComment else const id
+
+-- This totally ignores the filenames. Fixme?
+forJson options files = do
+    comments <- liftM concat $ mapM process files
+    putStrLn $ encodeStrict $ comments
+    return . null $ comments
+  where
+    process file = do
+      script <- readFile file
+      return $ shellCheck script
 
 getOption [] _ def = def
 getOption ((Flag var val):_) name _ | name == var = val

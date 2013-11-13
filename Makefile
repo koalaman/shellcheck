@@ -9,15 +9,12 @@ shellcheck: regardless
 	: Conditionally compiling shellcheck
 	ghc $(GHCFLAGS) --make shellcheck
 
-jsoncheck: regardless
-	: Conditionally compiling shellcheck
-	ghc $(GHCFLAGS) --make jsoncheck
-
 .tests: *.hs */*.hs
 	: Running unit tests
 	./test/runQuack && touch .tests
 
 clean:
-	rm -f .tests dist shellcheck jsoncheck *.hi *.o  ShellCheck/*.hi ShellCheck/*.o
+	rm -f .tests shellcheck *.hi *.o  ShellCheck/*.hi ShellCheck/*.o
+	rm -rf dist
 
 regardless:
