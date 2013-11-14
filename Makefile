@@ -2,7 +2,7 @@
 
 GHCFLAGS=-O9
 
-all: shellcheck jsoncheck .tests
+all: shellcheck .tests
 	: Done
 	
 shellcheck: regardless

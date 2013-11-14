@@ -52,21 +52,19 @@ parseArguments argv =
         (opts, files, []) ->
             if not $ null files
               then
-                return $ Just (opts, map specials files)
+                return $ Just (opts, files)
               else do
                 printErr "No files specified.\n"
                 printErr $ usageInfo header options
                 return $ Nothing
 
         (_, _, errors) -> do
-            printErr $ (unlines errors) ++ "\n" ++ usageInfo header options
+            printErr $ (concat errors) ++ "\n" ++ usageInfo header options
             return Nothing
-  where
-    specials "-" = "/dev/stdin"
-    specials x = x
 
 formats = Map.fromList [
     ("json", forJson),
+    ("gcc", forGcc),
     ("tty", forTty)
     ]
 
@@ -88,15 +86,8 @@ forTty options files = do
     colorComment level comment = (ansi $ colorForLevel level) ++ comment ++ clear
 
     doFile path = do
-        let actualPath = if path == "-" then "/dev/stdin" else path
-        exists <- doesFileExist actualPath
-        if exists then do
-            contents <- readFile actualPath
-            doInput path contents
-          else do
-            colorFunc <- getColorFunc
-            printErr (colorFunc "error" $ "No such file: " ++ actualPath)
-            return False
+        contents <- readContents path
+        doInput path contents
 
     doInput filename contents = do
         let fileLines = lines contents
@@ -128,13 +119,35 @@ forTty options files = do
 
 -- This totally ignores the filenames. Fixme?
 forJson options files = do
-    comments <- liftM concat $ mapM process files
+    comments <- liftM concat $ mapM commentsFor files
     putStrLn $ encodeStrict $ comments
     return . null $ comments
+
+--- Mimic GCC "file:line:col: (error|warning|note): message" format
+forGcc options files = do
+    files <- mapM process files
+    return $ and files
   where
     process file = do
-      script <- readFile file
-      return $ shellCheck script
+        comments <- commentsFor file
+        mapM_ (putStrLn . format file) comments
+        return $ null comments
+
+    format filename c = concat [
+            filename, ":",
+            show $ scLine c, ":",
+            show $ scColumn c, ": ",
+            case scSeverity c of 
+                "error" -> "error"
+                "warning" -> "warning"
+                _ -> "note",
+            ": ",
+            concat . lines $ scMessage c,
+            " [SC", show $ scCode c, "]"
+      ]
+        
+commentsFor file = liftM shellCheck $ readContents file
+readContents file = if file == "-" then getContents else readFile file
 
 getOption [] _ def = def
 getOption ((Flag var val):_) name _ | name == var = val
