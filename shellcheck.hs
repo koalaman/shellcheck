@@ -16,6 +16,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -}
 import Control.Monad
+import Data.Char
 import GHC.Exts
 import GHC.IO.Device
 import ShellCheck.Simple
@@ -65,6 +66,7 @@ parseArguments argv =
 formats = Map.fromList [
     ("json", forJson),
     ("gcc", forGcc),
+    ("checkstyle", forCheckstyle),
     ("tty", forTty)
     ]
 
@@ -123,7 +125,7 @@ forJson options files = do
     putStrLn $ encodeStrict $ comments
     return . null $ comments
 
---- Mimic GCC "file:line:col: (error|warning|note): message" format
+-- Mimic GCC "file:line:col: (error|warning|note): message" format
 forGcc options files = do
     files <- mapM process files
     return $ and files
@@ -137,7 +139,7 @@ forGcc options files = do
             filename, ":",
             show $ scLine c, ":",
             show $ scColumn c, ": ",
-            case scSeverity c of 
+            case scSeverity c of
                 "error" -> "error"
                 "warning" -> "warning"
                 _ -> "note",
@@ -145,7 +147,47 @@ forGcc options files = do
             concat . lines $ scMessage c,
             " [SC", show $ scCode c, "]"
       ]
-        
+
+-- Checkstyle compatible output. A bit of a hack to avoid XML dependencies
+forCheckstyle options files = do
+    putStrLn "<?xml version='1.0' encoding='UTF-8'?>"
+    putStrLn "<checkstyle version='4.3'>"
+    statuses <- mapM (\x -> process x `catch` report) files
+    putStrLn "</checkstyle>"
+    return $ and statuses
+  where
+    process file = do
+        comments <- commentsFor file
+        putStrLn (formatFile file comments)
+        return $ null comments
+    report error = do
+        printErr $ show error
+        return False
+
+    severity "error" = "error"
+    severity "warning" = "warning"
+    severity _ = "info"
+    attr s v = concat [ s, "='", escape v, "' " ]
+    escape msg = concatMap escape' msg
+    escape' c = if isOk c then [c] else "&#" ++ (show $ ord c) ++ ";"
+    isOk x = any ($x) [isAsciiUpper, isAsciiLower, isDigit, (`elem` " ./")]
+
+    formatFile name comments = concat [
+        "<file ", attr "name" name, ">\n",
+            concatMap format comments,
+        "</file>"
+        ]
+
+    format c = concat [
+        "<error ",
+        attr "line" $ show . scLine $ c,
+        attr "column" $ show . scColumn $ c,
+        attr "severity" $ severity . scSeverity $ c,
+        attr "message" $ scMessage c,
+        attr "source" $ "ShellCheck.SC" ++ (show $ scCode c),
+        "/>\n"
+        ]
+
 commentsFor file = liftM shellCheck $ readContents file
 readContents file = if file == "-" then getContents else readFile file
 
