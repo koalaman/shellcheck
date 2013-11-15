@@ -211,8 +211,12 @@ getOption (_:rest) flag def = getOption rest flag def
 main = do
     args <- getArgs
     parsedArgs <- parseArguments args
-    status <- process parsedArgs
-    if status then exitSuccess else exitFailure
+    do
+        status <- process parsedArgs
+        if status then exitSuccess else exitWith (ExitFailure 1)
+    `catch` \err -> do
+        printErr $ show err
+        exitWith $ ExitFailure 2
 
 process Nothing = return False
 process (Just (options, files)) =
