@@ -38,6 +38,9 @@ options = [
 
 printErr = hPutStrLn stderr
 
+syntaxFailure = ExitFailure 3
+supportFailure = ExitFailure 4
+
 instance JSON ShellCheckComment where
   showJSON c = makeObj [
       ("line", showJSON $ scLine c),
@@ -57,11 +60,11 @@ parseArguments argv =
               else do
                 printErr "No files specified.\n"
                 printErr $ usageInfo header options
-                return $ Nothing
+                exitWith syntaxFailure
 
         (_, _, errors) -> do
             printErr $ (concat errors) ++ "\n" ++ usageInfo header options
-            return Nothing
+            exitWith syntaxFailure
 
 formats = Map.fromList [
     ("json", forJson),
@@ -226,7 +229,7 @@ process (Just (options, files)) =
             printErr $ "Unknown format " ++ format
             printErr $ "Supported formats:"
             mapM_ (printErr . write) $ Map.keys formats
-            return False
+            exitWith supportFailure
           where write s = "  " ++ s
         Just f -> do
             f options files
