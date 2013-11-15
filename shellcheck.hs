@@ -131,7 +131,8 @@ forGcc options files = do
     return $ and files
   where
     process file = do
-        comments <- commentsFor file
+        contents <- readContents file
+        let comments = makeNonVirtual (shellCheck contents) contents
         mapM_ (putStrLn . format file) comments
         return $ null comments
 
@@ -190,6 +191,18 @@ forCheckstyle options files = do
 
 commentsFor file = liftM shellCheck $ readContents file
 readContents file = if file == "-" then getContents else readFile file
+
+-- Realign comments from a tabstop of 8 to 1
+makeNonVirtual comments contents =
+    map fix comments
+  where
+    ls = lines contents
+    fix c = c { scColumn = real (ls !! (scLine c - 1)) 0 0 (scColumn c) }
+    real _ r v target | target <= v = r
+    real [] r v _ = r -- should never happen
+    real ('\t':rest) r v target =
+        real rest (r+1) (v + 8 - (v `mod` 8)) target
+    real (_:rest) r v target = real rest (r+1) (v+1) target
 
 getOption [] _ def = def
 getOption ((Flag var val):_) name _ | name == var = val
