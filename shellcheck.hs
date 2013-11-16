@@ -15,10 +15,12 @@
     You should have received a copy of the GNU Affero General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -}
+import Control.Exception
 import Control.Monad
 import Data.Char
 import GHC.Exts
 import GHC.IO.Device
+import Prelude hiding (catch)
 import ShellCheck.Simple
 import System.Console.GetOpt
 import System.Directory
@@ -165,7 +167,7 @@ forCheckstyle options files = do
         putStrLn (formatFile file comments)
         return $ null comments
     report error = do
-        printErr $ show error
+        printErr $ show (error :: SomeException)
         return False
 
     severity "error" = "error"
@@ -214,12 +216,14 @@ getOption (_:rest) flag def = getOption rest flag def
 main = do
     args <- getArgs
     parsedArgs <- parseArguments args
-    do
+    code <- do
         status <- process parsedArgs
-        if status then exitSuccess else exitWith (ExitFailure 1)
-    `catch` \err -> do
-        printErr $ show err
-        exitWith $ ExitFailure 2
+        return $ if status then ExitSuccess else ExitFailure 1
+     `catch` return
+     `catch` \err -> do
+        printErr $ show (err :: SomeException)
+        return $ ExitFailure 2
+    exitWith code
 
 process Nothing = return False
 process (Just (options, files)) =
