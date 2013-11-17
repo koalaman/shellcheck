@@ -35,7 +35,9 @@ data Flag = Flag String String
 header = "Usage: shellcheck [OPTIONS...] FILES..."
 options = [
     Option ['f'] ["format"]
-        (ReqArg (Flag "format") "FORMAT") "output format"
+        (ReqArg (Flag "format") "FORMAT") "output format",
+    Option ['e'] ["exclude"]
+        (ReqArg (Flag "exclude") "CODE1,CODE2..") "exclude types of warnings"
     ]
 
 printErr = hPutStrLn stderr
@@ -99,7 +101,7 @@ forTty options files = do
     doInput filename contents = do
         let fileLines = lines contents
         let lineCount = length fileLines
-        let comments = shellCheck contents
+        let comments = getComments options contents
         let groups = groupWith scLine comments
         colorFunc <- getColorFunc
         mapM_ (\x -> do
@@ -126,7 +128,7 @@ forTty options files = do
 
 -- This totally ignores the filenames. Fixme?
 forJson options files = do
-    comments <- liftM concat $ mapM commentsFor files
+    comments <- liftM concat $ mapM (commentsFor options) files
     putStrLn $ encodeStrict $ comments
     return . null $ comments
 
@@ -137,7 +139,7 @@ forGcc options files = do
   where
     process file = do
         contents <- readContents file
-        let comments = makeNonVirtual (shellCheck contents) contents
+        let comments = makeNonVirtual (getComments options contents) contents
         mapM_ (putStrLn . format file) comments
         return $ null comments
 
@@ -163,7 +165,7 @@ forCheckstyle options files = do
     return $ and statuses
   where
     process file = do
-        comments <- commentsFor file
+        comments <- commentsFor options file
         putStrLn (formatFile file comments)
         return $ null comments
     report error = do
@@ -194,7 +196,12 @@ forCheckstyle options files = do
         "/>\n"
         ]
 
-commentsFor file = liftM shellCheck $ readContents file
+commentsFor options file =
+    liftM (getComments options) $ readContents file
+
+getComments options contents =
+    excludeCodes (getExclusions options) $ shellCheck contents
+
 readContents file = if file == "-" then getContents else readFile file
 
 -- Realign comments from a tabstop of 8 to 1
@@ -212,6 +219,29 @@ makeNonVirtual comments contents =
 getOption [] _ def = def
 getOption ((Flag var val):_) name _ | name == var = val
 getOption (_:rest) flag def = getOption rest flag def
+
+getOptions options name =
+    map (\(Flag _ val) -> val) . filter (\(Flag var _) -> var == name) $ options
+
+split char str =
+    split' str []
+  where
+    split' (a:rest) element =
+        if a == char
+        then (reverse element) : split' rest []
+        else split' rest (a:element)
+    split' [] element = [reverse element]
+
+getExclusions options =
+    let elements = concatMap (split ',') $ getOptions options "exclude"
+        clean = dropWhile (not . isDigit)
+    in
+        map (Prelude.read . clean) elements :: [Int]
+
+excludeCodes codes comments =
+    filter (not . hasCode) comments
+  where
+    hasCode c = scCode c `elem` codes
 
 main = do
     args <- getArgs
