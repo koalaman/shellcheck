@@ -1408,7 +1408,7 @@ getModifiedVariables t =
 getReferencedVariableCommand base@(T_SimpleCommand _ _ ((T_NormalWord _ ((T_Literal _ x):_)):rest)) =
     case x of
         "export" -> concatMap getReference rest
-        _ -> [(base,base, x)]
+        _ -> []
   where
     getReference t@(T_Assignment _ _ name _ value) = [(t, t, name)]
     getReference t@(T_NormalWord _ [T_Literal _ name]) | not ("-" `isPrefixOf` name) = [(t, t, name)]
