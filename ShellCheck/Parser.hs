@@ -34,7 +34,7 @@ import System.IO
 import Text.Parsec.Error
 import GHC.Exts (sortWith)
 
-
+lastError = 1074
 
 backslash = char '\\'
 linefeed = (optional carriageReturn) >> char '\n'
@@ -1464,7 +1464,11 @@ readCaseItem = called "case item" $ do
     g_Rparen
     readLineBreak
     list <- ((lookAhead g_DSEMI >> return []) <|> readCompoundList)
-    (g_DSEMI <|> lookAhead (readLineBreak >> g_Esac))
+    (g_DSEMI <|> lookAhead (readLineBreak >> g_Esac)) `attempting` do
+        pos <- getPosition
+        lookAhead g_Rparen
+        parseProblemAt pos ErrorC 1074
+            "Did you forget the ;; after the previous case item?"
     readLineBreak
     return (pattern, list)
 
