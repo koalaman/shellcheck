@@ -40,6 +40,13 @@ internalVariables = [
     "ZLE_REMOVE_SUFFIX_CHARS", "ZLE_SPACE_SUFFIX_CHARS"
   ]
 
+variablesWithoutSpaces = [
+    "$", "-", "?", "!", 
+    "BASHPID", "BASH_ARGC", "BASH_LINENO", "BASH_SUBSHELL", "EUID", "LINENO",
+    "OPTIND", "PPID", "PWD", "RANDOM", "SECONDS", "SHELLOPTS", "SHLVL", "UID",
+    "COLUMNS", "HISTFILESIZE", "HISTSIZE", "LINES"
+  ]
+
 commonCommands = [ 
     "admin", "alias", "ar", "asa", "at", "awk", "basename", "batch",
     "bc", "bg", "break", "c99", "cal", "cat", "cd", "cflow", "chgrp",

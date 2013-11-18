@@ -313,7 +313,7 @@ checkUuoc _ = return ()
 prop_checkNeedlessCommands = verify checkNeedlessCommands "foo=$(expr 3 + 2)"
 prop_checkNeedlessCommands2 = verify checkNeedlessCommands "foo=`echo \\`expr 3 + 2\\``"
 prop_checkNeedlessCommands3 = verifyNot checkNeedlessCommands "foo=$(expr foo : regex)"
-checkNeedlessCommands cmd@(T_SimpleCommand id _ (w:_)) | 
+checkNeedlessCommands cmd@(T_SimpleCommand id _ (w:_)) |
         w `isCommand` "expr" && (not $ ":" `elem` deadSimple cmd) =
     style id 2003 "expr is antiquated. Consider rewriting this using $((..)), ${} or [[ ]]."
 checkNeedlessCommands _ = return ()
@@ -1550,13 +1550,11 @@ prop_checkSpacefulnessJ = verifyFull checkSpacefulness "echo $PWD"
 checkSpacefulness t =
     doVariableFlowAnalysis readF writeF (Map.fromList defaults) t
   where
-    defaults =
-        let values = ["PWD"] ++ (map show [0..10]) in
-            zip values (repeat True)
+    defaults = zip variablesWithoutSpaces (repeat False)
 
     hasSpaces name = do
         map <- get
-        return $ Map.findWithDefault False name map
+        return $ Map.findWithDefault True name map
 
     setSpaces name bool = do
         modify $ Map.insert name bool
@@ -1564,6 +1562,8 @@ checkSpacefulness t =
     readF _ token name = do
         spaced <- hasSpaces name
         if spaced
+          && (not $ "@" `isPrefixOf` name) -- There's another warning for this
+          && (not $ isCounting token)
           && (not $ inUnquotableContext parents token)
           && (not $ usedAsCommandName parents token)
             then return [(getId token, Note InfoC 2086 warning)]
@@ -1578,13 +1578,19 @@ checkSpacefulness t =
     writeF _ _ name (DataFrom vals) = do
         map <- get
         setSpaces name
-            (isSpacefulWord (\x -> Map.findWithDefault False x map) vals)
+            (isSpacefulWord (\x -> Map.findWithDefault True x map) vals)
         return []
 
     parents = getParentTree t
+
+    isCounting (T_DollarBraced id token) =
+        case concat $ deadSimple token of
+            '#':_ -> True
+            _ -> False
+    isCounting _ = False
+
     isSpacefulWord :: (String -> Bool) -> [Token] -> Bool
-    isSpacefulWord f words =
-        any (isSpaceful f) words
+    isSpacefulWord f words = any (isSpaceful f) words
     isSpaceful :: (String -> Bool) -> Token -> Bool
     isSpaceful spacefulF x =
         case x of
