@@ -1241,6 +1241,7 @@ prop_checkSpuriousExec3 = verifyNot checkSpuriousExec "echo cow; exec foo"
 prop_checkSpuriousExec4 = verifyNot checkSpuriousExec "if a; then exec b; fi"
 prop_checkSpuriousExec5 = verifyNot checkSpuriousExec "exec > file; cmd"
 prop_checkSpuriousExec6 = verify checkSpuriousExec "exec foo > file; cmd"
+prop_checkSpuriousExec7 = verifyNot checkSpuriousExec "exec file; echo failed; exit 3"
 checkSpuriousExec = doLists
   where
     doLists (T_Script _ _ cmds) = doList cmds
@@ -1253,13 +1254,19 @@ checkSpuriousExec = doLists
         doList elses
     doLists _ = return ()
 
-    doList t@(current:following:_) = do
+    stripCleanup = reverse . dropWhile cleanup . reverse
+    cleanup (T_Pipeline _ [cmd]) =
+        isCommandMatch cmd (`elem` ["echo", "exit"])
+    cleanup _ = False
+
+    doList = doList' . stripCleanup
+    doList' t@(current:following:_) = do
         commentIfExec current
         doList (tail t)
-    doList _ = return ()
+    doList' _ = return ()
 
     commentIfExec (T_Pipeline id list) =
-      mapM_ commentIfExec list
+      mapM_ commentIfExec $ take 1 list
     commentIfExec (T_Redirecting _ _ f@(
       T_SimpleCommand id _ (cmd:arg:_))) =
         when (f `isUnqualifiedCommand` "exec") $
