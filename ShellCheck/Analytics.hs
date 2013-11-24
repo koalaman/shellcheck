@@ -85,7 +85,6 @@ basicChecks = [
     ,checkPipePitfalls
     ,checkForInQuoted
     ,checkForInLs
-    ,checkRedirectToSame
     ,checkShorthandIf
     ,checkDollarStar
     ,checkUnquotedDollarAt
@@ -138,6 +137,7 @@ basicChecks = [
 treeChecks = [
     checkUnquotedExpansions
     ,checkSingleQuotedVariables
+    ,checkRedirectToSame
     ]
 
 
@@ -573,17 +573,21 @@ checkUnquotedExpansions t tree =
             warn (getId t) 2046 "Quote this to prevent word splitting."
 
 
-prop_checkRedirectToSame = verify checkRedirectToSame "cat foo > foo"
-prop_checkRedirectToSame2 = verify checkRedirectToSame "cat lol | sed -e 's/a/b/g' > lol"
-prop_checkRedirectToSame3 = verifyNot checkRedirectToSame "cat lol | sed -e 's/a/b/g' > foo.bar && mv foo.bar lol"
-prop_checkRedirectToSame4 = verifyNot checkRedirectToSame "foo > /dev/null 2> /dev/null"
-checkRedirectToSame s@(T_Pipeline _ list) =
+prop_checkRedirectToSame = verifyTree checkRedirectToSame "cat foo > foo"
+prop_checkRedirectToSame2 = verifyTree checkRedirectToSame "cat lol | sed -e 's/a/b/g' > lol"
+prop_checkRedirectToSame3 = verifyNotTree checkRedirectToSame "cat lol | sed -e 's/a/b/g' > foo.bar && mv foo.bar lol"
+prop_checkRedirectToSame4 = verifyNotTree checkRedirectToSame "foo /dev/null > /dev/null"
+prop_checkRedirectToSame5 = verifyNotTree checkRedirectToSame "foo > bar 2> bar"
+checkRedirectToSame s@(T_Pipeline _ list) parents =
     mapM_ (\l -> (mapM_ (\x -> doAnalysis (checkOccurences x) l) (getAllRedirs list))) list
-  where checkOccurences t@(T_NormalWord exceptId x) (T_NormalWord newId y) =
-            when (x == y && exceptId /= newId && not (special t)) (do
+  where checkOccurences t@(T_NormalWord exceptId x) u@(T_NormalWord newId y) =
+            when (exceptId /= newId
+                    && x == y
+                    && not (isOutput t && isOutput u)
+                    && not (special t)) $ do
                 let note = Note InfoC 2094 $ "Make sure not to read and write the same file in the same pipeline."
                 addNoteFor newId $ note
-                addNoteFor exceptId $ note)
+                addNoteFor exceptId $ note
         checkOccurences _ _ = return ()
         getAllRedirs l = concatMap (\(T_Redirecting _ ls _) -> concatMap getRedirs ls) l
         getRedirs (T_FdRedirect _ _ (T_IoFile _ op file)) =
@@ -592,8 +596,16 @@ checkRedirectToSame s@(T_Pipeline _ list) =
                            T_DGREAT _  -> [file]
                            _ -> []
         getRedirs _ = []
-        special x = (deadSimple x == ["/dev/null"])
-checkRedirectToSame _ = return ()
+        special x = "/dev/" `isPrefixOf` (concat $ deadSimple x)
+        isOutput t =
+            case drop 1 $ getPath parents t of
+                (T_IoFile _ op _):_ ->
+                    case op of
+                        T_Greater _  -> True
+                        T_DGREAT _ -> True
+                        _ -> False
+                _ -> False
+checkRedirectToSame _ _ = return ()
 
 
 prop_checkShorthandIf  = verify checkShorthandIf "[[ ! -z file ]] && scp file host || rm file"
