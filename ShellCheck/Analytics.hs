@@ -25,6 +25,7 @@ import Control.Monad.State
 import qualified Data.Map as Map
 import Data.Char
 import Data.List
+import Data.Maybe
 import Debug.Trace
 import Text.Regex
 import Data.Maybe
@@ -313,8 +314,8 @@ checkUuoc _ = return ()
 prop_checkNeedlessCommands = verify checkNeedlessCommands "foo=$(expr 3 + 2)"
 prop_checkNeedlessCommands2 = verify checkNeedlessCommands "foo=`echo \\`expr 3 + 2\\``"
 prop_checkNeedlessCommands3 = verifyNot checkNeedlessCommands "foo=$(expr foo : regex)"
-checkNeedlessCommands cmd@(T_SimpleCommand id _ (w:_)) |
-        w `isCommand` "expr" && (not $ ":" `elem` deadSimple cmd) =
+checkNeedlessCommands cmd@(T_SimpleCommand id _ _) |
+        cmd `isCommand` "expr" && (not $ ":" `elem` deadSimple cmd) =
     style id 2003 "expr is antiquated. Consider rewriting this using $((..)), ${} or [[ ]]."
 checkNeedlessCommands _ = return ()
 
@@ -518,7 +519,7 @@ prop_checkFindExec3 = verify checkFindExec "find / -execdir cat {} | grep lol +"
 prop_checkFindExec4 = verifyNot checkFindExec "find / -name '*.php' -exec foo {} +"
 prop_checkFindExec5 = verifyNot checkFindExec "find / -execdir bash -c 'a && b' \\;"
 prop_checkFindExec6 = verify checkFindExec "find / -type d -execdir rm *.jpg \\;"
-checkFindExec (T_SimpleCommand _ _ t@(h:r)) | h `isCommand` "find" = do
+checkFindExec cmd@(T_SimpleCommand _ _ t@(h:r)) | cmd `isCommand` "find" = do
     c <- broken r False
     when c $ do
         let wordId = getId $ last t in
@@ -664,8 +665,19 @@ checkSingleQuotedVariables t@(T_SingleQuoted id s) parents =
                 Just [] -> unless (probablyOk t) $ info id 2016 $ "Expressions don't expand in single quotes, use double quotes for that."
                 _          -> return ()
   where
-    probablyOk t =
-        any (\x -> isParamTo parents x t) ["awk", "trap", "perl"]
+    probablyOk t = fromMaybe False $ do
+        cmd <- getClosestCommand parents t
+        name <- getCommandBasename cmd
+        return $ name `elem` [
+                "trap"
+                ,"sh"
+                ,"bash"
+                ,"ksh"
+                ,"zsh"
+                ]
+            || "awk" `isSuffixOf` name
+            || "perl" `isPrefixOf` name
+
     re = mkRegex "\\$[{(0-9a-zA-Z_]"
 checkSingleQuotedVariables _ _ = return ()
 
@@ -917,6 +929,12 @@ isParamTo tree cmd t =
             T_Redirecting _ _ _ -> isCommand t cmd
             _ -> False
 
+getClosestCommand tree t =
+    msum . map getCommand $ getPath tree t
+  where
+    getCommand t@(T_Redirecting _ _ _) = return t
+    getCommand _ = Nothing
+
 usedAsCommandName tree token = go (getId token) (tail $ getPath tree token)
   where
     go currentId ((T_NormalWord id [word]):rest)
@@ -935,16 +953,12 @@ getPath tree t = t :
 
 --- Command specific checks
 
-checkCommand str f (T_SimpleCommand id _ cmd) =
-    case cmd of
-        (w:rest) -> if w `isCommand` str then f rest else return ()
-        _ -> return ()
+checkCommand str f t@(T_SimpleCommand id _ (cmd:rest)) =
+    if t `isCommand` str then f rest else return ()
 checkCommand _ _ _ = return ()
 
-checkUnqualifiedCommand str f (T_SimpleCommand id _ cmd) =
-    case cmd of
-        (w:rest) -> if w `isUnqualifiedCommand` str then f rest else return ()
-        _ -> return ()
+checkUnqualifiedCommand str f t@(T_SimpleCommand id _ (cmd:rest)) =
+    if t `isUnqualifiedCommand` str then f rest else return ()
 checkUnqualifiedCommand _ _ _ = return ()
 
 getLiteralString t = g t
@@ -962,19 +976,19 @@ isLiteral t = isJust $ getLiteralString t
 isCommand token str = isCommandMatch token (\cmd -> cmd  == str || ("/" ++ str) `isSuffixOf` cmd)
 isUnqualifiedCommand token str = isCommandMatch token (\cmd -> cmd  == str)
 
-isCommandMatch (T_Redirecting _ _ w) matcher =
-    isCommandMatch w matcher
-isCommandMatch (T_SimpleCommand _ _ (w:_)) matcher =
-    isCommandMatch w matcher
-isCommandMatch token matcher =
-    case getLiteralString token of
-        Just cmd -> matcher cmd
-        Nothing -> False
+isCommandMatch token matcher = fromMaybe False $ do
+    cmd <- getCommandName token
+    return $ matcher cmd
 
-getCommandFor word =
-    case getLiteralString word of
-        Just str -> reverse . (takeWhile (/= '/')) . reverse $ str
-        Nothing -> ""
+getCommandName (T_Redirecting _ _ w) =
+    getCommandName w
+getCommandName (T_SimpleCommand _ _ (w:_)) =
+    getLiteralString w
+getCommandName _ = Nothing
+
+getCommandBasename = liftM basename . getCommandName
+
+basename = reverse . (takeWhile (/= '/')) . reverse
 
 prop_checkPrintfVar1 = verify checkPrintfVar "printf \"Lol: $s\""
 prop_checkPrintfVar2 = verifyNot checkPrintfVar "printf 'Lol: $s'"
@@ -1683,7 +1697,7 @@ checkFunctionsUsedExternally t =
         "xargs"
         ]
     checkCommand t@(T_SimpleCommand _ _ (cmd:args)) =
-        let name = getCommandFor cmd in
+        let name = fromMaybe "" $ getCommandBasename t in
           when (name `elem` invokingCmds) $
             mapM_ (checkArg name) args
     checkCommand _ = return ()
