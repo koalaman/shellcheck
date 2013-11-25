@@ -255,6 +255,7 @@ readConditionContents single = do
         otherOp = try $ do
             id <- getNextId
             s <- readOp
+            when (s == "-a" || s == "-o") $ fail "Wrong operator"
             return $ TC_Binary id typ s
 
     readCondUnaryExp = do
@@ -302,7 +303,6 @@ readConditionContents single = do
         when (not single && x == "-a") $ addNoteFor id $ Note ErrorC 1023 "In [[..]], use && instead of -a."
         softCondSpacing
         return $ TC_And id typ x
-
 
     readCondOrOp = do
         id <- getNextId
@@ -584,6 +584,7 @@ prop_readCondition5b= isOk readCondition "[[ $c =~ f( ($var ]]) )* ]]"
 prop_readCondition6 = isOk readCondition "[[ $c =~ ^[yY]$ ]]"
 prop_readCondition7 = isOk readCondition "[[ ${line} =~ ^[[:space:]]*# ]]"
 prop_readCondition8 = isOk readCondition "[[ $l =~ ogg|flac ]]"
+prop_readCondition9 = isOk readCondition "[ foo -a -f bar ]"
 readCondition = called "test expression" $ do
     opos <- getPosition
     id <- getNextId
