@@ -611,8 +611,16 @@ checkRedirectToSame _ _ = return ()
 
 prop_checkShorthandIf  = verify checkShorthandIf "[[ ! -z file ]] && scp file host || rm file"
 prop_checkShorthandIf2 = verifyNot checkShorthandIf "[[ ! -z file ]] && { scp file host || echo 'Eek'; }"
-checkShorthandIf (T_AndIf id _ (T_OrIf _ _ _)) =
+prop_checkShorthandIf3 = verifyNot checkShorthandIf "foo && bar || echo baz"
+prop_checkShorthandIf4 = verifyNot checkShorthandIf "foo && a=b || a=c"
+checkShorthandIf (T_AndIf id _ (T_OrIf _ _ (T_Pipeline _ t)))
+        | not $ isOk t =
     info id 2015 "Note that A && B || C is not if-then-else. C may run when A is true."
+  where
+    isOk [t] = isAssignment t || (fromMaybe False $ do
+        name <- getCommandBasename t
+        return $ name `elem` ["echo", "exit"])
+    isOk _ = False
 checkShorthandIf _ = return ()
 
 
@@ -987,8 +995,11 @@ getCommandName (T_SimpleCommand _ _ (w:_)) =
 getCommandName _ = Nothing
 
 getCommandBasename = liftM basename . getCommandName
-
 basename = reverse . (takeWhile (/= '/')) . reverse
+
+isAssignment (T_Redirecting _ _ w) = isAssignment w
+isAssignment (T_SimpleCommand _ (w:_) []) = True
+isAssignment _ = False
 
 prop_checkPrintfVar1 = verify checkPrintfVar "printf \"Lol: $s\""
 prop_checkPrintfVar2 = verifyNot checkPrintfVar "printf 'Lol: $s'"
