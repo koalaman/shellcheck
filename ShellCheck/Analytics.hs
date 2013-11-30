@@ -134,6 +134,7 @@ basicChecks = [
     ,checkSshHereDoc
     ,checkSshCommandString
     ,checkGlobsAsOptions
+    ,checkWhileReadPitfalls
     ]
 treeChecks = [
     checkUnquotedExpansions
@@ -1781,3 +1782,38 @@ checkGlobsAsOptions (T_SimpleCommand _ _ args) =
             _ -> False
 
 checkGlobsAsOptions _ = return ()
+
+
+prop_checkWhileReadPitfalls1 = verify checkWhileReadPitfalls "while read foo; do ssh $foo uptime; done < file"
+prop_checkWhileReadPitfalls2 = verifyNot checkWhileReadPitfalls "while read -u 3 foo; do ssh $foo uptime; done 3< file"
+prop_checkWhileReadPitfalls3 = verifyNot checkWhileReadPitfalls "while true; do ssh host uptime; done"
+prop_checkWhileReadPitfalls4 = verifyNot checkWhileReadPitfalls "while read foo; do ssh $foo hostname < /dev/null; done"
+prop_checkWhileReadPitfalls5 = verifyNot checkWhileReadPitfalls "while read foo; do echo ls | ssh $foo; done"
+prop_checkWhileReadPitfalls6 = verifyNot checkWhileReadPitfalls "while read foo <&3; do ssh $foo; done 3< foo"
+
+checkWhileReadPitfalls (T_WhileExpression id [command] contents)
+        | isStdinReadCommand command = do
+    mapM_ checkMuncher contents
+  where
+    munchers = [ "ssh", "ffmpeg", "mplayer" ]
+
+    isStdinReadCommand (T_Pipeline _ [T_Redirecting id redirs cmd]) =
+        let plaintext = deadSimple cmd
+        in head (plaintext ++ [""]) == "read"
+            && (not $ "-u" `elem` plaintext)
+            && all (not . stdinRedirect) redirs
+    isStdinReadCommand _ = False
+
+    checkMuncher (T_Pipeline _ ((T_Redirecting _ redirs cmd):_)) = do
+        let name = fromMaybe "" $ getCommandBasename cmd
+        when ((not . any stdinRedirect $ redirs) && (name `elem` munchers)) $ do
+            info id 2095 $
+                name ++ " may swallow stdin, preventing this loop from working properly."
+            warn (getId cmd) 2095 $
+                "Add < /dev/null to prevent " ++ name ++ " from swallowing stdin."
+    checkMuncher _ = return ()
+
+    stdinRedirect (T_FdRedirect _ fd _)
+        | fd == "" || fd == "0" = True
+    stdinRedirect _ = False
+checkWhileReadPitfalls _ = return ()

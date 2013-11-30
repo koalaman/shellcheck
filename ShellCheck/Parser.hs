@@ -308,7 +308,7 @@ readConditionContents single = do
         id <- getNextId
         x <- try (string "||" <|> string "-o")
         when (single && x == "||") $ addNoteFor id $ Note ErrorC 1024 "You can't use || inside [..]. Use [[..]] instead."
-        when (not single && x == "-o") $ addNoteFor id $ Note ErrorC 1025 "In [[..]], use && instead of -o."
+        when (not single && x == "-o") $ addNoteFor id $ Note ErrorC 1025 "In [[..]], use || instead of -o."
         softCondSpacing
         return $ TC_Or id typ x
 
