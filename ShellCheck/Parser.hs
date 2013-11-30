@@ -1384,6 +1384,7 @@ prop_readForClause5 = isOk readForClause "for ((i=0;i<10 && n>x;i++,--n))\ndo \n
 prop_readForClause6 = isOk readForClause "for ((;;))\ndo echo $i\ndone"
 prop_readForClause7 = isOk readForClause "for ((;;)) do echo $i\ndone"
 prop_readForClause8 = isOk readForClause "for ((;;)) ; do echo $i\ndone"
+prop_readForClause9 = isOk readForClause "for i do true; done"
 readForClause = called "for loop" $ do
     pos <- getPosition
     (T_For id) <- g_For
@@ -1408,7 +1409,7 @@ readForClause = called "for loop" $ do
     readRegular = do
         name <- readVariableName
         spacing
-        values <- readInClause <|> (readSequentialSep >> return [])
+        values <- readInClause <|> (optional readSequentialSep >> return [])
         return $ \id group -> (return $ T_ForIn id name values group)
 
 prop_readSelectClause1 = isOk readSelectClause "select foo in *; do echo $foo; done"
