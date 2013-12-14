@@ -683,6 +683,7 @@ checkSingleQuotedVariables t@(T_SingleQuoted id s) parents =
                 ,"bash"
                 ,"ksh"
                 ,"zsh"
+                ,"ssh"
                 ]
             || "awk" `isSuffixOf` name
             || "perl" `isPrefixOf` name
