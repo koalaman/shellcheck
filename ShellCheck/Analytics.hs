@@ -1005,14 +1005,16 @@ isAssignment _ = False
 prop_checkPrintfVar1 = verify checkPrintfVar "printf \"Lol: $s\""
 prop_checkPrintfVar2 = verifyNot checkPrintfVar "printf 'Lol: $s'"
 prop_checkPrintfVar3 = verify checkPrintfVar "printf -v cow $(cmd)"
+prop_checkPrintfVar4 = verifyNot checkPrintfVar "printf \"%${count}s\" var"
 checkPrintfVar = checkUnqualifiedCommand "printf" f where
     f (dashv:var:rest) | getLiteralString dashv == (Just "-v") = f rest
     f (format:params) = check format
     f _ = return ()
     check format =
-        if not $ isLiteral format
-          then warn (getId format) 2059 $ "Don't use variables in the printf format string. Use printf \"..%s..\" \"$foo\"."
-          else return ()
+        if '%' `elem` (concat $ deadSimple format) || isLiteral format
+          then return ()
+          else warn (getId format) 2059 $
+                "Don't use variables in the printf format string. Use printf \"..%s..\" \"$foo\"."
 
 prop_checkUuoe1 = verify checkUuoe "echo $(date)"
 prop_checkUuoe1a= verify checkUuoe "echo `date`"
