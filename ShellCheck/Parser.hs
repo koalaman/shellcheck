@@ -1009,9 +1009,9 @@ prop_readHereDoc = isOk readHereDoc "<< foo\nlol\ncow\nfoo"
 prop_readHereDoc2 = isWarning readHereDoc "<<- EOF\n  cow\n  EOF"
 prop_readHereDoc3 = isOk readHereDoc "<< foo\n$\"\nfoo"
 prop_readHereDoc4 = isOk readHereDoc "<< foo\n`\nfoo"
+prop_readHereDoc5 = isOk readHereDoc "<<- !foo\nbar\n!foo"
+prop_readHereDoc6 = isOk readHereDoc "<< foo\\ bar\ncow\nfoo bar"
 readHereDoc = called "here document" $ do
-    let stripLiteral (T_Literal _ x) = x
-        stripLiteral (T_SingleQuoted _ x) = x
     fid <- getNextId
     pos <- getPosition
     try $ string "<<"
@@ -1023,9 +1023,10 @@ readHereDoc = called "here document" $ do
         let message = "Shells are space sensitive. Use '< <(cmd)', not '<<" ++ sp ++ "(cmd)'."
         parseProblemAt pos ErrorC 1038 message
     hid <- getNextId
-    (quoted, endToken) <- (readNormalLiteral "" >>= (\x -> return (Unquoted, stripLiteral x)) )
-                            <|> (readDoubleQuotedLiteral >>= return . (\x -> (Quoted, stripLiteral x)))
-                            <|> (readSingleQuotedLiteral >>= return . (\x -> (Quoted, x)))
+    (quoted, endToken) <-
+            (readDoubleQuotedLiteral >>= return . (\x -> (Quoted, stripLiteral x)))
+            <|> (readSingleQuotedLiteral >>= return . (\x -> (Quoted, x)))
+            <|> (readToken >>= (\x -> return (Unquoted, x)))
     spacing
 
     startPos <- getPosition
@@ -1045,6 +1046,19 @@ readHereDoc = called "here document" $ do
      `attempting` (eof >> debugHereDoc tokenPosition endToken hereData)
 
   where
+    stripLiteral (T_Literal _ x) = x
+    stripLiteral (T_SingleQuoted _ x) = x
+
+    readToken = do
+        liftM concat $ many1 (escaped <|> quoted <|> normal)
+      where
+        quoted = liftM stripLiteral readDoubleQuotedLiteral <|> readSingleQuotedLiteral
+        normal = anyChar `reluctantlyTill1` (whitespace <|> oneOf ";&)'\"\\")
+        escaped = do -- surely the user must be doing something wrong at this point
+            char '\\'
+            c <- anyChar
+            return [c]
+
     parseHereData Quoted startPos hereData = do
         id <- getNextIdAt startPos
         return $ [T_Literal id hereData]
