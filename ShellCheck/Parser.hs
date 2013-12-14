@@ -1172,6 +1172,8 @@ prop_readSimpleCommand = isOk readSimpleCommand "echo test > file"
 prop_readSimpleCommand2 = isOk readSimpleCommand "cmd &> file"
 prop_readSimpleCommand3 = isOk readSimpleCommand "export foo=(bar baz)"
 prop_readSimpleCommand4 = isOk readSimpleCommand "typeset -a foo=(lol)"
+prop_readSimpleCommand5 = isOk readSimpleCommand "time if true; then echo foo; fi"
+prop_readSimpleCommand6 = isOk readSimpleCommand "time -p ( ls -l; )"
 readSimpleCommand = called "simple command" $ do
     id1 <- getNextId
     id2 <- getNextId
@@ -1184,12 +1186,17 @@ readSimpleCommand = called "simple command" $ do
             suffix <- option [] $
                         if isModifierCommand cmd
                         then readModifierSuffix
-                        else readCmdSuffix
+                        else if isTimeCommand cmd
+                             then readTimeSuffix
+                             else readCmdSuffix
             return $ makeSimpleCommand id1 id2 prefix [cmd] suffix
   where
     isModifierCommand (T_NormalWord _ [T_Literal _ s]) =
         s `elem` ["declare", "export", "local", "readonly", "typeset"]
     isModifierCommand _ = False
+    -- Might not belong in T_SimpleCommand. Fixme?
+    isTimeCommand (T_NormalWord _ [T_Literal _ "time"]) = True
+    isTimeCommand _ = False
 
 prop_readPipeline = isOk readPipeline "! cat /etc/issue | grep -i ubuntu"
 prop_readPipeline2 = isWarning readPipeline "!cat /etc/issue | grep -i ubuntu"
@@ -1549,6 +1556,15 @@ readCompoundList = readTerm
 readCmdPrefix = many1 (readIoRedirect <|> readAssignmentWord)
 readCmdSuffix = many1 (readIoRedirect <|> readCmdWord)
 readModifierSuffix = many1 (readIoRedirect <|> readAssignmentWord <|> readCmdWord)
+readTimeSuffix = do
+    flags <- many readFlag
+    pipeline <- readPipeline
+    return $ flags ++ [pipeline]
+  where
+    -- This fails for quoted variables and such. Fixme?
+    readFlag = do
+        lookAhead $ char '-'
+        readCmdWord
 
 prop_readAssignmentWord = isOk readAssignmentWord "a=42"
 prop_readAssignmentWord2 = isOk readAssignmentWord "b=(1 2 3)"
