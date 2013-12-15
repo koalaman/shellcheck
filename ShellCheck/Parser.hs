@@ -1214,6 +1214,7 @@ readSimpleCommand = called "simple command" $ do
 
 prop_readPipeline = isOk readPipeline "! cat /etc/issue | grep -i ubuntu"
 prop_readPipeline2 = isWarning readPipeline "!cat /etc/issue | grep -i ubuntu"
+prop_readPipeline3 = isOk readPipeline "for f; do :; done|cat"
 readPipeline = do
     unexpecting "keyword/token" readKeyword
     do
@@ -1705,7 +1706,7 @@ g_Semi = do
     tryToken ";" T_Semi
 
 keywordSeparator =
-    eof <|> disregard whitespace <|> (disregard $ oneOf ";()[<>&")
+    eof <|> disregard whitespace <|> (disregard $ oneOf ";()[<>&|")
 
 readKeyword = choice [ g_Then, g_Else, g_Elif, g_Fi, g_Do, g_Done, g_Esac, g_Rbrace, g_Rparen, g_DSEMI ]
 
