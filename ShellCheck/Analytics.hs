@@ -140,6 +140,7 @@ treeChecks = [
     checkUnquotedExpansions
     ,checkSingleQuotedVariables
     ,checkRedirectToSame
+    ,checkPrefixAssignmentReference
     ]
 
 
@@ -1820,3 +1821,27 @@ checkWhileReadPitfalls (T_WhileExpression id [command] contents)
         | fd == "" || fd == "0" = True
     stdinRedirect _ = False
 checkWhileReadPitfalls _ = return ()
+
+
+prop_checkPrefixAssign1 = verifyTree checkPrefixAssignmentReference "var=foo echo $var"
+prop_checkPrefixAssign2 = verifyNotTree checkPrefixAssignmentReference "var=$(echo $var) cmd"
+checkPrefixAssignmentReference t@(T_DollarBraced id value) tree =
+    check path
+  where
+    name = getBracedReference $ bracedString value
+    path = getPath tree t
+    idPath = map getId path
+
+    check [] = return ()
+    check (t:rest) =
+        case t of
+            T_SimpleCommand _ vars (_:_) -> mapM_ checkVar vars
+            otherwise -> check rest
+    checkVar (T_Assignment aId mode aName Nothing value) |
+            aName == name && (not $ aId `elem` idPath) = do
+        warn aId 2097 "This assignment is only seen by the forked process."
+        warn id 2098 "This expansion will not see the mentioned assignment."
+    checkVar _ = return ()
+
+checkPrefixAssignmentReference _ _ = return ()
+
