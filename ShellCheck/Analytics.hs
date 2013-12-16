@@ -24,6 +24,7 @@ import Control.Monad
 import Control.Monad.State
 import qualified Data.Map as Map
 import Data.Char
+import Data.Functor
 import Data.List
 import Data.Maybe
 import Debug.Trace
@@ -42,6 +43,7 @@ genericChecks = [
     ,checkShebang
     ,checkFunctionsUsedExternally
     ,checkUnusedAssignments
+    ,checkWrongArithmeticAssignment
     ]
 
 checksFor Sh = map runBasicAnalysis [
@@ -135,6 +137,7 @@ basicChecks = [
     ,checkSshCommandString
     ,checkGlobsAsOptions
     ,checkWhileReadPitfalls
+    ,checkArithmeticOpCommand
     ]
 treeChecks = [
     checkUnquotedExpansions
@@ -232,6 +235,11 @@ deadSimple (T_Redirecting _ _ foo) = deadSimple foo
 deadSimple (T_DollarSingleQuoted _ s) = [s]
 deadSimple _ = []
 
+(!!!) list i =
+    case drop i list of
+        [] -> Nothing
+        (r:_) -> Just r
+
 verify f s = checkBasic f s == Just True
 verifyNot f s = checkBasic f s == Just False
 verifyFull f s = checkFull f s == Just True
@@ -298,6 +306,49 @@ checkAssignAteCommand (T_SimpleCommand id ((T_Assignment _ _ _ _ assignmentTerm)
     isCommonCommand _ = False
 checkAssignAteCommand _ = return ()
 
+prop_checkArithmeticOpCommand1 = verify checkArithmeticOpCommand "i=i + 1"
+prop_checkArithmeticOpCommand2 = verify checkArithmeticOpCommand "foo=bar * 2"
+prop_checkArithmeticOpCommand3 = verifyNot checkArithmeticOpCommand "foo + opts"
+checkArithmeticOpCommand (T_SimpleCommand id ((T_Assignment _ _ _ _ _):[]) (firstWord:_)) =
+    fromMaybe (return ()) $ check <$> getGlobOrLiteralString firstWord
+  where
+    check op =
+        when (op `elem` ["+", "-", "*", "/"]) $
+            warn (getId firstWord) 2099 $
+                "Use $((..)) for arithmetics, e.g. i=$((i " ++ op ++ " 2))"
+checkArithmeticOpCommand _ = return ()
+
+prop_checkWrongArit = verifyFull checkWrongArithmeticAssignment "i=i+1"
+prop_checkWrongArit2 = verifyFull checkWrongArithmeticAssignment "n=2; i=n*2"
+checkWrongArithmeticAssignment t = runBasicAnalysis f t
+  where
+    regex = mkRegex "^([_a-zA-Z][_a-zA-Z0-9]*)([+*-]).+$"
+    flow = getVariableFlow t
+    references = foldl (flip ($)) Map.empty (map insertRef flow)
+    insertRef (Assignment (_, _, name, _)) =
+        Map.insert name ()
+    insertRef _ = id
+
+    getNormalString (T_NormalWord _ words) = do
+        parts <- foldl (liftM2 (\x y -> x ++ [y])) (Just []) $ map getLiterals words
+        return $ concat parts
+    getNormalString _ = Nothing
+
+    getLiterals (T_Literal _ s) = return s
+    getLiterals (T_Glob _ s) = return s
+    getLiterals _ = Nothing
+
+    f (T_SimpleCommand id ((T_Assignment _ _ _ _ val):[]) []) =
+      fromMaybe (return ()) $ do
+        str <- getNormalString val
+        match <- matchRegex regex str
+        var <- match !!! 0
+        op <- match !!! 1
+        Map.lookup var references
+        return $ do
+            warn (getId val) 2100 $
+                "Use $((..)) for arithmetics, e.g. i=$((i " ++ op ++ " 2))"
+    f _ = return ()
 
 prop_checkUuoc1 = verify checkUuoc "cat foo | grep bar"
 prop_checkUuoc2 = verifyNot checkUuoc "cat * | grep bar"
@@ -972,7 +1023,14 @@ checkUnqualifiedCommand str f t@(T_SimpleCommand id _ (cmd:rest)) =
     if t `isUnqualifiedCommand` str then f rest else return ()
 checkUnqualifiedCommand _ _ _ = return ()
 
-getLiteralString t = g t
+getLiteralString = getLiteralStringExt (const Nothing)
+
+getGlobOrLiteralString = getLiteralStringExt f
+  where
+    f (T_Glob _ str) = return str
+    f _ = Nothing
+
+getLiteralStringExt more t = g t
   where
     allInList l = let foo = map g l in if all isJust foo then return $ concat (catMaybes foo) else Nothing
     g s@(T_DoubleQuoted _ l) = allInList l
@@ -980,7 +1038,7 @@ getLiteralString t = g t
     g s@(T_NormalWord _ l) = allInList l
     g (T_SingleQuoted _ s) = return s
     g (T_Literal _ s) = return s
-    g _ = Nothing
+    g x = more x
 
 isLiteral t = isJust $ getLiteralString t
 
