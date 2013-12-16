@@ -45,12 +45,16 @@ variableChars = upper <|> lower <|> digit <|> oneOf "_"
 functionChars = variableChars <|> oneOf ":+-.?"
 specialVariable = oneOf "@*#?-$!"
 tokenDelimiter = oneOf "&|;<> \t\n\r" <|> nbsp
-quotable = oneOf "|&;<>()$`\\ \"'\t\n\r" <|> nbsp <|> unicodeDoubleQuote
+quotableChars = "|&;<>()\\ '\t\n\r\xA0" ++ doubleQuotableChars
+quotable = nbsp <|> unicodeDoubleQuote <|> oneOf quotableChars
 bracedQuotable = oneOf "}\"$`'"
-doubleQuotable = oneOf "\"$`" <|> unicodeDoubleQuote
+doubleQuotableChars = "\"$`\x201C\x201D"
+doubleQuotable = unicodeDoubleQuote <|> oneOf doubleQuotableChars
 whitespace = oneOf " \t\n" <|> carriageReturn <|> nbsp
 linewhitespace = oneOf " \t" <|> nbsp
-extglobStart = oneOf "?*@!+"
+
+extglobStartChars = "?*@!+"
+extglobStart = oneOf extglobStartChars
 
 prop_spacing = isOk spacing "  \\\n # Comment"
 spacing = do
@@ -445,7 +449,7 @@ readArithmeticContents =
     -- Doesn't help with foo[foo]
     readArrayIndex = do
         char '['
-        x <- anyChar `reluctantlyTill1` (char ']')
+        x <- many1 $ noneOf "]"
         char ']'
         return $ "[" ++ x ++ "]"
 
@@ -613,7 +617,7 @@ condSpacingMsg soft msg = do
 
 readComment = do
     char '#'
-    anyChar `reluctantlyTill` linefeed
+    many $ noneOf "\r\n"
 
 prop_readNormalWord = isOk readNormalWord "'foo'\"bar\"{1..3}baz$(lol)"
 prop_readNormalWord2 = isOk readNormalWord "foo**(foo)!!!(@@(bar))"
@@ -699,7 +703,7 @@ readSingleQuotedLiteral = do
 
 readSingleQuotedPart =
     readSingleEscaped
-    <|> anyChar `reluctantlyTill1` (singleQuote <|> backslash)
+    <|> (many1 $ noneOf "'\\\x2018\x2019")
 
 prop_readBackTicked = isOk readBackTicked "`ls *.mp3`"
 prop_readBackTicked2 = isOk readBackTicked "`grep \"\\\"\"`"
@@ -708,7 +712,7 @@ readBackTicked = called "backtick expansion" $ do
     pos <- getPosition
     char '`'
     subStart <- getPosition
-    subString <- readGenericLiteral (char '`')
+    subString <- readGenericLiteral "`"
     char '`'
     -- Result positions may be off due to escapes
     result <- subParse subStart readCompoundList (unEscape subString)
@@ -753,7 +757,7 @@ readDoubleLiteral = do
     return $ T_Literal id (concat s)
 
 readDoubleLiteralPart = do
-    x <- (readDoubleEscaped <|> (anyChar >>= \x -> return [x])) `reluctantlyTill1` doubleQuotable
+    x <- many1 $ (readDoubleEscaped <|> (many1 $ noneOf ('\\':doubleQuotableChars)))
     return $ concat x
 
 readNormalLiteral end = do
@@ -793,7 +797,7 @@ readGlob = readExtglob <|> readSimple <|> readClass <|> readGlobbyLiteral
             return $ T_Literal id [c]
 
 readNormalLiteralPart end = do
-    readNormalEscaped <|> (anyChar `reluctantlyTill1` (quotable <|> extglobStart <|> char '[' <|> oneOf end))
+    readNormalEscaped <|> (many1 $ noneOf (end ++ quotableChars ++ extglobStartChars ++ "["))
 
 readNormalEscaped = called "escaped char" $ do
     pos <- getPosition
@@ -877,8 +881,8 @@ readBraceEscaped = do
         <|> (anyChar >>= (return . \x -> [bs, x]))
 
 
-readGenericLiteral endExp = do
-    strings <- (readGenericEscaped <|> (anyChar >>= \x -> return [x])) `reluctantlyTill` endExp
+readGenericLiteral endChars = do
+    strings <- many (readGenericEscaped <|> (many1 $ noneOf ('\\':endChars)))
     return $ concat strings
 
 readGenericLiteral1 endExp = do
@@ -908,7 +912,7 @@ prop_readDollarSingleQuote = isOk readDollarSingleQuote "$'foo\\\'lol'"
 readDollarSingleQuote = called "$'..' expression" $ do
     id <- getNextId
     try $ string "$'"
-    str <- readGenericLiteral (char '\'')
+    str <- readGenericLiteral "'"
     char '\''
     return $ T_DollarSingleQuoted id str
 
@@ -1070,7 +1074,7 @@ readHereDoc = called "here document" $ do
 
     readHereLiteral = do
         id <- getNextId
-        chars <- anyChar `reluctantlyTill1` oneOf "`$"
+        chars <- many1 $ noneOf "`$"
         return $ T_Literal id chars
 
     verifyHereDoc dashed quoted spacing hereInfo = do
@@ -1541,7 +1545,7 @@ readFunctionSignature = do
         optional spacing
         g_Rparen <|> do
             parseProblem ErrorC 1065 "Trying to declare parameters? Don't. Use () and refer to params as $1, $2.."
-            anyChar `reluctantlyTill` oneOf "\n){"
+            many $ noneOf "\n){"
             g_Rparen
         return ()
 
@@ -1715,7 +1719,7 @@ ifParse p t f = do
 
 readShebang = do
     try $ string "#!"
-    str <- anyChar `reluctantlyTill` oneOf "\r\n"
+    str <- many $ noneOf "\r\n"
     optional carriageReturn
     optional linefeed
     return str
