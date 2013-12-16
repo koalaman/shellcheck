@@ -3,4 +3,5 @@
 .tests
 jsoncheck
 shellcheck
+shellcheck.1
 dist

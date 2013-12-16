@@ -2,7 +2,7 @@
 
 GHCFLAGS=-O9
 
-all: shellcheck .tests
+all: shellcheck .tests shellcheck.1
 	: Done
 	
 shellcheck: regardless
@@ -12,6 +12,9 @@ shellcheck: regardless
 .tests: *.hs */*.hs
 	: Running unit tests
 	./test/runQuack && touch .tests
+
+shellcheck.1: shellcheck.1.md
+	pandoc -s -t man $< -o $@
 
 clean:
 	rm -f .tests shellcheck *.hi *.o  ShellCheck/*.hi ShellCheck/*.o
