@@ -1508,12 +1508,13 @@ prop_readFunctionDefinition4 = isWarning readFunctionDefinition "foo(a, b) { tru
 prop_readFunctionDefinition5 = isOk readFunctionDefinition ":(){ :|:;}"
 prop_readFunctionDefinition6 = isOk readFunctionDefinition "?(){ foo; }"
 prop_readFunctionDefinition7 = isOk readFunctionDefinition "..(){ cd ..; }"
+prop_readFunctionDefinition8 = isOk readFunctionDefinition "foo() (ls)"
 readFunctionDefinition = called "function" $ do
     id <- getNextId
     name <- try readFunctionSignature
     allspacing
-    (disregard (lookAhead $ char '{') <|> parseProblem ErrorC 1064 "Expected a { to open the function definition.")
-    group <- readBraceGroup
+    (disregard (lookAhead $ oneOf "{(") <|> parseProblem ErrorC 1064 "Expected a { to open the function definition.")
+    group <- readBraceGroup <|> readSubshell
     return $ T_Function id name group
 
 
