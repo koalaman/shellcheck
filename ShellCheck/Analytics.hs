@@ -1564,7 +1564,7 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ ((T_NormalWord _ ((T_Litera
 getModifiedVariableCommand _ = []
 
 -- TODO:
-getBracedReference s = takeWhile (\x -> not $ x `elem` ":[#%/^,") $ dropWhile (== '#') s
+getBracedReference s = takeWhile (\x -> not $ x `elem` ":[#%/^,") $ dropWhile (`elem` "#!") s
 
 getReferencedVariables t =
     case t of
@@ -1806,6 +1806,7 @@ prop_checkUnused8 = verifyFull checkUnusedAssignments "var=2; var=3;"
 prop_checkUnused9 = verifyNotFull checkUnusedAssignments "read ''"
 prop_checkUnused10= verifyNotFull checkUnusedAssignments "read -p 'test: '"
 prop_checkUnused11= verifyNotFull checkUnusedAssignments "bar=5; export foo[$bar]=3"
+prop_checkUnused12= verifyNotFull checkUnusedAssignments "read foo; echo ${!foo}"
 checkUnusedAssignments t = snd $ runState (mapM_ checkAssignment flow) []
   where
     flow = getVariableFlow t
