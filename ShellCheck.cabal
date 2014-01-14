@@ -1,12 +1,28 @@
 Name:             ShellCheck
 Version:          0.2.0
-Description:      Shell script analysis tool
+Synopsis:         Shell script analysis tool
 License-file:     LICENSE
 Author:           Vidar Holen
 Maintainer:       vidar@vidarholen.net
 Homepage:         http://www.shellcheck.net/
 Build-Type:       Simple
 Cabal-Version:    >= 1.2
+Bug-reports:      https://github.com/koalaman/shellcheck/issues
+Description:
+  The goals of ShellCheck are:
+  .
+  * To point out and clarify typical beginner's syntax issues,
+    that causes a shell to give cryptic error messages.
+  .
+  * To point out and clarify typical intermediate level semantic problems,
+    that causes a shell to behave strangely and counter-intuitively.
+  .
+  * To point out subtle caveats, corner cases and pitfalls, that may cause an
+    advanced user's otherwise working script to fail under future circumstances.
+
+source-repository head
+    type: git
+    location: git://github.com/koalaman/shellcheck.git
 
 library
     build-depends: base >= 4, parsec, containers, regex-compat, mtl, directory, json
