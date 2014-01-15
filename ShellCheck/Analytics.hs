@@ -138,6 +138,7 @@ basicChecks = [
     ,checkGlobsAsOptions
     ,checkWhileReadPitfalls
     ,checkArithmeticOpCommand
+    ,checkCharRangeGlob
     ]
 treeChecks = [
     checkUnquotedExpansions
@@ -1904,3 +1905,21 @@ checkPrefixAssignmentReference t@(T_DollarBraced id value) tree =
 
 checkPrefixAssignmentReference _ _ = return ()
 
+prop_checkCharRangeGlob1 = verify checkCharRangeGlob "ls *[:digit:].jpg"
+prop_checkCharRangeGlob2 = verifyNot checkCharRangeGlob "ls *[[:digit:]].jpg"
+prop_checkCharRangeGlob3 = verify checkCharRangeGlob "ls [10-15]"
+prop_checkCharRangeGlob4 = verifyNot checkCharRangeGlob "ls [a-zA-Z]"
+checkCharRangeGlob (T_Glob id str) | isCharClass str =
+    if ":" `isPrefixOf` contents
+        && ":" `isSuffixOf` contents
+        && contents /= ":"
+    then warn id 2101 "Named class needs outer [], e.g. [[:digit:]]."
+    else
+        if (not $ '[' `elem` contents) && hasDupes
+        then info id 2102 "Ranges can only match single chars (mentioned due to duplicates)."
+        else return ()
+  where
+    isCharClass str = "[" `isPrefixOf` str && "]" `isSuffixOf` str
+    contents = drop 1 . take ((length str) - 1) $ str
+    hasDupes = any (>1) . map length . group . sort . filter (/= '-') $ contents
+checkCharRangeGlob _ = return ()
