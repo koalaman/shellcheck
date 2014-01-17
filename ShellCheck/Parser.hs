@@ -104,7 +104,11 @@ data Note = Note Severity Code String deriving (Show, Eq)
 data ParseNote = ParseNote SourcePos Severity Code String deriving (Show, Eq)
 data Metadata = Metadata SourcePos [Note] deriving (Show)
 data Severity = ErrorC | WarningC | InfoC | StyleC deriving (Show, Eq, Ord)
+data Context = ContextName SourcePos String | ContextAnnotation [Annotation]
 type Code = Integer
+
+codeForNote (Note _ code _) = code
+codeForParseNote (ParseNote _ _ code _) = code
 
 initialState = (Id $ -1, Map.empty, [])
 
@@ -139,9 +143,19 @@ getParseNotes = do
     return notes
 
 addParseNote n = do
-    (a, b, notes) <- getState
-    putState (a, b, n:notes)
+    irrelevant <- shouldIgnoreCode (codeForParseNote n)
+    when (not irrelevant) $ do
+        (a, b, notes) <- getState
+        putState (a, b, n:notes)
 
+shouldIgnoreCode code = do
+    context <- getCurrentContexts
+    return $ any disabling context
+  where
+    disabling (ContextAnnotation list) =
+        any disabling' list
+    disabling _ = False
+    disabling' (DisableComment n) = code == n
 
 -- Store potential parse problems outside of parsec
 parseProblem level code msg = do
@@ -170,7 +184,9 @@ pushContext c = do
     setCurrentContexts (c:v)
 
 parseProblemAt pos level code msg = do
-    Ms.modify (\(list, current) -> ((ParseNote pos level code msg):list, current))
+    irrelevant <- shouldIgnoreCode code
+    when (not irrelevant) $
+        Ms.modify (\(list, current) -> ((ParseNote pos level code msg):list, current))
 
 -- Store non-parse problems inside
 addNoteFor id note = modifyMap $ Map.adjust (\(Metadata pos notes) -> Metadata pos (note:notes)) id
@@ -226,9 +242,8 @@ acceptButWarn parser level code note = do
         parseProblemAt pos level code note
       )
 
-called s p = do
-    pos <- getPosition
-    pushContext (pos, s)
+withContext entry p = do
+    pushContext entry
     do
         v <- p
         popContext
@@ -236,6 +251,13 @@ called s p = do
      <|> do -- p failed without consuming input, abort context
         popContext
         fail $ ""
+
+called s p = do
+    pos <- getPosition
+    withContext (ContextName pos s) p
+
+withAnnotations anns p =
+    withContext (ContextAnnotation anns) p
 
 readConditionContents single = do
     readCondContents `attempting` (lookAhead $ do
@@ -615,7 +637,41 @@ condSpacingMsg soft msg = do
   space <- spacing
   when (null space) $ (if soft then parseNoteAt else parseProblemAt) pos ErrorC 1035 msg
 
+readAnnotationPrefix = do
+    char '#'
+    many linewhitespace
+    string "shellcheck"
+
+prop_readAnnotation1 = isOk readAnnotation "# shellcheck disable=1234,5678\n"
+prop_readAnnotation2 = isOk readAnnotation "# shellcheck disable=SC1234 disable=SC5678\n"
+readAnnotation = called "shellcheck annotation" $ do
+    try readAnnotationPrefix
+    many1 linewhitespace
+    values <- many1 (readDisable)
+    linefeed
+    many linewhitespace
+    return $ concat values
+  where
+    readDisable = forKey "disable" $ do
+        readCode `sepBy` char ','
+      where
+        readCode = do
+            optional $ string "SC"
+            int <- many1 digit
+            return $ DisableComment (read int)
+    forKey s p = do
+        try $ string s
+        char '='
+        value <- p
+        many linewhitespace
+        return value
+
+readAnnotations = do
+    annotations <- many (readAnnotation `thenSkip` allspacing)
+    return $ concat annotations
+
 readComment = do
+    unexpecting "shellcheck annotation" readAnnotationPrefix
     char '#'
     many $ noneOf "\r\n"
 
@@ -1229,11 +1285,22 @@ readPipeline = do
         readPipeSequence
 
 prop_readAndOr = isOk readAndOr "grep -i lol foo || exit 1"
-readAndOr = chainr1 readPipeline $ do
-    op <- g_AND_IF <|> g_OR_IF
-    readLineBreak
-    return $ case op of T_AND_IF id -> T_AndIf id
-                        T_OR_IF  id -> T_OrIf id
+prop_readAndOr1 = isOk readAndOr "# shellcheck disable=1\nfoo"
+prop_readAndOr2 = isOk readAndOr "# shellcheck disable=1\n# lol\n# shellcheck disable=3\nfoo"
+readAndOr = do
+    aid <- getNextId
+    annotations <- readAnnotations
+
+    andOr <- withAnnotations annotations $ do
+        chainr1 readPipeline $ do
+            op <- g_AND_IF <|> g_OR_IF
+            readLineBreak
+            return $ case op of T_AND_IF id -> T_AndIf id
+                                T_OR_IF  id -> T_OrIf id
+
+    return $ if null annotations
+                then andOr
+                else T_Annotation aid annotations andOr
 
 readTerm = do
     allspacing
@@ -1840,10 +1907,12 @@ parseShell filename contents = do
         (Left err, (p, context)) -> ParseResult Nothing (nub $ sortNotes $ p ++ (notesForContext context) ++ ([makeErrorFor err]))
 
   where
-    notesForContext list = zipWith ($) [first, second] list
-    first (pos, str) = ParseNote pos ErrorC 1073 $
+    isName (ContextName _ _) = True
+    isName _ = False
+    notesForContext list = zipWith ($) [first, second] $ filter isName list
+    first (ContextName pos str) = ParseNote pos ErrorC 1073 $
         "Couldn't parse this " ++ str ++ "."
-    second (pos, str) = ParseNote pos InfoC 1009 $
+    second (ContextName pos str) = ParseNote pos InfoC 1009 $
         "The mentioned parser error was in this " ++ str ++ "."
 
 lt x = trace (show x) x

@@ -154,6 +154,21 @@ runBasicTreeAnalysis checks token =
     parentTree = getParentTree token
     runTree f t = runBasicAnalysis (flip f $ parentTree) t
 
+filterByAnnotation token metadataMap =
+    Map.mapWithKey removeVals metadataMap
+  where
+    removeVals id (Metadata pos notes) =
+        Metadata pos $ filter (not . shouldIgnore id . numFor) notes
+    numFor (Note _ code _) = code
+    shouldIgnore id num =
+        any (shouldIgnoreFor num) $ getPath parents (T_Bang id)
+    shouldIgnoreFor num (T_Annotation _ anns _) =
+        any hasNum anns
+      where
+        hasNum (DisableComment ts) = num == ts
+    shouldIgnoreFor _ _ = False
+    parents = getParentTree token
+
 addNoteFor id note = modify ((id, note):)
 warn id code note = addNoteFor id $ Note WarningC code $ note
 err id code note = addNoteFor id $ Note ErrorC code $ note
@@ -218,6 +233,7 @@ isEmpty token =
 
 makeSimple (T_NormalWord _ [f]) = f
 makeSimple (T_Redirecting _ _ f) = f
+makeSimple (T_Annotation _ _ f) = f
 makeSimple t = t
 simplify = doTransform makeSimple
 
@@ -234,6 +250,7 @@ deadSimple (T_Literal _ x) = [x]
 deadSimple (T_SimpleCommand _ vars words) = concatMap (deadSimple) words
 deadSimple (T_Redirecting _ _ foo) = deadSimple foo
 deadSimple (T_DollarSingleQuoted _ s) = [s]
+deadSimple (T_Annotation _ _ s) = deadSimple s
 deadSimple _ = []
 
 (!!!) list i =
@@ -1054,11 +1071,13 @@ getCommandName (T_Redirecting _ _ w) =
     getCommandName w
 getCommandName (T_SimpleCommand _ _ (w:_)) =
     getLiteralString w
+getCommandName (T_Annotation _ _ t) = getCommandName t
 getCommandName _ = Nothing
 
 getCommandBasename = liftM basename . getCommandName
 basename = reverse . (takeWhile (/= '/')) . reverse
 
+isAssignment (T_Annotation _ _ w) = isAssignment w
 isAssignment (T_Redirecting _ _ w) = isAssignment w
 isAssignment (T_SimpleCommand _ (w:_) []) = True
 isAssignment _ = False

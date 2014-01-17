@@ -23,13 +23,30 @@ import Data.Maybe
 import Text.Parsec.Pos
 import Data.List
 
+
+prop_findsParseIssue =
+    let comments = shellCheck "echo \"$12\"" in
+        (length comments) == 1 && (scCode $ head comments) == 1037
+prop_commentDisablesParseIssue1 =
+    null $ shellCheck "#shellcheck disable=SC1037\necho \"$12\""
+prop_commentDisablesParseIssue2 =
+    null $ shellCheck "#shellcheck disable=SC1037\n#lol\necho \"$12\""
+
+prop_findsAnalysisIssue =
+    let comments = shellCheck "echo $1" in
+        (length comments) == 1 && (scCode $ head comments) == 2086
+prop_commentDisablesAnalysisIssue1 =
+    null $ shellCheck "#shellcheck disable=SC2086\necho $1"
+prop_commentDisablesAnalysisIssue2 =
+    null $ shellCheck "#shellcheck disable=SC2086\n#lol\necho $1"
+
 shellCheck :: String -> [ShellCheckComment]
 shellCheck script =
     let (ParseResult result notes) = parseShell "-" script in
         let allNotes = notes ++ (concat $ maybeToList $ do
             (tree, map) <- result
             let newMap = runAllAnalytics tree map
-            return $ notesFromMap newMap
+            return $ notesFromMap $ filterByAnnotation tree newMap
             )
         in
             map formatNote $ nub $ sortNotes allNotes

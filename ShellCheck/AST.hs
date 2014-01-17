@@ -117,8 +117,10 @@ data Token =
     | T_UntilExpression Id [Token] [Token]
     | T_While Id
     | T_WhileExpression Id [Token] [Token]
+    | T_Annotation Id [Annotation] Token
     deriving (Show)
 
+data Annotation = DisableComment Integer deriving (Show, Eq)
 data ConditionType = DoubleBracket | SingleBracket deriving (Show, Eq)
 
 -- I apologize for nothing!
@@ -239,6 +241,7 @@ analyze f g i t =
         return $ TA_Trinary id a b c
     delve (TA_Expansion id t) = d1 t $ TA_Expansion id
     delve (TA_Base id b t) = d1 t $ TA_Base id b
+    delve (T_Annotation id anns t) = d1 t $ T_Annotation id anns
     delve t = return t
 
 getId t = case t of
@@ -331,6 +334,7 @@ getId t = case t of
         T_DollarSingleQuoted id _ -> id
         T_DollarDoubleQuoted id _ -> id
         T_DollarBracket id _ -> id
+        T_Annotation id _ _ -> id
 
 blank :: Monad m => Token -> m ()
 blank = const $ return ()
