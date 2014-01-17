@@ -49,18 +49,22 @@ genericChecks = [
 checksFor Sh = map runBasicAnalysis [
     checkBashisms
     ,checkTimeParameters
+    ,checkCdAndBack Sh
     ]
 checksFor Ksh = map runBasicAnalysis [
     checkEchoSed
+    ,checkCdAndBack Ksh
     ]
 checksFor Zsh = map runBasicAnalysis [
     checkTimeParameters
     ,checkEchoSed
+    ,checkCdAndBack Zsh
     ]
 checksFor Bash = map runBasicAnalysis [
     checkTimeParameters
     ,checkBraceExpansionVars
     ,checkEchoSed
+    ,checkCdAndBack Bash
     ]
 
 runAllAnalytics root m = addToMap notes m
@@ -1945,3 +1949,37 @@ checkCharRangeGlob (T_Glob id str) | isCharClass str =
     contents = drop 1 . take ((length str) - 1) $ str
     hasDupes = any (>1) . map length . group . sort . filter (/= '-') $ contents
 checkCharRangeGlob _ = return ()
+
+
+
+prop_checkCdAndBack1 = verify (checkCdAndBack Sh) "for f in *; do cd $f; git pull; cd ..; done"
+prop_checkCdAndBack2 = verifyNot (checkCdAndBack Sh) "for f in *; do cd $f || continue; git pull; cd ..; done"
+prop_checkCdAndBack3 = verifyNot (checkCdAndBack Sh) "while [[ $PWD != / ]]; do cd ..; done"
+checkCdAndBack shell = doLists
+  where
+    doLists (T_ForIn _ _ _ cmds) = doList cmds
+    doLists (T_WhileExpression _ _ cmds) = doList cmds
+    doLists (T_UntilExpression _ _ cmds) = doList cmds
+    doLists (T_IfExpression _ thens elses) = do
+        mapM_ (\(_, l) -> doList l) thens
+        doList elses
+    doLists _ = return ()
+
+    isCdRevert t =
+        case deadSimple t of
+            ["cd", p] -> p `elem` ["..", "-"]
+            _ -> False
+
+    getCmd (T_Annotation id _ x) = getCmd x
+    getCmd (T_Pipeline id [x]) = getCommandName x
+    getCmd _ = Nothing
+
+    doList list =
+        let cds = filter ((== Just "cd") . getCmd) list in
+            when (length cds >= 2 && isCdRevert (last cds)) $
+               warn (getId $ head cds) 2103 message
+
+    message =
+        if shell == Bash || shell == Zsh
+        then "Consider using ( subshell ), 'cd foo||exit', or pushd/popd instead."
+        else "Consider using ( subshell ) or 'cd foo||exit' instead."
