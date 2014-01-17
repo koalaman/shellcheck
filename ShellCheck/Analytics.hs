@@ -1722,6 +1722,7 @@ prop_checkQuotesInLiterals1a= verifyFull checkQuotesInLiterals "param=\"--foo='l
 prop_checkQuotesInLiterals2 = verifyNotFull checkQuotesInLiterals "param='--foo=\"bar\"'; app \"$param\""
 prop_checkQuotesInLiterals3 =verifyNotFull checkQuotesInLiterals "param=('--foo='); app \"${param[@]}\""
 prop_checkQuotesInLiterals4 = verifyNotFull checkQuotesInLiterals "param=\"don't bother with this one\"; app $param"
+prop_checkQuotesInLiterals5 = verifyNotFull checkQuotesInLiterals "param=\"--foo='lolbar'\"; eval app $param"
 checkQuotesInLiterals t =
     doVariableFlowAnalysis readF writeF Map.empty t
   where
@@ -1743,7 +1744,9 @@ checkQuotesInLiterals t =
 
     readF _ expr name = do
         assignment <- getQuotes name
-        if isJust assignment && not (inUnquotableContext parents expr)
+        if isJust assignment
+            && not (isParamTo parents "eval" expr)
+            && not (inUnquotableContext parents expr)
             then return [
                     (fromJust assignment,
                         Note WarningC 2089 "Word splitting will treat quotes as literals. Use an array."),
