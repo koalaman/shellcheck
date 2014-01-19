@@ -85,6 +85,34 @@ examines the file's shebang to determine which one to use.
           ...
         ]
 
+# DIRECTIVES
+ShellCheck directives can be specified as comments in the shell script
+before a command or block:
+
+    # shellcheck key=value key=value
+    command-or-structure
+
+For example, to suppress SC2035 about using `./*.jpg`:
+
+    # shellcheck disable=SC2035
+    echo "Files: " *.jpg
+
+Valid keys are:
+
+**disable**
+:   Disables a comma separated list of error codes for the following command.
+    The command can be a simple command like `echo foo`, or a compound command
+    like a function definition, subshell block or loop.
+
+
+# AUTHOR
+ShellCheck is written and maintained by Vidar Holen.
+
+# REPORTING BUGS
+Bugs and issues can be reported on GitHub:
+
+https://github.com/koalaman/shellcheck/issues
+
 # SEE ALSO
 
 sh(1) bash(1)
