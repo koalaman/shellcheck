@@ -540,6 +540,7 @@ prop_checkForInQuoted2a = verifyNot checkForInQuoted "for f in *.mp3; do echo fo
 prop_checkForInQuoted2b = verify checkForInQuoted "for f in \"*.mp3\"; do echo foo; done"
 prop_checkForInQuoted3 = verify checkForInQuoted "for f in 'find /'; do true; done"
 prop_checkForInQuoted4 = verify checkForInQuoted "for f in 1,2,3; do true; done"
+prop_checkForInQuoted4a = verifyNot checkForInQuoted "for f in foo{1,2,3}; do true; done"
 prop_checkForInQuoted5 = verify checkForInQuoted "for f in ls; do true; done"
 checkForInQuoted (T_ForIn _ f [T_NormalWord _ [word@(T_DoubleQuoted id list)]] _) =
     when (any (\x -> willSplit x && not (isMagicInQuotes x)) list
@@ -549,7 +550,8 @@ checkForInQuoted (T_ForIn _ f [T_NormalWord _ [T_SingleQuoted id s]] _) =
     warn id 2041 $ "This is a literal string. To run as a command, use $(" ++ s ++ ")."
 checkForInQuoted (T_ForIn _ f [T_NormalWord _ [T_Literal id s]] _) =
     if ',' `elem` s
-      then warn id 2042 $ "Use spaces, not commas, to separate loop elements."
+      then when (not $ '{' `elem` s) $
+            warn id 2042 $ "Use spaces, not commas, to separate loop elements."
       else warn id 2043 $ "This loop will only run once, with " ++ f ++ "='" ++ s ++ "'."
 checkForInQuoted _ = return ()
 
