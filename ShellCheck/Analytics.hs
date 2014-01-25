@@ -745,15 +745,22 @@ prop_checkSingleQuotedVariables3b= verifyTree checkSingleQuotedVariables "sed 's
 prop_checkSingleQuotedVariables3c= verifyTree checkSingleQuotedVariables "sed 's/$((1+foo))/bar/'"
 prop_checkSingleQuotedVariables4 = verifyNotTree checkSingleQuotedVariables "awk '{print $1}'"
 prop_checkSingleQuotedVariables5 = verifyNotTree checkSingleQuotedVariables "trap 'echo $SECONDS' EXIT"
+prop_checkSingleQuotedVariables6 = verifyNotTree checkSingleQuotedVariables "sed -n '$p'"
+prop_checkSingleQuotedVariables6a= verifyTree checkSingleQuotedVariables "sed -n '$pattern'"
 checkSingleQuotedVariables t@(T_SingleQuoted id s) parents =
-            case matchRegex re s of
-                Just [] -> unless (probablyOk t) $ info id 2016 $ "Expressions don't expand in single quotes, use double quotes for that."
-                _          -> return ()
+    when (s `matches` re) $
+        if "sed" == commandName
+        then unless (s `matches` sedContra) showMessage
+        else unless isProbablyOk showMessage
   where
-    probablyOk t = fromMaybe False $ do
+    showMessage = info id 2016 $
+        "Expressions don't expand in single quotes, use double quotes for that."
+    commandName = fromMaybe "" $ do
         cmd <- getClosestCommand parents t
         name <- getCommandBasename cmd
-        return $ name `elem` [
+        return name
+
+    isProbablyOk = commandName `elem` [
                 "trap"
                 ,"sh"
                 ,"bash"
@@ -761,10 +768,11 @@ checkSingleQuotedVariables t@(T_SingleQuoted id s) parents =
                 ,"zsh"
                 ,"ssh"
                 ]
-            || "awk" `isSuffixOf` name
-            || "perl" `isPrefixOf` name
+            || "awk" `isSuffixOf` commandName
+            || "perl" `isPrefixOf` commandName
 
     re = mkRegex "\\$[{(0-9a-zA-Z_]"
+    sedContra = mkRegex "\\$[dp]($|[^a-zA-Z])"
 checkSingleQuotedVariables _ _ = return ()
 
 
