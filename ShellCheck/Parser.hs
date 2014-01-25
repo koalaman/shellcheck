@@ -1348,6 +1348,8 @@ readCmdWord = do
 prop_readIfClause = isOk readIfClause "if false; then foo; elif true; then stuff; more stuff; else cows; fi"
 prop_readIfClause2 = isWarning readIfClause "if false; then; echo oo; fi"
 prop_readIfClause3 = isWarning readIfClause "if false; then true; else; echo lol; fi"
+prop_readIfClause4 = isWarning readIfClause "if false; then true; else if true; then echo lol; fi"
+prop_readIfClause5 = isOk readIfClause "if false; then true; else\nif true; then echo lol; fi; fi"
 readIfClause = called "if expression" $ do
     id <- getNextId
     pos <- getPosition
@@ -1389,7 +1391,9 @@ readIfPart = do
 
 readElifPart = called "elif clause" $ do
     pos <- getPosition
-    g_Elif
+    correctElif <- elif
+    when (not correctElif) $
+        parseProblemAt pos ErrorC 1075 "Use 'elif' instead of 'else if'."
     allspacing
     condition <- readTerm
     g_Then
@@ -1398,8 +1402,12 @@ readElifPart = called "elif clause" $ do
     verifyNotEmptyIf "then"
     action <- readTerm
     return (condition, action)
+  where
+    elif = (g_Elif >> return True) <|>
+        (try $ g_Else >> g_If >> return False)
 
 readElsePart = called "else clause" $ do
+    pos <- getPosition
     g_Else
     acceptButWarn g_Semi ErrorC 1053 "No semicolons directly after 'else'."
     allspacing
