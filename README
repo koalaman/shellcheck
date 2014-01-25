@@ -27,6 +27,9 @@ On Ubuntu and similar, use:
 For older releases, you may have to use:
   apt-get install ghc6 libghc6-parsec3-dev libghc6-quickcheck2-dev libghc6-json-dev libghc-regex-compat-dev cabal-install
 
+On Mac OS X with homebrew (http://brew.sh/), use:
+  brew install cabal-install
+
 Executables can be built with cabal. Tests currently still rely on a Makefile.
 
 Install:
