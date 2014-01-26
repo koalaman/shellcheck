@@ -1486,15 +1486,14 @@ prop_readForClause6 = isOk readForClause "for ((;;))\ndo echo $i\ndone"
 prop_readForClause7 = isOk readForClause "for ((;;)) do echo $i\ndone"
 prop_readForClause8 = isOk readForClause "for ((;;)) ; do echo $i\ndone"
 prop_readForClause9 = isOk readForClause "for i do true; done"
+prop_readForClause10= isOk readForClause "for ((;;)) { true; }"
 readForClause = called "for loop" $ do
     pos <- getPosition
     (T_For id) <- g_For
     spacing
-    typ <- (readRegular <|> readArithmetic)
-    group <- readDoGroup pos
-    typ id group
+    readRegular id pos <|> readArithmetic id pos
   where
-    readArithmetic = called "arithmetic for condition" $ do
+    readArithmetic id pos = called "arithmetic for condition" $ do
         try $ string "(("
         x <- readArithmeticContents
         char ';' >> spacing
@@ -1505,13 +1504,19 @@ readForClause = called "for loop" $ do
         string "))"
         spacing
         optional $ readSequentialSep >> spacing
-        return $ \id group -> (return $ T_ForArithmetic id x y z group)
+        group <- readBraced <|> readDoGroup pos
+        return $ T_ForArithmetic id x y z group
 
-    readRegular = do
+    readBraced = do
+        (T_BraceGroup _ list) <- readBraceGroup
+        return list
+
+    readRegular id pos = do
         name <- readVariableName
         spacing
         values <- readInClause <|> (optional readSequentialSep >> return [])
-        return $ \id group -> (return $ T_ForIn id name values group)
+        group <- readDoGroup pos
+        return $ T_ForIn id name values group
 
 prop_readSelectClause1 = isOk readSelectClause "select foo in *; do echo $foo; done"
 prop_readSelectClause2 = isOk readSelectClause "select foo; do echo $foo; done"
