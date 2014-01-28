@@ -34,8 +34,6 @@ import System.IO
 import Text.Parsec.Error
 import GHC.Exts (sortWith)
 
-lastError = 1074
-
 backslash = char '\\'
 linefeed = (optional carriageReturn) >> char '\n'
 singleQuote = char '\'' <|> unicodeSingleQuote
@@ -269,6 +267,7 @@ readConditionContents single = do
   where
     typ = if single then SingleBracket else DoubleBracket
     readCondBinaryOp = try $ do
+        optional guardArithmetic
         id <- getNextId
         op <- (choice $ (map tryOp ["==", "!=", "<=", ">=", "=~", ">", "<", "=", "\\<=", "\\>=", "\\<", "\\>"])) <|> otherOp
         hardCondSpacing
@@ -283,6 +282,13 @@ readConditionContents single = do
             s <- readOp
             when (s == "-a" || s == "-o") $ fail "Wrong operator"
             return $ TC_Binary id typ s
+
+    guardArithmetic = do
+        try . lookAhead $ disregard (oneOf "+*/%") <|> disregard (string "- ")
+        parseProblem ErrorC 1076 $
+            if single
+            then "Trying to do math? Use e.g. [ $((i/2+7)) -ge 18 ]."
+            else "Trying to do math? Use e.g. [[ $((i/2+7)) -ge 18 ]]."
 
     readCondUnaryExp = do
       op <- readCondUnaryOp
@@ -323,6 +329,7 @@ readConditionContents single = do
             endedWith _ _ = False
 
     readCondAndOp = do
+        optional guardArithmetic
         id <- getNextId
         x <- try (string "&&" <|> string "-a")
         when (single && x == "&&") $ addNoteFor id $ Note ErrorC 1022 "You can't use && inside [..]. Use [[..]] instead."
@@ -331,6 +338,7 @@ readConditionContents single = do
         return $ TC_And id typ x
 
     readCondOrOp = do
+        optional guardArithmetic
         id <- getNextId
         x <- try (string "||" <|> string "-o")
         when (single && x == "||") $ addNoteFor id $ Note ErrorC 1024 "You can't use || inside [..]. Use [[..]] instead."
