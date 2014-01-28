@@ -1757,6 +1757,9 @@ prop_checkQuotesInLiterals2 = verifyNotFull checkQuotesInLiterals "param='--foo=
 prop_checkQuotesInLiterals3 =verifyNotFull checkQuotesInLiterals "param=('--foo='); app \"${param[@]}\""
 prop_checkQuotesInLiterals4 = verifyNotFull checkQuotesInLiterals "param=\"don't bother with this one\"; app $param"
 prop_checkQuotesInLiterals5 = verifyNotFull checkQuotesInLiterals "param=\"--foo='lolbar'\"; eval app $param"
+prop_checkQuotesInLiterals6 = verifyFull checkQuotesInLiterals "param='my\\ file'; cmd=\"rm $param\"; $cmd"
+prop_checkQuotesInLiterals6a= verifyNotFull checkQuotesInLiterals "param='my\\ file'; cmd=\"rm ${#param}\"; $cmd"
+prop_checkQuotesInLiterals7 = verifyFull checkQuotesInLiterals "param='my\\ file'; rm $param"
 checkQuotesInLiterals t =
     doVariableFlowAnalysis readF writeF Map.empty t
   where
@@ -1764,17 +1767,29 @@ checkQuotesInLiterals t =
     setQuotes name ref = modify $ Map.insert name ref
     deleteQuotes = modify . Map.delete
     parents = getParentTree t
-    quoteRegex = mkRegex "\"|([= ]|^)'|'( |$)"
-    containsQuotes s = isJust $ matchRegex quoteRegex s
+    quoteRegex = mkRegex "\"|([= ]|^)'|'( |$)|\\\\ "
+    containsQuotes s = s `matches` quoteRegex
 
-    -- Just catch the most blatant cases of foo='--cow="lol bert"'; cmd $foo, since that's 99%
     writeF _ _ name (DataFrom values) = do
-        let quotedVars = filter (\v -> containsQuotes (concat $ deadSimple v)) values
+        quoteMap <- get
+        let quotedVars = msum $ map (forToken quoteMap) values
         case quotedVars of
-            [] -> deleteQuotes name
-            x:_ -> setQuotes name (getId x)
+            Nothing -> deleteQuotes name
+            Just x -> setQuotes name x
         return []
     writeF _ _ _ _ = return []
+
+    forToken map (T_DollarBraced id t) =
+        -- skip getBracedReference here to avoid false positives on PE
+        Map.lookup (concat . deadSimple $ t) map
+    forToken quoteMap (T_DoubleQuoted id tokens) =
+        msum $ map (forToken quoteMap) tokens
+    forToken quoteMap (T_NormalWord id tokens) =
+        msum $ map (forToken quoteMap) tokens
+    forToken _ t =
+        if containsQuotes (concat $ deadSimple t)
+        then return $ getId t
+        else Nothing
 
     readF _ expr name = do
         assignment <- getQuotes name
@@ -1783,9 +1798,9 @@ checkQuotesInLiterals t =
             && not (inUnquotableContext parents expr)
             then return [
                     (fromJust assignment,
-                        Note WarningC 2089 "Word splitting will treat quotes as literals. Use an array."),
+                        Note WarningC 2089 "Quotes/backslashes will be treated literally. Use an array."),
                     (getId expr,
-                        Note WarningC 2090 "Embedded quotes in this variable will not be respected.")
+                        Note WarningC 2090 "Quotes/backslashes in this variable will not be respected.")
                     ]
             else return []
 
