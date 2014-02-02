@@ -17,7 +17,7 @@
 -}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
-module ShellCheck.Parser (Note(..), Severity(..), parseShell, ParseResult(..), ParseNote(..), notesFromMap, Metadata(..), sortNotes) where
+module ShellCheck.Parser (Note(..), Severity(..), parseShell, ParseResult(..), ParseNote(..), sortNotes, noteToParseNote) where
 
 import ShellCheck.AST
 import ShellCheck.Data
@@ -98,19 +98,19 @@ nbsp = do
     return ' '
 
 --------- Message/position annotation on top of user state
-data Note = Note Severity Code String deriving (Show, Eq)
+data Note = Note Id Severity Code String deriving (Show, Eq)
 data ParseNote = ParseNote SourcePos Severity Code String deriving (Show, Eq)
-data Metadata = Metadata SourcePos [Note] deriving (Show)
 data Severity = ErrorC | WarningC | InfoC | StyleC deriving (Show, Eq, Ord)
 data Context = ContextName SourcePos String | ContextAnnotation [Annotation]
 type Code = Integer
 
-codeForNote (Note _ code _) = code
 codeForParseNote (ParseNote _ _ code _) = code
+noteToParseNote map (Note id severity code message) =
+        ParseNote pos severity code message
+    where
+        pos = fromJust $ Map.lookup id map
 
 initialState = (Id $ -1, Map.empty, [])
-
-getInitialMeta pos = Metadata pos []
 
 getLastId = do
     (id, _, _) <- getState
@@ -119,7 +119,7 @@ getLastId = do
 getNextIdAt sourcepos = do
     (id, map, notes) <- getState
     let newId = incId id
-    let newMap = Map.insert newId (getInitialMeta sourcepos) map
+    let newMap = Map.insert newId sourcepos map
     putState (newId, newMap, notes)
     return newId
   where incId (Id n) = (Id $ n+1)
@@ -187,11 +187,6 @@ parseProblemAt pos level code msg = do
         Ms.modify (\(list, current) -> ((ParseNote pos level code msg):list, current))
 
 -- Store non-parse problems inside
-addNoteFor id note = modifyMap $ Map.adjust (\(Metadata pos notes) -> Metadata pos (note:notes)) id
-
-addNote note = do
-    id <- getLastId
-    addNoteFor id note
 
 parseNote c l a = do
     pos <- getPosition
@@ -331,8 +326,6 @@ readConditionContents single = do
     readCondAndOp = do
         id <- getNextId
         x <- try (string "&&" <|> string "-a")
-        when (single && x == "&&") $ addNoteFor id $ Note ErrorC 1022 "You can't use && inside [..]. Use [[..]] instead."
-        when (not single && x == "-a") $ addNoteFor id $ Note ErrorC 1023 "In [[..]], use && instead of -a."
         softCondSpacing
         return $ TC_And id typ x
 
@@ -340,8 +333,6 @@ readConditionContents single = do
         optional guardArithmetic
         id <- getNextId
         x <- try (string "||" <|> string "-o")
-        when (single && x == "||") $ addNoteFor id $ Note ErrorC 1024 "You can't use || inside [..]. Use [[..]] instead."
-        when (not single && x == "-o") $ addNoteFor id $ Note ErrorC 1025 "In [[..]], use || instead of -o."
         softCondSpacing
         return $ TC_Or id typ x
 
@@ -1885,7 +1876,7 @@ isOk p s = (fst cs) && (null . snd $ cs) where cs = checkString p s
 
 checkString parser string =
     case rp (parser >> eof >> getState) "-" string of
-        (Right (tree, map, notes), (problems, _)) -> (True, (notesFromMap map) ++ notes ++ problems)
+        (Right (tree, map, notes), (problems, _)) -> (True, notes ++ problems)
         (Left _, (n, _)) -> (False, n)
 
 parseWithNotes parser = do
@@ -1894,16 +1885,11 @@ parseWithNotes parser = do
     parseNotes <- getParseNotes
     return (item, map, nub . sortNotes $ parseNotes)
 
-toParseNotes (Metadata pos list) = map (\(Note level code note) -> ParseNote pos level code note) list
-notesFromMap map = Map.fold (\x -> (++) (toParseNotes x)) [] map
-
-getAllNotes result = (concatMap (notesFromMap . snd) (maybeToList . parseResult $ result)) ++ (parseNotes result)
-
 compareNotes (ParseNote pos1 level1 _ s1) (ParseNote pos2 level2 _ s2) = compare (pos1, level1) (pos2, level2)
 sortNotes = sortBy compareNotes
 
 
-data ParseResult = ParseResult { parseResult :: Maybe (Token, Map.Map Id Metadata), parseNotes :: [ParseNote] } deriving (Show)
+data ParseResult = ParseResult { parseResult :: Maybe (Token, Map.Map Id SourcePos), parseNotes :: [ParseNote] } deriving (Show)
 
 makeErrorFor parsecError =
     ParseNote (errorPos parsecError) ErrorC 1072 $ getStringFromParsec $ errorMessages parsecError
@@ -1923,9 +1909,11 @@ getStringFromParsec errors =
 
 parseShell filename contents = do
     case rp (parseWithNotes readScript) filename contents of
-        (Right (script, map, notes), (parsenotes, _)) -> ParseResult (Just (script, map)) (nub $ sortNotes $ notes ++ parsenotes)
-        (Left err, (p, context)) -> ParseResult Nothing (nub $ sortNotes $ p ++ (notesForContext context) ++ ([makeErrorFor err]))
-
+        (Right (script, map, notes), (parsenotes, _)) ->
+            ParseResult (Just (script, map)) (nub $ sortNotes $ notes ++ parsenotes)
+        (Left err, (p, context)) ->
+            ParseResult Nothing
+                (nub $ sortNotes $ p ++ (notesForContext context) ++ ([makeErrorFor err]))
   where
     isName (ContextName _ _) = True
     isName _ = False

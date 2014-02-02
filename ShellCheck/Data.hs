@@ -41,13 +41,13 @@ internalVariables = [
   ]
 
 variablesWithoutSpaces = [
-    "$", "-", "?", "!", 
+    "$", "-", "?", "!",
     "BASHPID", "BASH_ARGC", "BASH_LINENO", "BASH_SUBSHELL", "EUID", "LINENO",
     "OPTIND", "PPID", "RANDOM", "SECONDS", "SHELLOPTS", "SHLVL", "UID",
     "COLUMNS", "HISTFILESIZE", "HISTSIZE", "LINES"
   ]
 
-commonCommands = [ 
+commonCommands = [
     "admin", "alias", "ar", "asa", "at", "awk", "basename", "batch",
     "bc", "bg", "break", "c99", "cal", "cat", "cd", "cflow", "chgrp",
     "chmod", "chown", "cksum", "cmp", "colon", "comm", "command",
@@ -70,5 +70,5 @@ commonCommands = [
     "unalias", "uname", "uncompress", "unexpand", "unget", "uniq",
     "unlink", "unset", "uucp", "uudecode", "uuencode", "uustat", "uux",
     "val", "vi", "wait", "wc", "what", "who", "write", "xargs", "yacc",
-    "zcat" 
+    "zcat"
   ]

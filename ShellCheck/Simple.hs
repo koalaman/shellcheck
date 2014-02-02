@@ -44,9 +44,9 @@ shellCheck :: String -> [ShellCheckComment]
 shellCheck script =
     let (ParseResult result notes) = parseShell "-" script in
         let allNotes = notes ++ (concat $ maybeToList $ do
-            (tree, map) <- result
-            let newMap = runAllAnalytics tree map
-            return $ notesFromMap $ filterByAnnotation tree newMap
+            (tree, posMap) <- result
+            let list = runAnalytics [] tree
+            return $ map (noteToParseNote posMap) $ filterByAnnotation tree list
             )
         in
             map formatNote $ nub $ sortNotes allNotes
