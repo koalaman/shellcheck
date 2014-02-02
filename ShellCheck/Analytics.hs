@@ -21,7 +21,7 @@ import ShellCheck.AST
 import ShellCheck.Data
 import ShellCheck.Parser
 import Control.Monad
-import Control.Monad.State
+import Control.Monad.State.Strict
 import Control.Monad.Writer
 import qualified Data.Map as Map
 import Data.Char
@@ -82,7 +82,7 @@ runList root list = notes
         params = Parameters {
                 shellType = determineShell root,
                 parentMap = getParentTree root,
-                variableFlow = getVariableFlow root
+                variableFlow = getVariableFlow (shellType params) (parentMap params) root
         }
         notes = concatMap (\f -> f params root) list
 
@@ -95,8 +95,14 @@ determineShell (T_Script _ shebang _) = normalize $ shellFor shebang
     where shellFor s | "/env " `isInfixOf` s = head ((drop 1 $ words s)++[""])
           shellFor s = reverse . takeWhile (/= '/') . reverse $ s
           normalize "sh" = Sh
+          normalize "ash" = Sh
+          normalize "dash" = Sh
+
           normalize "ksh" = Ksh
+          normalize "ksh93" = Ksh
+
           normalize "zsh" = Zsh
+
           normalize "bash" = Bash
           normalize _ = Bash
 
@@ -1516,6 +1522,9 @@ prop_subshellAssignmentCheck9 = verifyTree    subshellAssignmentCheck "read n & 
 prop_subshellAssignmentCheck10 = verifyTree    subshellAssignmentCheck "(( n <<= 3 )) & (( n |= 4 )) &"
 prop_subshellAssignmentCheck11 = verifyTree subshellAssignmentCheck "cat /etc/passwd | while read line; do let n=n+1; done\necho $n"
 prop_subshellAssignmentCheck12 = verifyTree subshellAssignmentCheck "cat /etc/passwd | while read line; do let ++n; done\necho $n"
+prop_subshellAssignmentCheck13 = verifyTree subshellAssignmentCheck "#!/bin/bash\necho foo | read bar; echo $bar"
+prop_subshellAssignmentCheck14 = verifyNotTree subshellAssignmentCheck "#!/bin/ksh93\necho foo | read bar; echo $bar"
+prop_subshellAssignmentCheck15 = verifyNotTree subshellAssignmentCheck "#!/bin/zsh\ncat foo | while read bar; do a=$bar; done\necho \"$a\""
 subshellAssignmentCheck params t =
     let flow = variableFlow params
         check = findSubshelled flow [("oops",[])] Map.empty
@@ -1535,16 +1544,38 @@ data DataSource = DataFrom [Token] | DataExternal
 
 data VariableState = Dead Token String | Alive deriving (Show, Eq)
 
-leadType t =
+leadType shell parents t =
     case t of
         T_DollarExpansion _ _  -> SubshellScope "$(..) expansion"
         T_Backticked _ _  -> SubshellScope "`..` expansion"
         T_Backgrounded _ _  -> SubshellScope "backgrounding &"
         T_Subshell _ _  -> SubshellScope "(..) group"
-        -- This considers the whole pipeline one subshell. Consider fixing.
-        T_Pipeline _ (_:_:[])  -> SubshellScope "pipeline"
+        T_Redirecting _ _ _  ->
+            if fromMaybe False causesSubshell
+            then SubshellScope "pipeline"
+            else NoneScope
         _ -> NoneScope
+  where
+    parentPipeline = do
+        parent <- Map.lookup (getId t) parents
+        case parent of
+            T_Pipeline _ _ -> return parent
+            _ -> Nothing
 
+    causesSubshell = do
+        (T_Pipeline _ list) <- parentPipeline
+        if length list <= 1
+            then return False
+            else if lastCreatesSubshell
+                then return True
+                else return . not $ (getId . head $ reverse list) == (getId t)
+
+    lastCreatesSubshell =
+        case shell of
+            Bash -> True
+            Sh -> True
+            Ksh -> False
+            Zsh -> False
 
 getModifiedVariables t =
     case t of
@@ -1631,18 +1662,18 @@ getReferencedVariables t =
         T_Assignment id Append str _ _ -> [(t, t, str)]
         x -> getReferencedVariableCommand x
 
-getVariableFlow t =
+getVariableFlow shell parents t =
     let (_, stack) = runState (doStackAnalysis startScope endScope t) []
     in reverse stack
   where
     startScope t =
-        let scopeType = leadType t
+        let scopeType = leadType shell parents t
         in do
             when (scopeType /= NoneScope) $ modify ((StackScope scopeType):)
             if assignFirst t then setWritten t else return ()
 
     endScope t =
-        let scopeType = leadType t
+        let scopeType = leadType shell parents t
         in do
             setRead t
             if assignFirst t then return () else setWritten t
@@ -2040,6 +2071,8 @@ prop_checkLoopKeywordScope2 = verify checkLoopKeywordScope "for f; do ( break; )
 prop_checkLoopKeywordScope3 = verify checkLoopKeywordScope "if true; then continue; fi"
 prop_checkLoopKeywordScope4 = verifyNot checkLoopKeywordScope "while true; do break; done"
 prop_checkLoopKeywordScope5 = verify checkLoopKeywordScope "if true; then break; fi"
+prop_checkLoopKeywordScope6 = verify checkLoopKeywordScope "while true; do true | { break; }; done"
+prop_checkLoopKeywordScope7 = verifyNot checkLoopKeywordScope "#!/bin/ksh\nwhile true; do true | { break; }; done"
 checkLoopKeywordScope params t |
         name `elem` map Just ["continue", "break"] =
     if not $ any isLoop path
@@ -2048,14 +2081,13 @@ checkLoopKeywordScope params t |
         then err (getId t) 2104 $ "In functions, use return instead of " ++ (fromJust name) ++ "."
         else err (getId t) 2105 $ (fromJust name) ++ " is only valid in loops."
     else case map subshellType $ filter (not . isFunction) path of
-        -- TODO: Fix warning for Ksh/Zsh when this is the last step in the pipeline
         (Just str):_ -> warn (getId t) 2106 $
             "This only exits the subshell caused by the " ++ str ++ "."
         _ -> return ()
   where
     name = getCommandName t
     path = let p = getPath (parentMap params) t in filter relevant p
-    subshellType t = case leadType t of
+    subshellType t = case leadType (shellType params) (parentMap params) t of
         NoneScope -> Nothing
         SubshellScope str -> return str
     isFunction t = case t of T_Function _ _ _ -> True; _ -> False
