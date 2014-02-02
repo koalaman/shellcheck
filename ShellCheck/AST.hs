@@ -26,6 +26,8 @@ data Id = Id Int deriving (Show, Eq, Ord)
 data Quoted = Quoted | Unquoted deriving (Show, Eq)
 data Dashed = Dashed | Undashed deriving (Show, Eq)
 data AssignmentMode = Assign | Append deriving (Show, Eq)
+data FunctionKeyword = FunctionKeyword Bool deriving (Show, Eq)
+data FunctionParentheses = FunctionParentheses Bool deriving (Show, Eq)
 
 data Token =
     TA_Base Id String Token
@@ -80,7 +82,7 @@ data Token =
     | T_For Id
     | T_ForArithmetic Id Token Token Token [Token]
     | T_ForIn Id String [Token] [Token]
-    | T_Function Id String Token
+    | T_Function Id FunctionKeyword FunctionParentheses String Token
     | T_GREATAND Id
     | T_Glob Id String
     | T_Greater Id
@@ -218,7 +220,7 @@ analyze f g i t =
         return $ T_ForArithmetic id x y z list
 
     delve (T_Script id s l) = dl l $ T_Script id s
-    delve (T_Function id name body) = d1 body $ T_Function id name
+    delve (T_Function id a b name body) = d1 body $ T_Function id a b name
     delve (T_Condition id typ token) = d1 token $ T_Condition id typ
     delve (T_Extglob id str l) = dl l $ T_Extglob id str
     delve (T_DollarBraced id op) = d1 op $ T_DollarBraced id
@@ -308,7 +310,7 @@ getId t = case t of
         T_ForIn id _ _ _  -> id
         T_SelectIn id _ _ _  -> id
         T_CaseExpression id _ _ -> id
-        T_Function id _ _  -> id
+        T_Function id _ _ _ _  -> id
         T_Arithmetic id _  -> id
         T_Script id _ _  -> id
         T_Condition id _ _  -> id

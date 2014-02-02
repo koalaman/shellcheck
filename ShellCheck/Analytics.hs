@@ -172,6 +172,7 @@ nodeChecks = [
     ,checkCdAndBack
     ,checkWrongArithmeticAssignment
     ,checkConditionalAndOrs
+    ,checkFunctionDeclarations
     ]
 
 
@@ -1884,7 +1885,7 @@ checkFunctionsUsedExternally params t =
 
     analyse f t = snd $ runState (doAnalysis f t) []
     functions = Map.fromList $ analyse findFunctions t
-    findFunctions (T_Function id name _) = modify ((name, id):)
+    findFunctions (T_Function id _ _ name _) = modify ((name, id):)
     findFunctions t@(T_SimpleCommand id _ (_:args))
         | t `isUnqualifiedCommand` "alias" = mapM_ getAlias args
     findFunctions _ = return ()
@@ -2090,6 +2091,25 @@ checkLoopKeywordScope params t |
     subshellType t = case leadType (shellType params) (parentMap params) t of
         NoneScope -> Nothing
         SubshellScope str -> return str
-    isFunction t = case t of T_Function _ _ _ -> True; _ -> False
+    isFunction t = case t of T_Function _ _ _ _ _ -> True; _ -> False
     relevant t = isLoop t || isFunction t || isJust (subshellType t)
 checkLoopKeywordScope _ _ = return ()
+
+
+prop_checkFunctionDeclarations1 = verify checkFunctionDeclarations "#!/bin/ksh\nfunction foo() { command foo --lol \"$@\"; }"
+prop_checkFunctionDeclarations2 = verify checkFunctionDeclarations "#!/bin/dash\nfunction foo { lol; }"
+prop_checkFunctionDeclarations3 = verifyNot checkFunctionDeclarations "foo() { echo bar; }"
+checkFunctionDeclarations params
+        (T_Function id (FunctionKeyword hasKeyword) (FunctionParentheses hasParens) _ _) =
+    case (shellType params) of
+        Bash -> return ()
+        Zsh -> return ()
+        Ksh -> do
+            when (hasKeyword && hasParens) $
+                err id 2111 "ksh does not allow 'function' keyword and '()' at the same time."
+        Sh -> do
+            when (hasKeyword && hasParens) $
+                warn id 2112 "'function' keyword is non-standard. Delete it."
+            when (hasKeyword && not hasParens) $
+                warn id 2113 "'function' keyword is non-standard. Use 'foo()' instead of 'function foo'."
+checkFunctionDeclarations _ _ = return ()

@@ -1580,60 +1580,51 @@ readCaseItem = called "case item" $ do
 
 prop_readFunctionDefinition = isOk readFunctionDefinition "foo() { command foo --lol \"$@\"; }"
 prop_readFunctionDefinition1 = isOk readFunctionDefinition "foo   (){ command foo --lol \"$@\"; }"
-prop_readFunctionDefinition2 = isWarning readFunctionDefinition "function foo() { command foo --lol \"$@\"; }"
-prop_readFunctionDefinition3 = isWarning readFunctionDefinition "function foo { lol; }"
 prop_readFunctionDefinition4 = isWarning readFunctionDefinition "foo(a, b) { true; }"
 prop_readFunctionDefinition5 = isOk readFunctionDefinition ":(){ :|:;}"
 prop_readFunctionDefinition6 = isOk readFunctionDefinition "?(){ foo; }"
 prop_readFunctionDefinition7 = isOk readFunctionDefinition "..(){ cd ..; }"
 prop_readFunctionDefinition8 = isOk readFunctionDefinition "foo() (ls)"
 readFunctionDefinition = called "function" $ do
-    id <- getNextId
-    name <- try readFunctionSignature
+    functionSignature <- try readFunctionSignature
     allspacing
     (disregard (lookAhead $ oneOf "{(") <|> parseProblem ErrorC 1064 "Expected a { to open the function definition.")
     group <- readBraceGroup <|> readSubshell
-    return $ T_Function id name group
-
-
-readFunctionSignature = do
-    readWithFunction <|> readWithoutFunction
+    return $ functionSignature group
   where
-    readWithFunction = do
-        pos <- getPosition
-        try $ do
-            string "function"
-            whitespace
-        parseProblemAt pos InfoC 1005 "Drop the keyword 'function'. It's optional in Bash but invalid in other shells."
-        spacing
-        name <- readFunctionName
-        optional spacing
-        pos <- getPosition
-        readParens <|> do
-            parseProblemAt pos InfoC 1006 "Include '()' after the function name (in addition to dropping 'function')."
-        return name
+    readFunctionSignature = do
+        readWithFunction <|> readWithoutFunction
+      where
+        readWithFunction = do
+            id <- getNextId
+            try $ do
+                string "function"
+                whitespace
+            spacing
+            name <- readFunctionName
+            optional spacing
+            hasParens <- wasIncluded readParens
+            return $ T_Function id (FunctionKeyword True) (FunctionParentheses hasParens) name
 
-    readWithoutFunction = try $ do
-        name <- readFunctionName
-        optional spacing
-        readParens
-        return name
+        readWithoutFunction = try $ do
+            id <- getNextId
+            name <- readFunctionName
+            optional spacing
+            readParens
+            return $ T_Function id (FunctionKeyword False) (FunctionParentheses True) name
 
-    readParens = do
-        g_Lparen
-        optional spacing
-        g_Rparen <|> do
-            parseProblem ErrorC 1065 "Trying to declare parameters? Don't. Use () and refer to params as $1, $2.."
-            many $ noneOf "\n){"
-            g_Rparen
-        return ()
+        readParens = do
+            g_Lparen
+            optional spacing
+            g_Rparen <|> do
+                parseProblem ErrorC 1065 "Trying to declare parameters? Don't. Use () and refer to params as $1, $2.."
+                many $ noneOf "\n){"
+                g_Rparen
+            return ()
 
-    readFunctionName = many1 functionChars
-
-
+        readFunctionName = many1 functionChars
 
 readPattern = (readNormalWord `thenSkip` spacing) `sepBy1` (char '|' `thenSkip` spacing)
-
 
 prop_readCompoundCommand = isOk readCompoundCommand "{ echo foo; }>/dev/null"
 readCompoundCommand = do
