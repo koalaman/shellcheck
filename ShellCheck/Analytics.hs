@@ -149,6 +149,7 @@ treeChecks = [
     ,checkSingleQuotedVariables
     ,checkRedirectToSame
     ,checkPrefixAssignmentReference
+    ,checkLoopKeywordScope
     ]
 
 
@@ -2010,3 +2011,30 @@ checkCdAndBack shell = doLists
         if shell == Bash || shell == Zsh
         then "Consider using ( subshell ), 'cd foo||exit', or pushd/popd instead."
         else "Consider using ( subshell ) or 'cd foo||exit' instead."
+
+prop_checkLoopKeywordScope1 = verifyTree checkLoopKeywordScope "continue 2"
+prop_checkLoopKeywordScope2 = verifyTree checkLoopKeywordScope "for f; do ( break; ); done"
+prop_checkLoopKeywordScope3 = verifyTree checkLoopKeywordScope "if true; then continue; fi"
+prop_checkLoopKeywordScope4 = verifyNotTree checkLoopKeywordScope "while true; do break; done"
+prop_checkLoopKeywordScope5 = verifyTree checkLoopKeywordScope "if true; then break; fi"
+checkLoopKeywordScope t tree |
+        name `elem` map Just ["continue", "break"] =
+    if not $ any isLoop path
+    then if any isFunction $ take 1 path
+        -- breaking at a source/function invocation is an abomination. Let's ignore it.
+        then err (getId t) 2104 $ "In functions, use return instead of " ++ (fromJust name) ++ "."
+        else err (getId t) 2105 $ (fromJust name) ++ " is only valid in loops."
+    else case map subshellType $ filter (not . isFunction) path of
+        -- TODO: Fix warning for Ksh/Zsh when this is the last step in the pipeline
+        (Just str):_ -> warn (getId t) 2106 $
+            "This only exits the subshell caused by the " ++ str ++ "."
+        _ -> return ()
+  where
+    name = getCommandName t
+    path = let p = getPath tree t in filter relevant p
+    subshellType t = case leadType t of
+        NoneScope -> Nothing
+        SubshellScope str -> return str
+    isFunction t = case t of T_Function _ _ _ -> True; _ -> False
+    relevant t = isLoop t || isFunction t || isJust (subshellType t)
+checkLoopKeywordScope _ _ = return ()
