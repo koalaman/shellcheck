@@ -329,7 +329,6 @@ readConditionContents single = do
             endedWith _ _ = False
 
     readCondAndOp = do
-        optional guardArithmetic
         id <- getNextId
         x <- try (string "&&" <|> string "-a")
         when (single && x == "&&") $ addNoteFor id $ Note ErrorC 1022 "You can't use && inside [..]. Use [[..]] instead."
