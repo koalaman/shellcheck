@@ -21,7 +21,7 @@ import ShellCheck.AST
 import ShellCheck.Data
 import ShellCheck.Parser
 import Control.Monad
-import Control.Monad.State.Strict
+import Control.Monad.State
 import Control.Monad.Writer
 import qualified Data.Map as Map
 import Data.Char
@@ -991,8 +991,6 @@ checkOrNeq _ (TA_Binary id "||" (TA_Binary _ "!=" word1 _) (TA_Binary _ "!=" wor
         warn id 2056 "You probably wanted && here."
 checkOrNeq _ _ = return ()
 
-
-allModifiedVariables t = snd $ runWriter (doAnalysis (\x -> modify $ (++) (getModifiedVariables x)) t)
 
 prop_checkValidCondOps1 = verify checkValidCondOps "[[ a -xz b ]]"
 prop_checkValidCondOps2 = verify checkValidCondOps "[ -M a ]"
