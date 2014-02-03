@@ -30,8 +30,11 @@ corner cases can cause delayed failures.
     options are cumulative, but all the codes can be specified at once,
     comma-separated as a single argument.
 
-Also note that shellcheck supports multiple Bourne shell dialects, and
-examines the file's shebang to determine which one to use.
+**-s**\ *shell*,\ **--shell=***shell*
+
+:   Specify Bourne shell dialect. Valid values are *sh*, *bash*, *ksh* and
+    *zsh*. The default is to use the file's shebang, or *bash* if the target
+    shell can't be determined.
 
 # FORMATS
 
