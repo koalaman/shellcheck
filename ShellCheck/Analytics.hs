@@ -15,7 +15,7 @@
     You should have received a copy of the GNU Affero General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -}
-module ShellCheck.Analytics (AnalysisOption(..), filterByAnnotation, runAnalytics) where
+module ShellCheck.Analytics (AnalysisOption(..), filterByAnnotation, runAnalytics, shellForExecutable) where
 
 import ShellCheck.AST
 import ShellCheck.Data
@@ -41,7 +41,7 @@ data Parameters = Parameters {
     shellType :: Shell
     }
 
-data AnalysisOption = NotImplemented
+data AnalysisOption = ForceShell Shell
 
 -- Checks that are run on the AST root
 treeChecks :: [Parameters -> Token -> [Note]]
@@ -75,36 +75,41 @@ checksFor Bash = [
     ]
 
 runAnalytics :: [AnalysisOption] -> Token -> [Note]
-runAnalytics options root = runList root treeChecks
+runAnalytics options root = runList options root treeChecks
 
-runList root list = notes
+runList options root list = notes
     where
         params = Parameters {
-                shellType = determineShell root,
+                shellType = getShellOption,
                 parentMap = getParentTree root,
                 variableFlow = getVariableFlow (shellType params) (parentMap params) root
         }
         notes = concatMap (\f -> f params root) list
+
+        getShellOption =
+            fromMaybe (determineShell root) . msum $
+                map ((\option ->
+                    case option of
+                        ForceShell x -> return x
+                        )) options
 
 checkList l t = concatMap (\f -> f t) l
 
 prop_determineShell0 = determineShell (T_Script (Id 0) "#!/bin/sh" []) == Sh
 prop_determineShell1 = determineShell (T_Script (Id 0) "#!/usr/bin/env ksh" []) == Ksh
 prop_determineShell2 = determineShell (T_Script (Id 0) "" []) == Bash
-determineShell (T_Script _ shebang _) = normalize $ shellFor shebang
+determineShell (T_Script _ shebang _) = fromMaybe Bash . shellForExecutable $ shellFor shebang
     where shellFor s | "/env " `isInfixOf` s = head ((drop 1 $ words s)++[""])
           shellFor s = reverse . takeWhile (/= '/') . reverse $ s
-          normalize "sh" = Sh
-          normalize "ash" = Sh
-          normalize "dash" = Sh
 
-          normalize "ksh" = Ksh
-          normalize "ksh93" = Ksh
-
-          normalize "zsh" = Zsh
-
-          normalize "bash" = Bash
-          normalize _ = Bash
+shellForExecutable "sh" = return Sh
+shellForExecutable "ash" = return Sh
+shellForExecutable "dash" = return Sh
+shellForExecutable "ksh" = return Ksh
+shellForExecutable "ksh93" = return Ksh
+shellForExecutable "zsh" = return Zsh
+shellForExecutable "bash" = return Bash
+shellForExecutable _ = Nothing
 
 -- Checks that are run on each node in the AST
 runNodeAnalysis f p t = execWriter (doAnalysis (f p) t)
@@ -288,7 +293,7 @@ verifyNotTree f s = checkTree f s == Just False
 
 checkNode f s = checkTree (runNodeAnalysis f) s
 checkTree f s = case parseShell "-" s of
-        (ParseResult (Just (t, m)) _) -> Just . not . null $ runList t [f]
+        (ParseResult (Just (t, m)) _) -> Just . not . null $ runList [] t [f]
         _ -> Nothing
 
 

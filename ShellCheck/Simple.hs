@@ -25,27 +25,27 @@ import Data.List
 
 
 prop_findsParseIssue =
-    let comments = shellCheck "echo \"$12\"" in
+    let comments = shellCheck "echo \"$12\"" [] in
         (length comments) == 1 && (scCode $ head comments) == 1037
 prop_commentDisablesParseIssue1 =
-    null $ shellCheck "#shellcheck disable=SC1037\necho \"$12\""
+    null $ shellCheck "#shellcheck disable=SC1037\necho \"$12\"" []
 prop_commentDisablesParseIssue2 =
-    null $ shellCheck "#shellcheck disable=SC1037\n#lol\necho \"$12\""
+    null $ shellCheck "#shellcheck disable=SC1037\n#lol\necho \"$12\"" []
 
 prop_findsAnalysisIssue =
-    let comments = shellCheck "echo $1" in
+    let comments = shellCheck "echo $1" [] in
         (length comments) == 1 && (scCode $ head comments) == 2086
 prop_commentDisablesAnalysisIssue1 =
-    null $ shellCheck "#shellcheck disable=SC2086\necho $1"
+    null $ shellCheck "#shellcheck disable=SC2086\necho $1" []
 prop_commentDisablesAnalysisIssue2 =
-    null $ shellCheck "#shellcheck disable=SC2086\n#lol\necho $1"
+    null $ shellCheck "#shellcheck disable=SC2086\n#lol\necho $1" []
 
-shellCheck :: String -> [ShellCheckComment]
-shellCheck script =
+shellCheck :: String -> [AnalysisOption] -> [ShellCheckComment]
+shellCheck script options =
     let (ParseResult result notes) = parseShell "-" script in
         let allNotes = notes ++ (concat $ maybeToList $ do
             (tree, posMap) <- result
-            let list = runAnalytics [] tree
+            let list = runAnalytics options tree
             return $ map (noteToParseNote posMap) $ filterByAnnotation tree list
             )
         in

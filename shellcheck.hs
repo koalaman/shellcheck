@@ -18,10 +18,12 @@
 import Control.Exception
 import Control.Monad
 import Data.Char
+import Data.Maybe
 import GHC.Exts
 import GHC.IO.Device
 import Prelude hiding (catch)
 import ShellCheck.Simple
+import ShellCheck.Analytics
 import System.Console.GetOpt
 import System.Directory
 import System.Environment
@@ -37,7 +39,9 @@ options = [
     Option ['f'] ["format"]
         (ReqArg (Flag "format") "FORMAT") "output format",
     Option ['e'] ["exclude"]
-        (ReqArg (Flag "exclude") "CODE1,CODE2..") "exclude types of warnings"
+        (ReqArg (Flag "exclude") "CODE1,CODE2..") "exclude types of warnings",
+    Option ['s'] ["shell"]
+        (ReqArg (Flag "shell") "SHELLNAME") "Specify dialect (bash,sh,ksh,zsh)"
     ]
 
 printErr = hPutStrLn stderr
@@ -200,7 +204,14 @@ commentsFor options file =
     liftM (getComments options) $ readContents file
 
 getComments options contents =
-    excludeCodes (getExclusions options) $ shellCheck contents
+    excludeCodes (getExclusions options) $ shellCheck contents analysisOptions
+  where
+    analysisOptions = catMaybes [ shellOption ]
+    shellOption = do
+        option <- getOption options "shell"
+        sh <- shellForExecutable option
+        return $ ForceShell sh
+
 
 readContents file = if file == "-" then getContents else readFile file
 
@@ -216,9 +227,9 @@ makeNonVirtual comments contents =
         real rest (r+1) (v + 8 - (v `mod` 8)) target
     real (_:rest) r v target = real rest (r+1) (v+1) target
 
-getOption [] _ def = def
-getOption ((Flag var val):_) name _ | name == var = val
-getOption (_:rest) flag def = getOption rest flag def
+getOption [] _ = Nothing
+getOption ((Flag var val):_) name | name == var = return val
+getOption (_:rest) flag = getOption rest flag
 
 getOptions options name =
     map (\(Flag _ val) -> val) . filter (\(Flag var _) -> var == name) $ options
@@ -256,8 +267,9 @@ main = do
     exitWith code
 
 process Nothing = return False
-process (Just (options, files)) =
-  let format = getOption options "format" "tty" in
+process (Just (options, files)) = do
+  verifyShellOption options
+  let format = fromMaybe "tty" $ getOption options "format" in
     case Map.lookup format formats of
         Nothing -> do
             printErr $ "Unknown format " ++ format
@@ -268,3 +280,10 @@ process (Just (options, files)) =
         Just f -> do
             f options files
 
+verifyShellOption options =
+    let shell = getOption options "shell" in
+        if isNothing shell
+        then return ()
+        else when (isNothing $ shell >>= shellForExecutable) $ do
+                printErr $ "Unknown shell: " ++ (fromJust shell)
+                exitWith supportFailure
