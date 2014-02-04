@@ -22,6 +22,7 @@ import Data.Maybe
 import GHC.Exts
 import GHC.IO.Device
 import Prelude hiding (catch)
+import ShellCheck.Data
 import ShellCheck.Simple
 import ShellCheck.Analytics
 import System.Console.GetOpt
@@ -41,7 +42,9 @@ options = [
     Option ['e'] ["exclude"]
         (ReqArg (Flag "exclude") "CODE1,CODE2..") "exclude types of warnings",
     Option ['s'] ["shell"]
-        (ReqArg (Flag "shell") "SHELLNAME") "Specify dialect (bash,sh,ksh,zsh)"
+        (ReqArg (Flag "shell") "SHELLNAME") "Specify dialect (bash,sh,ksh,zsh)",
+    Option ['V'] ["version"]
+        (NoArg $ Flag "version" "true") "Print version information"
     ]
 
 printErr = hPutStrLn stderr
@@ -61,14 +64,9 @@ instance JSON ShellCheckComment where
 
 parseArguments argv =
     case getOpt Permute options argv of
-        (opts, files, []) ->
-            if not $ null files
-              then
-                return $ Just (opts, files)
-              else do
-                printErr "No files specified.\n"
-                printErr $ usageInfo header options
-                exitWith syntaxFailure
+        (opts, files, []) -> do
+            verifyOptions opts files
+            return $ Just (opts, files)
 
         (_, _, errors) -> do
             printErr $ (concat errors) ++ "\n" ++ usageInfo header options
@@ -268,7 +266,6 @@ main = do
 
 process Nothing = return False
 process (Just (options, files)) = do
-  verifyShellOption options
   let format = fromMaybe "tty" $ getOption options "format" in
     case Map.lookup format formats of
         Nothing -> do
@@ -280,10 +277,24 @@ process (Just (options, files)) = do
         Just f -> do
             f options files
 
-verifyShellOption options =
-    let shell = getOption options "shell" in
+verifyOptions opts files = do
+    when (isJust $ getOption opts "version") printVersionAndExit
+
+    let shell = getOption opts "shell" in
         if isNothing shell
         then return ()
         else when (isNothing $ shell >>= shellForExecutable) $ do
                 printErr $ "Unknown shell: " ++ (fromJust shell)
                 exitWith supportFailure
+
+    when (null files) $ do
+        printErr "No files specified.\n"
+        printErr $ usageInfo header options
+        exitWith syntaxFailure
+
+printVersionAndExit = do
+    putStrLn $ "ShellCheck - shell script analysis tool"
+    putStrLn $ "version: " ++ shellcheckVersion
+    putStrLn $ "license: GNU Affero General Public License, version 3"
+    putStrLn $ "website: http://www.shellcheck.net"
+    exitWith ExitSuccess

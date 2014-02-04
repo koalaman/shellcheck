@@ -1,5 +1,7 @@
 module ShellCheck.Data where
 
+shellcheckVersion = "0.3.0"  -- Must also be updated in ShellCheck.cabal
+
 internalVariables = [
     -- Generic
     "", "_", "rest", "REST",

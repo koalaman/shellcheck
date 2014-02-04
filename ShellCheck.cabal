@@ -1,5 +1,5 @@
 Name:             ShellCheck
-Version:          0.3.0
+Version:          0.3.0 -- Must also be updated in ShellCheck/Data.hs
 Synopsis:         Shell script analysis tool
 License:          OtherLicense
 License-file:     LICENSE

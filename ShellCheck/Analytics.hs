@@ -105,8 +105,11 @@ determineShell (T_Script _ shebang _) = fromMaybe Bash . shellForExecutable $ sh
 shellForExecutable "sh" = return Sh
 shellForExecutable "ash" = return Sh
 shellForExecutable "dash" = return Sh
+
 shellForExecutable "ksh" = return Ksh
+shellForExecutable "ksh88" = return Ksh
 shellForExecutable "ksh93" = return Ksh
+
 shellForExecutable "zsh" = return Zsh
 shellForExecutable "bash" = return Bash
 shellForExecutable _ = Nothing
