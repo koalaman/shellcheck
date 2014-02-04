@@ -442,6 +442,8 @@ prop_aA = isOk readArithmeticContents "! $?"
 prop_aB = isOk readArithmeticContents "10#08 * 16#f"
 prop_aC = isOk readArithmeticContents "\"$((3+2))\" + '37'"
 prop_aD = isOk readArithmeticContents "foo[9*y+x]++"
+prop_aE = isOk readArithmeticContents "1+`echo 2`"
+prop_aF = isOk readArithmeticContents "foo[`echo foo | sed s/foo/4/g` * 3] + 4"
 readArithmeticContents =
     readSequence
   where
@@ -475,7 +477,7 @@ readArithmeticContents =
 
     readExpansion = do
         id <- getNextId
-        x <- readNormalDollar
+        x <- readNormalDollar <|> readBackTicked
         spacing
         return $ TA_Expansion id x
 
