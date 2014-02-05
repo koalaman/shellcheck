@@ -181,6 +181,7 @@ nodeChecks = [
     ,checkWrongArithmeticAssignment
     ,checkConditionalAndOrs
     ,checkFunctionDeclarations
+    ,checkCatastrophicRm
     ]
 
 
@@ -2119,3 +2120,108 @@ checkFunctionDeclarations params
             when (hasKeyword && not hasParens) $
                 warn id 2113 "'function' keyword is non-standard. Use 'foo()' instead of 'function foo'."
 checkFunctionDeclarations _ _ = return ()
+
+
+-- This is a lot of code for little gain. Consider whether it's worth it.
+prop_checkCatastrophicRm1 = verify checkCatastrophicRm "rm -r $1/$2"
+prop_checkCatastrophicRm2 = verify checkCatastrophicRm "foo=$(echo bar); rm -r /home/$foo"
+prop_checkCatastrophicRm3 = verify checkCatastrophicRm "foo=/home; user=$(whoami); rm -r \"$foo/$user\""
+prop_checkCatastrophicRm4 = verifyNot checkCatastrophicRm "foo=/home; user=cow; rm -r \"$foo/$user\""
+prop_checkCatastrophicRm5 = verifyNot checkCatastrophicRm "user=$(whoami); rm -r /home/${user:?Nope}"
+prop_checkCatastrophicRm6 = verify checkCatastrophicRm "rm --recursive /etc/*$config*"
+prop_checkCatastrophicRm7 = verifyNot checkCatastrophicRm "var=$(cmd); if [ -n \"$var\" ]; then rm -r /etc/$var/*; fi"
+prop_checkCatastrophicRm8 = verify checkCatastrophicRm "rm -rf /home"
+prop_checkCatastrophicRm9 = verifyNot checkCatastrophicRm "rm -rf -- /home"
+checkCatastrophicRm params t@(T_SimpleCommand id _ tokens) | t `isCommand` "rm" =
+    when (any isRecursiveFlag $ simpleArgs) $
+        mapM_ checkWord tokens
+  where
+    -- This ugly hack is based on the fact that ids generally increase
+    relevantMap (Id n) = liftM snd . listToMaybe . dropWhile (\(Id x, _) ->  x > n) $ flowMapR
+    flowMapR = reverse $ (\x -> zip (scanl getScopeId (Id 0) x) (scanl addNulls defaultMap x)) $ variableFlow params
+    simpleArgs = deadSimple t
+    defaultMap = Map.fromList (map (\x -> (x, Nothing)) variablesWithoutSpaces)
+
+    checkWord token =
+        case getLiteralString token of
+            Just str ->
+                when (all (/= "--") simpleArgs && (fixPath str `elem` importantPaths)) $
+                    info (getId token) 2114 $ "Obligatory typo warning. Use 'rm --' to disable this message."
+            Nothing ->
+                checkWord' token
+
+    checkWord' token = fromMaybe (return ()) $ do
+        m <- relevantMap id
+        filename <- combine m token
+        let path = fixPath filename
+        return . when (path `elem` importantPaths) $ do
+            warn (getId token) 2115 $ "Make sure this never accidentally expands to '" ++ path ++ "'."
+
+    fixPath filename =
+        let normalized = skipRepeating '/' . skipRepeating '*' $ filename in
+            if normalized == "/" then normalized else stripTrailing '/' $ normalized
+
+    unnullable = all isVariableChar . concat . deadSimple
+    isRecursiveFlag "--recursive" = True
+    isRecursiveFlag ('-':'-':_) = False
+    isRecursiveFlag ('-':str) = 'r' `elem` str || 'R' `elem` str
+    isRecursiveFlag _ = False
+
+    stripTrailing c = reverse . dropWhile (== c) . reverse
+    skipRepeating c (a:b:rest) | a == b && b == c = skipRepeating c (b:rest)
+    skipRepeating c (a:r) = a:(skipRepeating c r)
+    skipRepeating _ [] = []
+
+    addNulls map (Reference (_, token, name)) =
+        if mightBeGuarded token
+        then Map.insert name Nothing map
+        else map
+    addNulls map (Assignment (_, token, name, DataExternal)) =
+        if mightBeGuarded token
+        then Map.insert name Nothing map
+        else Map.insert name (Just "") map
+    addNulls m (Assignment (_, token, name, DataFrom [word])) =
+        if mightBeGuarded token
+        then Map.insert name Nothing m
+        else
+            if couldFail word
+            then m
+            else Map.insert name ((combine m) word) m
+    addNulls m (Assignment (_, token, name, DataFrom _)) =
+        Map.insert name Nothing m
+    addNulls map _ = map
+
+    getScopeId n (Reference (_, token, _)) = getId token
+    getScopeId n (Assignment (_, token, _, _)) = getId token
+    getScopeId n _ = n
+
+    joinMaybes :: [Maybe String] -> Maybe String
+    joinMaybes = foldl (liftM2 (++)) (Just "")
+    combine m token = c token
+      where
+        c (T_DollarBraced _ t) | unnullable t =
+            Map.findWithDefault (Just "") (concat $ deadSimple t) m
+        c (T_DoubleQuoted _ tokens) = joinMaybes $ map (combine m) tokens
+        c (T_NormalWord _ tokens) = joinMaybes $ map (combine m) tokens
+        c (T_Glob _ "*") = Just "*"
+        c t = getLiteralString t
+
+    couldFail (T_Backticked _ _) = True
+    couldFail (T_DollarExpansion _ _) = True
+    couldFail (T_DoubleQuoted _ foo) = any couldFail foo
+    couldFail (T_NormalWord _ foo) = any couldFail foo
+    couldFail _ = False
+
+    mightBeGuarded token = any t (getPath (parentMap params) token)
+      where
+        t (T_Condition _ _ _) = True
+        t (T_OrIf _ _ _) = True
+        t (T_AndIf _ _ _) = True
+        t _ = False
+
+    paths = [
+        "/", "/etc", "/home", "/mnt", "/usr", "/usr/share", "/usr/local",
+        "/var"
+        ]
+    importantPaths = ["", "/*", "/*/*"] >>= (\x -> map (++x) paths)
+checkCatastrophicRm _ _ = return ()
