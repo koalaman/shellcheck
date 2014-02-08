@@ -763,13 +763,14 @@ readSingleQuotedPart =
 
 prop_readBackTicked = isOk readBackTicked "`ls *.mp3`"
 prop_readBackTicked2 = isOk readBackTicked "`grep \"\\\"\"`"
+prop_readBackTicked3 = isWarning readBackTicked "´grep \"\\\"\"´"
 readBackTicked = called "backtick expansion" $ do
     id <- getNextId
     pos <- getPosition
-    char '`'
+    backtick
     subStart <- getPosition
-    subString <- readGenericLiteral "`"
-    char '`'
+    subString <- readGenericLiteral "`´"
+    backtick
     -- Result positions may be off due to escapes
     result <- subParse subStart readCompoundList (unEscape subString)
     return $ T_Backticked id result
@@ -778,6 +779,12 @@ readBackTicked = called "backtick expansion" $ do
     unEscape ('\\':x:rest) | x `elem` "$`\\" = x : unEscape rest
     unEscape ('\\':'\n':rest) = unEscape rest
     unEscape (c:rest) = c : unEscape rest
+    backtick =
+      disregard (char '`') <|> do
+         pos <- getPosition
+         char '´'
+         parseNoteAt pos ErrorC 1077 $
+            "For command expansion, the tick should slant left (` vs ´)."
 
 subParse pos parser input = do
     lastPosition <- getPosition
