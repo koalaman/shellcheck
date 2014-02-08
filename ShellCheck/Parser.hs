@@ -46,7 +46,7 @@ tokenDelimiter = oneOf "&|;<> \t\n\r" <|> nbsp
 quotableChars = "|&;<>()\\ '\t\n\r\xA0" ++ doubleQuotableChars
 quotable = nbsp <|> unicodeDoubleQuote <|> oneOf quotableChars
 bracedQuotable = oneOf "}\"$`'"
-doubleQuotableChars = "\"$`\x201C\x201D"
+doubleQuotableChars = "\"$`" ++ unicodeDoubleQuoteChars
 doubleQuotable = unicodeDoubleQuote <|> oneOf doubleQuotableChars
 whitespace = oneOf " \t\n" <|> carriageReturn <|> nbsp
 linewhitespace = oneOf " \t" <|> nbsp
@@ -55,6 +55,8 @@ suspectCharAfterQuotes = variableChars <|> char '%'
 
 extglobStartChars = "?*@!+"
 extglobStart = oneOf extglobStartChars
+
+unicodeDoubleQuoteChars = "\x201C\x201D\x2033\x2036"
 
 prop_spacing = isOk spacing "  \\\n # Comment"
 spacing = do
@@ -80,7 +82,7 @@ allspacingOrFail = do
 
 unicodeDoubleQuote = do
     pos <- getPosition
-    char '\x201C' <|> char '\x201D'
+    oneOf unicodeDoubleQuoteChars
     parseProblemAt pos WarningC 1015 "This is a unicode double quote. Delete and retype it."
     return '"'
 
