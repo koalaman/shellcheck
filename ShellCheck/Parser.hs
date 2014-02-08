@@ -51,6 +51,8 @@ doubleQuotable = unicodeDoubleQuote <|> oneOf doubleQuotableChars
 whitespace = oneOf " \t\n" <|> carriageReturn <|> nbsp
 linewhitespace = oneOf " \t" <|> nbsp
 
+suspectCharAfterQuotes = variableChars <|> char '%'
+
 extglobStartChars = "?*@!+"
 extglobStart = oneOf extglobStartChars
 
@@ -739,17 +741,29 @@ readProcSub = called "process substitution" $ do
 prop_readSingleQuoted = isOk readSingleQuoted "'foo bar'"
 prop_readSingleQuoted2 = isWarning readSingleQuoted "'foo bar\\'"
 prop_readsingleQuoted3 = isWarning readSingleQuoted "\x2018hello\x2019"
+prop_readSingleQuoted4 = isWarning readNormalWord "'it's"
+prop_readSingleQuoted5 = isWarning readSimpleCommand "foo='bar\ncow 'arg"
+prop_readSingleQuoted6 = isOk readSimpleCommand "foo='bar cow 'arg"
 readSingleQuoted = called "single quoted string" $ do
     id <- getNextId
+    startPos <- getPosition
     singleQuote
     s <- readSingleQuotedPart `reluctantlyTill` singleQuote
-    pos <- getPosition
+    let string = concat s
+    endPos <- getPosition
     singleQuote <?> "end of single quoted string"
 
-    let string = concat s
-    return (T_SingleQuoted id string) `attempting` do
-        x <- lookAhead anyChar
-        when (isAlpha x && not (null string) && isAlpha (last string)) $ parseProblemAt pos WarningC 1011 "This apostrophe terminated the single quoted string!"
+    optional $ do
+        c <- try . lookAhead $ suspectCharAfterQuotes <|> oneOf "'"
+        if (not (null string) && isAlpha c && isAlpha (last string))
+          then
+            parseProblemAt endPos WarningC 1011 $
+                "This apostrophe terminated the single quoted string!"
+          else
+            when ('\n' `elem` string && not ("\n" `isPrefixOf` string)) $
+                suggestForgotClosingQuote startPos endPos "single quoted string"
+
+    return (T_SingleQuoted id string)
 
 readSingleQuotedLiteral = do
     singleQuote
@@ -764,13 +778,23 @@ readSingleQuotedPart =
 prop_readBackTicked = isOk readBackTicked "`ls *.mp3`"
 prop_readBackTicked2 = isOk readBackTicked "`grep \"\\\"\"`"
 prop_readBackTicked3 = isWarning readBackTicked "´grep \"\\\"\"´"
+prop_readBackTicked4 = isOk readBackTicked "`echo foo\necho bar`"
+prop_readBackTicked5 = isOk readSimpleCommand "echo `foo`bar"
+prop_readBackTicked6 = isWarning readSimpleCommand "echo `foo\necho `bar"
 readBackTicked = called "backtick expansion" $ do
     id <- getNextId
-    pos <- getPosition
+    startPos <- getPosition
     backtick
     subStart <- getPosition
     subString <- readGenericLiteral "`´"
+    endPos <- getPosition
     backtick
+
+    optional $ do
+        c <- try . lookAhead $ suspectCharAfterQuotes
+        when ('\n' `elem` subString && not ("\n" `isPrefixOf` subString)) $ do
+            suggestForgotClosingQuote startPos endPos "backtick expansion"
+
     -- Result positions may be off due to escapes
     result <- subParse subStart readCompoundList (unEscape subString)
     return $ T_Backticked id result
@@ -783,7 +807,7 @@ readBackTicked = called "backtick expansion" $ do
       disregard (char '`') <|> do
          pos <- getPosition
          char '´'
-         parseNoteAt pos ErrorC 1077 $
+         parseProblemAt pos ErrorC 1077 $
             "For command expansion, the tick should slant left (` vs ´)."
 
 subParse pos parser input = do
@@ -799,12 +823,31 @@ subParse pos parser input = do
 prop_readDoubleQuoted = isOk readDoubleQuoted "\"Hello $FOO\""
 prop_readDoubleQuoted2 = isOk readDoubleQuoted "\"$'\""
 prop_readDoubleQuoted3 = isWarning readDoubleQuoted "\x201Chello\x201D"
+prop_readDoubleQuoted4 = isWarning readSimpleCommand "\"foo\nbar\"foo"
+prop_readDoubleQuoted5 = isOk readSimpleCommand "lol \"foo\nbar\" etc"
 readDoubleQuoted = called "double quoted string" $ do
     id <- getNextId
+    startPos <- getPosition
     doubleQuote
     x <- many doubleQuotedPart
+    endPos <- getPosition
     doubleQuote <?> "end of double quoted string"
+    optional $ do
+        try . lookAhead $ suspectCharAfterQuotes <|> oneOf "$\""
+        when (any hasLineFeed x && not (startsWithLineFeed x)) $
+            suggestForgotClosingQuote startPos endPos "double quoted string"
     return $ T_DoubleQuoted id x
+  where
+    startsWithLineFeed ((T_Literal _ ('\n':_)):_) = True
+    startsWithLineFeed _ = False
+    hasLineFeed (T_Literal _ str) | '\n' `elem` str = True
+    hasLineFeed _ = False
+
+suggestForgotClosingQuote startPos endPos name = do
+    parseProblemAt startPos WarningC 1078 $
+        "Did you forget to close this " ++ name ++ "?"
+    parseProblemAt endPos InfoC 1079 $
+        "This is actually an end quote, but due to next char it looks suspect."
 
 doubleQuotedPart = readDoubleLiteral <|> readDoubleQuotedDollar <|> readBackTicked
 
