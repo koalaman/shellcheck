@@ -1734,7 +1734,8 @@ readAssignmentWord = try $ do
     if space == "" && space2 /= ""
       then do
         when (variable /= "IFS") $
-            parseNoteAt pos InfoC 1007 $ "Note that 'var= value' (with space after equals sign) is similar to 'var=\"\"; value'."
+            parseNoteAt pos WarningC 1007
+                "Remove space after = if trying to assign a value (for empty string, use var='' ... )."
         value <- readEmptyLiteral
         return $ T_Assignment id op variable index value
       else do
