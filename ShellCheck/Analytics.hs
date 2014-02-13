@@ -144,7 +144,8 @@ nodeChecks = [
     ,checkTr
     ,checkPipedAssignment
     ,checkAssignAteCommand
-    ,checkUuoe
+    ,checkUuoeCmd
+    ,checkUuoeVar
     ,checkFindNameGlob
     ,checkGrepRe
     ,checkNeedlessCommands
@@ -1148,18 +1149,43 @@ checkPrintfVar _ = checkUnqualifiedCommand "printf" f where
           else warn (getId format) 2059 $
                 "Don't use variables in the printf format string. Use printf \"..%s..\" \"$foo\"."
 
-prop_checkUuoe1 = verify checkUuoe "echo $(date)"
-prop_checkUuoe1a= verify checkUuoe "echo `date`"
-prop_checkUuoe2 = verify checkUuoe "echo \"$(date)\""
-prop_checkUuoe2a= verify checkUuoe "echo \"`date`\""
-prop_checkUuoe3 = verifyNot checkUuoe "echo \"The time is $(date)\""
-checkUuoe _ = checkUnqualifiedCommand "echo" f where
+prop_checkUuoeCmd1 = verify checkUuoeCmd "echo $(date)"
+prop_checkUuoeCmd2 = verify checkUuoeCmd "echo `date`"
+prop_checkUuoeCmd3 = verify checkUuoeCmd "echo \"$(date)\""
+prop_checkUuoeCmd4 = verify checkUuoeCmd "echo \"`date`\""
+prop_checkUuoeCmd5 = verifyNot checkUuoeCmd "echo \"The time is $(date)\""
+checkUuoeCmd _ = checkUnqualifiedCommand "echo" f where
     msg id = style id 2005 "Useless echo? Instead of 'echo $(cmd)', just use 'cmd'."
     f [T_NormalWord id [(T_DollarExpansion _ _)]] = msg id
     f [T_NormalWord id [T_DoubleQuoted _ [(T_DollarExpansion _ _)]]] = msg id
     f [T_NormalWord id [(T_Backticked _ _)]] = msg id
     f [T_NormalWord id [T_DoubleQuoted _ [(T_Backticked _ _)]]] = msg id
     f _ = return ()
+
+prop_checkUuoeVar1 = verify checkUuoeVar "for f in $(echo $tmp); do echo lol; done"
+prop_checkUuoeVar2 = verify checkUuoeVar "date +`echo \"$format\"`"
+prop_checkUuoeVar3 = verifyNot checkUuoeVar "foo \"$(echo -e '\r')\""
+prop_checkUuoeVar4 = verifyNot checkUuoeVar "echo $tmp"
+checkUuoeVar _ p =
+    case p of
+        T_Backticked id [cmd] -> check id cmd
+        T_DollarExpansion id [cmd] -> check id cmd
+        _ -> return ()
+  where
+    variableLike f = case f of
+        T_DollarBraced _ _ -> True
+        T_DollarArithmetic _ _ -> True
+        _ -> False
+
+    check id (T_Pipeline _ [T_Redirecting _ _ c]) = warnForEcho id c
+    check _ _ = return ()
+    warnForEcho id = checkUnqualifiedCommand "echo" $ \f ->
+        case f of
+            [T_NormalWord _ [T_DoubleQuoted _ [t]]] -> inform t
+            [T_NormalWord _ [t]] -> inform t
+            _ -> return ()
+      where
+        inform t = when (variableLike t) $ style id 2116 "Useless echo? Instead of $(echo $var), just use $var."
 
 prop_checkTr1 = verify checkTr "tr [a-f] [A-F]"
 prop_checkTr2 = verify checkTr "tr 'a-z' 'A-Z'"
