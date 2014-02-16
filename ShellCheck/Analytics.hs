@@ -1164,26 +1164,28 @@ prop_checkUuoeVar1 = verify checkUuoeVar "for f in $(echo $tmp); do echo lol; do
 prop_checkUuoeVar2 = verify checkUuoeVar "date +`echo \"$format\"`"
 prop_checkUuoeVar3 = verifyNot checkUuoeVar "foo \"$(echo -e '\r')\""
 prop_checkUuoeVar4 = verifyNot checkUuoeVar "echo $tmp"
+prop_checkUuoeVar5 = verify checkUuoeVar "foo \"$(echo \"$(date) value:\" $value)\""
+prop_checkUuoeVar6 = verifyNot checkUuoeVar "foo \"$(echo files: *.png)\""
 checkUuoeVar _ p =
     case p of
         T_Backticked id [cmd] -> check id cmd
         T_DollarExpansion id [cmd] -> check id cmd
         _ -> return ()
   where
-    variableLike f = case f of
-        T_DollarBraced _ _ -> True
-        T_DollarArithmetic _ _ -> True
-        _ -> False
+    couldBeOptimized f = case f of
+        T_Glob {} -> False
+        T_Extglob {} -> False
+        T_BraceExpansion {} -> False
+        T_NormalWord _ l -> all couldBeOptimized l
+        T_DoubleQuoted _ l -> all couldBeOptimized l
+        _ -> True
 
     check id (T_Pipeline _ [T_Redirecting _ _ c]) = warnForEcho id c
     check _ _ = return ()
-    warnForEcho id = checkUnqualifiedCommand "echo" $ \f ->
-        case f of
-            [T_NormalWord _ [T_DoubleQuoted _ [t]]] -> inform t
-            [T_NormalWord _ [t]] -> inform t
-            _ -> return ()
-      where
-        inform t = when (variableLike t) $ style id 2116 "Useless echo? Instead of $(echo $var), just use $var."
+    warnForEcho id = checkUnqualifiedCommand "echo" $ \vars ->
+        unless ("-" `isPrefixOf` (concat $ concatMap deadSimple vars)) $
+            when (all couldBeOptimized vars) $ style id 2116
+                "Useless echo? Instead of 'cmd $(echo foo)', just use 'cmd foo'."
 
 prop_checkTr1 = verify checkTr "tr [a-f] [A-F]"
 prop_checkTr2 = verify checkTr "tr 'a-z' 'A-Z'"
