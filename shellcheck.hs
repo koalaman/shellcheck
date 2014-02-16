@@ -69,7 +69,7 @@ parseArguments argv =
             return $ Just (opts, files)
 
         (_, _, errors) -> do
-            printErr $ (concat errors) ++ "\n" ++ usageInfo header options
+            printErr $ concat errors ++ "\n" ++ usageInfo header options
             exitWith syntaxFailure
 
 formats = Map.fromList [
@@ -84,7 +84,7 @@ forTty options files = do
     return $ and output
   where
     clear = ansi 0
-    ansi n = "\x1B[" ++ (show n) ++ "m"
+    ansi n = "\x1B[" ++ show n ++ "m"
 
     colorForLevel "error" = 31 -- red
     colorForLevel "warning" = 33 -- yellow
@@ -94,7 +94,8 @@ forTty options files = do
     colorForLevel "source" = 0 -- none
     colorForLevel _ = 0 -- none
 
-    colorComment level comment = (ansi $ colorForLevel level) ++ comment ++ clear
+    colorComment level comment =
+        ansi (colorForLevel level) ++ comment ++ clear
 
     doFile path = do
         contents <- readContents path
@@ -112,15 +113,17 @@ forTty options files = do
                             then ""
                             else fileLines !! (lineNum - 1)
             putStrLn ""
-            putStrLn $ colorFunc "message" ("In " ++ filename ++" line " ++ (show $ lineNum) ++ ":")
+            putStrLn $ colorFunc "message"
+                ("In " ++ filename ++" line " ++ show lineNum ++ ":")
             putStrLn (colorFunc "source" line)
-            mapM (\c -> putStrLn (colorFunc (scSeverity c) $ cuteIndent c)) x
+            mapM_ (\c -> putStrLn (colorFunc (scSeverity c) $ cuteIndent c)) x
             putStrLn ""
           ) groups
         return $ null comments
 
     cuteIndent comment =
-        (replicate ((scColumn comment) - 1) ' ') ++ "^-- " ++ (code $ scCode comment) ++ ": " ++ (scMessage comment)
+        replicate (scColumn comment - 1) ' ' ++
+            "^-- " ++ code (scCode comment) ++ ": " ++ scMessage comment
 
     code code = "SC" ++ (show code)
 
@@ -131,7 +134,7 @@ forTty options files = do
 -- This totally ignores the filenames. Fixme?
 forJson options files = do
     comments <- liftM concat $ mapM (commentsFor options) files
-    putStrLn $ encodeStrict $ comments
+    putStrLn $ encodeStrict comments
     return . null $ comments
 
 -- Mimic GCC "file:line:col: (error|warning|note): message" format
@@ -178,8 +181,8 @@ forCheckstyle options files = do
     severity "warning" = "warning"
     severity _ = "info"
     attr s v = concat [ s, "='", escape v, "' " ]
-    escape msg = concatMap escape' msg
-    escape' c = if isOk c then [c] else "&#" ++ (show $ ord c) ++ ";"
+    escape = concatMap escape'
+    escape' c = if isOk c then [c] else "&#" ++ show (ord c) ++ ";"
     isOk x = any ($x) [isAsciiUpper, isAsciiLower, isDigit, (`elem` " ./")]
 
     formatFile name comments = concat [
@@ -226,7 +229,7 @@ makeNonVirtual comments contents =
     real (_:rest) r v target = real rest (r+1) (v+1) target
 
 getOption [] _ = Nothing
-getOption ((Flag var val):_) name | name == var = return val
+getOption (Flag var val:_) name | name == var = return val
 getOption (_:rest) flag = getOption rest flag
 
 getOptions options name =
@@ -247,8 +250,8 @@ getExclusions options =
     in
         map (Prelude.read . clean) elements :: [Int]
 
-excludeCodes codes comments =
-    filter (not . hasCode) comments
+excludeCodes codes =
+    filter (not . hasCode)
   where
     hasCode c = scCode c `elem` codes
 
@@ -265,7 +268,7 @@ main = do
     exitWith code
 
 process Nothing = return False
-process (Just (options, files)) = do
+process (Just (options, files)) =
   let format = fromMaybe "tty" $ getOption options "format" in
     case Map.lookup format formats of
         Nothing -> do
@@ -281,11 +284,9 @@ verifyOptions opts files = do
     when (isJust $ getOption opts "version") printVersionAndExit
 
     let shell = getOption opts "shell" in
-        if isNothing shell
-        then return ()
-        else when (isNothing $ shell >>= shellForExecutable) $ do
-                printErr $ "Unknown shell: " ++ (fromJust shell)
-                exitWith supportFailure
+        when (isJust shell && isNothing (shell >>= shellForExecutable)) $ do
+            printErr $ "Unknown shell: " ++ (fromJust shell)
+            exitWith supportFailure
 
     when (null files) $ do
         printErr "No files specified.\n"

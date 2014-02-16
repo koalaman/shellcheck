@@ -17,20 +17,19 @@
 -}
 module ShellCheck.Analytics (AnalysisOption(..), filterByAnnotation, runAnalytics, shellForExecutable) where
 
-import ShellCheck.AST
-import ShellCheck.Data
-import ShellCheck.Parser
 import Control.Monad
 import Control.Monad.State
 import Control.Monad.Writer
-import qualified Data.Map as Map
 import Data.Char
 import Data.Functor
 import Data.List
 import Data.Maybe
 import Debug.Trace
+import ShellCheck.AST
+import ShellCheck.Data
+import ShellCheck.Parser
 import Text.Regex
-import Data.Maybe
+import qualified Data.Map as Map
 
 data Shell = Ksh | Zsh | Sh | Bash
     deriving (Show, Eq)
@@ -48,7 +47,7 @@ treeChecks :: [Parameters -> Token -> [Note]]
 treeChecks = [
     runNodeAnalysis
         (\p t -> mapM_ (\f -> f t) $
-            map (\f -> f p) (nodeChecks ++ (checksFor (shellType p))))
+            map (\f -> f p) (nodeChecks ++ checksFor (shellType p)))
     ,subshellAssignmentCheck
     ,checkSpacefulness
     ,checkQuotesInLiterals
@@ -88,10 +87,10 @@ runList options root list = notes
 
         getShellOption =
             fromMaybe (determineShell root) . msum $
-                map ((\option ->
+                map (\option ->
                     case option of
                         ForceShell x -> return x
-                        )) options
+                        ) options
 
 checkList l t = concatMap (\f -> f t) l
 
@@ -99,7 +98,7 @@ prop_determineShell0 = determineShell (T_Script (Id 0) "#!/bin/sh" []) == Sh
 prop_determineShell1 = determineShell (T_Script (Id 0) "#!/usr/bin/env ksh" []) == Ksh
 prop_determineShell2 = determineShell (T_Script (Id 0) "" []) == Bash
 determineShell (T_Script _ shebang _) = fromMaybe Bash . shellForExecutable $ shellFor shebang
-    where shellFor s | "/env " `isInfixOf` s = head ((drop 1 $ words s)++[""])
+    where shellFor s | "/env " `isInfixOf` s = head (drop 1 (words s)++[""])
           shellFor s = reverse . takeWhile (/= '/') . reverse $ s
 
 shellForExecutable "sh" = return Sh
@@ -186,8 +185,8 @@ nodeChecks = [
     ]
 
 
-filterByAnnotation token notes =
-    filter (not . shouldIgnore) notes
+filterByAnnotation token =
+    filter (not . shouldIgnore)
   where
     numFor (Note _ _ code _) = code
     idFor (Note id  _ _ _) = id
@@ -208,8 +207,8 @@ err = makeNote ErrorC
 info = makeNote InfoC
 style = makeNote StyleC
 
-isVariableStartChar x = x == '_' || x >= 'a' && x <= 'z' || x >= 'A' && x <= 'Z'
-isVariableChar x = isVariableStartChar x || x >= '0' && x <= '9'
+isVariableStartChar x = x == '_' || isAsciiLower x || isAsciiUpper x
+isVariableChar x = isVariableStartChar x || isDigit x
 
 prop_isVariableName1 = isVariableName "_fo123"
 prop_isVariableName2 = not $ isVariableName "4"
@@ -219,17 +218,17 @@ isVariableName _ = False
 
 willSplit x =
   case x of
-    T_DollarBraced _ _ -> True
-    T_DollarExpansion _ _ -> True
-    T_Backticked _ _ -> True
-    T_BraceExpansion _ s -> True
-    T_Glob _ _ -> True
-    T_Extglob _ _ _ -> True
+    T_DollarBraced {} -> True
+    T_DollarExpansion {} -> True
+    T_Backticked {} -> True
+    T_BraceExpansion {} -> True
+    T_Glob {} -> True
+    T_Extglob {} -> True
     T_NormalWord _ l -> any willSplit l
     _ -> False
 
-isGlob (T_Extglob _ _ _) = True
-isGlob (T_Glob _ _) = True
+isGlob (T_Extglob {}) = True
+isGlob (T_Glob {}) = True
 isGlob (T_NormalWord _ l) = any isGlob l
 isGlob _ = False
 
@@ -270,8 +269,8 @@ makeSimple (T_Annotation _ _ f) = f
 makeSimple t = t
 simplify = doTransform makeSimple
 
-deadSimple (T_NormalWord _ l) = [concat (concatMap (deadSimple) l)]
-deadSimple (T_DoubleQuoted _ l) = [(concat (concatMap (deadSimple) l))]
+deadSimple (T_NormalWord _ l) = [concat (concatMap deadSimple l)]
+deadSimple (T_DoubleQuoted _ l) = [(concat (concatMap deadSimple l))]
 deadSimple (T_SingleQuoted _ s) = [s]
 deadSimple (T_DollarBraced _ _) = ["${VAR}"]
 deadSimple (T_DollarArithmetic _ _) = ["${VAR}"]
@@ -280,7 +279,7 @@ deadSimple (T_Backticked _ _) = ["${VAR}"]
 deadSimple (T_Glob _ s) = [s]
 deadSimple (T_Pipeline _ [x]) = deadSimple x
 deadSimple (T_Literal _ x) = [x]
-deadSimple (T_SimpleCommand _ vars words) = concatMap (deadSimple) words
+deadSimple (T_SimpleCommand _ vars words) = concatMap deadSimple words
 deadSimple (T_Redirecting _ _ foo) = deadSimple foo
 deadSimple (T_DollarSingleQuoted _ s) = [s]
 deadSimple (T_Annotation _ _ s) = deadSimple s
@@ -296,7 +295,7 @@ verifyNot f s = checkNode f s == Just False
 verifyTree f s = checkTree f s == Just True
 verifyNotTree f s = checkTree f s == Just False
 
-checkNode f s = checkTree (runNodeAnalysis f) s
+checkNode f = checkTree (runNodeAnalysis f)
 checkTree f s = case parseShell "-" s of
         (ParseResult (Just (t, m)) _) -> Just . not . null $ runList [] t [f]
         _ -> Nothing
@@ -312,7 +311,7 @@ checkEchoWc _ (T_Pipeline id [a, b]) =
   where
     acmd = deadSimple a
     bcmd = deadSimple b
-    countMsg = style id 2000 $ "See if you can use ${#variable} instead."
+    countMsg = style id 2000 "See if you can use ${#variable} instead."
 checkEchoWc _ _ = return ()
 
 prop_checkEchoSed1 = verify checkEchoSed "FOO=$(echo \"$cow\" | sed 's/foo/bar/g')"
@@ -329,7 +328,8 @@ checkEchoSed _ (T_Pipeline id [a, b]) =
     bcmd = deadSimple b
     checkIn s =
         case matchRegex sedRe s of
-                Just _ -> style id 2001 $ "See if you can use ${variable//search/replace} instead."
+                Just _ -> style id 2001
+                    "See if you can use ${variable//search/replace} instead."
                 _        -> return ()
 checkEchoSed _ _ = return ()
 
@@ -345,10 +345,10 @@ prop_checkAssignAteCommand2 = verify checkAssignAteCommand "A=ls --sort=$foo"
 prop_checkAssignAteCommand3 = verify checkAssignAteCommand "A=cat foo | grep bar"
 prop_checkAssignAteCommand4 = verifyNot checkAssignAteCommand "A=foo ls -l"
 prop_checkAssignAteCommand5 = verifyNot checkAssignAteCommand "PAGER=cat grep bar"
-checkAssignAteCommand _ (T_SimpleCommand id ((T_Assignment _ _ _ _ assignmentTerm):[]) (firstWord:_)) =
-    when ("-" `isPrefixOf` (concat $ deadSimple firstWord) ||
-        (isCommonCommand (getLiteralString assignmentTerm)
-            && not (isCommonCommand (getLiteralString firstWord)))) $
+checkAssignAteCommand _ (T_SimpleCommand id (T_Assignment _ _ _ _ assignmentTerm:[]) (firstWord:_)) =
+    when ("-" `isPrefixOf` concat (deadSimple firstWord) ||
+        isCommonCommand (getLiteralString assignmentTerm)
+            && not (isCommonCommand (getLiteralString firstWord))) $
                 warn id 2037 "To assign the output of a command, use var=$(cmd) ."
   where
     isCommonCommand (Just s) = s `elem` commonCommands
@@ -358,7 +358,7 @@ checkAssignAteCommand _ _ = return ()
 prop_checkArithmeticOpCommand1 = verify checkArithmeticOpCommand "i=i + 1"
 prop_checkArithmeticOpCommand2 = verify checkArithmeticOpCommand "foo=bar * 2"
 prop_checkArithmeticOpCommand3 = verifyNot checkArithmeticOpCommand "foo + opts"
-checkArithmeticOpCommand _ (T_SimpleCommand id ((T_Assignment _ _ _ _ _):[]) (firstWord:_)) =
+checkArithmeticOpCommand _ (T_SimpleCommand id [T_Assignment {}] (firstWord:_)) =
     fromMaybe (return ()) $ check <$> getGlobOrLiteralString firstWord
   where
     check op =
@@ -376,9 +376,8 @@ checkWrongArithmeticAssignment params (T_SimpleCommand id ((T_Assignment _ _ _ _
     var <- match !!! 0
     op <- match !!! 1
     Map.lookup var references
-    return $ do
-        warn (getId val) 2100 $
-            "Use $((..)) for arithmetics, e.g. i=$((i " ++ op ++ " 2))"
+    return . warn (getId val) 2100 $
+        "Use $((..)) for arithmetics, e.g. i=$((i " ++ op ++ " 2))"
   where
     regex = mkRegex "^([_a-zA-Z][_a-zA-Z0-9]*)([+*-]).+$"
     references = foldl (flip ($)) Map.empty (map insertRef $ variableFlow params)
@@ -426,7 +425,7 @@ prop_checkPipePitfalls6 = verify checkPipePitfalls "find . | xargs foo"
 checkPipePitfalls _ (T_Pipeline id commands) = do
     for ["find", "xargs"] $
         \(find:xargs:_) -> let args = deadSimple xargs in
-            when (not $ hasShortParameter args '0') $
+            unless (hasShortParameter args '0') $
                 warn (getId find) 2038 "Use either 'find .. -print0 | xargs -0 ..' or 'find .. -exec .. +' to allow for non-alphanumeric filenames."
 
     for ["?", "echo"] $
@@ -441,10 +440,10 @@ checkPipePitfalls _ (T_Pipeline id commands) = do
         for' ["ls", "xargs"] $
             \x -> warn x 2011 "Use 'find .. -print0 | xargs -0 ..' or 'find .. -exec .. +' to allow non-alphanumeric filenames."
         ]
-    when (not didLs) $ do
+    unless didLs $ do
         for ["ls", "?"] $
-            \(ls:_) -> (when (not $ hasShortParameter (deadSimple ls) 'N') $
-                info (getId ls) 2012 "Use find instead of ls to better handle non-alphanumeric filenames.")
+            \(ls:_) -> unless (hasShortParameter (deadSimple ls) 'N') $
+                info (getId ls) 2012 "Use find instead of ls to better handle non-alphanumeric filenames."
         return ()
   where
     for l f =
@@ -535,7 +534,7 @@ checkBashisms _ = bashism
 
     bashism t@(T_SimpleCommand _ _ (cmd:arg:_))
         | t `isCommand` "echo" && "-" `isPrefixOf` argString =
-            when (not $ "--" `isPrefixOf` argString) $ -- echo "-------"
+            unless ("--" `isPrefixOf` argString) $ -- echo "-------"
                 warnMsg (getId arg) "echo flag"
       where argString = (concat $ deadSimple arg)
     bashism t@(T_SimpleCommand _ _ (cmd:arg:_))
@@ -568,13 +567,13 @@ prop_checkForInQuoted4a = verifyNot checkForInQuoted "for f in foo{1,2,3}; do tr
 prop_checkForInQuoted5 = verify checkForInQuoted "for f in ls; do true; done"
 checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [word@(T_DoubleQuoted id list)]] _) =
     when (any (\x -> willSplit x && not (isMagicInQuotes x)) list
-            || (getLiteralString word >>= (return . wouldHaveBeenGlob)) == Just True) $
+            || (liftM wouldHaveBeenGlob (getLiteralString word) == Just True)) $
         err id 2066 $ "Since you double quoted this, it will not word split, and the loop will only run once."
 checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [T_SingleQuoted id s]] _) =
     warn id 2041 $ "This is a literal string. To run as a command, use $(" ++ s ++ ")."
 checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [T_Literal id s]] _) =
     if ',' `elem` s
-      then when (not $ '{' `elem` s) $
+      then unless ('{' `elem` s) $
             warn id 2042 $ "Use spaces, not commas, to separate loop elements."
       else warn id 2043 $ "This loop will only run once, with " ++ f ++ "='" ++ s ++ "'."
 checkForInQuoted _ _ = return ()
@@ -646,9 +645,8 @@ checkFindExec _ cmd@(T_SimpleCommand _ _ t@(h:r)) | cmd `isCommand` "find" = do
         _ -> False
 
     warnFor x =
-        if shouldWarn x
-        then info (getId x) 2014 "This will expand once before find runs, not per file found."
-        else return ()
+        when(shouldWarn x) $
+            info (getId x) 2014 "This will expand once before find runs, not per file found."
 
     fromWord (T_NormalWord _ l) = l
     fromWord _ = []
@@ -1850,7 +1848,7 @@ prop_checkQuotesInLiterals7 = verifyTree checkQuotesInLiterals "param='my\\ file
 checkQuotesInLiterals params t =
     doVariableFlowAnalysis readF writeF Map.empty (variableFlow params)
   where
-    getQuotes name = get >>= (return . Map.lookup name)
+    getQuotes name = liftM (Map.lookup name) get
     setQuotes name ref = modify $ Map.insert name ref
     deleteQuotes = modify . Map.delete
     parents = parentMap params
@@ -2004,7 +2002,7 @@ checkWhileReadPitfalls _ (T_WhileExpression id [command] contents)
     isStdinReadCommand (T_Pipeline _ [T_Redirecting id redirs cmd]) =
         let plaintext = deadSimple cmd
         in head (plaintext ++ [""]) == "read"
-            && (not $ "-u" `elem` plaintext)
+            && ("-u" `notElem` plaintext)
             && all (not . stdinRedirect) redirs
     isStdinReadCommand _ = False
 
@@ -2038,7 +2036,7 @@ checkPrefixAssignmentReference params t@(T_DollarBraced id value) =
             T_SimpleCommand _ vars (_:_) -> mapM_ checkVar vars
             otherwise -> check rest
     checkVar (T_Assignment aId mode aName Nothing value) |
-            aName == name && (not $ aId `elem` idPath) = do
+            aName == name && (aId `notElem` idPath) = do
         warn aId 2097 "This assignment is only seen by the forked process."
         warn id 2098 "This expansion will not see the mentioned assignment."
     checkVar _ = return ()
@@ -2055,7 +2053,7 @@ checkCharRangeGlob _ (T_Glob id str) | isCharClass str =
         && contents /= ":"
     then warn id 2101 "Named class needs outer [], e.g. [[:digit:]]."
     else
-        if (not $ '[' `elem` contents) && hasDupes
+        if ('[' `notElem` contents) && hasDupes
         then info id 2102 "Ranges can only match single chars (mentioned due to duplicates)."
         else return ()
   where

@@ -128,12 +128,12 @@ data ConditionType = DoubleBracket | SingleBracket deriving (Show, Eq)
 -- I apologize for nothing!
 lolHax s = Re.subRegex (Re.mkRegex "(Id [0-9]+)") (show s) "(Id 0)"
 instance Eq Token where
-    (==) a b = (lolHax a) == (lolHax b)
+    (==) a b = lolHax a == lolHax b
 
 
 analyze :: Monad m => (Token -> m ()) -> (Token -> m ()) -> (Token -> Token) -> Token -> m Token
-analyze f g i t =
-    round t
+analyze f g i =
+    round
   where
     round t = do
         f t
@@ -340,14 +340,14 @@ getId t = case t of
 
 blank :: Monad m => Token -> m ()
 blank = const $ return ()
-doAnalysis f t = analyze f blank id t
-doStackAnalysis startToken endToken t = analyze startToken endToken id t
-doTransform i t = runIdentity $ analyze blank blank i t
+doAnalysis f = analyze f blank id
+doStackAnalysis startToken endToken = analyze startToken endToken id
+doTransform i = runIdentity . analyze blank blank i
 
 isLoop t = case t of
-        T_WhileExpression _ _ _  -> True
-        T_UntilExpression _ _ _  -> True
-        T_ForIn _ _ _ _  -> True
-        T_ForArithmetic _ _ _ _ _ -> True
-        T_SelectIn _ _ _ _  -> True
+        T_WhileExpression {} -> True
+        T_UntilExpression {} -> True
+        T_ForIn {} -> True
+        T_ForArithmetic {} -> True
+        T_SelectIn {}  -> True
         _ -> False
