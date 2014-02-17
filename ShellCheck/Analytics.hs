@@ -182,6 +182,7 @@ nodeChecks = [
     ,checkConditionalAndOrs
     ,checkFunctionDeclarations
     ,checkCatastrophicRm
+    ,checkInteractiveSu
     ]
 
 
@@ -400,7 +401,8 @@ prop_checkUuoc1 = verify checkUuoc "cat foo | grep bar"
 prop_checkUuoc2 = verifyNot checkUuoc "cat * | grep bar"
 prop_checkUuoc3 = verify checkUuoc "cat $var | grep bar"
 prop_checkUuoc4 = verifyNot checkUuoc "cat $var"
-checkUuoc _ (T_Pipeline _ ((T_Redirecting _ _ cmd):_:_)) = checkCommand "cat" f cmd
+checkUuoc _ (T_Pipeline _ ((T_Redirecting _ _ cmd):_:_)) =
+    checkCommand "cat" (const f) cmd
   where
     f [word] = when (isSimple word) $
         style (getId word) 2002 "Useless cat. Consider 'cmd < file | ..' or 'cmd file | ..' instead."
@@ -1085,11 +1087,11 @@ getPath tree t = t :
 --- Command specific checks
 
 checkCommand str f t@(T_SimpleCommand id _ (cmd:rest)) =
-    if t `isCommand` str then f rest else return ()
+    if t `isCommand` str then f cmd rest else return ()
 checkCommand _ _ _ = return ()
 
 checkUnqualifiedCommand str f t@(T_SimpleCommand id _ (cmd:rest)) =
-    if t `isUnqualifiedCommand` str then f rest else return ()
+    if t `isUnqualifiedCommand` str then f cmd rest else return ()
 checkUnqualifiedCommand _ _ _ = return ()
 
 getLiteralString = getLiteralStringExt (const Nothing)
@@ -1137,7 +1139,7 @@ prop_checkPrintfVar1 = verify checkPrintfVar "printf \"Lol: $s\""
 prop_checkPrintfVar2 = verifyNot checkPrintfVar "printf 'Lol: $s'"
 prop_checkPrintfVar3 = verify checkPrintfVar "printf -v cow $(cmd)"
 prop_checkPrintfVar4 = verifyNot checkPrintfVar "printf \"%${count}s\" var"
-checkPrintfVar _ = checkUnqualifiedCommand "printf" f where
+checkPrintfVar _ = checkUnqualifiedCommand "printf" (const f) where
     f (dashv:var:rest) | getLiteralString dashv == (Just "-v") = f rest
     f (format:params) = check format
     f _ = return ()
@@ -1152,7 +1154,7 @@ prop_checkUuoeCmd2 = verify checkUuoeCmd "echo `date`"
 prop_checkUuoeCmd3 = verify checkUuoeCmd "echo \"$(date)\""
 prop_checkUuoeCmd4 = verify checkUuoeCmd "echo \"`date`\""
 prop_checkUuoeCmd5 = verifyNot checkUuoeCmd "echo \"The time is $(date)\""
-checkUuoeCmd _ = checkUnqualifiedCommand "echo" f where
+checkUuoeCmd _ = checkUnqualifiedCommand "echo" (const f) where
     msg id = style id 2005 "Useless echo? Instead of 'echo $(cmd)', just use 'cmd'."
     f [T_NormalWord id [(T_DollarExpansion _ _)]] = msg id
     f [T_NormalWord id [T_DoubleQuoted _ [(T_DollarExpansion _ _)]]] = msg id
@@ -1182,7 +1184,7 @@ checkUuoeVar _ p =
 
     check id (T_Pipeline _ [T_Redirecting _ _ c]) = warnForEcho id c
     check _ _ = return ()
-    warnForEcho id = checkUnqualifiedCommand "echo" $ \vars ->
+    warnForEcho id = checkUnqualifiedCommand "echo" $ \_ vars ->
         unless ("-" `isPrefixOf` (concat $ concatMap deadSimple vars)) $
             when (all couldBeOptimized vars) $ style id 2116
                 "Useless echo? Instead of 'cmd $(echo foo)', just use 'cmd foo'."
@@ -1200,7 +1202,7 @@ prop_checkTr8 = verifyNot checkTr "tr aeiou _____"
 prop_checkTr9 = verifyNot checkTr "a-z n-za-m"
 prop_checkTr10= verifyNot checkTr "tr --squeeze-repeats rl lr"
 prop_checkTr11= verifyNot checkTr "tr abc '[d*]'"
-checkTr _ = checkCommand "tr" (mapM_ f)
+checkTr _ = checkCommand "tr" (const $ mapM_ f)
   where
     f w | isGlob w = do -- The user will go [ab] -> '[ab]' -> 'ab'. Fixme?
         warn (getId w) 2060 $ "Quote parameters to tr to prevent glob expansion."
@@ -1224,7 +1226,7 @@ checkTr _ = checkCommand "tr" (mapM_ f)
 prop_checkFindNameGlob1 = verify checkFindNameGlob "find / -name *.php"
 prop_checkFindNameGlob2 = verify checkFindNameGlob "find / -type f -ipath *(foo)"
 prop_checkFindNameGlob3 = verifyNot checkFindNameGlob "find * -name '*.php'"
-checkFindNameGlob _ = checkCommand "find" f where
+checkFindNameGlob _ = checkCommand "find" (const f) where
     acceptsGlob (Just s) = s `elem` [ "-ilname", "-iname", "-ipath", "-iregex", "-iwholename", "-lname", "-name", "-path", "-regex", "-wholename" ]
     acceptsGlob _ = False
     f [] = return ()
@@ -1246,7 +1248,7 @@ prop_checkGrepRe7 = verify checkGrepRe "grep *foo* file"
 prop_checkGrepRe8 = verify checkGrepRe "ls | grep foo*.jpg"
 prop_checkGrepRe9 = verifyNot checkGrepRe "grep '[0-9]*' file"
 
-checkGrepRe _ = checkCommand "grep" f where
+checkGrepRe _ = checkCommand "grep" (const f) where
     -- --regex=*(extglob) doesn't work. Fixme?
     skippable (Just s) = not ("--regex=" `isPrefixOf` s) && "-" `isPrefixOf` s
     skippable _ = False
@@ -1268,7 +1270,7 @@ prop_checkTrapQuotes1 = verify checkTrapQuotes "trap \"echo $num\" INT"
 prop_checkTrapQuotes1a= verify checkTrapQuotes "trap \"echo `ls`\" INT"
 prop_checkTrapQuotes2 = verifyNot checkTrapQuotes "trap 'echo $num' INT"
 prop_checkTrapQuotes3 = verify checkTrapQuotes "trap \"echo $((1+num))\" EXIT DEBUG"
-checkTrapQuotes _ = checkCommand "trap" f where
+checkTrapQuotes _ = checkCommand "trap" (const f) where
     f (x:_) = checkTrap x
     f _ = return ()
     checkTrap (T_NormalWord _ [T_DoubleQuoted _ rs]) = mapM_ checkExpansions rs
@@ -1284,11 +1286,11 @@ prop_checkTimeParameters1 = verify checkTimeParameters "time -f lol sleep 10"
 prop_checkTimeParameters2 = verifyNot checkTimeParameters "time sleep 10"
 prop_checkTimeParameters3 = verifyNot checkTimeParameters "time -p foo"
 checkTimeParameters _ = checkUnqualifiedCommand "time" f where
-    f (x:_) = let s = concat $ deadSimple x in
+    f cmd (x:_) = let s = concat $ deadSimple x in
                 if "-" `isPrefixOf` s && s /= "-p" then
-                    info (getId x) 2023 "The shell may override 'time' as seen in man time(1). Use 'command time ..' for that one."
+                    info (getId cmd) 2023 "The shell may override 'time' as seen in man time(1). Use 'command time ..' for that one."
                   else return ()
-    f _ = return ()
+    f _ _ = return ()
 
 prop_checkTestRedirects1 = verify checkTestRedirects "test 3 > 1"
 prop_checkTestRedirects2 = verifyNot checkTestRedirects "test 3 \\> 1"
@@ -1483,7 +1485,7 @@ prop_checkUnusedEchoEscapes1 = verify checkUnusedEchoEscapes "echo 'foo\\nbar\\n
 prop_checkUnusedEchoEscapes2 = verifyNot checkUnusedEchoEscapes "echo -e 'foi\\nbar'"
 prop_checkUnusedEchoEscapes3 = verify checkUnusedEchoEscapes "echo \"n:\\t42\""
 prop_checkUnusedEchoEscapes4 = verifyNot checkUnusedEchoEscapes "echo lol"
-checkUnusedEchoEscapes _ = checkCommand "echo" f
+checkUnusedEchoEscapes _ = checkCommand "echo" (const f)
   where
     isDashE = mkRegex "^-.*e"
     hasEscapes = mkRegex "\\\\[rnt]"
@@ -1526,7 +1528,7 @@ checkSshHereDoc _ _ = return ()
 prop_checkSshCmdStr1 = verify checkSshCommandString "ssh host \"echo $PS1\""
 prop_checkSshCmdStr2 = verifyNot checkSshCommandString "ssh host \"ls foo\""
 prop_checkSshCmdStr3 = verifyNot checkSshCommandString "ssh \"$host\""
-checkSshCommandString _ = checkCommand "ssh" f
+checkSshCommandString _ = checkCommand "ssh" (const f)
   where
     nonOptions args =
         filter (\x -> not $ "-" `isPrefixOf` (concat $ deadSimple x)) args
@@ -2251,3 +2253,20 @@ checkCatastrophicRm params t@(T_SimpleCommand id _ tokens) | t `isCommand` "rm" 
         ]
     importantPaths = ["", "/*", "/*/*"] >>= (\x -> map (++x) paths)
 checkCatastrophicRm _ _ = return ()
+
+
+prop_checkInteractiveSu1 = verify checkInteractiveSu "su; rm file; su $USER"
+prop_checkInteractiveSu2 = verify checkInteractiveSu "su foo; something; exit"
+prop_checkInteractiveSu3 = verifyNot checkInteractiveSu "echo rm | su foo"
+prop_checkInteractiveSu4 = verifyNot checkInteractiveSu "su root < script"
+checkInteractiveSu params = checkCommand "su" f
+  where
+    f cmd l = when (length l <= 1) $
+        when (all undirected $ getPath (parentMap params) cmd) $
+            info (getId cmd) 2117
+                "To run commands as another user, use su -c or sudo."
+
+    undirected (T_Pipeline _ l) = length l <= 1
+    -- This should really just be modifications to stdin, but meh
+    undirected (T_Redirecting _ list _) = null list
+    undirected _ = True
