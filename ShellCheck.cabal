@@ -9,7 +9,7 @@ Author:           Vidar Holen
 Maintainer:       vidar@vidarholen.net
 Homepage:         http://www.shellcheck.net/
 Build-Type:       Simple
-Cabal-Version:    >= 1.6
+Cabal-Version:    >= 1.8
 Bug-reports:      https://github.com/koalaman/shellcheck/issues
 Description:
   The goals of ShellCheck are:
@@ -44,4 +44,13 @@ library
       ShellCheck.Simple
 
 executable shellcheck
+    build-depends:
+      ShellCheck,
+      base >= 4 && < 5,
+      containers,
+      directory,
+      json,
+      mtl,
+      parsec,
+      regex-compat
     main-is: shellcheck.hs
