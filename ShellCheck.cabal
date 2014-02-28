@@ -28,8 +28,20 @@ source-repository head
     location: git://github.com/koalaman/shellcheck.git
 
 library
-    build-depends: base >= 4, base < 5, parsec, containers, regex-compat, mtl, directory, json
-    exposed-modules: ShellCheck.AST, ShellCheck.Data, ShellCheck.Parser, ShellCheck.Analytics, ShellCheck.Simple
+    build-depends:
+      base >= 4 && < 5,
+      containers,
+      directory,
+      json,
+      mtl,
+      parsec,
+      regex-compat
+    exposed-modules:
+      ShellCheck.Analytics
+      ShellCheck.AST
+      ShellCheck.Data
+      ShellCheck.Parser
+      ShellCheck.Simple
 
 executable shellcheck
     main-is: shellcheck.hs
