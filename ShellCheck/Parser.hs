@@ -317,9 +317,11 @@ readConditionContents single = do
         when (endedWith "]" x) $ do
             parseProblemAt pos ErrorC 1020 $
                 "You need a space before the " ++ (if single then "]" else "]]") ++ "."
+            fail "Missing space before ]"
         when (single && endedWith ")" x) $ do
             parseProblemAt pos ErrorC 1021 $
                 "You need a space before the \\)"
+            fail "Missing space before )"
         disregard spacing
         return x
       where endedWith str (T_NormalWord id s@(_:_)) =
@@ -331,6 +333,7 @@ readConditionContents single = do
         id <- getNextId
         x <- try (string "&&" <|> string "-a")
         softCondSpacing
+        skipLineFeeds
         return $ TC_And id typ x
 
     readCondOrOp = do
@@ -338,6 +341,7 @@ readConditionContents single = do
         id <- getNextId
         x <- try (string "||" <|> string "-o")
         softCondSpacing
+        skipLineFeeds
         return $ TC_Or id typ x
 
     readCondNoaryOrBinary = do
@@ -416,7 +420,17 @@ readConditionContents single = do
             str <- string "|"
             return $ T_Literal id str
 
-    readCondTerm = readCondNot <|> readCondExpr
+    skipLineFeeds = do
+        pos <- getPosition
+        spacing <- allspacing
+        when (single  && '\n' `elem` spacing) $
+            parseProblemAt pos ErrorC 1080 "In [ ] you need \\ before line feeds."
+
+    readCondTerm = do
+        term <- readCondNot <|> readCondExpr
+        skipLineFeeds
+        return term
+
     readCondNot = do
         id <- getNextId
         char '!'
@@ -615,6 +629,9 @@ prop_readCondition6 = isOk readCondition "[[ $c =~ ^[yY]$ ]]"
 prop_readCondition7 = isOk readCondition "[[ ${line} =~ ^[[:space:]]*# ]]"
 prop_readCondition8 = isOk readCondition "[[ $l =~ ogg|flac ]]"
 prop_readCondition9 = isOk readCondition "[ foo -a -f bar ]"
+prop_readCondition10= isOk readCondition "[[ a == b \n || c == d ]]"
+prop_readCondition11= isOk readCondition "[[ a == b || \n c == d ]]"
+prop_readCondition12= isWarning readCondition "[ a == b \n -o c == d ]"
 readCondition = called "test expression" $ do
     opos <- getPosition
     id <- getNextId
