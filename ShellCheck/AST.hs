@@ -102,7 +102,7 @@ data Token =
     | T_NormalWord Id [Token]
     | T_OR_IF Id
     | T_OrIf Id (Token) (Token)
-    | T_Pipeline Id [Token]
+    | T_Pipeline Id [Token] [Token] -- [Pipe separators] [Commands]
     | T_ProcSub Id String [Token]
     | T_Rbrace Id
     | T_Redirecting Id [Token] Token
@@ -120,6 +120,7 @@ data Token =
     | T_While Id
     | T_WhileExpression Id [Token] [Token]
     | T_Annotation Id [Annotation] Token
+    | T_Pipe Id String
     deriving (Show)
 
 data Annotation = DisableComment Integer deriving (Show, Eq)
@@ -182,7 +183,7 @@ analyze f g i =
         b <- round cmd
         return $ T_Redirecting id a b
     delve (T_SimpleCommand id vars cmds) = dll vars cmds $ T_SimpleCommand id
-    delve (T_Pipeline id l) = dl l $ T_Pipeline id
+    delve (T_Pipeline id l1 l2) = dll l1 l2 $ T_Pipeline id
     delve (T_Banged id l) = d1 l $ T_Banged id
     delve (T_AndIf id t u) = d2 t u $ T_AndIf id
     delve (T_OrIf id t u) = d2 t u $ T_OrIf id
@@ -297,7 +298,7 @@ getId t = case t of
         T_Array id _  -> id
         T_Redirecting id _ _  -> id
         T_SimpleCommand id _ _  -> id
-        T_Pipeline id _  -> id
+        T_Pipeline id _ _  -> id
         T_Banged id _  -> id
         T_AndIf id _ _ -> id
         T_OrIf id _ _ -> id
@@ -337,6 +338,7 @@ getId t = case t of
         T_DollarDoubleQuoted id _ -> id
         T_DollarBracket id _ -> id
         T_Annotation id _ _ -> id
+        T_Pipe id _ -> id
 
 blank :: Monad m => Token -> m ()
 blank = const $ return ()

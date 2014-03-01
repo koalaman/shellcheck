@@ -1394,13 +1394,25 @@ transformWithSeparator i _  = id
 
 readPipeSequence = do
     id <- getNextId
-    list <- readCommand `sepBy1` (readPipe `thenSkip` (spacing >> readLineBreak))
+    (cmds, pipes) <- sepBy1WithSeparators readCommand
+                        (readPipe `thenSkip` (spacing >> readLineBreak))
     spacing
-    return $ T_Pipeline id list
+    return $ T_Pipeline id pipes cmds
+  where
+    sepBy1WithSeparators p s = do
+        let elems = p >>= \x -> return ([x], [])
+        let seps = do
+            separator <- s
+            return $ \(a,b) (c,d) -> (a++c, b ++ d ++ [separator])
+        elems `chainl1` seps
 
 readPipe = do
     notFollowedBy2 g_OR_IF
-    char '|' `thenSkip` spacing
+    id <- getNextId
+    char '|'
+    qualifier <- string "&" <|> return ""
+    spacing
+    return $ T_Pipe id ('|':qualifier)
 
 readCommand = (readCompoundCommand <|> readSimpleCommand)
 

@@ -183,6 +183,7 @@ nodeChecks = [
     ,checkFunctionDeclarations
     ,checkCatastrophicRm
     ,checkInteractiveSu
+    ,checkStderrPipe
     ]
 
 
@@ -278,7 +279,7 @@ deadSimple (T_DollarArithmetic _ _) = ["${VAR}"]
 deadSimple (T_DollarExpansion _ _) = ["${VAR}"]
 deadSimple (T_Backticked _ _) = ["${VAR}"]
 deadSimple (T_Glob _ s) = [s]
-deadSimple (T_Pipeline _ [x]) = deadSimple x
+deadSimple (T_Pipeline _ _ [x]) = deadSimple x
 deadSimple (T_Literal _ x) = [x]
 deadSimple (T_SimpleCommand _ vars words) = concatMap deadSimple words
 deadSimple (T_Redirecting _ _ foo) = deadSimple foo
@@ -303,7 +304,7 @@ checkTree f s = case parseShell "-" s of
 
 
 prop_checkEchoWc3 = verify checkEchoWc "n=$(echo $foo | wc -c)"
-checkEchoWc _ (T_Pipeline id [a, b]) =
+checkEchoWc _ (T_Pipeline id _ [a, b]) =
     when (acmd == ["echo", "${VAR}"]) $
         case bcmd of
             ["wc", "-c"] -> countMsg
@@ -317,7 +318,7 @@ checkEchoWc _ _ = return ()
 
 prop_checkEchoSed1 = verify checkEchoSed "FOO=$(echo \"$cow\" | sed 's/foo/bar/g')"
 prop_checkEchoSed2 = verify checkEchoSed "rm $(echo $cow | sed -e 's,foo,bar,')"
-checkEchoSed _ (T_Pipeline id [a, b]) =
+checkEchoSed _ (T_Pipeline id _ [a, b]) =
     when (acmd == ["echo", "${VAR}"]) $
         case bcmd of
             ["sed", v] -> checkIn v
@@ -337,7 +338,7 @@ checkEchoSed _ _ = return ()
 prop_checkPipedAssignment1 = verify checkPipedAssignment "A=ls | grep foo"
 prop_checkPipedAssignment2 = verifyNot checkPipedAssignment "A=foo cmd | grep foo"
 prop_checkPipedAssignment3 = verifyNot checkPipedAssignment "A=foo"
-checkPipedAssignment _ (T_Pipeline _ (T_Redirecting _ _ (T_SimpleCommand id (_:_) []):_:_)) =
+checkPipedAssignment _ (T_Pipeline _ _ (T_Redirecting _ _ (T_SimpleCommand id (_:_) []):_:_)) =
     warn id 2036 "If you wanted to assign the output of the pipeline, use a=$(b | c) ."
 checkPipedAssignment _ _ = return ()
 
@@ -401,7 +402,7 @@ prop_checkUuoc1 = verify checkUuoc "cat foo | grep bar"
 prop_checkUuoc2 = verifyNot checkUuoc "cat * | grep bar"
 prop_checkUuoc3 = verify checkUuoc "cat $var | grep bar"
 prop_checkUuoc4 = verifyNot checkUuoc "cat $var"
-checkUuoc _ (T_Pipeline _ ((T_Redirecting _ _ cmd):_:_)) =
+checkUuoc _ (T_Pipeline _ _ ((T_Redirecting _ _ cmd):_:_)) =
     checkCommand "cat" (const f) cmd
   where
     f [word] = when (isSimple word) $
@@ -424,7 +425,7 @@ prop_checkPipePitfalls3 = verify checkPipePitfalls "ls | grep -v mp3"
 prop_checkPipePitfalls4 = verifyNot checkPipePitfalls "find . -print0 | xargs -0 foo"
 prop_checkPipePitfalls5 = verifyNot checkPipePitfalls "ls -N | foo"
 prop_checkPipePitfalls6 = verify checkPipePitfalls "find . | xargs foo"
-checkPipePitfalls _ (T_Pipeline id commands) = do
+checkPipePitfalls _ (T_Pipeline id _ commands) = do
     for ["find", "xargs"] $
         \(find:xargs:_) -> let args = deadSimple xargs in
             unless (hasShortParameter args '0') $
@@ -546,6 +547,8 @@ checkBashisms _ = bashism
         | t `isCommand` "let" = warnMsg id "'let'"
     bashism t@(TA_Variable id "RANDOM") =
         warnMsg id "RANDOM"
+    bashism t@(T_Pipe id "|&") =
+        warnMsg id "|& in place of 2>&1 |"
 
     bashism _ = return()
 
@@ -587,7 +590,7 @@ prop_checkForInCat2a= verify checkForInCat "for f in `cat foo | grep lol`; do st
 prop_checkForInCat3 = verifyNot checkForInCat "for f in $(cat foo | grep bar | wc -l); do stuff; done"
 checkForInCat _ (T_ForIn _ f [T_NormalWord _ w] _) = mapM_ checkF w
   where
-    checkF (T_DollarExpansion id [T_Pipeline _ r])
+    checkF (T_DollarExpansion id [T_Pipeline _ _ r])
         | all isLineBased r =
             info id 2013 "To read lines rather than words, pipe/redirect to a 'while read' loop."
     checkF (T_Backticked id cmds) = checkF (T_DollarExpansion id cmds)
@@ -681,7 +684,7 @@ prop_checkRedirectToSame2 = verify checkRedirectToSame "cat lol | sed -e 's/a/b/
 prop_checkRedirectToSame3 = verifyNot checkRedirectToSame "cat lol | sed -e 's/a/b/g' > foo.bar && mv foo.bar lol"
 prop_checkRedirectToSame4 = verifyNot checkRedirectToSame "foo /dev/null > /dev/null"
 prop_checkRedirectToSame5 = verifyNot checkRedirectToSame "foo > bar 2> bar"
-checkRedirectToSame params s@(T_Pipeline _ list) =
+checkRedirectToSame params s@(T_Pipeline _ _ list) =
     mapM_ (\l -> (mapM_ (\x -> doAnalysis (checkOccurences x) l) (getAllRedirs list))) list
   where
     note x = Note x InfoC 2094 $
@@ -717,7 +720,7 @@ prop_checkShorthandIf  = verify checkShorthandIf "[[ ! -z file ]] && scp file ho
 prop_checkShorthandIf2 = verifyNot checkShorthandIf "[[ ! -z file ]] && { scp file host || echo 'Eek'; }"
 prop_checkShorthandIf3 = verifyNot checkShorthandIf "foo && bar || echo baz"
 prop_checkShorthandIf4 = verifyNot checkShorthandIf "foo && a=b || a=c"
-checkShorthandIf _ (T_AndIf id _ (T_OrIf _ _ (T_Pipeline _ t)))
+checkShorthandIf _ (T_AndIf id _ (T_OrIf _ _ (T_Pipeline _ _ t)))
         | not $ isOk t =
     info id 2015 "Note that A && B || C is not if-then-else. C may run when A is true."
   where
@@ -1182,7 +1185,7 @@ checkUuoeVar _ p =
         T_DoubleQuoted _ l -> all couldBeOptimized l
         _ -> True
 
-    check id (T_Pipeline _ [T_Redirecting _ _ c]) = warnForEcho id c
+    check id (T_Pipeline _ _ [T_Redirecting _ _ c]) = warnForEcho id c
     check _ _ = return ()
     warnForEcho id = checkUnqualifiedCommand "echo" $ \_ vars ->
         unless ("-" `isPrefixOf` (concat $ concatMap deadSimple vars)) $
@@ -1443,7 +1446,7 @@ checkSpuriousExec _ = doLists
     doLists _ = return ()
 
     stripCleanup = reverse . dropWhile cleanup . reverse
-    cleanup (T_Pipeline _ [cmd]) =
+    cleanup (T_Pipeline _ _ [cmd]) =
         isCommandMatch cmd (`elem` ["echo", "exit"])
     cleanup _ = False
 
@@ -1453,7 +1456,7 @@ checkSpuriousExec _ = doLists
         doList (tail t)
     doList' _ = return ()
 
-    commentIfExec (T_Pipeline id list) =
+    commentIfExec (T_Pipeline id _ list) =
       mapM_ commentIfExec $ take 1 list
     commentIfExec (T_Redirecting _ _ f@(
       T_SimpleCommand id _ (cmd:arg:_))) =
@@ -1595,11 +1598,11 @@ leadType shell parents t =
     parentPipeline = do
         parent <- Map.lookup (getId t) parents
         case parent of
-            T_Pipeline _ _ -> return parent
+            T_Pipeline _ _ _ -> return parent
             _ -> Nothing
 
     causesSubshell = do
-        (T_Pipeline _ list) <- parentPipeline
+        (T_Pipeline _ _ list) <- parentPipeline
         if length list <= 1
             then return False
             else if lastCreatesSubshell
@@ -2003,14 +2006,14 @@ checkWhileReadPitfalls _ (T_WhileExpression id [command] contents)
   where
     munchers = [ "ssh", "ffmpeg", "mplayer" ]
 
-    isStdinReadCommand (T_Pipeline _ [T_Redirecting id redirs cmd]) =
+    isStdinReadCommand (T_Pipeline _ _ [T_Redirecting id redirs cmd]) =
         let plaintext = deadSimple cmd
         in head (plaintext ++ [""]) == "read"
             && ("-u" `notElem` plaintext)
             && all (not . stdinRedirect) redirs
     isStdinReadCommand _ = False
 
-    checkMuncher (T_Pipeline _ ((T_Redirecting _ redirs cmd):_)) = do
+    checkMuncher (T_Pipeline _ _ ((T_Redirecting _ redirs cmd):_)) = do
         let name = fromMaybe "" $ getCommandBasename cmd
         when ((not . any stdinRedirect $ redirs) && (name `elem` munchers)) $ do
             info id 2095 $
@@ -2089,7 +2092,7 @@ checkCdAndBack params = doLists
             _ -> False
 
     getCmd (T_Annotation id _ x) = getCmd x
-    getCmd (T_Pipeline id [x]) = getCommandName x
+    getCmd (T_Pipeline id _ [x]) = getCommandName x
     getCmd _ = Nothing
 
     doList list =
@@ -2266,7 +2269,19 @@ checkInteractiveSu params = checkCommand "su" f
             info (getId cmd) 2117
                 "To run commands as another user, use su -c or sudo."
 
-    undirected (T_Pipeline _ l) = length l <= 1
+    undirected (T_Pipeline _ _ l) = length l <= 1
     -- This should really just be modifications to stdin, but meh
     undirected (T_Redirecting _ list _) = null list
     undirected _ = True
+
+
+prop_checkStderrPipe1 = verify checkStderrPipe "#!/bin/ksh\nfoo |& bar"
+prop_checkStderrPipe2 = verifyNot checkStderrPipe "#!/bin/zsh\nfoo |& bar"
+checkStderrPipe params =
+    case shellType params of
+        Ksh -> match
+        _ -> const $ return ()
+  where
+    match (T_Pipe id "|&") =
+        err id 2118 "Ksh does not support |&. Use 2>&1 |."
+    match _ = return ()
