@@ -54,6 +54,7 @@ treeChecks = [
     ,checkShebang
     ,checkFunctionsUsedExternally
     ,checkUnusedAssignments
+    ,checkUnpassedInFunctions
     ]
 
 checksFor Sh = [
@@ -2288,3 +2289,54 @@ checkStderrPipe params =
     match (T_Pipe id "|&") =
         err id 2118 "Ksh does not support |&. Use 2>&1 |."
     match _ = return ()
+
+prop_checkUnpassedInFunctions1 = verifyTree checkUnpassedInFunctions "foo() { echo $1; }; foo"
+prop_checkUnpassedInFunctions2 = verifyNotTree checkUnpassedInFunctions "foo() { echo $1; };"
+prop_checkUnpassedInFunctions3 = verifyNotTree checkUnpassedInFunctions "foo() { echo $lol; }; foo"
+prop_checkUnpassedInFunctions4 = verifyNotTree checkUnpassedInFunctions "foo() { echo $0; }; foo"
+prop_checkUnpassedInFunctions5 = verifyNotTree checkUnpassedInFunctions "foo() { echo $1; }; foo 'lol'; foo"
+checkUnpassedInFunctions params root =
+    execWriter $ mapM_ warnForGroup referenceGroups
+  where
+    functionMap :: Map.Map String Token
+    functionMap = Map.fromList $
+        map (\t@(T_Function _ _ _ name _) -> (name,t)) functions
+    functions = execWriter $ doAnalysis (tell . maybeToList . findFunction) root
+    findFunction t@(T_DollarBraced id token) = do
+        str <- getLiteralString token
+        unless (isPositional str) $ fail "Not positional"
+        let path = getPath (parentMap params) t
+        find isFunction path
+    findFunction _ = Nothing
+
+    isFunction (T_Function {}) = True
+    isFunction _ = False
+
+    referenceList :: [(String, Bool, Token)]
+    referenceList = execWriter $
+        doAnalysis (fromMaybe (return ()) . checkCommand) root
+    checkCommand :: Token -> Maybe (Writer [(String, Bool, Token)] ())
+    checkCommand t@(T_SimpleCommand _ _ (cmd:args)) = do
+        str <- getLiteralString cmd
+        unless (Map.member str functionMap) $ fail "irrelevant"
+        return $ tell [(str, null args, t)]
+    checkCommand _ = Nothing
+
+    isPositional str = str == "*" || str == "@"
+        || (all isDigit str && str /= "0")
+
+    isArgumentless (_, b, _) = b
+    referenceGroups = Map.elems $ foldr updateWith Map.empty referenceList
+    updateWith x@(name, _, _) = Map.insertWith (++) name [x]
+
+    warnForGroup group =
+        when (all isArgumentless group) $ do
+            mapM_ suggestParams group
+            warnForDeclaration group
+
+    suggestParams (name, _, thing) =
+        info (getId thing) 2119 $
+            "Use " ++ name ++ " \"$@\" if function's $1 should mean script's $1."
+    warnForDeclaration ((name, _, _):_) =
+        warn (getId . fromJust $ Map.lookup name functionMap) 2120 $
+            name ++ " references arguments, but none are ever passed."
