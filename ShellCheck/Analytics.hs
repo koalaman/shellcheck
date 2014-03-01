@@ -506,29 +506,29 @@ prop_checkBashisms17= verify checkBashisms "echo $((RANDOM%6+1))"
 prop_checkBashisms18= verify checkBashisms "foo &> /dev/null"
 checkBashisms _ = bashism
   where
-    errMsg id s = err id 2040 $ "#!/bin/sh was specified, so " ++ s ++ " is not supported, even when sh is actually bash."
-    warnMsg id s = warn id 2039 $ "#!/bin/sh was specified, but " ++ s ++ " is not standard."
-    bashism (T_ProcSub id _ _) = errMsg id "process substitution"
-    bashism (T_Extglob id _ _) = warnMsg id "extglob"
-    bashism (T_DollarSingleQuoted id _) = warnMsg id "$'..'"
-    bashism (T_DollarDoubleQuoted id _) = warnMsg id "$\"..\""
-    bashism (T_ForArithmetic id _ _ _ _) = warnMsg id "arithmetic for loop"
-    bashism (T_Arithmetic id _) = warnMsg id "standalone ((..))"
-    bashism (T_DollarBracket id _) = warnMsg id "$[..] in place of $((..))"
-    bashism (T_SelectIn id _ _ _) = warnMsg id "select loop"
-    bashism (T_BraceExpansion id _) = warnMsg id "brace expansion"
-    bashism (T_Condition id DoubleBracket _) = warnMsg id "[[ ]]"
-    bashism (T_HereString id _) = warnMsg id "here-string"
+    errMsg id s = err id 2040 $ "#!/bin/sh was specified, so " ++ s ++ " not supported, even when sh is actually bash."
+    warnMsg id s = warn id 2039 $ "#!/bin/sh was specified, but " ++ s ++ " not standard."
+    bashism (T_ProcSub id _ _) = errMsg id "process substitution is"
+    bashism (T_Extglob id _ _) = warnMsg id "extglob is"
+    bashism (T_DollarSingleQuoted id _) = warnMsg id "$'..' is"
+    bashism (T_DollarDoubleQuoted id _) = warnMsg id "$\"..\" is"
+    bashism (T_ForArithmetic id _ _ _ _) = warnMsg id "arithmetic for loops are"
+    bashism (T_Arithmetic id _) = warnMsg id "standalone ((..)) is"
+    bashism (T_DollarBracket id _) = warnMsg id "$[..] in place of $((..)) is"
+    bashism (T_SelectIn id _ _ _) = warnMsg id "select loops are"
+    bashism (T_BraceExpansion id _) = warnMsg id "brace expansion is"
+    bashism (T_Condition id DoubleBracket _) = warnMsg id "[[ ]] is"
+    bashism (T_HereString id _) = warnMsg id "here-strings are"
     bashism (TC_Binary id SingleBracket op _ _)
         | op `elem` [ "-nt", "-ef", "\\<", "\\>", "==" ] =
-            warnMsg id op
+            warnMsg id $ op ++ " is"
     bashism (TA_Unary id op _)
         | op `elem` [ "|++", "|--", "++|", "--|"] =
-            warnMsg id (filter (/= '|') op)
+            warnMsg id $ (filter (/= '|') op) ++ " is"
     bashism t@(T_SimpleCommand id _ _)
         | t `isCommand` "source" =
-            warnMsg id "'source' in place of '.'"
-    bashism (T_FdRedirect id "&" (T_IoFile _ (T_Greater _) _)) = warnMsg id "&>"
+            warnMsg id "'source' in place of '.' is"
+    bashism (T_FdRedirect id "&" (T_IoFile _ (T_Greater _) _)) = warnMsg id "&> is"
     bashism (T_DollarBraced id token) =
         mapM_ check expansion
       where
@@ -539,28 +539,30 @@ checkBashisms _ = bashism
     bashism t@(T_SimpleCommand _ _ (cmd:arg:_))
         | t `isCommand` "echo" && "-" `isPrefixOf` argString =
             unless ("--" `isPrefixOf` argString) $ -- echo "-------"
-                warnMsg (getId arg) "echo flag"
+                warnMsg (getId arg) "echo flags are"
       where argString = (concat $ deadSimple arg)
     bashism t@(T_SimpleCommand _ _ (cmd:arg:_))
         | t `isCommand` "exec" && "-" `isPrefixOf` (concat $ deadSimple arg) =
-            warnMsg (getId arg) "exec flag"
+            warnMsg (getId arg) "exec flags are"
     bashism t@(T_SimpleCommand id _ _)
-        | t `isCommand` "let" = warnMsg id "'let'"
+        | t `isCommand` "let" = warnMsg id "'let' is"
     bashism t@(TA_Variable id "RANDOM") =
-        warnMsg id "RANDOM"
+        warnMsg id "RANDOM is"
     bashism t@(T_Pipe id "|&") =
-        warnMsg id "|& in place of 2>&1 |"
+        warnMsg id "|& in place of 2>&1 | is"
+    bashism (T_Array id _) =
+        warnMsg id "arrays are"
 
     bashism _ = return()
 
     varChars="_0-9a-zA-Z"
     expansion = let re = mkRegex in [
-        (re $ "^[" ++ varChars ++ "]+\\[.*\\]$", "array references"),
-        (re $ "^![" ++ varChars ++ "]+\\[[*@]]$", "array key expansion"),
-        (re $ "^![" ++ varChars ++ "]+[*@]$", "name matching prefix"),
-        (re $ "^[" ++ varChars ++ "]+:[^-=?+]", "string indexing"),
-        (re $ "^[" ++ varChars ++ "]+(\\[.*\\])?/", "string replacement"),
-        (re $ "^RANDOM$", "$RANDOM")
+        (re $ "^[" ++ varChars ++ "]+\\[.*\\]$", "array references are"),
+        (re $ "^![" ++ varChars ++ "]+\\[[*@]]$", "array key expansion is"),
+        (re $ "^![" ++ varChars ++ "]+[*@]$", "name matching prefixes are"),
+        (re $ "^[" ++ varChars ++ "]+:[^-=?+]", "string indexing is"),
+        (re $ "^[" ++ varChars ++ "]+(\\[.*\\])?/", "string replacement is"),
+        (re $ "^RANDOM$", "$RANDOM is")
         ]
 
 prop_checkForInQuoted = verify checkForInQuoted "for f in \"$(ls)\"; do echo foo; done"
