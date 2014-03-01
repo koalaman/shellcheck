@@ -1953,22 +1953,24 @@ prop_checkUnused9 = verifyNotTree checkUnusedAssignments "read ''"
 prop_checkUnused10= verifyNotTree checkUnusedAssignments "read -p 'test: '"
 prop_checkUnused11= verifyNotTree checkUnusedAssignments "bar=5; export foo[$bar]=3"
 prop_checkUnused12= verifyNotTree checkUnusedAssignments "read foo; echo ${!foo}"
+prop_checkUnused13= verifyNotTree checkUnusedAssignments "x=(1); echo ${x[0]}"
 checkUnusedAssignments params t = snd $ runWriter (mapM_ checkAssignment flow)
   where
     flow = variableFlow params
     references = foldl (flip ($)) defaultMap (map insertRef flow)
     insertRef (Reference (base, token, name)) =
-        Map.insert name ()
+        Map.insert (stripSuffix name) ()
     insertRef _ = id
 
     checkAssignment (Assignment (_, token, name, _)) | isVariableName name =
         case Map.lookup name references of
             Just _ -> return ()
-            Nothing -> do
+            Nothing ->
                 info (getId token) 2034 $
                     name ++ " appears unused. Verify it or export it."
     checkAssignment _ = return ()
 
+    stripSuffix str = takeWhile isVariableChar str
     defaultMap = Map.fromList $ zip internalVariables $ repeat ()
 
 prop_checkGlobsAsOptions1 = verify checkGlobsAsOptions "rm *.txt"
