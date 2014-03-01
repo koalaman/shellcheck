@@ -984,10 +984,16 @@ checkComparisonAgainstGlob _ _ = return ()
 prop_checkCommarrays1 = verify checkCommarrays "a=(1, 2)"
 prop_checkCommarrays2 = verify checkCommarrays "a+=(1,2,3)"
 prop_checkCommarrays3 = verifyNot checkCommarrays "cow=(1 \"foo,bar\" 3)"
+prop_checkCommarrays4 = verifyNot checkCommarrays "cow=('one,' 'two')"
 checkCommarrays _ (T_Array id l) =
-    if any ("," `isSuffixOf`) (concatMap deadSimple l) || (length $ filter (==',') (concat $ concatMap deadSimple l)) > 1
-    then warn id 2054 "Use spaces, not commas, to separate array elements."
-    else return ()
+    when (any (isCommaSeparated . literal) l) $
+        warn id 2054 "Use spaces, not commas, to separate array elements."
+  where
+    literal (T_NormalWord _ l) = concatMap literal l
+    literal (T_Literal _ str) = str
+    literal _ = "str"
+
+    isCommaSeparated str = "," `isSuffixOf` str || (length $ filter (== ',') str) > 1
 checkCommarrays _ _ = return ()
 
 prop_checkOrNeq1 = verify checkOrNeq "if [[ $lol -ne cow || $lol -ne foo ]]; then echo foo; fi"
