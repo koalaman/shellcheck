@@ -819,13 +819,14 @@ prop_checkNumberComparisons2 = verify checkNumberComparisons "[[ 0 >= $(cmd) ]]"
 prop_checkNumberComparisons3 = verifyNot checkNumberComparisons "[[ $foo ]] > 3"
 prop_checkNumberComparisons4 = verify checkNumberComparisons "[[ $foo > 2.72 ]]"
 prop_checkNumberComparisons5 = verify checkNumberComparisons "[[ $foo -le 2.72 ]]"
-prop_checkNumberComparisons6 = verify checkNumberComparisons "[[ 3.14 = $foo ]]"
+prop_checkNumberComparisons6 = verify checkNumberComparisons "[[ 3.14 -eq $foo ]]"
+prop_checkNumberComparisons7 = verifyNot checkNumberComparisons "[[ 3.14 == $foo ]]"
 checkNumberComparisons _ (TC_Binary id typ op lhs rhs) = do
     when (op `elem` ["<", ">", "<=", ">=", "\\<", "\\>", "\\<=", "\\>="]) $ do
         when (isNum lhs || isNum rhs) $ err id 2071 $ "\"" ++ op ++ "\" is for string comparisons. Use " ++ (eqv op) ++" ."
         mapM_ checkDecimals [lhs, rhs]
 
-    when (op `elem` ["-lt", "-gt", "-le", "-ge", "-eq", "=", "=="]) $ do
+    when (op `elem` ["-lt", "-gt", "-le", "-ge", "-eq"]) $ do
         mapM_ checkDecimals [lhs, rhs]
 
   where
@@ -1953,7 +1954,7 @@ prop_checkUnused9 = verifyNotTree checkUnusedAssignments "read ''"
 prop_checkUnused10= verifyNotTree checkUnusedAssignments "read -p 'test: '"
 prop_checkUnused11= verifyNotTree checkUnusedAssignments "bar=5; export foo[$bar]=3"
 prop_checkUnused12= verifyNotTree checkUnusedAssignments "read foo; echo ${!foo}"
-prop_checkUnused13= verifyNotTree checkUnusedAssignments "x=(1); echo ${x[0]}"
+prop_checkUnused13= verifyNotTree checkUnusedAssignments "x=(1); (( x[0] ))"
 checkUnusedAssignments params t = snd $ runWriter (mapM_ checkAssignment flow)
   where
     flow = variableFlow params
