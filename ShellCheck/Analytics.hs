@@ -185,6 +185,7 @@ nodeChecks = [
     ,checkCatastrophicRm
     ,checkInteractiveSu
     ,checkStderrPipe
+    ,checkSetAssignment
     ]
 
 
@@ -2348,3 +2349,28 @@ checkUnpassedInFunctions params root =
     warnForDeclaration ((name, _, _):_) =
         warn (getId . fromJust $ Map.lookup name functionMap) 2120 $
             name ++ " references arguments, but none are ever passed."
+
+
+prop_checkSetAssignment1 = verify checkSetAssignment "set foo 42"
+prop_checkSetAssignment2 = verify checkSetAssignment "set foo = 42"
+prop_checkSetAssignment3 = verify checkSetAssignment "set foo=42"
+prop_checkSetAssignment4 = verifyNot checkSetAssignment "set -- if=/dev/null"
+prop_checkSetAssignment5 = verifyNot checkSetAssignment "set 'a=5'"
+prop_checkSetAssignment6 = verifyNot checkSetAssignment "set"
+checkSetAssignment params = checkUnqualifiedCommand "set" f
+  where
+    f cmd (var:value:rest) =
+        let str = literal var in
+            when (isVariableName str || isAssignment str) $
+                msg (getId var)
+    f cmd (var:_) =
+        when (isAssignment $ literal var) $
+            msg (getId var)
+    f _ _ = return ()
+
+    msg id = warn id 2121 "To assign a variable, use just 'var=value', no 'set ..'."
+
+    isAssignment str = '=' `elem` str
+    literal (T_NormalWord _ l) = concatMap literal l
+    literal (T_Literal _ str) = str
+    literal _ = "*"
