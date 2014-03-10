@@ -98,8 +98,10 @@ checkList l t = concatMap (\f -> f t) l
 prop_determineShell0 = determineShell (T_Script (Id 0) "#!/bin/sh" []) == Sh
 prop_determineShell1 = determineShell (T_Script (Id 0) "#!/usr/bin/env ksh" []) == Ksh
 prop_determineShell2 = determineShell (T_Script (Id 0) "" []) == Bash
+prop_determineShell3 = determineShell (T_Script (Id 0) "#!/bin/sh -e" []) == Sh
 determineShell (T_Script _ shebang _) = fromMaybe Bash . shellForExecutable $ shellFor shebang
     where shellFor s | "/env " `isInfixOf` s = head (drop 1 (words s)++[""])
+          shellFor s | ' ' `elem` s = shellFor $ takeWhile (/= ' ') s
           shellFor s = reverse . takeWhile (/= '/') . reverse $ s
 
 shellForExecutable "sh" = return Sh
