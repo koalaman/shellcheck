@@ -479,7 +479,9 @@ indexOfSublists sub all = f 0 all
 
 
 bracedString l = concat $ deadSimple l
-isMagicInQuotes (T_DollarBraced _ l) | '@' `elem` (bracedString l) = True
+isMagicInQuotes (T_DollarBraced _ l) =
+    let string = bracedString l in
+        '@' `elem` string || "!" `isPrefixOf` string
 isMagicInQuotes _ = False
 
 prop_checkShebang1 = verifyTree checkShebang "#!/usr/bin/env bash -x\necho cow"
@@ -576,6 +578,7 @@ prop_checkForInQuoted3 = verify checkForInQuoted "for f in 'find /'; do true; do
 prop_checkForInQuoted4 = verify checkForInQuoted "for f in 1,2,3; do true; done"
 prop_checkForInQuoted4a = verifyNot checkForInQuoted "for f in foo{1,2,3}; do true; done"
 prop_checkForInQuoted5 = verify checkForInQuoted "for f in ls; do true; done"
+prop_checkForInQuoted6 = verifyNot checkForInQuoted "for f in \"${!arr}\"; do true; done"
 checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [word@(T_DoubleQuoted id list)]] _) =
     when (any (\x -> willSplit x && not (isMagicInQuotes x)) list
             || (liftM wouldHaveBeenGlob (getLiteralString word) == Just True)) $
