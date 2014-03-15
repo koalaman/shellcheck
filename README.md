@@ -19,6 +19,8 @@ The goals of ShellCheck are:
 ShellCheck is written in Haskell, and requires GHC, Parsec3, JSON and
 Text.Regex. To run the unit tests, it also requires QuickCheck2.
 
+ShellCheck requires at least 1 GB of RAM to compile.
+
 On Fedora, these can be installed with:
 
     yum install cabal-install ghc ghc-parsec-devel ghc-QuickCheck-devel \
