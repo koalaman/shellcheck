@@ -1811,15 +1811,23 @@ redirToken c t = try $ do
     notFollowedBy2 $ char '('
     return $ t id
 
-tryWordToken s t = tryParseWordToken (string s) t `thenSkip` spacing
-tryParseWordToken parser t = try $ do
+tryWordToken s t = tryParseWordToken s t `thenSkip` spacing
+tryParseWordToken keyword t = try $ do
     id <- getNextId
-    parser
+    str <- anycaseString keyword
     optional (do
         try . lookAhead $ char '['
         parseProblem ErrorC 1069 "You need a space before the [.")
     try $ lookAhead (keywordSeparator)
+    when (str /= keyword) $
+        parseProblem ErrorC 1081 $
+            "Scripts are case sensitive. Use '" ++ keyword ++ "', not '" ++ str ++ "'."
     return $ t id
+
+anycaseString str =
+    mapM anycaseChar str
+  where
+    anycaseChar c = char (toLower c) <|> char (toUpper c)
 
 g_AND_IF = tryToken "&&" T_AND_IF
 g_OR_IF = tryToken "||" T_OR_IF
