@@ -60,6 +60,7 @@ treeChecks = [
 checksFor Sh = [
     checkBashisms
     ,checkTimeParameters
+    ,checkForDecimals
     ]
 checksFor Ksh = [
     checkEchoSed
@@ -72,6 +73,7 @@ checksFor Bash = [
     checkTimeParameters
     ,checkBraceExpansionVars
     ,checkEchoSed
+    ,checkForDecimals
     ]
 
 runAnalytics :: [AnalysisOption] -> Token -> [Note]
@@ -133,7 +135,6 @@ nodeChecks = [
     ,checkDoubleBracketOperators
     ,checkNoaryWasBinary
     ,checkConstantNoary
-    ,checkForDecimals
     ,checkDivBeforeMult
     ,checkArithmeticDeref
     ,checkArithmeticBadOctal
