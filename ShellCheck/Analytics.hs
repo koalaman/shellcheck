@@ -998,9 +998,14 @@ prop_checkArithmeticDeref3 = verifyNot checkArithmeticDeref "cow=1/40; (( s+= ${
 prop_checkArithmeticDeref4 = verifyNot checkArithmeticDeref "(( ! $? ))"
 prop_checkArithmeticDeref5 = verifyNot checkArithmeticDeref "(($1))"
 prop_checkArithmeticDeref6 = verifyNot checkArithmeticDeref "(( ${a[$i]} ))"
-checkArithmeticDeref _ (TA_Expansion _ (T_DollarBraced id l)) | not . excepting $ bracedString l =
-    style id 2004 $ "Don't use $ on variables in (( ))."
+prop_checkArithmeticDeref7 = verifyNot checkArithmeticDeref "(( 10#$n ))"
+checkArithmeticDeref params t@(TA_Expansion _ (T_DollarBraced id l)) =
+    when (not $ (excepting $ bracedString l) || inBaseExpression) $
+        style id 2004 $ "$ on variables in (( )) is unnecessary."
   where
+    inBaseExpression = any isBase $ parents params t
+    isBase (TA_Base {}) = True
+    isBase _ = False
     excepting [] = True
     excepting s = (any (`elem` "/.:#%?*@[]") s) || (isDigit $ head s)
 checkArithmeticDeref _ _ = return ()
@@ -1138,6 +1143,8 @@ getPath tree t = t :
     case Map.lookup (getId t) tree of
         Nothing -> []
         Just parent -> getPath tree parent
+
+parents params t = getPath (parentMap params) t
 
 --- Command specific checks
 
