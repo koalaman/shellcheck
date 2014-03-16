@@ -830,27 +830,62 @@ prop_checkNumberComparisons4 = verify checkNumberComparisons "[[ $foo > 2.72 ]]"
 prop_checkNumberComparisons5 = verify checkNumberComparisons "[[ $foo -le 2.72 ]]"
 prop_checkNumberComparisons6 = verify checkNumberComparisons "[[ 3.14 -eq $foo ]]"
 prop_checkNumberComparisons7 = verifyNot checkNumberComparisons "[[ 3.14 == $foo ]]"
-checkNumberComparisons _ (TC_Binary id typ op lhs rhs) = do
-    when (op `elem` ["<", ">", "<=", ">=", "\\<", "\\>", "\\<=", "\\>="]) $ do
-        when (isNum lhs || isNum rhs) $ err id 2071 $ "\"" ++ op ++ "\" is for string comparisons. Use " ++ (eqv op) ++" ."
-        mapM_ checkDecimals [lhs, rhs]
+prop_checkNumberComparisons8 = verify checkNumberComparisons "[[ foo <= bar ]]"
+prop_checkNumberComparisons9 = verify checkNumberComparisons "[ foo \\>= bar ]"
+prop_checkNumberComparisons10= verify checkNumberComparisons "#!/bin/zsh -x\n[ foo >= bar ]]"
+checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
+    if (isNum lhs || isNum rhs)
+      then do
+        when (isLtGt op) $
+          err id 2071 $
+            op ++ " is for string comparisons. Use " ++ (eqv op) ++ " instead."
+        when (isLeGe op) $
+            err id 2071 $ op ++ " is not a valid operator. " ++
+              "Use " ++ (eqv op) ++ " ."
+      else do
+        when (isLeGe op || isLtGt op) $
+            mapM_ checkDecimals [lhs, rhs]
+
+        when (isLeGe op) $
+            err id 2122 $ op ++ " is not a valid operator. " ++
+                "Use '! a " ++ (invert op) ++ " b' instead."
 
     when (op `elem` ["-lt", "-gt", "-le", "-ge", "-eq"]) $ do
         mapM_ checkDecimals [lhs, rhs]
 
   where
-      checkDecimals hs = when (isFraction hs) $ err (getId hs) 2072 $ decimalError
-      decimalError = "Decimals are not supported. Either use integers only, or use bc or awk to compare."
-      isNum t = case deadSimple t of [v] -> all isDigit v
-                                     _ -> False
-      isFraction t = case deadSimple t of [v] -> isJust $ matchRegex floatRegex v
-                                          _ -> False
+      isLtGt = flip elem ["<", "\\<", ">", "\\>"]
+      isLeGe = flip elem ["<=", "\\<=", ">=", "\\>="]
+
+      supportsDecimals =
+        let sh = shellType params in
+            sh == Ksh || sh == Zsh
+      checkDecimals hs =
+        when (isFraction hs && not supportsDecimals) $
+            err (getId hs) 2072 decimalError
+      decimalError = "Decimals are not supported. " ++
+        "Either use integers only, or use bc or awk to compare."
+
+      isNum t =
+        case deadSimple t of
+            [v] -> all isDigit v
+            _ -> False
+      isFraction t =
+        case deadSimple t of
+            [v] -> isJust $ matchRegex floatRegex v
+            _ -> False
+
       eqv ('\\':s) = eqv s
       eqv "<" = "-lt"
       eqv ">" = "-gt"
       eqv "<=" = "-le"
       eqv ">=" = "-ge"
       eqv _ = "the numerical equivalent"
+
+      invert ('\\':s) = invert s
+      invert "<=" = ">"
+      invert ">=" = "<"
+
       floatRegex = mkRegex "^[0-9]+\\.[0-9]+$"
 checkNumberComparisons _ _ = return ()
 
