@@ -39,7 +39,7 @@ On Mac OS X with MacPorts (http://www.macports.org/):
 
 With cabal installed, cd to the shellcheck source directory and:
 
-    $ cabal install
+    $ cabal install shellcheck
     ...
     $ which shellcheck
     ~/.cabal/bin/shellcheck
