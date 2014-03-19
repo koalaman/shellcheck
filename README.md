@@ -48,7 +48,7 @@ Executables can be built with cabal. Tests currently still rely on a Makefile.
 
 Install:
 
-    $ cabal install
+    $ cabal install shellcheck
     ...
     $ which shellcheck
     ~/.cabal/bin/shellcheck
