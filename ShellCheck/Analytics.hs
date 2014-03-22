@@ -692,7 +692,7 @@ checkUnquotedExpansions params t =
     check _ = return ()
     tree = parentMap params
     examine t =
-        unless (inUnquotableContext tree t || usedAsCommandName tree t) $
+        unless (isQuoteFree tree t || usedAsCommandName tree t) $
             warn (getId t) 2046 "Quote this to prevent word splitting."
 
 
@@ -1094,36 +1094,36 @@ getTokenMap t =
     f t = modify (Map.insert (getId t) t)
 
 
--- Should this entity be quoted?
-inUnquotableContext tree t =
-    (isUnquotable t == Just True) ||
-        (head $ (mapMaybe isUnquotableContext $ drop 1 $ getPath tree t) ++ [False])
+-- Is this node self quoting?
+isQuoteFree tree t =
+    (isQuoteFreeElement t == Just True) ||
+        (head $ (mapMaybe isQuoteFreeContext $ drop 1 $ getPath tree t) ++ [False])
+  where
+    -- Is this node self-quoting in itself?
+    isQuoteFreeElement t =
+        case t of
+            T_Assignment {} -> return True
+            _ -> Nothing
 
--- A usage that in itself doesn't require quotes
-isUnquotable t =
-    case t of
-        T_Assignment {} -> return True
-        _ -> Nothing
-
--- A usage in which any subnode doesn't require quotes
-isUnquotableContext t =
-    case t of
-        TC_Noary _ DoubleBracket _ -> return True
-        TC_Unary _ DoubleBracket _ _ -> return True
-        TC_Binary _ DoubleBracket _ _ _ -> return True
-        TA_Unary _ _ _ -> return True
-        TA_Binary _ _ _ _ -> return True
-        TA_Trinary _ _ _ _ -> return True
-        TA_Expansion _ _ -> return True
-        T_Assignment {} -> return True
-        T_Redirecting _ _ _ -> return $
-            any (isCommand t) ["local", "declare", "typeset", "export"]
-        T_DoubleQuoted _ _ -> return True
-        T_CaseExpression _ _ _ -> return True
-        T_HereDoc _ _ _ _ _ -> return True
-        T_DollarBraced {} -> return True
-        T_ForIn _ _ _ _ -> return True -- Pragmatically assume it's desirable here
-        _ -> Nothing
+    -- Are any subnodes inherently self-quoting?
+    isQuoteFreeContext t =
+        case t of
+            TC_Noary _ DoubleBracket _ -> return True
+            TC_Unary _ DoubleBracket _ _ -> return True
+            TC_Binary _ DoubleBracket _ _ _ -> return True
+            TA_Unary _ _ _ -> return True
+            TA_Binary _ _ _ _ -> return True
+            TA_Trinary _ _ _ _ -> return True
+            TA_Expansion _ _ -> return True
+            T_Assignment {} -> return True
+            T_Redirecting _ _ _ -> return $
+                any (isCommand t) ["local", "declare", "typeset", "export"]
+            T_DoubleQuoted _ _ -> return True
+            T_CaseExpression _ _ _ -> return True
+            T_HereDoc _ _ _ _ _ -> return True
+            T_DollarBraced {} -> return True
+            T_ForIn _ _ _ _ -> return True -- Pragmatically assume it's desirable here
+            _ -> Nothing
 
 isParamTo tree cmd t =
     go t
@@ -1883,7 +1883,7 @@ checkSpacefulness params t =
         if spaced
           && (not $ "@" `isPrefixOf` name) -- There's another warning for this
           && (not $ isCounting token)
-          && (not $ inUnquotableContext parents token)
+          && (not $ isQuoteFree parents token)
           && (not $ usedAsCommandName parents token)
             then return [(Note (getId token) InfoC 2086 warning)]
             else return []
@@ -1972,7 +1972,7 @@ checkQuotesInLiterals params t =
         assignment <- getQuotes name
         if isJust assignment
             && not (isParamTo parents "eval" expr)
-            && not (inUnquotableContext parents expr)
+            && not (isQuoteFree parents expr)
             then return [
                 Note (fromJust assignment)WarningC 2089 $
                     "Quotes/backslashes will be treated literally. Use an array.",
