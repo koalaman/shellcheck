@@ -216,12 +216,19 @@ style = makeNote StyleC
 
 isVariableStartChar x = x == '_' || isAsciiLower x || isAsciiUpper x
 isVariableChar x = isVariableStartChar x || isDigit x
+variableNameRegex = mkRegex "[_a-zA-Z][_a-zA-Z0-9]*"
 
 prop_isVariableName1 = isVariableName "_fo123"
 prop_isVariableName2 = not $ isVariableName "4"
 prop_isVariableName3 = not $ isVariableName "test: "
 isVariableName (x:r) = isVariableStartChar x && all isVariableChar r
 isVariableName _ = False
+
+matchAll re = unfoldr f
+  where
+    f str = do
+        (_, match, rest, _) <- matchRegexAll re str
+        return $ (match, rest)
 
 willSplit x =
   case x of
@@ -1087,25 +1094,36 @@ getTokenMap t =
     f t = modify (Map.insert (getId t) t)
 
 
+-- Should this entity be quoted?
 inUnquotableContext tree t =
+    (isUnquotable t == Just True) ||
+        (head $ (mapMaybe isUnquotableContext $ drop 1 $ getPath tree t) ++ [False])
+
+-- A usage that in itself doesn't require quotes
+isUnquotable t =
     case t of
-        TC_Noary _ DoubleBracket _ -> True
-        TC_Unary _ DoubleBracket _ _ -> True
-        TC_Binary _ DoubleBracket _ _ _ -> True
-        TA_Unary _ _ _ -> True
-        TA_Binary _ _ _ _ -> True
-        TA_Trinary _ _ _ _ -> True
-        TA_Expansion _ _ -> True
-        T_Assignment _ _ _ _ _ -> True
-        T_Redirecting _ _ _ ->
+        T_Assignment {} -> return True
+        _ -> Nothing
+
+-- A usage in which any subnode doesn't require quotes
+isUnquotableContext t =
+    case t of
+        TC_Noary _ DoubleBracket _ -> return True
+        TC_Unary _ DoubleBracket _ _ -> return True
+        TC_Binary _ DoubleBracket _ _ _ -> return True
+        TA_Unary _ _ _ -> return True
+        TA_Binary _ _ _ _ -> return True
+        TA_Trinary _ _ _ _ -> return True
+        TA_Expansion _ _ -> return True
+        T_Assignment {} -> return True
+        T_Redirecting _ _ _ -> return $
             any (isCommand t) ["local", "declare", "typeset", "export"]
-        T_DoubleQuoted _ _ -> True
-        T_CaseExpression _ _ _ -> True
-        T_HereDoc _ _ _ _ _ -> True
-        T_ForIn _ _ _ _ -> True -- Pragmatically assume it's desirable here
-        x -> case Map.lookup (getId x) tree of
-                Nothing -> False
-                Just parent -> inUnquotableContext tree parent
+        T_DoubleQuoted _ _ -> return True
+        T_CaseExpression _ _ _ -> return True
+        T_HereDoc _ _ _ _ _ -> return True
+        T_DollarBraced {} -> return True
+        T_ForIn _ _ _ _ -> return True -- Pragmatically assume it's desirable here
+        _ -> Nothing
 
 isParamTo tree cmd t =
     go t
@@ -1752,11 +1770,19 @@ getModifiedVariableCommand _ = []
 
 -- TODO:
 getBracedReference s = takeWhile (\x -> not $ x `elem` ":[#%/^,") $ dropWhile (`elem` "#!") s
+getIndexReferences s = fromMaybe [] $ do
+    (_, index, _, _) <- matchRegexAll re s
+    return $ matchAll variableNameRegex index
+  where
+    re = mkRegex "\\[.*\\]"
 
 getReferencedVariables t =
     case t of
-        T_DollarBraced id l -> map (\x -> (t, t, x)) $ [getBracedReference $ bracedString l]
-        TA_Variable id str -> [(t, t, str)]
+        T_DollarBraced id l -> let str = bracedString l in
+            (t, t, getBracedReference str) :
+                (map (\x -> (l, l, x)) $ getIndexReferences str)
+        TA_Variable id str ->
+            map (\x -> (t, t, x)) $ (getBracedReference str):(getIndexReferences str)
         T_Assignment id Append str _ _ -> [(t, t, str)]
         x -> getReferencedVariableCommand x
 
@@ -1819,7 +1845,6 @@ doVariableFlowAnalysis readFunc writeFunc empty flow = fst $ runState (
     doFlow _ = return []
 
 ---- Check whether variables could have spaces/globs
-prop_checkSpacefulness0 = verifyTree checkSpacefulness "for f in *.mp3; do echo $f; done"
 prop_checkSpacefulness1 = verifyTree checkSpacefulness "a='cow moo'; echo $a"
 prop_checkSpacefulness2 = verifyNotTree checkSpacefulness "a='cow moo'; [[ $a ]]"
 prop_checkSpacefulness3 = verifyNotTree checkSpacefulness "a='cow*.mp3'; echo \"$a\""
@@ -1839,6 +1864,7 @@ prop_checkSpacefulnessG = verifyNotTree checkSpacefulness "declare foo=$1"
 prop_checkSpacefulnessH = verifyTree checkSpacefulness "echo foo=$1"
 prop_checkSpacefulnessI = verifyNotTree checkSpacefulness "$1 --flags"
 prop_checkSpacefulnessJ = verifyTree checkSpacefulness "echo $PWD"
+prop_checkSpacefulnessK = verifyNotTree checkSpacefulness "n+='foo bar'"
 
 checkSpacefulness params t =
     doVariableFlowAnalysis readF writeF (Map.fromList defaults) (variableFlow params)
@@ -2013,6 +2039,8 @@ prop_checkUnused10= verifyNotTree checkUnusedAssignments "read -p 'test: '"
 prop_checkUnused11= verifyNotTree checkUnusedAssignments "bar=5; export foo[$bar]=3"
 prop_checkUnused12= verifyNotTree checkUnusedAssignments "read foo; echo ${!foo}"
 prop_checkUnused13= verifyNotTree checkUnusedAssignments "x=(1); (( x[0] ))"
+prop_checkUnused14= verifyNotTree checkUnusedAssignments "x=(1); n=0; echo ${x[n]}"
+prop_checkUnused15= verifyNotTree checkUnusedAssignments "x=(1); n=0; (( x[n] ))"
 checkUnusedAssignments params t = snd $ runWriter (mapM_ checkAssignment flow)
   where
     flow = variableFlow params
