@@ -299,6 +299,17 @@ deadSimple (T_DollarSingleQuoted _ s) = [s]
 deadSimple (T_Annotation _ _ s) = deadSimple s
 deadSimple _ = []
 
+-- Turn a SimpleCommand foo -avz --bar=baz into args ["a", "v", "z", "bar"]
+getFlags (T_SimpleCommand _ _ (_:args)) =
+    let textArgs = takeWhile (/= "--") $ map (concat . deadSimple) args in
+        concatMap flag textArgs
+  where
+    flag ('-':'-':arg) = [ takeWhile (/= '=') arg ]
+    flag ('-':args) = map (:[]) args
+    flag _ = []
+
+getFlags _ = []
+
 (!!!) list i =
     case drop i list of
         [] -> Nothing
@@ -1716,10 +1727,13 @@ getModifiedVariables t =
         T_SelectIn id str words _ -> [(t, t, str, DataFrom words)]
         _ -> []
 
--- Consider 'export' a reference, since it makes the var available
+-- Consider 'export/declare -x' a reference, since it makes the var available
 getReferencedVariableCommand base@(T_SimpleCommand _ _ ((T_NormalWord _ ((T_Literal _ x):_)):rest)) =
     case x of
         "export" -> concatMap getReference rest
+        "declare" -> if "x" `elem` getFlags base
+            then concatMap getReference rest
+            else []
         _ -> []
   where
     getReference t@(T_Assignment _ _ name _ value) = [(t, t, name)]
@@ -2041,6 +2055,7 @@ prop_checkUnused12= verifyNotTree checkUnusedAssignments "read foo; echo ${!foo}
 prop_checkUnused13= verifyNotTree checkUnusedAssignments "x=(1); (( x[0] ))"
 prop_checkUnused14= verifyNotTree checkUnusedAssignments "x=(1); n=0; echo ${x[n]}"
 prop_checkUnused15= verifyNotTree checkUnusedAssignments "x=(1); n=0; (( x[n] ))"
+prop_checkUnused16= verifyNotTree checkUnusedAssignments "foo=5; declare -x foo"
 checkUnusedAssignments params t = snd $ runWriter (mapM_ checkAssignment flow)
   where
     flow = variableFlow params
