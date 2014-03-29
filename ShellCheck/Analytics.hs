@@ -189,6 +189,7 @@ nodeChecks = [
     ,checkInteractiveSu
     ,checkStderrPipe
     ,checkSetAssignment
+    ,checkOverridingPath
     ]
 
 
@@ -2465,3 +2466,24 @@ checkSetAssignment params = checkUnqualifiedCommand "set" f
     literal (T_NormalWord _ l) = concatMap literal l
     literal (T_Literal _ str) = str
     literal _ = "*"
+
+
+prop_checkOverridingPath1 = verify checkOverridingPath "PATH=\"$var/$foo\""
+prop_checkOverridingPath2 = verify checkOverridingPath "PATH=\"mydir\""
+prop_checkOverridingPath3 = verify checkOverridingPath "PATH=/cow/foo"
+prop_checkOverridingPath4 = verifyNot checkOverridingPath "PATH=/cow/foo/bin"
+prop_checkOverridingPath5 = verifyNot checkOverridingPath "PATH='/bin:/sbin'"
+prop_checkOverridingPath6 = verifyNot checkOverridingPath "PATH=\"$var/$foo\" cmd"
+prop_checkOverridingPath7 = verifyNot checkOverridingPath "PATH=$OLDPATH"
+prop_checkOverridingPath8 = verifyNot checkOverridingPath "PATH=$PATH:/stuff"
+checkOverridingPath _ (T_SimpleCommand _ vars []) =
+    mapM_ checkVar vars
+  where
+    checkVar (T_Assignment id Assign "PATH" Nothing word) =
+        let string = concat $ deadSimple word
+        in unless (any (`isInfixOf` string) ["/bin", "/sbin" ]) $ do
+            when ('/' `elem` string && ':' `notElem` string) $ notify id
+            when (isLiteral word && ':' `notElem` string && '/' `notElem` string) $ notify id
+    checkVar _ = return ()
+    notify id = warn id 2123 "PATH is the shell search path. Use another name."
+checkOverridingPath _ _ = return ()
