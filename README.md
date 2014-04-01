@@ -24,18 +24,22 @@ ShellCheck requires at least 1 GB of RAM to compile. Executables can be built wi
 Make sure cabal is installed. On Debian based distros:
 
     apt-get install cabal-install
+    cabal update
 
 On Fedora:
 
     yum install cabal-install
+    cabal update
 
 On Mac OS X with homebrew (http://brew.sh/):
 
     brew install cabal-install
+    cabal update
 
 On Mac OS X with MacPorts (http://www.macports.org/):
 
     port install hs-cabal-install
+    cabal update
 
 With cabal installed, cd to the shellcheck source directory and:
 
