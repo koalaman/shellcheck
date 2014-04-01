@@ -40,10 +40,17 @@ On Mac OS X with MacPorts (http://www.macports.org/):
 With cabal installed, cd to the shellcheck source directory and:
 
     $ cabal install
-    ...
+    
+This will install shellcheck to your ~/.cabal/bin directory.
+
+Add the directory to your path (for bash, add this to your ~/.bashrc file):
+
+    export PATH=$HOME/.cabal/bin:$PATH
+
+Verify that your PATH is set up correctly:    
+
     $ which shellcheck
     ~/.cabal/bin/shellcheck
-
 
 ## Building with Make
 
