@@ -190,6 +190,7 @@ nodeChecks = [
     ,checkStderrPipe
     ,checkSetAssignment
     ,checkOverridingPath
+    ,checkArrayAsString
     ]
 
 
@@ -499,10 +500,37 @@ indexOfSublists sub all = f 0 all
 
 
 bracedString l = concat $ deadSimple l
-isMagicInQuotes (T_DollarBraced _ l) =
+
+isArrayExpansion (T_DollarBraced _ l) =
     let string = bracedString l in
-        '@' `elem` string || "!" `isPrefixOf` string
-isMagicInQuotes _ = False
+        "@" `isPrefixOf` string ||
+            not ("#" `isPrefixOf` string) && "[@]" `isInfixOf` string
+isArrayExpansion _ = False
+
+-- Is it certain that this arg will becomes multiple args?
+willBecomeMultipleArgs t = willConcatInAssignment t || f t
+  where
+    f (T_Extglob {}) = True
+    f (T_Glob {}) = True
+    f (T_BraceExpansion {}) = True
+    f (T_DoubleQuoted _ parts) = any f parts
+    f (T_NormalWord _ parts) = any f parts
+    f _ = False
+
+willConcatInAssignment t@(T_DollarBraced {}) = isArrayExpansion t
+willConcatInAssignment (T_DoubleQuoted _ parts) = any willConcatInAssignment parts
+willConcatInAssignment (T_NormalWord _ parts) = any willConcatInAssignment parts
+willConcatInAssignment _ = False
+
+-- Is it possible that this arg becomes multiple args?
+mayBecomeMultipleArgs t = willBecomeMultipleArgs t || f t
+  where
+    f (T_DollarBraced _ l) =
+        let string = bracedString l in
+            "!" `isPrefixOf` string
+    f (T_DoubleQuoted _ parts) = any f parts
+    f (T_NormalWord _ parts) = any f parts
+    f _ = False
 
 prop_checkShebang1 = verifyTree checkShebang "#!/usr/bin/env bash -x\necho cow"
 prop_checkShebang2 = verifyNotTree checkShebang "#! /bin/sh  -l "
@@ -600,7 +628,7 @@ prop_checkForInQuoted4a = verifyNot checkForInQuoted "for f in foo{1,2,3}; do tr
 prop_checkForInQuoted5 = verify checkForInQuoted "for f in ls; do true; done"
 prop_checkForInQuoted6 = verifyNot checkForInQuoted "for f in \"${!arr}\"; do true; done"
 checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [word@(T_DoubleQuoted id list)]] _) =
-    when (any (\x -> willSplit x && not (isMagicInQuotes x)) list
+    when (any (\x -> willSplit x && not (mayBecomeMultipleArgs x)) list
             || (liftM wouldHaveBeenGlob (getLiteralString word) == Just True)) $
         err id 2066 $ "Since you double quoted this, it will not word split, and the loop will only run once."
 checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [T_SingleQuoted id s]] _) =
@@ -761,8 +789,14 @@ checkShorthandIf _ _ = return ()
 
 
 prop_checkDollarStar = verify checkDollarStar "for f in $*; do ..; done"
-checkDollarStar _ (T_NormalWord _ [(T_DollarBraced id l)]) | (bracedString l) == "*"  =
-    warn id 2048 $ "Use \"$@\" (with quotes) to prevent whitespace problems."
+prop_checkDollarStar2 = verifyNot checkDollarStar "a=$*"
+checkDollarStar p t@(T_NormalWord _ [(T_DollarBraced id l)])
+      | (bracedString l) == "*"  =
+    unless isAssigned $
+        warn id 2048 $ "Use \"$@\" (with quotes) to prevent whitespace problems."
+  where
+    path = getPath (parentMap p) t
+    isAssigned = any isAssignment . take 2 $ path
 checkDollarStar _ _ = return ()
 
 
@@ -772,13 +806,34 @@ prop_checkUnquotedDollarAt2 = verify checkUnquotedDollarAt "ls ${foo[@]}"
 prop_checkUnquotedDollarAt3 = verifyNot checkUnquotedDollarAt "ls ${#foo[@]}"
 prop_checkUnquotedDollarAt4 = verifyNot checkUnquotedDollarAt "ls \"$@\""
 prop_checkUnquotedDollarAt5 = verifyNot checkUnquotedDollarAt "ls ${foo/@/ at }"
-checkUnquotedDollarAt _ (T_NormalWord _ [T_DollarBraced id l]) =
-    let string = bracedString l
-        failing = err id 2068 $ "Add double quotes around ${" ++ string ++ "}, otherwise it's just like $* and breaks on spaces."
-        in do
-            when ("@" `isPrefixOf` string) failing
-            when (not ("#" `isPrefixOf` string) && "[@]" `isInfixOf` string) failing
+prop_checkUnquotedDollarAt6 = verifyNot checkUnquotedDollarAt "a=$@"
+checkUnquotedDollarAt p word@(T_NormalWord _ parts) | not isAssigned =
+    flip mapM_ (take 1 $ filter isArrayExpansion parts) $ \x -> do
+        err (getId x) 2068 $
+            "Double quote array expansions, otherwise they're like $* and break on spaces."
+  where
+    path = getPath (parentMap p) word
+    isAssigned = any isAssignment . take 2 $ path
 checkUnquotedDollarAt _ _ = return ()
+
+
+prop_checkArrayAsString1 = verify checkArrayAsString "a=$@"
+prop_checkArrayAsString2 = verify checkArrayAsString "a=\"${arr[@]}\""
+prop_checkArrayAsString3 = verify checkArrayAsString "a=*.png"
+prop_checkArrayAsString4 = verify checkArrayAsString "a={1..10}"
+prop_checkArrayAsString5 = verifyNot checkArrayAsString "a='*.gif'"
+prop_checkArrayAsString6 = verifyNot checkArrayAsString "a=$*"
+prop_checkArrayAsString7 = verifyNot checkArrayAsString "a=( $@ )"
+checkArrayAsString _ (T_Assignment id _ _ _ word) =
+    if willConcatInAssignment word
+    then
+      warn (getId word) 2124
+        "Assigning an array to a string! Assign as array, or use * instead of @ to concatenate."
+    else
+      when (willBecomeMultipleArgs word) $
+        warn (getId word) 2125
+          "Brace expansions and globs are literal in assignments. Quote it or use an array."
+checkArrayAsString _ _ = return ()
 
 prop_checkStderrRedirect = verify checkStderrRedirect "test 2>&1 > cow"
 prop_checkStderrRedirect2 = verifyNot checkStderrRedirect "test > cow 2>&1"
@@ -1225,6 +1280,7 @@ basename = reverse . (takeWhile (/= '/')) . reverse
 isAssignment (T_Annotation _ _ w) = isAssignment w
 isAssignment (T_Redirecting _ _ w) = isAssignment w
 isAssignment (T_SimpleCommand _ (w:_) []) = True
+isAssignment (T_Assignment {}) = True
 isAssignment _ = False
 
 prop_checkPrintfVar1 = verify checkPrintfVar "printf \"Lol: $s\""
