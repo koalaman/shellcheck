@@ -39,6 +39,7 @@ On Mac OS X with MacPorts (http://www.macports.org/):
 
 With cabal installed, cd to the ShellCheck source directory and:
 
+    $ cabal update
     $ cabal install
     
 This will install ShellCheck to your ~/.cabal/bin directory.
