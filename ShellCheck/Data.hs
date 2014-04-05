@@ -74,3 +74,11 @@ commonCommands = [
     "val", "vi", "wait", "wc", "what", "who", "write", "xargs", "yacc",
     "zcat"
   ]
+
+sampleWords = [
+    "alpha", "bravo", "charlie", "delta", "echo", "foxtrot",
+    "golf", "hotel", "india", "juliett", "kilo", "lima", "mike",
+    "november", "oscar", "papa", "quebec", "romeo", "sierra",
+    "tango", "uniform", "victor", "whiskey", "xray", "yankee",
+    "zulu"
+  ]

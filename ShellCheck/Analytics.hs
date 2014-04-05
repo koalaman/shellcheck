@@ -226,6 +226,8 @@ prop_isVariableName3 = not $ isVariableName "test: "
 isVariableName (x:r) = isVariableStartChar x && all isVariableChar r
 isVariableName _ = False
 
+potentially = fromMaybe (return ())
+
 matchAll re = unfoldr f
   where
     f str = do
@@ -254,9 +256,17 @@ isConfusedGlobRegex ('*':_) = True
 isConfusedGlobRegex [x,'*'] | x /= '\\' = True
 isConfusedGlobRegex _ = False
 
-isPotentiallyConfusedGlobRegex =
-    let re = mkRegex "[a-z1-9]\\*" in
-        isJust . matchRegex re
+getSuspiciousRegexWildcard str =
+    if (not $ str `matches` contra)
+    then do
+        match <- matchRegex suspicious str
+        str <- match !!! 0
+        str !!! 0
+    else
+        fail "looks good"
+  where
+    suspicious = mkRegex "([A-Za-z1-9])\\*"
+    contra = mkRegex "[^a-zA-Z1-9]\\*|[][^$+\\\\]"
 
 matches string regex = isJust $ matchRegex regex string
 
@@ -1395,6 +1405,7 @@ prop_checkGrepRe6 = verifyNot checkGrepRe "grep foo \\*.mp3"
 prop_checkGrepRe7 = verify checkGrepRe "grep *foo* file"
 prop_checkGrepRe8 = verify checkGrepRe "ls | grep foo*.jpg"
 prop_checkGrepRe9 = verifyNot checkGrepRe "grep '[0-9]*' file"
+prop_checkGrepRe10= verifyNot checkGrepRe "grep '^aa*' file"
 
 checkGrepRe _ = checkCommand "grep" (const f) where
     -- --regex=*(extglob) doesn't work. Fixme?
@@ -1408,11 +1419,16 @@ checkGrepRe _ = checkCommand "grep" (const f) where
         let string = concat $ deadSimple re
         if isConfusedGlobRegex string then
             warn (getId re) 2063 $ "Grep uses regex, but this looks like a glob."
-          else
-            if (isPotentiallyConfusedGlobRegex string)
-            then info (getId re) 2022 "Note that c* does not mean \"c followed by anything\" in regex."
-            else return ()
+          else potentially $ do
+            char <- getSuspiciousRegexWildcard string
+            return $ info (getId re) 2022 $
+                "Note that unlike globs, " ++ [char] ++ "* here matches '" ++ [char, char, char] ++ "' but not '" ++ (wordStartingWith char) ++ "'."
 
+wordStartingWith c =
+    head . filter ([c] `isPrefixOf`) $ candidates
+  where
+    candidates =
+        sampleWords ++ (map (\(x:r) -> (toUpper x) : r) sampleWords) ++ [c:"test"]
 
 prop_checkTrapQuotes1 = verify checkTrapQuotes "trap \"echo $num\" INT"
 prop_checkTrapQuotes1a= verify checkTrapQuotes "trap \"echo `ls`\" INT"
