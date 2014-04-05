@@ -451,9 +451,14 @@ checkUuoc _ _ = return ()
 prop_checkNeedlessCommands = verify checkNeedlessCommands "foo=$(expr 3 + 2)"
 prop_checkNeedlessCommands2 = verify checkNeedlessCommands "foo=`echo \\`expr 3 + 2\\``"
 prop_checkNeedlessCommands3 = verifyNot checkNeedlessCommands "foo=$(expr foo : regex)"
-checkNeedlessCommands _ cmd@(T_SimpleCommand id _ _) |
-        cmd `isCommand` "expr" && (not $ ":" `elem` deadSimple cmd) =
+prop_checkNeedlessCommands4 = verifyNot checkNeedlessCommands "foo=$(expr foo \\< regex)"
+checkNeedlessCommands _ cmd@(T_SimpleCommand id _ args) |
+        cmd `isCommand` "expr" && (not $ any (`elem` words) exceptions) =
     style id 2003 "expr is antiquated. Consider rewriting this using $((..)), ${} or [[ ]]."
+  where
+    -- These operators are hard to replicate in POSIX
+    exceptions = [ ":", "<", ">", "<=", ">=" ]
+    words = mapMaybe getLiteralString args
 checkNeedlessCommands _ _ = return ()
 
 prop_checkPipePitfalls3 = verify checkPipePitfalls "ls | grep -v mp3"
