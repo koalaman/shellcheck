@@ -897,6 +897,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
                 ,"ksh"
                 ,"zsh"
                 ,"ssh"
+                ,"xprop"
                 ]
             || "awk" `isSuffixOf` commandName
             || "perl" `isPrefixOf` commandName
