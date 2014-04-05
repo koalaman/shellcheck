@@ -1577,11 +1577,14 @@ prop_checkUnusedEchoEscapes1 = verify checkUnusedEchoEscapes "echo 'foo\\nbar\\n
 prop_checkUnusedEchoEscapes2 = verifyNot checkUnusedEchoEscapes "echo -e 'foi\\nbar'"
 prop_checkUnusedEchoEscapes3 = verify checkUnusedEchoEscapes "echo \"n:\\t42\""
 prop_checkUnusedEchoEscapes4 = verifyNot checkUnusedEchoEscapes "echo lol"
+prop_checkUnusedEchoEscapes5 = verifyNot checkUnusedEchoEscapes "echo -n -e '\n'"
 checkUnusedEchoEscapes _ = checkCommand "echo" (const f)
   where
     isDashE = mkRegex "^-.*e"
     hasEscapes = mkRegex "\\\\[rnt]"
-    f (arg:_) | (concat $ deadSimple arg) `matches` isDashE = return ()
+    f args | (concat $ concatMap deadSimple allButLast) `matches` isDashE =
+        return ()
+      where allButLast = reverse . drop 1 . reverse $ args
     f args = mapM_ checkEscapes args
 
     checkEscapes (T_NormalWord _ args) =
