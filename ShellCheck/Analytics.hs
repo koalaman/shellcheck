@@ -477,6 +477,9 @@ checkPipePitfalls _ (T_Pipeline id _ commands) = do
     for' ["ps", "grep"] $
         \x -> info x 2009 "Consider using pgrep instead of grepping ps output."
 
+    for' ["grep", "wc"] $
+        \x -> style x 2126 "Consider using grep -c instead of grep|wc."
+
     didLs <- liftM or . sequence $ [
         for' ["ls", "grep"] $
             \x -> warn x 2010 "Don't use ls | grep. Use a glob or a for loop with a condition to allow non-alphanumeric filenames.",
