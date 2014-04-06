@@ -879,6 +879,7 @@ prop_checkSingleQuotedVariables4 = verifyNot checkSingleQuotedVariables "awk '{p
 prop_checkSingleQuotedVariables5 = verifyNot checkSingleQuotedVariables "trap 'echo $SECONDS' EXIT"
 prop_checkSingleQuotedVariables6 = verifyNot checkSingleQuotedVariables "sed -n '$p'"
 prop_checkSingleQuotedVariables6a= verify checkSingleQuotedVariables "sed -n '$pattern'"
+prop_checkSingleQuotedVariables7 = verifyNot checkSingleQuotedVariables "PS1='$PWD \\$ '"
 checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
     when (s `matches` re) $
         if "sed" == commandName
@@ -893,7 +894,9 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
         name <- getCommandBasename cmd
         return name
 
-    isProbablyOk = commandName `elem` [
+    isProbablyOk =
+            (any isOkAssignment $ take 3 $ getPath parents t)
+            || commandName `elem` [
                 "trap"
                 ,"sh"
                 ,"bash"
@@ -904,6 +907,12 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
                 ]
             || "awk" `isSuffixOf` commandName
             || "perl" `isPrefixOf` commandName
+
+    commonlyQuoted = ["PS1", "PS2", "PS3", "PS4", "PROMPT_COMMAND"]
+    isOkAssignment t =
+        case t of
+            T_Assignment _ _ name _ _ -> name `elem` commonlyQuoted
+            otherwise -> False
 
     re = mkRegex "\\$[{(0-9a-zA-Z_]"
     sedContra = mkRegex "\\$[dp]($|[^a-zA-Z])"
