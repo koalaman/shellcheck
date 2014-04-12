@@ -2252,7 +2252,9 @@ prop_checkCharRangeGlob1 = verify checkCharRangeGlob "ls *[:digit:].jpg"
 prop_checkCharRangeGlob2 = verifyNot checkCharRangeGlob "ls *[[:digit:]].jpg"
 prop_checkCharRangeGlob3 = verify checkCharRangeGlob "ls [10-15]"
 prop_checkCharRangeGlob4 = verifyNot checkCharRangeGlob "ls [a-zA-Z]"
-checkCharRangeGlob _ (T_Glob id str) | isCharClass str =
+prop_checkCharRangeGlob5 = verifyNot checkCharRangeGlob "tr -d [a-zA-Z]" -- tr has 2060
+checkCharRangeGlob p t@(T_Glob id str) |
+  isCharClass str && not (isParamTo (parentMap p) "tr" t) =
     if ":" `isPrefixOf` contents
         && ":" `isSuffixOf` contents
         && contents /= ":"
