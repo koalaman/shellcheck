@@ -41,14 +41,14 @@ With cabal installed, cd to the ShellCheck source directory and:
 
     $ cabal update
     $ cabal install
-    
+
 This will install ShellCheck to your ~/.cabal/bin directory.
 
 Add the directory to your PATH (for bash, add this to your ~/.bashrc file):
 
     export PATH=$HOME/.cabal/bin:$PATH
 
-Verify that your PATH is set up correctly:    
+Verify that your PATH is set up correctly:
 
     $ which shellcheck
     ~/.cabal/bin/shellcheck
@@ -67,6 +67,11 @@ On Ubuntu and similar, use:
 
     apt-get install ghc libghc-parsec3-dev libghc-json-dev \
       libghc-regex-compat-dev libghc-quickcheck2-dev
+
+On Gentoo:
+    emerge cabal cabal-install dev-haskell/parsec \
+      dev-haskell/quickcheck dev-haskell/json \
+      dev-haskell/regex-compat pandoc
 
 To build and run the tests, cd to the shellcheck source directory and:
 
