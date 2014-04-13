@@ -191,6 +191,7 @@ nodeChecks = [
     ,checkSetAssignment
     ,checkOverridingPath
     ,checkArrayAsString
+    ,checkUnsupported
     ]
 
 
@@ -645,17 +646,17 @@ prop_checkForInQuoted4 = verify checkForInQuoted "for f in 1,2,3; do true; done"
 prop_checkForInQuoted4a = verifyNot checkForInQuoted "for f in foo{1,2,3}; do true; done"
 prop_checkForInQuoted5 = verify checkForInQuoted "for f in ls; do true; done"
 prop_checkForInQuoted6 = verifyNot checkForInQuoted "for f in \"${!arr}\"; do true; done"
-checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [word@(T_DoubleQuoted id list)]] _) =
+checkForInQuoted _ (T_ForIn _ _ f [T_NormalWord _ [word@(T_DoubleQuoted id list)]] _) =
     when (any (\x -> willSplit x && not (mayBecomeMultipleArgs x)) list
             || (liftM wouldHaveBeenGlob (getLiteralString word) == Just True)) $
         err id 2066 $ "Since you double quoted this, it will not word split, and the loop will only run once."
-checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [T_SingleQuoted id s]] _) =
+checkForInQuoted _ (T_ForIn _ _ f [T_NormalWord _ [T_SingleQuoted id s]] _) =
     warn id 2041 $ "This is a literal string. To run as a command, use $(" ++ s ++ ")."
-checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [T_Literal id s]] _) =
+checkForInQuoted _ (T_ForIn _ _ f [T_NormalWord _ [T_Literal id s]] _) =
     if ',' `elem` s
       then unless ('{' `elem` s) $
             warn id 2042 $ "Use spaces, not commas, to separate loop elements."
-      else warn id 2043 $ "This loop will only run once, with " ++ f ++ "='" ++ s ++ "'."
+      else warn id 2043 $ "This loop will only run once, with " ++ (head f) ++ "='" ++ s ++ "'."
 checkForInQuoted _ _ = return ()
 
 prop_checkForInCat1 = verify checkForInCat "for f in $(cat foo); do stuff; done"
@@ -663,7 +664,7 @@ prop_checkForInCat1a= verify checkForInCat "for f in `cat foo`; do stuff; done"
 prop_checkForInCat2 = verify checkForInCat "for f in $(cat foo | grep lol); do stuff; done"
 prop_checkForInCat2a= verify checkForInCat "for f in `cat foo | grep lol`; do stuff; done"
 prop_checkForInCat3 = verifyNot checkForInCat "for f in $(cat foo | grep bar | wc -l); do stuff; done"
-checkForInCat _ (T_ForIn _ f [T_NormalWord _ w] _) = mapM_ checkF w
+checkForInCat _ (T_ForIn _ _ f [T_NormalWord _ w] _) = mapM_ checkF w
   where
     checkF (T_DollarExpansion id [T_Pipeline _ _ r])
         | all isLineBased r =
@@ -679,9 +680,9 @@ prop_checkForInLs2 = verify checkForInLs "for f in `ls *.mp3`; do mplayer \"$f\"
 prop_checkForInLs3 = verify checkForInLs "for f in `find / -name '*.mp3'`; do mplayer \"$f\"; done"
 checkForInLs _ t = try t
   where
-   try (T_ForIn _ f [T_NormalWord _ [T_DollarExpansion id [x]]] _) =
+   try (T_ForIn _ _ f [T_NormalWord _ [T_DollarExpansion id [x]]] _) =
         check id f x
-   try (T_ForIn _ f [T_NormalWord _ [T_Backticked id [x]]] _) =
+   try (T_ForIn _ _ f [T_NormalWord _ [T_Backticked id [x]]] _) =
         check id f x
    try _ = return ()
    check id f x =
@@ -1217,7 +1218,7 @@ isQuoteFree tree t =
             T_CaseExpression _ _ _ -> return True
             T_HereDoc _ _ _ _ _ -> return True
             T_DollarBraced {} -> return True
-            T_ForIn _ _ _ _ -> return True -- Pragmatically assume it's desirable here
+            T_ForIn {} -> return True -- Pragmatically assume it's desirable here
             _ -> Nothing
 
 isParamTo tree cmd t =
@@ -1617,7 +1618,7 @@ checkSpuriousExec _ = doLists
     doLists (T_BraceGroup _ cmds) = doList cmds
     doLists (T_WhileExpression _ _ cmds) = doList cmds
     doLists (T_UntilExpression _ _ cmds) = doList cmds
-    doLists (T_ForIn _ _ _ cmds) = doList cmds
+    doLists (T_ForIn _ _ _ _ cmds) = doList cmds
     doLists (T_ForArithmetic _ _ _ _ cmds) = doList cmds
     doLists (T_IfExpression _ thens elses) = do
         mapM_ (\(_, l) -> doList l) thens
@@ -1817,7 +1818,7 @@ getModifiedVariables t =
                 else []
 
         --Points to 'for' rather than variable
-        T_ForIn id str words _ -> [(t, t, str, DataFrom words)]
+        T_ForIn id _ strs words _ -> map (\str -> (t, t, str, DataFrom words)) strs
         T_SelectIn id str words _ -> [(t, t, str, DataFrom words)]
         _ -> []
 
@@ -1911,8 +1912,8 @@ getVariableFlow shell parents t =
             if assignFirst t then return () else setWritten t
             when (scopeType /= NoneScope) $ modify ((StackScopeEnd):)
 
-    assignFirst (T_ForIn _ _ _ _) = True
-    assignFirst (T_SelectIn _ _ _ _) = True
+    assignFirst (T_ForIn {}) = True
+    assignFirst (T_SelectIn {}) = True
     assignFirst _ = False
 
     setRead t =
@@ -2277,7 +2278,7 @@ prop_checkCdAndBack3 = verifyNot checkCdAndBack "while [[ $PWD != / ]]; do cd ..
 checkCdAndBack params = doLists
   where
     shell = shellType params
-    doLists (T_ForIn _ _ _ cmds) = doList cmds
+    doLists (T_ForIn _ _ _ _ cmds) = doList cmds
     doLists (T_ForArithmetic _ _ _ _ cmds) = doList cmds
     doLists (T_WhileExpression _ _ cmds) = doList cmds
     doLists (T_UntilExpression _ _ cmds) = doList cmds
@@ -2582,3 +2583,23 @@ checkOverridingPath _ (T_SimpleCommand _ vars []) =
     checkVar _ = return ()
     notify id = warn id 2123 "PATH is the shell search path. Use another name."
 checkOverridingPath _ _ = return ()
+
+
+prop_checkUnsupported1 = verifyNot checkUnsupported "#!/bin/zsh\nfunction { echo cow; }"
+prop_checkUnsupported2 = verify checkUnsupported "#!/bin/sh\nfunction { echo cow; }"
+checkUnsupported params t =
+    when  (shellType params `notElem` support) $
+        report name
+ where
+    (name, support) = shellSupport t
+    report s = err (getId t) 2127 $
+        "To use " ++ s ++ ", specify #!/usr/bin/env " ++
+            (map toLower . intercalate " or " . map show $ support)
+
+-- TODO: Move more of these checks here
+shellSupport t =
+  case t of
+    T_Function _ _ _ "" _ -> ("anonymous functions", [Zsh])
+    T_ForIn _ _ (_:_:_) _ _ -> ("multi-index for loops", [Zsh])
+    T_ForIn _ ShortForIn _ _ _ -> ("short form for loops", [Zsh])
+    otherwise -> ("", [Bash, Ksh, Sh, Zsh])

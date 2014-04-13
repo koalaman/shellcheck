@@ -1568,6 +1568,7 @@ prop_readForClause7 = isOk readForClause "for ((;;)) do echo $i\ndone"
 prop_readForClause8 = isOk readForClause "for ((;;)) ; do echo $i\ndone"
 prop_readForClause9 = isOk readForClause "for i do true; done"
 prop_readForClause10= isOk readForClause "for ((;;)) { true; }"
+prop_readForClause11= isOk readForClause "for a b in *; do echo $a $b; done"
 readForClause = called "for loop" $ do
     pos <- getPosition
     (T_For id) <- g_For
@@ -1593,11 +1594,25 @@ readForClause = called "for loop" $ do
         return list
 
     readRegular id pos = do
-        name <- readVariableName
-        spacing
-        values <- readInClause <|> (optional readSequentialSep >> return [])
-        group <- readDoGroup pos
-        return $ T_ForIn id name values group
+        names <- readNames
+        readShort names <|> readLong names
+      where
+        readLong names = do
+            values <- readInClause <|> (optional readSequentialSep >> return [])
+            group <- readDoGroup pos
+            return $ T_ForIn id NormalForIn names values group
+        readShort names = do
+            char '('
+            allspacing
+            words <- many (readNormalWord `thenSkip` allspacing)
+            char ')'
+            allspacing
+            command <- readAndOr
+            return $ T_ForIn id ShortForIn names words [command]
+
+    readNames =
+        reluctantlyTill1 (readVariableName `thenSkip` spacing) $
+            disregard g_Do <|> disregard readInClause <|> disregard readSequentialSep
 
 prop_readSelectClause1 = isOk readSelectClause "select foo in *; do echo $foo; done"
 prop_readSelectClause2 = isOk readSelectClause "select foo; do echo $foo; done"
@@ -1705,7 +1720,7 @@ readFunctionDefinition = called "function" $ do
                 g_Rparen
             return ()
 
-        readFunctionName = many1 functionChars
+        readFunctionName = many functionChars
 
 readPattern = (readNormalWord `thenSkip` spacing) `sepBy1` (char '|' `thenSkip` spacing)
 

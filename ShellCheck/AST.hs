@@ -28,6 +28,7 @@ data Dashed = Dashed | Undashed deriving (Show, Eq)
 data AssignmentMode = Assign | Append deriving (Show, Eq)
 data FunctionKeyword = FunctionKeyword Bool deriving (Show, Eq)
 data FunctionParentheses = FunctionParentheses Bool deriving (Show, Eq)
+data ForInType = NormalForIn | ShortForIn deriving (Show, Eq)
 
 data Token =
     TA_Base Id String Token
@@ -81,7 +82,7 @@ data Token =
     | T_Fi Id
     | T_For Id
     | T_ForArithmetic Id Token Token Token [Token]
-    | T_ForIn Id String [Token] [Token]
+    | T_ForIn Id ForInType [String] [Token] [Token]
     | T_Function Id FunctionKeyword FunctionParentheses String Token
     | T_GREATAND Id
     | T_Glob Id String
@@ -202,7 +203,7 @@ analyze f g i =
     delve (T_BraceGroup id l) = dl l $ T_BraceGroup id
     delve (T_WhileExpression id c l) = dll c l $ T_WhileExpression id
     delve (T_UntilExpression id c l) = dll c l $ T_UntilExpression id
-    delve (T_ForIn id v w l) = dll w l $ T_ForIn id v
+    delve (T_ForIn id t v w l) = dll w l $ T_ForIn id t v
     delve (T_SelectIn id v w l) = dll w l $ T_SelectIn id v
     delve (T_CaseExpression id word cases) = do
         newWord <- round word
@@ -308,7 +309,7 @@ getId t = case t of
         T_BraceGroup id _  -> id
         T_WhileExpression id _ _  -> id
         T_UntilExpression id _ _  -> id
-        T_ForIn id _ _ _  -> id
+        T_ForIn id _ _ _ _  -> id
         T_SelectIn id _ _ _  -> id
         T_CaseExpression id _ _ -> id
         T_Function id _ _ _ _  -> id
