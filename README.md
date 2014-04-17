@@ -61,12 +61,12 @@ Text.Regex. To run the unit tests, it also requires QuickCheck2.
 On Fedora, these can be installed with:
 
     yum install ghc ghc-parsec-devel ghc-QuickCheck-devel \
-      ghc-json-devel ghc-regex-compat-devel
+      ghc-json-devel ghc-regex-compat-devel pandoc
 
 On Ubuntu and similar, use:
 
     apt-get install ghc libghc-parsec3-dev libghc-json-dev \
-      libghc-regex-compat-dev libghc-quickcheck2-dev
+      libghc-regex-compat-dev libghc-quickcheck2-dev pandoc
 
 To build and run the tests, cd to the shellcheck source directory and:
 
