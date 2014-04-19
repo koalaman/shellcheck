@@ -939,7 +939,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
             otherwise -> False
 
     re = mkRegex "\\$[{(0-9a-zA-Z_]"
-    sedContra = mkRegex "\\$[dp]($|[^a-zA-Z])"
+    sedContra = mkRegex "\\$[dpsaic]($|[^a-zA-Z])"
 checkSingleQuotedVariables _ _ = return ()
 
 
