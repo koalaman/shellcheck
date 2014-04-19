@@ -55,6 +55,7 @@ treeChecks = [
     ,checkFunctionsUsedExternally
     ,checkUnusedAssignments
     ,checkUnpassedInFunctions
+    ,checkArrayWithoutIndex
     ]
 
 checksFor Sh = [
@@ -853,6 +854,27 @@ checkArrayAsString _ (T_Assignment id _ _ _ word) =
         warn (getId word) 2125
           "Brace expansions and globs are literal in assignments. Quote it or use an array."
 checkArrayAsString _ _ = return ()
+
+prop_checkArrayWithoutIndex1 = verifyTree checkArrayWithoutIndex "foo=(a b); echo $foo"
+prop_checkArrayWithoutIndex2 = verifyNotTree checkArrayWithoutIndex "foo='bar baz'; foo=($foo); echo ${foo[0]}"
+checkArrayWithoutIndex params _ =
+    concat $ doVariableFlowAnalysis readF writeF Map.empty (variableFlow params)
+  where
+    readF _ (T_DollarBraced id token) _ = do
+        map <- get
+        return . maybeToList $ do
+            name <- getLiteralString token
+            assignment <- Map.lookup name map
+            return [(Note id WarningC 2128
+                "Expanding an array without an index only gives the first element.")]
+    readF _ _ _ = return []
+
+    writeF _ t name (DataFrom [T_Array {}]) = do
+        modify (Map.insert name t)
+        return []
+    writeF _ _ name _ = do
+        modify (Map.delete name)
+        return []
 
 prop_checkStderrRedirect = verify checkStderrRedirect "test 2>&1 > cow"
 prop_checkStderrRedirect2 = verifyNot checkStderrRedirect "test > cow 2>&1"
