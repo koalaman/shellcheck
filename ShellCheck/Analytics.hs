@@ -1840,7 +1840,9 @@ getReferencedVariableCommand _ = []
 getModifiedVariableCommand base@(T_SimpleCommand _ _ ((T_NormalWord _ ((T_Literal _ x):_)):rest)) =
    filter (\(_,_,s,_) -> not ("-" `isPrefixOf` s)) $
     case x of
-        "read" ->  concatMap getLiteral rest
+        "read" ->
+            let params = map getLiteral rest in
+                catMaybes . takeWhile isJust . reverse $ params
         "let" -> concatMap letParamToLiteral rest
 
         "export" -> concatMap getModifierParam rest
@@ -1858,13 +1860,10 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ ((T_NormalWord _ ((T_Litera
         (T_NormalWord id1 [T_DoubleQuoted id2 [T_Literal id3 (stripEquals s)]])
     stripEqualsFrom t = t
 
-    getLiteral t@(T_NormalWord _ [T_Literal _ s]) =
-        [(base, t, s, DataExternal)]
-    getLiteral t@(T_NormalWord _ [T_SingleQuoted _ s]) =
-        [(base, t, s, DataExternal)]
-    getLiteral t@(T_NormalWord _ [T_DoubleQuoted _ [T_Literal id s]]) =
-        [(base, t, s, DataExternal)]
-    getLiteral x = []
+    getLiteral t = do
+        s <- getLiteralString t
+        when ("-" `isPrefixOf` s) $ fail "argument"
+        return (base, t, s, DataExternal)
 
     getModifierParam t@(T_Assignment _ _ name _ value) =
         [(base, t, name, DataFrom [value])]
@@ -2151,6 +2150,7 @@ prop_checkUnused13= verifyNotTree checkUnusedAssignments "x=(1); (( x[0] ))"
 prop_checkUnused14= verifyNotTree checkUnusedAssignments "x=(1); n=0; echo ${x[n]}"
 prop_checkUnused15= verifyNotTree checkUnusedAssignments "x=(1); n=0; (( x[n] ))"
 prop_checkUnused16= verifyNotTree checkUnusedAssignments "foo=5; declare -x foo"
+prop_checkUnused17= verifyNotTree checkUnusedAssignments "read -i 'foo' -e -p 'Input: ' bar; $bar;"
 checkUnusedAssignments params t = snd $ runWriter (mapM_ checkAssignment flow)
   where
     flow = variableFlow params
