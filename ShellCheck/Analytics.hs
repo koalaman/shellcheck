@@ -193,6 +193,7 @@ nodeChecks = [
     ,checkOverridingPath
     ,checkArrayAsString
     ,checkUnsupported
+    ,checkMultipleAppends
     ]
 
 
@@ -2625,3 +2626,40 @@ shellSupport t =
     T_ForIn _ _ (_:_:_) _ _ -> ("multi-index for loops", [Zsh])
     T_ForIn _ ShortForIn _ _ _ -> ("short form for loops", [Zsh])
     otherwise -> ("", [Bash, Ksh, Sh, Zsh])
+
+getCommandSequences t =
+    f t
+  where
+    f (T_Script _ _ cmds) = [cmds]
+    f (T_BraceGroup _ cmds) = [cmds]
+    f (T_Subshell _ cmds) = [cmds]
+    f (T_WhileExpression _ _ cmds) = [cmds]
+    f (T_UntilExpression _ _ cmds) = [cmds]
+    f (T_ForIn _ _ _ _ cmds) = [cmds]
+    f (T_ForArithmetic _ _ _ _ cmds) = [cmds]
+    f (T_IfExpression _ thens elses) = elses:(map snd thens)
+    f _ = []
+
+groupWith f l = groupBy (\x y -> f x == f y) l
+
+prop_checkMultipleAppends1 = verify checkMultipleAppends "foo >> file; bar >> file; baz >> file;"
+prop_checkMultipleAppends2 = verify checkMultipleAppends "foo >> file; bar | grep f >> file; baz >> file;"
+prop_checkMultipleAppends3 = verifyNot checkMultipleAppends "foo < file; bar < file; baz < file;"
+checkMultipleAppends params t =
+    mapM_ checkList $ getCommandSequences t
+  where
+    checkList list =
+        mapM_ checkGroup groups
+      where
+        groups = groupWith (liftM fst) $ map getTarget list
+    checkGroup (f:_:_:_) | isJust f =
+        style (snd $ fromJust f) 2129
+            "Consider using { cmd1; cmd2; } >> file instead of individual redirects."
+    checkGroup _ = return ()
+    getTarget (T_Pipeline _ _ args@(_:_)) = getTarget (last args)
+    getTarget (T_Redirecting id list _) = do
+        file <- (mapMaybe getAppend list) !!! 0
+        return (file, id)
+    getTarget _ = Nothing
+    getAppend (T_FdRedirect _ _ (T_IoFile _ (T_DGREAT {}) f)) = return f
+    getAppend _ = Nothing
