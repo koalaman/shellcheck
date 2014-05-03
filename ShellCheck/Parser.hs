@@ -1271,8 +1271,8 @@ readHereString = called "here string" $ do
 readNewlineList = many1 ((newline <|> carriageReturn) `thenSkip` spacing)
 readLineBreak = optional readNewlineList
 
-prop_roflol = isWarning readScript "a &; b"
-prop_roflol2 = isOk readScript "a & b"
+prop_readSeparator1 = isWarning readScript "a &; b"
+prop_readSeparator2 = isOk readScript "a & b"
 readSeparatorOp = do
     notFollowedBy2 (g_AND_IF <|> g_DSEMI)
     notFollowedBy2 (string "&>")
@@ -1917,6 +1917,10 @@ prop_readScript4 = isWarning readScript "#!/usr/bin/perl\nfoo=("
 readScript = do
     id <- getNextId
     pos <- getPosition
+    optional $ do
+        readUtf8Bom
+        parseProblem ErrorC 1082 $
+            "This file has a UTF-8 BOM. Remove it with: LC_CTYPE=C sed '1s/^...//' < yourscript ."
     sb <- option "" readShebang
     verifyShell pos (getShell sb)
     if (isValidShell $ getShell sb) /= Just False
@@ -1975,6 +1979,8 @@ readScript = do
         "ruby",
         "tcsh"
         ]
+
+    readUtf8Bom = called "Byte Order Mark" $ string "\xFEFF"
 
 rp p filename contents = Ms.runState (runParserT p initialState filename contents) ([], [])
 
