@@ -1137,7 +1137,6 @@ readDollarLonely = do
     pos <- getPosition
     char '$'
     n <- lookAhead (anyChar <|> (eof >> return '_'))
-    when (n /= '\'') $ parseNoteAt pos StyleC 1000 "$ is not used specially and should therefore be escaped."
     return $ T_Literal id "$"
 
 prop_readHereDoc = isOk readHereDoc "<< foo\nlol\ncow\nfoo"
