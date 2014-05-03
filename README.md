@@ -37,9 +37,13 @@ On Mac OS X with MacPorts (http://www.macports.org/):
 
     port install hs-cabal-install
 
-With cabal installed, cd to the ShellCheck source directory and:
+Let cabal update itself, in case your distro version is outdated:
 
     $ cabal update
+    $ cabal install cabal-install
+
+With cabal installed, cd to the ShellCheck source directory and:
+
     $ cabal install
     
 This will install ShellCheck to your ~/.cabal/bin directory.
