@@ -2625,6 +2625,7 @@ shellSupport t =
     T_Function _ _ _ "" _ -> ("anonymous functions", [Zsh])
     T_ForIn _ _ (_:_:_) _ _ -> ("multi-index for loops", [Zsh])
     T_ForIn _ ShortForIn _ _ _ -> ("short form for loops", [Zsh])
+    T_ProcSub _ "=" _ -> ("=(..) process substitution", [Zsh])
     otherwise -> ("", [Bash, Ksh, Sh, Zsh])
 
 getCommandSequences t =

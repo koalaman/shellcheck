@@ -64,6 +64,11 @@ spacing = do
     optional readComment
     return $ concat x
 
+spacing1 = do
+    spacing <- spacing
+    when (null spacing) $ fail "no spacing"
+    return spacing
+
 prop_allspacing = isOk allspacing "#foo"
 prop_allspacing2 = isOk allspacing " #foo\n # bar\n#baz\n"
 prop_allspacing3 = isOk allspacing "#foo\n#bar\n#baz\n"
@@ -745,10 +750,11 @@ readDollarBracedLiteral = do
 
 prop_readProcSub1 = isOk readProcSub "<(echo test | wc -l)"
 prop_readProcSub2 = isOk readProcSub "<(  if true; then true; fi )"
+prop_readProcSub3 = isOk readProcSub "=(ls)"
 readProcSub = called "process substitution" $ do
     id <- getNextId
     dir <- try $ do
-                    x <- oneOf "<>"
+                    x <- oneOf "<>="
                     char '('
                     return [x]
     allspacing
@@ -1317,6 +1323,7 @@ prop_readSimpleCommand3 = isOk readSimpleCommand "export foo=(bar baz)"
 prop_readSimpleCommand4 = isOk readSimpleCommand "typeset -a foo=(lol)"
 prop_readSimpleCommand5 = isOk readSimpleCommand "time if true; then echo foo; fi"
 prop_readSimpleCommand6 = isOk readSimpleCommand "time -p ( ls -l; )"
+prop_readSimpleCommand7 = isOk readSimpleCommand "cat =(ls)"
 readSimpleCommand = called "simple command" $ do
     id1 <- getNextId
     id2 <- getNextId
@@ -1768,6 +1775,9 @@ readAssignmentWord = try $ do
     pos <- getPosition
     optional (char '$' >> parseNote ErrorC 1066 "Don't use $ on the left side of assignments.")
     variable <- readVariableName
+    notFollowedBy2 $ do -- Special case for zsh =(..) syntax
+        spacing1
+        string "=("
     optional (readNormalDollar >> parseNoteAt pos ErrorC
                                 1067 "For indirection, use (associative) arrays or 'read \"var$n\" <<< \"value\"'")
     index <- optionMaybe readArrayIndex
