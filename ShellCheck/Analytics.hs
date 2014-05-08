@@ -1605,6 +1605,8 @@ checkIndirectExpansion _ _ = return ()
 prop_checkInexplicablyUnquoted1 = verify checkInexplicablyUnquoted "echo 'var='value';'"
 prop_checkInexplicablyUnquoted2 = verifyNot checkInexplicablyUnquoted "'foo'*"
 prop_checkInexplicablyUnquoted3 = verifyNot checkInexplicablyUnquoted "wget --user-agent='something'"
+prop_checkInexplicablyUnquoted4 = verify checkInexplicablyUnquoted "echo \"VALUES (\"id\")\""
+prop_checkInexplicablyUnquoted5 = verifyNot checkInexplicablyUnquoted "\"$dir\"/\"$file\""
 checkInexplicablyUnquoted _ (T_NormalWord id tokens) = mapM_ check (tails tokens)
   where
     check ((T_SingleQuoted _ _):(T_Literal id str):_)
@@ -1613,13 +1615,16 @@ checkInexplicablyUnquoted _ (T_NormalWord id tokens) = mapM_ check (tails tokens
 
     check ((T_DoubleQuoted _ _):trapped:(T_DoubleQuoted _ _):_) =
         case trapped of
-            T_DollarExpansion id _ -> warnAbout id
-            T_DollarBraced id _ -> warnAbout id
+            T_DollarExpansion id _ -> warnAboutExpansion id
+            T_DollarBraced id _ -> warnAboutExpansion id
+            T_Literal id s -> unless (s == "/") $ warnAboutLiteral id
             _ -> return ()
 
     check _ = return ()
-    warnAbout id =
-        info id 2027 $ "Surrounding quotes actually unquotes this (\"inside\"$outside\"inside\"). Did you forget your quote level?"
+    warnAboutExpansion id =
+        warn id 2027 $ "The surrounding quotes actually unquote this. Remove or escape them."
+    warnAboutLiteral id =
+        warn id 2140 $ "The double quotes around this do nothing. Remove or escape them."
 checkInexplicablyUnquoted _ _ = return ()
 
 prop_checkTildeInQuotes1 = verify checkTildeInQuotes "var=\"~/out.txt\""
