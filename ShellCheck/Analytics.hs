@@ -121,6 +121,8 @@ shellForExecutable _ = Nothing
 
 -- Checks that are run on each node in the AST
 runNodeAnalysis f p t = execWriter (doAnalysis (f p) t)
+
+nodeChecks :: [Parameters -> Token -> Writer [Note] ()]
 nodeChecks = [
     checkUuoc
     ,checkPipePitfalls
@@ -194,6 +196,7 @@ nodeChecks = [
     ,checkArrayAsString
     ,checkUnsupported
     ,checkMultipleAppends
+    ,checkAliasesExpandEarly
     ]
 
 
@@ -330,9 +333,16 @@ getFlags _ = []
         [] -> Nothing
         (r:_) -> Just r
 
+verify :: (Parameters -> Token -> Writer [a] ()) -> String -> Bool
 verify f s = checkNode f s == Just True
+
+verifyNot :: (Parameters -> Token -> Writer [a] ()) -> String -> Bool
 verifyNot f s = checkNode f s == Just False
+
+verifyTree :: (Parameters -> Token -> [a]) -> String -> Bool
 verifyTree f s = checkTree f s == Just True
+
+verifyNotTree :: (Parameters -> Token -> [a]) -> String -> Bool
 verifyNotTree f s = checkTree f s == Just False
 
 checkNode f = checkTree (runNodeAnalysis f)
@@ -1311,6 +1321,13 @@ getLiteralStringExt more t = g t
     g x = more x
 
 isLiteral t = isJust $ getLiteralString t
+
+-- turn a NormalWord like foo="bar $baz" into a series of constituent elements like [foo=,bar ,$baz]
+getWordParts t = g t
+  where
+    g (T_NormalWord _ l) = concatMap g l
+    g (T_DoubleQuoted _ l) = l
+    g other = [other]
 
 isCommand token str = isCommandMatch token (\cmd -> cmd  == str || ("/" ++ str) `isSuffixOf` cmd)
 isUnqualifiedCommand token str = isCommandMatch token (\cmd -> cmd  == str)
@@ -2664,3 +2681,16 @@ checkMultipleAppends params t =
     getTarget _ = Nothing
     getAppend (T_FdRedirect _ _ (T_IoFile _ (T_DGREAT {}) f)) = return f
     getAppend _ = Nothing
+
+
+prop_checkAliasesExpandEarly1 = verify checkAliasesExpandEarly "alias foo=\"echo $PWD\""
+prop_checkAliasesExpandEarly2 = verifyNot checkAliasesExpandEarly "alias -p"
+prop_checkAliasesExpandEarly3 = verifyNot checkAliasesExpandEarly "alias foo='echo {1..10}'"
+checkAliasesExpandEarly params =
+    checkUnqualifiedCommand "alias" (const f)
+  where
+    f = mapM_ checkArg
+    checkArg arg | '=' `elem` (concat $ deadSimple arg) =
+        flip mapM_ (take 1 $ filter (not . isLiteral) $ getWordParts arg) $
+            \x -> warn (getId x) 2139 "This expands when defined, not when used. Consider escaping."
+    checkArg _ = return ()
