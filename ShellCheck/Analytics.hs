@@ -701,8 +701,8 @@ checkForInLs _ t = try t
     case deadSimple x of
       ("ls":n) ->
         let warntype = if any ("-" `isPrefixOf`) n then warn else err in
-          warntype id 2045 $ "Iterate over globs whenever possible (e.g. 'for f in */*.wav'), as for loops over ls will fail for filenames like 'my file*.txt'."
-      ("find":_) -> warn id 2044 $ "Use find -exec or a while read loop instead, as for loops over find will fail for filenames like 'my file*.txt'."
+          warntype id 2045 "Iterating over ls output is fragile. Use globs."
+      ("find":_) -> warn id 2044 "For loops over find output are fragile. Use find -exec or a while read loop."
       _ -> return ()
 
 
