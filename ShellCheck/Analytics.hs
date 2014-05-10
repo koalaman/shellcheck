@@ -814,7 +814,7 @@ checkShorthandIf _ (T_AndIf id _ (T_OrIf _ _ (T_Pipeline _ _ t)))
   where
     isOk [t] = isAssignment t || (fromMaybe False $ do
         name <- getCommandBasename t
-        return $ name `elem` ["echo", "exit"])
+        return $ name `elem` ["echo", "exit", "return"])
     isOk _ = False
 checkShorthandIf _ _ = return ()
 
