@@ -970,8 +970,11 @@ prop_checkNumberComparisons7 = verifyNot checkNumberComparisons "[[ 3.14 == $foo
 prop_checkNumberComparisons8 = verify checkNumberComparisons "[[ foo <= bar ]]"
 prop_checkNumberComparisons9 = verify checkNumberComparisons "[ foo \\>= bar ]"
 prop_checkNumberComparisons10= verify checkNumberComparisons "#!/bin/zsh -x\n[ foo >= bar ]]"
+prop_checkNumberComparisons11= verify checkNumberComparisons "[[ $foo -eq 'N' ]]"
+prop_checkNumberComparisons12= verify checkNumberComparisons "[ x$foo -gt x${N} ]"
 checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
-    if (isNum lhs || isNum rhs)
+    if (isNum lhs && (not $ isNonNum rhs)
+            || isNum rhs && (not $ isNonNum lhs))
       then do
         when (isLtGt op) $
           err id 2071 $
@@ -989,6 +992,7 @@ checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
 
     when (op `elem` ["-lt", "-gt", "-le", "-ge", "-eq"]) $ do
         mapM_ checkDecimals [lhs, rhs]
+        checkStrings [lhs, rhs]
 
   where
       isLtGt = flip elem ["<", "\\<", ">", "\\>"]
@@ -1002,6 +1006,17 @@ checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
             err (getId hs) 2072 decimalError
       decimalError = "Decimals are not supported. " ++
         "Either use integers only, or use bc or awk to compare."
+
+      checkStrings hs =
+        mapM_ stringError . take 1 . filter isNonNum $ hs
+
+      isNonNum t = fromMaybe False $ do
+        s <- getLiteralStringExt (const $ return "") t
+        return . not . all numChar $ s
+      numChar x = isDigit x || x `elem` "+-. "
+
+      stringError t = err (getId t) 2130 $
+        op ++ " is for integer comparisons. Use " ++ (seqv op) ++ " instead."
 
       isNum t =
         case deadSimple t of
@@ -1018,6 +1033,15 @@ checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
       eqv "<=" = "-le"
       eqv ">=" = "-ge"
       eqv _ = "the numerical equivalent"
+
+      esc = if typ == SingleBracket then "\\" else ""
+      seqv "-ge" = "! a " ++ esc ++ "< b"
+      seqv "-gt" = esc ++ ">"
+      seqv "-le" = "! a " ++ esc ++ "> b"
+      seqv "-lt" = esc ++ "<"
+      seqv "-eq" = "="
+      seqv "-ne" = "!="
+      seqv _ = "the string equivalent"
 
       invert ('\\':s) = invert s
       invert "<=" = ">"
