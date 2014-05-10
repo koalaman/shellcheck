@@ -705,6 +705,8 @@ prop_readNormalWord = isOk readNormalWord "'foo'\"bar\"{1..3}baz$(lol)"
 prop_readNormalWord2 = isOk readNormalWord "foo**(foo)!!!(@@(bar))"
 prop_readNormalWord3 = isOk readNormalWord "foo#"
 prop_readNormalWord4 = isOk readNormalWord "$\"foo\"$'foo\nbar'"
+prop_readNormalWord5 = isWarning readNormalWord "${foo}}"
+prop_readNormalWord6 = isOk readNormalWord "foo/{}"
 readNormalWord = readNormalishWord ""
 
 readNormalishWord end = do
@@ -715,20 +717,43 @@ readNormalishWord end = do
     return $ T_NormalWord id x
 
 checkPossibleTermination pos [T_Literal _ x] =
-    if x `elem` ["do", "done", "then", "fi", "esac", "}"]
+    if x `elem` ["do", "done", "then", "fi", "esac"]
         then parseProblemAt pos WarningC 1010 $ "Use semicolon or linefeed before '" ++ x ++ "' (or quote to make it literal)."
         else return ()
 checkPossibleTermination _ _ = return ()
 
 readNormalWordPart end = do
     checkForParenthesis
-    readSingleQuoted <|> readDoubleQuoted <|> readGlob <|> readNormalDollar <|> readBraced <|> readBackTicked <|> readProcSub <|> (readNormalLiteral end)
+    choice [
+        readSingleQuoted,
+        readDoubleQuoted,
+        readGlob,
+        readNormalDollar,
+        readBraced,
+        readBackTicked,
+        readProcSub,
+        readNormalLiteral end,
+        readLiteralCurlyBraces
+      ]
   where
     checkForParenthesis = do
         return () `attempting` do
             pos <- getPosition
             lookAhead $ char '('
             parseProblemAt pos ErrorC 1036 "'(' is invalid here. Did you forget to escape it?"
+
+    readLiteralCurlyBraces = do
+        id <- getNextId
+        str <- findParam <|> literalBraces
+        return $ T_Literal id str
+
+    findParam = try $ string "{}"
+    literalBraces = do
+        pos <- getPosition
+        c <- oneOf "{}"
+        parseProblemAt pos WarningC 1083 $
+            "This " ++ [c] ++ " is literal. Check expression (missing ;/\\n?) or quote it."
+        return [c]
 
 
 readSpacePart = do
@@ -928,7 +953,7 @@ readGlob = readExtglob <|> readSimple <|> readClass <|> readGlobbyLiteral
             return $ T_Literal id [c]
 
 readNormalLiteralPart end = do
-    readNormalEscaped <|> (many1 $ noneOf (end ++ quotableChars ++ extglobStartChars ++ "["))
+    readNormalEscaped <|> (many1 $ noneOf (end ++ quotableChars ++ extglobStartChars ++ "[{}"))
 
 readNormalEscaped = called "escaped char" $ do
     pos <- getPosition
@@ -1033,7 +1058,10 @@ readBraced = try $ do
     char '{'
     str <- many1 ((readDoubleQuotedLiteral >>= (strip)) <|> readGenericLiteral1 (oneOf "}\"" <|> whitespace))
     char '}'
-    return $ T_BraceExpansion id $ concat str
+    let result = concat str
+    unless (',' `elem` result || ".." `isInfixOf` result) $
+        fail "Not a brace expression"
+    return $ T_BraceExpansion id $ result
 
 readNormalDollar = readDollarExpression <|> readDollarDoubleQuote <|> readDollarSingleQuote <|> readDollarLonely
 readDoubleQuotedDollar = readDollarExpression <|> readDollarLonely
@@ -1083,7 +1111,7 @@ readArithmeticExpression = called "((..)) command" $ do
 
 prop_readDollarBraced1 = isOk readDollarBraced "${foo//bar/baz}"
 prop_readDollarBraced2 = isOk readDollarBraced "${foo/'{cow}'}"
-prop_readDollarBraced3 = isOk readDollarBraced "${foo%%$(echo cow})}"
+prop_readDollarBraced3 = isOk readDollarBraced "${foo%%$(echo cow\\})}"
 prop_readDollarBraced4 = isOk readDollarBraced "${foo#\\}}"
 readDollarBraced = called "parameter expansion" $ do
     id <- getNextId
