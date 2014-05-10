@@ -197,6 +197,7 @@ nodeChecks = [
     ,checkUnsupported
     ,checkMultipleAppends
     ,checkAliasesExpandEarly
+    ,checkSuspiciousIFS
     ]
 
 
@@ -2723,3 +2724,22 @@ checkAliasesExpandEarly params =
         flip mapM_ (take 1 $ filter (not . isLiteral) $ getWordParts arg) $
             \x -> warn (getId x) 2139 "This expands when defined, not when used. Consider escaping."
     checkArg _ = return ()
+
+prop_checkSuspiciousIFS1 = verify checkSuspiciousIFS "IFS=\"\\n\""
+prop_checkSuspiciousIFS2 = verifyNot checkSuspiciousIFS "IFS=$'\\t'"
+checkSuspiciousIFS params (T_Assignment id Assign "IFS" Nothing value) =
+    potentially $ do
+        str <- getLiteralString value
+        return $ check str
+  where
+    n = if (shellType params == Sh) then "'<literal linefeed here>'" else "$'\\n'"
+    t = if (shellType params == Sh) then "\"$(printf '\\t')\"" else "$'\\t'"
+    check value =
+        case value of
+            "\\n" -> suggest n
+            "/n" -> suggest n
+            "\\t" -> suggest t
+            "/t" -> suggest t
+            _ -> return ()
+    suggest r = warn id 2141 $ "Did you mean IFS=" ++ r ++ " ?"
+checkSuspiciousIFS _ _ = return ()

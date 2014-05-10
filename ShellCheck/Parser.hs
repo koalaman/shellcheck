@@ -965,10 +965,12 @@ readNormalEscaped = called "escaped char" $ do
         do
             next <- anyChar
             case escapedChar next of
-                Just name -> parseNoteAt pos WarningC 1012 $ "\\" ++ [next] ++ " is just literal '" ++ [next] ++ "' here. For " ++ name ++ ", use \"$(printf \"\\" ++ [next] ++ "\")\"."
+                Just name -> parseNoteAt pos WarningC 1012 $ "\\" ++ [next] ++ " is just literal '" ++ [next] ++ "' here. For " ++ name ++ ", use " ++ (alternative next) ++ " instead."
                 Nothing -> parseNoteAt pos InfoC 1001 $ "This \\" ++ [next] ++ " will be a regular '" ++ [next] ++ "' in this context."
             return [next]
   where
+    alternative 'n' = "a quoted, literal line feed"
+    alternative t = "\"$(printf \"\\" ++ [t] ++ "\")\""
     escapedChar 'n' = Just "line feed"
     escapedChar 't' = Just "tab"
     escapedChar 'r' = Just "carriage return"
