@@ -1281,6 +1281,8 @@ readSeparatorOp = do
                     spacing
                     pos <- getPosition
                     char ';'
+                    -- In case statements we might have foo & ;;
+                    notFollowedBy2 $ char ';'
                     parseProblemAt pos ErrorC 1045 "It's not 'foo &; bar', just 'foo & bar'."
                     return '&'
             ) <|> char ';' <|> char '&'
@@ -1653,6 +1655,7 @@ readInClause = do
 
 prop_readCaseClause = isOk readCaseClause "case foo in a ) lol; cow;; b|d) fooo; esac"
 prop_readCaseClause2 = isOk readCaseClause "case foo\n in * ) echo bar;; esac"
+prop_readCaseClause3 = isOk readCaseClause "case foo\n in * ) echo bar & ;; esac"
 readCaseClause = called "case expression" $ do
     id <- getNextId
     g_Case
