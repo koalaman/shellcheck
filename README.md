@@ -76,5 +76,8 @@ To build and run the tests, cd to the shellcheck source directory and:
 
     $ make
 
+If you want to distribute the binary and/or run it on other distros, you
+can `make shellcheck-static` to build a statically linked executable without
+library dependencies.
 
 Happy ShellChecking!
