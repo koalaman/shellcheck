@@ -408,7 +408,7 @@ readConditionContents single = do
       where
         readGlobLiteral = do
             id <- getNextId
-            s <- many1 (extglobStart <|> oneOf "[]$")
+            s <- many1 (extglobStart <|> oneOf "{}[]$")
             return $ T_Literal id s
         readGroup = called "regex grouping" $ do
             id <- getNextId
@@ -637,6 +637,7 @@ prop_readCondition9 = isOk readCondition "[ foo -a -f bar ]"
 prop_readCondition10= isOk readCondition "[[ a == b \n || c == d ]]"
 prop_readCondition11= isOk readCondition "[[ a == b || \n c == d ]]"
 prop_readCondition12= isWarning readCondition "[ a == b \n -o c == d ]"
+prop_readCondition13= isOk readCondition "[[ foo =~ ^fo{1,3}$ ]]"
 readCondition = called "test expression" $ do
     opos <- getPosition
     id <- getNextId
