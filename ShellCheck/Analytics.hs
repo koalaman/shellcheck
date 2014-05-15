@@ -1490,13 +1490,14 @@ prop_checkGrepRe7 = verify checkGrepRe "grep *foo* file"
 prop_checkGrepRe8 = verify checkGrepRe "ls | grep foo*.jpg"
 prop_checkGrepRe9 = verifyNot checkGrepRe "grep '[0-9]*' file"
 prop_checkGrepRe10= verifyNot checkGrepRe "grep '^aa*' file"
+prop_checkGrepRe11= verifyNot checkGrepRe "grep --include=*.png foo"
 
 checkGrepRe _ = checkCommand "grep" (const f) where
     -- --regex=*(extglob) doesn't work. Fixme?
     skippable (Just s) = not ("--regex=" `isPrefixOf` s) && "-" `isPrefixOf` s
     skippable _ = False
     f [] = return ()
-    f (x:r) | skippable (getLiteralString x) = f r
+    f (x:r) | skippable (getLiteralStringExt (const $ return "_") x) = f r
     f (re:_) = do
         when (isGlob re) $ do
             warn (getId re) 2062 $ "Quote the grep pattern so the shell won't interpret it."
