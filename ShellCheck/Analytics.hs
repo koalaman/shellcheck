@@ -198,6 +198,7 @@ nodeChecks = [
     ,checkMultipleAppends
     ,checkAliasesExpandEarly
     ,checkSuspiciousIFS
+    ,checkAliasesUsesArgs
     ]
 
 
@@ -939,6 +940,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
                 ,"zsh"
                 ,"ssh"
                 ,"xprop"
+                ,"alias"
                 ]
             || "awk" `isSuffixOf` commandName
             || "perl" `isPrefixOf` commandName
@@ -2744,3 +2746,18 @@ checkSuspiciousIFS params (T_Assignment id Assign "IFS" Nothing value) =
             _ -> return ()
     suggest r = warn id 2141 $ "Did you mean IFS=" ++ r ++ " ?"
 checkSuspiciousIFS _ _ = return ()
+
+prop_checkAliasesUsesArgs1 = verify checkAliasesUsesArgs "alias a='cp $1 /a'"
+prop_checkAliasesUsesArgs2 = verifyNot checkAliasesUsesArgs "alias $1='foo'"
+prop_checkAliasesUsesArgs3 = verify checkAliasesUsesArgs "alias a=\"echo \\${@}\""
+checkAliasesUsesArgs params =
+    checkUnqualifiedCommand "alias" (const f)
+  where
+    re = mkRegex "\\$\\{?[0-9*@]"
+    f = mapM_ checkArg
+    checkArg arg =
+        let string = fromJust $ getLiteralStringExt (const $ return "_") arg in
+            when ('=' `elem` string && string `matches` re) $
+                err (getId arg) 2142
+                    "Aliases can't use positional parameters. Use a function."
+
