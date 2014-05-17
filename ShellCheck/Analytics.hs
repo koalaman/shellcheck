@@ -199,6 +199,7 @@ nodeChecks = [
     ,checkAliasesExpandEarly
     ,checkSuspiciousIFS
     ,checkAliasesUsesArgs
+    ,checkShouldUseGrepQ
     ]
 
 
@@ -2761,3 +2762,37 @@ checkAliasesUsesArgs params =
                 err (getId arg) 2142
                     "Aliases can't use positional parameters. Use a function."
 
+prop_checkGrepQ1= verify checkShouldUseGrepQ "[[ $(foo | grep bar) ]]"
+prop_checkGrepQ2= verify checkShouldUseGrepQ "[ -z $(fgrep lol) ]"
+prop_checkGrepQ3= verify checkShouldUseGrepQ "[ -n \"$(foo | zgrep lol)\" ]"
+prop_checkGrepQ4= verifyNot checkShouldUseGrepQ "[ -z $(grep bar | cmd) ]"
+prop_checkGrepQ5= verifyNot checkShouldUseGrepQ "rm $(ls | grep file)"
+checkShouldUseGrepQ params t =
+    potentially $ case t of
+        TC_Noary id _ token -> check id True token
+        TC_Unary id _ "-n" token -> check id True token
+        TC_Unary id _ "-z" token -> check id False token
+        _ -> fail "not check"
+  where
+    check id bool token = do
+        name <- getFinalGrep token
+        let op = if bool then "-n" else "-z"
+        let flip = if bool then "" else "! "
+        return . style id 2143 $
+            "Instead of [ " ++ op ++ " $(foo | " ++ name ++ " bar) ], " ++
+                "use " ++ flip ++ "foo | " ++ name ++ " -q bar ."
+
+    getFinalGrep t = do
+        cmds <- getPipeline t
+        guard . not . null $ cmds
+        name <- getCommandBasename $ last cmds
+        guard . isGrep $ name
+        return name
+    getPipeline t =
+        case t of
+            T_NormalWord _ [x] -> getPipeline x
+            T_DoubleQuoted _ [x] -> getPipeline x
+            T_DollarExpansion _ [x] -> getPipeline x
+            T_Pipeline _ _ cmds -> return cmds
+            _ -> fail "unknown"
+    isGrep = isSuffixOf "grep"
