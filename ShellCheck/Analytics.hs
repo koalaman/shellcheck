@@ -1279,7 +1279,9 @@ isQuoteFree tree t =
             T_CaseExpression _ _ _ -> return True
             T_HereDoc _ _ _ _ _ -> return True
             T_DollarBraced {} -> return True
-            T_ForIn {} -> return True -- Pragmatically assume it's desirable here
+            -- Pragmatically assume it's desirable to split here
+            T_ForIn {} -> return True
+            T_SelectIn {} -> return True
             _ -> Nothing
 
 isParamTo tree cmd t =
@@ -2047,6 +2049,7 @@ prop_checkSpacefulnessH = verifyTree checkSpacefulness "echo foo=$1"
 prop_checkSpacefulnessI = verifyNotTree checkSpacefulness "$1 --flags"
 prop_checkSpacefulnessJ = verifyTree checkSpacefulness "echo $PWD"
 prop_checkSpacefulnessK = verifyNotTree checkSpacefulness "n+='foo bar'"
+prop_checkSpacefulnessL = verifyNotTree checkSpacefulness "select foo in $bar; do true; done"
 
 checkSpacefulness params t =
     doVariableFlowAnalysis readF writeF (Map.fromList defaults) (variableFlow params)
