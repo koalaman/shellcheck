@@ -200,6 +200,7 @@ nodeChecks = [
     ,checkSuspiciousIFS
     ,checkAliasesUsesArgs
     ,checkShouldUseGrepQ
+    ,checkTestGlobs
     ]
 
 
@@ -2800,3 +2801,10 @@ checkShouldUseGrepQ params t =
             T_Pipeline _ _ cmds -> return cmds
             _ -> fail "unknown"
     isGrep = isSuffixOf "grep"
+
+prop_checkTestGlobs1 = verify checkTestGlobs "[ -e *.mp3 ]"
+prop_checkTestGlobs2 = verifyNot checkTestGlobs "[[ $a == *b* ]]"
+checkTestGlobs params (TC_Unary _ _ op token) | isGlob token =
+    err (getId token) 2144 $
+       op ++ " doesn't work with globs. Use a for loop."
+checkTestGlobs _ _ = return ()
