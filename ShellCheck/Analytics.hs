@@ -1140,9 +1140,10 @@ checkConstantNoary _ (TC_Noary _ _ t@(T_NormalWord id _)) | isConstant t = do
     err id 2078 $ "This expression is constant. Did you forget a $ somewhere?"
 checkConstantNoary _ _ = return ()
 
-prop_checkBraceExpansionVars = verify checkBraceExpansionVars "echo {1..$n}"
-checkBraceExpansionVars _ (T_BraceExpansion id s) | '$' `elem` s =
-    warn id 2051 $ "Bash doesn't support variables in brace expansions."
+prop_checkBraceExpansionVars1 = verify checkBraceExpansionVars "echo {1..$n}"
+prop_checkBraceExpansionVars2 = verifyNot checkBraceExpansionVars "echo {1,3,$n}"
+checkBraceExpansionVars _ (T_BraceExpansion id s) | "..$" `isInfixOf` s =
+    warn id 2051 $ "Bash doesn't support variables in brace range expansions."
 checkBraceExpansionVars _ _ = return ()
 
 prop_checkForDecimals = verify checkForDecimals "((3.14*c))"
