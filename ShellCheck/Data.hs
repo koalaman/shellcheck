@@ -1,6 +1,6 @@
 module ShellCheck.Data where
 
-shellcheckVersion = "0.3.2"  -- Must also be updated in ShellCheck.cabal
+shellcheckVersion = "0.3.3"  -- Must also be updated in ShellCheck.cabal
 
 internalVariables = [
     -- Generic
