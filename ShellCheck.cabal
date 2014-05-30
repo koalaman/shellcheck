@@ -42,6 +42,8 @@ library
       ShellCheck.Data
       ShellCheck.Parser
       ShellCheck.Simple
+    other-modules:
+      Paths_ShellCheck
 
 executable shellcheck
     build-depends:
@@ -54,3 +56,4 @@ executable shellcheck
       parsec,
       regex-compat
     main-is: shellcheck.hs
+
