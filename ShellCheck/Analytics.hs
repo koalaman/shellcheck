@@ -2277,6 +2277,7 @@ prop_checkWhileReadPitfalls3 = verifyNot checkWhileReadPitfalls "while true; do 
 prop_checkWhileReadPitfalls4 = verifyNot checkWhileReadPitfalls "while read foo; do ssh $foo hostname < /dev/null; done"
 prop_checkWhileReadPitfalls5 = verifyNot checkWhileReadPitfalls "while read foo; do echo ls | ssh $foo; done"
 prop_checkWhileReadPitfalls6 = verifyNot checkWhileReadPitfalls "while read foo <&3; do ssh $foo; done 3< foo"
+prop_checkWhileReadPitfalls7 = verify checkWhileReadPitfalls "while read foo; do if true; then ssh $foo uptime; fi; done < file"
 
 checkWhileReadPitfalls _ (T_WhileExpression id [command] contents)
         | isStdinReadCommand command = do
@@ -2291,13 +2292,19 @@ checkWhileReadPitfalls _ (T_WhileExpression id [command] contents)
             && all (not . stdinRedirect) redirs
     isStdinReadCommand _ = False
 
-    checkMuncher (T_Pipeline _ _ ((T_Redirecting _ redirs cmd):_)) = do
-        let name = fromMaybe "" $ getCommandBasename cmd
-        when ((not . any stdinRedirect $ redirs) && (name `elem` munchers)) $ do
-            info id 2095 $
-                name ++ " may swallow stdin, preventing this loop from working properly."
-            warn (getId cmd) 2095 $
-                "Add < /dev/null to prevent " ++ name ++ " from swallowing stdin."
+    checkMuncher (T_Pipeline _ _ ((T_Redirecting _ redirs cmd):_)) | not $ any stdinRedirect redirs = do
+        case cmd of
+            (T_IfExpression _ thens elses) ->
+              mapM_ checkMuncher . concat $ (map fst thens) ++ (map snd thens) ++ [elses]
+
+            _ -> potentially $ do
+                name <- getCommandBasename cmd
+                guard $ name `elem` munchers
+                return $ do
+                    info id 2095 $
+                        name ++ " may swallow stdin, preventing this loop from working properly."
+                    warn (getId cmd) 2095 $
+                        "Add < /dev/null to prevent " ++ name ++ " from swallowing stdin."
     checkMuncher _ = return ()
 
     stdinRedirect (T_FdRedirect _ fd _)
@@ -2694,7 +2701,7 @@ getCommandSequences t =
     f (T_UntilExpression _ _ cmds) = [cmds]
     f (T_ForIn _ _ _ _ cmds) = [cmds]
     f (T_ForArithmetic _ _ _ _ cmds) = [cmds]
-    f (T_IfExpression _ thens elses) = elses:(map snd thens)
+    f (T_IfExpression _ thens elses) = (map snd thens) ++ [elses]
     f _ = []
 
 groupWith f l = groupBy (\x y -> f x == f y) l
