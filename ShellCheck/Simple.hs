@@ -28,7 +28,7 @@ import Test.QuickCheck.All (quickCheckAll)
 shellCheck :: String -> [AnalysisOption] -> [ShellCheckComment]
 shellCheck script options =
     let (ParseResult result notes) = parseShell "-" script in
-        let allNotes = notes ++ (concat $ maybeToList $ do
+        let allNotes = notes ++ concat (maybeToList $ do
             (tree, posMap) <- result
             let list = runAnalytics options tree
             return $ map (noteToParseNote posMap) $ filterByAnnotation tree list
