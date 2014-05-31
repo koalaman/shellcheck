@@ -15,7 +15,8 @@
     You should have received a copy of the GNU Affero General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -}
-module ShellCheck.Analytics (AnalysisOption(..), filterByAnnotation, runAnalytics, shellForExecutable) where
+{-# LANGUAGE TemplateHaskell #-}
+module ShellCheck.Analytics (AnalysisOption(..), filterByAnnotation, runAnalytics, shellForExecutable, runTests) where
 
 import Control.Monad
 import Control.Monad.State
@@ -27,9 +28,10 @@ import Data.Maybe
 import Debug.Trace
 import ShellCheck.AST
 import ShellCheck.Data
-import ShellCheck.Parser
+import ShellCheck.Parser hiding (runTests)
 import Text.Regex
 import qualified Data.Map as Map
+import Test.QuickCheck.All (quickCheckAll)
 
 data Shell = Ksh | Zsh | Sh | Bash
     deriving (Show, Eq)
@@ -1979,15 +1981,15 @@ getVariableFlow shell parents t =
     startScope t =
         let scopeType = leadType shell parents t
         in do
-            when (scopeType /= NoneScope) $ modify ((StackScope scopeType):)
-            if assignFirst t then setWritten t else return ()
+            when (scopeType /= NoneScope) $ modify (StackScope scopeType:)
+            when (assignFirst t) $ setWritten t
 
     endScope t =
         let scopeType = leadType shell parents t
         in do
             setRead t
-            if assignFirst t then return () else setWritten t
-            when (scopeType /= NoneScope) $ modify ((StackScopeEnd):)
+            unless (assignFirst t) $ setWritten t
+            when (scopeType /= NoneScope) $ modify (StackScopeEnd:)
 
     assignFirst (T_ForIn {}) = True
     assignFirst (T_SelectIn {}) = True
@@ -1995,16 +1997,16 @@ getVariableFlow shell parents t =
 
     setRead t =
         let read    = getReferencedVariables t
-        in mapM_ (\v -> modify ((Reference v):)) read
+        in mapM_ (\v -> modify (Reference v:)) read
 
     setWritten t =
         let written = getModifiedVariables t
-        in mapM_ (\v -> modify ((Assignment v):)) written
+        in mapM_ (\v -> modify (Assignment v:)) written
 
 findSubshelled [] _ _ = return ()
-findSubshelled ((Assignment x@(_, _, str, _)):rest) ((reason,scope):lol) deadVars =
+findSubshelled (Assignment x@(_, _, str, _):rest) ((reason,scope):lol) deadVars =
     findSubshelled rest ((reason, x:scope):lol) $ Map.insert str Alive deadVars
-findSubshelled ((Reference (_, readToken, str)):rest) scopes deadVars = do
+findSubshelled (Reference (_, readToken, str):rest) scopes deadVars = do
     case Map.findWithDefault Alive str deadVars of
         Alive -> return ()
         Dead writeToken reason -> do
@@ -2012,15 +2014,15 @@ findSubshelled ((Reference (_, readToken, str)):rest) scopes deadVars = do
                     info (getId readToken) 2031 $ str ++ " was modified in a subshell. That change might be lost."
     findSubshelled rest scopes deadVars
 
-findSubshelled ((StackScope (SubshellScope reason)):rest) scopes deadVars =
+findSubshelled (StackScope (SubshellScope reason):rest) scopes deadVars =
     findSubshelled rest ((reason,[]):scopes) deadVars
 
-findSubshelled ((StackScopeEnd):rest) ((reason, scope):oldScopes) deadVars =
+findSubshelled (StackScopeEnd:rest) ((reason, scope):oldScopes) deadVars =
     findSubshelled rest oldScopes $
         foldl (\m (_, token, var, _) ->
             Map.insert var (Dead token reason) m) deadVars scope
 
-doVariableFlowAnalysis readFunc writeFunc empty flow = fst $ runState (
+doVariableFlowAnalysis readFunc writeFunc empty flow = evalState (
     foldM (\list x -> do { l <- doFlow x;  return $ l ++ list; }) [] flow
     ) empty
   where
@@ -2062,17 +2064,17 @@ checkSpacefulness params t =
         map <- get
         return $ Map.findWithDefault True name map
 
-    setSpaces name bool = do
+    setSpaces name bool =
         modify $ Map.insert name bool
 
     readF _ token name = do
         spaced <- hasSpaces name
         if spaced
-          && (not $ "@" `isPrefixOf` name) -- There's another warning for this
-          && (not $ isCounting token)
-          && (not $ isQuoteFree parents token)
-          && (not $ usedAsCommandName parents token)
-            then return [(Note (getId token) InfoC 2086 warning)]
+          && not ("@" `isPrefixOf` name) -- There's another warning for this
+          && not (isCounting token)
+          && not (isQuoteFree parents token)
+          && not (usedAsCommandName parents token)
+            then return [Note (getId token) InfoC 2086 warning]
             else return []
       where
         warning = "Double quote to prevent globbing and word splitting."
@@ -2096,14 +2098,14 @@ checkSpacefulness params t =
     isCounting _ = False
 
     isSpacefulWord :: (String -> Bool) -> [Token] -> Bool
-    isSpacefulWord f words = any (isSpaceful f) words
+    isSpacefulWord f = any (isSpaceful f)
     isSpaceful :: (String -> Bool) -> Token -> Bool
     isSpaceful spacefulF x =
         case x of
           T_DollarExpansion _ _ -> True
           T_Backticked _ _ -> True
           T_Glob _ _         -> True
-          T_Extglob _ _ _    -> True
+          T_Extglob {}       -> True
           T_Literal _ s      -> s `containsAny` globspace
           T_SingleQuoted _ s -> s `containsAny` globspace
           T_DollarBraced _ l -> spacefulF $ getBracedReference $ bracedString l
@@ -2112,7 +2114,7 @@ checkSpacefulness params t =
           _ -> False
       where
         globspace = "*? \t\n"
-        containsAny s chars = any (\c -> c `elem` s) chars
+        containsAny s = any (\c -> c `elem` s)
 
 
 prop_checkQuotesInLiterals1 = verifyTree checkQuotesInLiterals "param='--foo=\"bar\"'; app $param"
@@ -2161,9 +2163,9 @@ checkQuotesInLiterals params t =
             && not (isParamTo parents "eval" expr)
             && not (isQuoteFree parents expr)
             then return [
-                Note (fromJust assignment)WarningC 2089 $
+                Note (fromJust assignment)WarningC 2089
                     "Quotes/backslashes will be treated literally. Use an array.",
-                Note (getId expr) WarningC 2090 $
+                Note (getId expr) WarningC 2090
                     "Quotes/backslashes in this variable will not be respected."
               ]
             else return []
@@ -2193,7 +2195,7 @@ checkFunctionsUsedExternally params t =
             mapM_ (checkArg name) args
     checkCommand _ _ = return ()
 
-    analyse f t = snd $ runState (doAnalysis f t) []
+    analyse f t = execState (doAnalysis f t) []
     functions = Map.fromList $ analyse findFunctions t
     findFunctions (T_Function id _ _ name _) = modify ((name, id):)
     findFunctions t@(T_SimpleCommand id _ (_:args))
@@ -2207,7 +2209,7 @@ checkFunctionsUsedExternally params t =
         case Map.lookup (concat $ deadSimple arg) functions of
             Nothing -> return ()
             Just id -> do
-              warn (getId arg) 2033 $
+              warn (getId arg) 2033
                 "Shell functions can't be passed to external commands."
               info id 2032 $
                 "Use own script or sh -c '..' to run this from " ++ cmd ++ "."
@@ -2246,7 +2248,7 @@ checkUnusedAssignments params t = snd $ runWriter (mapM_ checkAssignment flow)
                     name ++ " appears unused. Verify it or export it."
     checkAssignment _ = return ()
 
-    stripSuffix str = takeWhile isVariableChar str
+    stripSuffix = takeWhile isVariableChar
     defaultMap = Map.fromList $ zip internalVariables $ repeat ()
 
 prop_checkGlobsAsOptions1 = verify checkGlobsAsOptions "rm *.txt"
@@ -2255,9 +2257,9 @@ prop_checkGlobsAsOptions3 = verifyNot checkGlobsAsOptions "rm -- *.txt"
 checkGlobsAsOptions _ (T_SimpleCommand _ _ args) =
     mapM_ check $ takeWhile (not . isEndOfArgs) args
   where
-    check v@(T_NormalWord _ ((T_Glob id s):_)) | s == "*" || s == "?" =
+    check v@(T_NormalWord _ (T_Glob id s:_)) | s == "*" || s == "?" =
         info id 2035 $
-            "Use ./" ++ (concat $ deadSimple v)
+            "Use ./" ++ concat (deadSimple v)
                 ++ " so names with dashes won't become options."
     check _ = return ()
 
@@ -2280,7 +2282,7 @@ prop_checkWhileReadPitfalls6 = verifyNot checkWhileReadPitfalls "while read foo 
 prop_checkWhileReadPitfalls7 = verify checkWhileReadPitfalls "while read foo; do if true; then ssh $foo uptime; fi; done < file"
 
 checkWhileReadPitfalls _ (T_WhileExpression id [command] contents)
-        | isStdinReadCommand command = do
+        | isStdinReadCommand command =
     mapM_ checkMuncher contents
   where
     munchers = [ "ssh", "ffmpeg", "mplayer" ]
@@ -2292,7 +2294,7 @@ checkWhileReadPitfalls _ (T_WhileExpression id [command] contents)
             && all (not . stdinRedirect) redirs
     isStdinReadCommand _ = False
 
-    checkMuncher (T_Pipeline _ _ ((T_Redirecting _ redirs cmd):_)) | not $ any stdinRedirect redirs = do
+    checkMuncher (T_Pipeline _ _ (T_Redirecting _ redirs cmd:_)) | not $ any stdinRedirect redirs =
         case cmd of
             (T_IfExpression _ thens elses) ->
               mapM_ checkMuncher . concat $ (map fst thens) ++ (map snd thens) ++ [elses]
@@ -2347,12 +2349,11 @@ checkCharRangeGlob p t@(T_Glob id str) |
         && contents /= ":"
     then warn id 2101 "Named class needs outer [], e.g. [[:digit:]]."
     else
-        if ('[' `notElem` contents) && hasDupes
-        then info id 2102 "Ranges can only match single chars (mentioned due to duplicates)."
-        else return ()
+        when ('[' `notElem` contents && hasDupes) $
+            info id 2102 "Ranges can only match single chars (mentioned due to duplicates)."
   where
     isCharClass str = "[" `isPrefixOf` str && "]" `isSuffixOf` str
-    contents = drop 1 . take ((length str) - 1) $ str
+    contents = drop 1 . take (length str - 1) $ str
     hasDupes = any (>1) . map length . group . sort . filter (/= '-') $ contents
 checkCharRangeGlob _ _ = return ()
 
@@ -2404,10 +2405,10 @@ checkLoopKeywordScope params t |
     if not $ any isLoop path
     then if any isFunction $ take 1 path
         -- breaking at a source/function invocation is an abomination. Let's ignore it.
-        then err (getId t) 2104 $ "In functions, use return instead of " ++ (fromJust name) ++ "."
+        then err (getId t) 2104 $ "In functions, use return instead of " ++ fromJust name ++ "."
         else err (getId t) 2105 $ (fromJust name) ++ " is only valid in loops."
     else case map subshellType $ filter (not . isFunction) path of
-        (Just str):_ -> warn (getId t) 2106 $
+        Just str:_ -> warn (getId t) 2106 $
             "This only exits the subshell caused by the " ++ str ++ "."
         _ -> return ()
   where
@@ -2416,7 +2417,7 @@ checkLoopKeywordScope params t |
     subshellType t = case leadType (shellType params) (parentMap params) t of
         NoneScope -> Nothing
         SubshellScope str -> return str
-    isFunction t = case t of T_Function _ _ _ _ _ -> True; _ -> False
+    isFunction t = case t of T_Function {} -> True; _ -> False
     relevant t = isLoop t || isFunction t || isJust (subshellType t)
 checkLoopKeywordScope _ _ = return ()
 
@@ -2429,7 +2430,7 @@ checkFunctionDeclarations params
     case (shellType params) of
         Bash -> return ()
         Zsh -> return ()
-        Ksh -> do
+        Ksh ->
             when (hasKeyword && hasParens) $
                 err id 2111 "ksh does not allow 'function' keyword and '()' at the same time."
         Sh -> do
@@ -2451,7 +2452,7 @@ prop_checkCatastrophicRm7 = verifyNot checkCatastrophicRm "var=$(cmd); if [ -n \
 prop_checkCatastrophicRm8 = verify checkCatastrophicRm "rm -rf /home"
 prop_checkCatastrophicRm9 = verifyNot checkCatastrophicRm "rm -rf -- /home"
 checkCatastrophicRm params t@(T_SimpleCommand id _ tokens) | t `isCommand` "rm" =
-    when (any isRecursiveFlag $ simpleArgs) $
+    when (any isRecursiveFlag simpleArgs) $
         mapM_ checkWord tokens
   where
     -- This ugly hack is based on the fact that ids generally increase
@@ -2463,8 +2464,8 @@ checkCatastrophicRm params t@(T_SimpleCommand id _ tokens) | t `isCommand` "rm" 
     checkWord token =
         case getLiteralString token of
             Just str ->
-                when (all (/= "--") simpleArgs && (fixPath str `elem` importantPaths)) $
-                    info (getId token) 2114 $ "Obligatory typo warning. Use 'rm --' to disable this message."
+                when (notElem "--" simpleArgs && (fixPath str `elem` importantPaths)) $
+                    info (getId token) 2114 "Obligatory typo warning. Use 'rm --' to disable this message."
             Nothing ->
                 checkWord' token
 
@@ -2472,12 +2473,12 @@ checkCatastrophicRm params t@(T_SimpleCommand id _ tokens) | t `isCommand` "rm" 
         m <- relevantMap id
         filename <- combine m token
         let path = fixPath filename
-        return . when (path `elem` importantPaths) $ do
+        return . when (path `elem` importantPaths) $
             warn (getId token) 2115 $ "Make sure this never accidentally expands to '" ++ path ++ "'."
 
     fixPath filename =
         let normalized = skipRepeating '/' . skipRepeating '*' $ filename in
-            if normalized == "/" then normalized else stripTrailing '/' $ normalized
+            if normalized == "/" then normalized else stripTrailing '/' normalized
 
     unnullable = all isVariableChar . concat . deadSimple
     isRecursiveFlag "--recursive" = True
@@ -2487,7 +2488,7 @@ checkCatastrophicRm params t@(T_SimpleCommand id _ tokens) | t `isCommand` "rm" 
 
     stripTrailing c = reverse . dropWhile (== c) . reverse
     skipRepeating c (a:b:rest) | a == b && b == c = skipRepeating c (b:rest)
-    skipRepeating c (a:r) = a:(skipRepeating c r)
+    skipRepeating c (a:r) = a:skipRepeating c r
     skipRepeating _ [] = []
 
     addNulls map (Reference (_, token, name)) =
@@ -2498,13 +2499,10 @@ checkCatastrophicRm params t@(T_SimpleCommand id _ tokens) | t `isCommand` "rm" 
         if mightBeGuarded token
         then Map.insert name Nothing map
         else Map.insert name (Just "") map
-    addNulls m (Assignment (_, token, name, DataFrom [word])) =
-        if mightBeGuarded token
-        then Map.insert name Nothing m
-        else
-            if couldFail word
-            then m
-            else Map.insert name ((combine m) word) m
+    addNulls m (Assignment (_, token, name, DataFrom [word]))
+        | mightBeGuarded token = Map.insert name Nothing m
+        | couldFail word       = m
+        | otherwise            = Map.insert name (combine m word) m
     addNulls m (Assignment (_, token, name, DataFrom _)) =
         Map.insert name Nothing m
     addNulls map _ = map
@@ -2515,7 +2513,7 @@ checkCatastrophicRm params t@(T_SimpleCommand id _ tokens) | t `isCommand` "rm" 
 
     joinMaybes :: [Maybe String] -> Maybe String
     joinMaybes = foldl (liftM2 (++)) (Just "")
-    combine m token = c token
+    combine m = c
       where
         c (T_DollarBraced _ t) | unnullable t =
             Map.findWithDefault (Just "") (concat $ deadSimple t) m
@@ -2532,9 +2530,9 @@ checkCatastrophicRm params t@(T_SimpleCommand id _ tokens) | t `isCommand` "rm" 
 
     mightBeGuarded token = any t (getPath (parentMap params) token)
       where
-        t (T_Condition _ _ _) = True
-        t (T_OrIf _ _ _) = True
-        t (T_AndIf _ _ _) = True
+        t (T_Condition {}) = True
+        t (T_OrIf {}) = True
+        t (T_AndIf {}) = True
         t _ = False
 
     paths = [
@@ -2691,20 +2689,17 @@ shellSupport t =
     T_ProcSub _ "=" _ -> ("=(..) process substitution", [Zsh])
     otherwise -> ("", [Bash, Ksh, Sh, Zsh])
 
-getCommandSequences t =
-    f t
-  where
-    f (T_Script _ _ cmds) = [cmds]
-    f (T_BraceGroup _ cmds) = [cmds]
-    f (T_Subshell _ cmds) = [cmds]
-    f (T_WhileExpression _ _ cmds) = [cmds]
-    f (T_UntilExpression _ _ cmds) = [cmds]
-    f (T_ForIn _ _ _ _ cmds) = [cmds]
-    f (T_ForArithmetic _ _ _ _ cmds) = [cmds]
-    f (T_IfExpression _ thens elses) = (map snd thens) ++ [elses]
-    f _ = []
+getCommandSequences (T_Script _ _ cmds) = [cmds]
+getCommandSequences (T_BraceGroup _ cmds) = [cmds]
+getCommandSequences (T_Subshell _ cmds) = [cmds]
+getCommandSequences (T_WhileExpression _ _ cmds) = [cmds]
+getCommandSequences (T_UntilExpression _ _ cmds) = [cmds]
+getCommandSequences (T_ForIn _ _ _ _ cmds) = [cmds]
+getCommandSequences (T_ForArithmetic _ _ _ _ cmds) = [cmds]
+getCommandSequences (T_IfExpression _ thens elses) = (map snd thens) ++ [elses]
+getCommandSequences _ = []
 
-groupWith f l = groupBy (\x y -> f x == f y) l
+groupWith f = groupBy (\x y -> f x == f y)
 
 prop_checkMultipleAppends1 = verify checkMultipleAppends "foo >> file; bar >> file; baz >> file;"
 prop_checkMultipleAppends2 = verify checkMultipleAppends "foo >> file; bar | grep f >> file; baz >> file;"
@@ -2722,7 +2717,7 @@ checkMultipleAppends params t =
     checkGroup _ = return ()
     getTarget (T_Pipeline _ _ args@(_:_)) = getTarget (last args)
     getTarget (T_Redirecting id list _) = do
-        file <- (mapMaybe getAppend list) !!! 0
+        file <- mapMaybe getAppend list !!! 0
         return (file, id)
     getTarget _ = Nothing
     getAppend (T_FdRedirect _ _ (T_IoFile _ (T_DGREAT {}) f)) = return f
@@ -2736,8 +2731,8 @@ checkAliasesExpandEarly params =
     checkUnqualifiedCommand "alias" (const f)
   where
     f = mapM_ checkArg
-    checkArg arg | '=' `elem` (concat $ deadSimple arg) =
-        flip mapM_ (take 1 $ filter (not . isLiteral) $ getWordParts arg) $
+    checkArg arg | '=' `elem` concat (deadSimple arg) =
+        forM_ (take 1 $ filter (not . isLiteral) $ getWordParts arg) $
             \x -> warn (getId x) 2139 "This expands when defined, not when used. Consider escaping."
     checkArg _ = return ()
 
@@ -2748,8 +2743,8 @@ checkSuspiciousIFS params (T_Assignment id Assign "IFS" Nothing value) =
         str <- getLiteralString value
         return $ check str
   where
-    n = if (shellType params == Sh) then "'<literal linefeed here>'" else "$'\\n'"
-    t = if (shellType params == Sh) then "\"$(printf '\\t')\"" else "$'\\t'"
+    n = if shellType params == Sh then "'<literal linefeed here>'" else "$'\\n'"
+    t = if shellType params == Sh then "\"$(printf '\\t')\"" else "$'\\t'"
     check value =
         case value of
             "\\n" -> suggest n
@@ -2815,3 +2810,7 @@ checkTestGlobs params (TC_Unary _ _ op token) | isGlob token =
     err (getId token) 2144 $
        op ++ " doesn't work with globs. Use a for loop."
 checkTestGlobs _ _ = return ()
+
+return []
+runTests = $quickCheckAll
+

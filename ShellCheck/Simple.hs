@@ -15,30 +15,15 @@
     You should have received a copy of the GNU Affero General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -}
-module ShellCheck.Simple (shellCheck, ShellCheckComment, scLine, scColumn, scSeverity, scCode, scMessage) where
+{-# LANGUAGE TemplateHaskell #-}
+module ShellCheck.Simple (shellCheck, ShellCheckComment, scLine, scColumn, scSeverity, scCode, scMessage, runTests) where
 
-import ShellCheck.Parser
-import ShellCheck.Analytics
+import ShellCheck.Parser hiding (runTests)
+import ShellCheck.Analytics hiding (runTests)
 import Data.Maybe
 import Text.Parsec.Pos
 import Data.List
-
-
-prop_findsParseIssue =
-    let comments = shellCheck "echo \"$12\"" [] in
-        (length comments) == 1 && (scCode $ head comments) == 1037
-prop_commentDisablesParseIssue1 =
-    null $ shellCheck "#shellcheck disable=SC1037\necho \"$12\"" []
-prop_commentDisablesParseIssue2 =
-    null $ shellCheck "#shellcheck disable=SC1037\n#lol\necho \"$12\"" []
-
-prop_findsAnalysisIssue =
-    let comments = shellCheck "echo $1" [] in
-        (length comments) == 1 && (scCode $ head comments) == 2086
-prop_commentDisablesAnalysisIssue1 =
-    null $ shellCheck "#shellcheck disable=SC2086\necho $1" []
-prop_commentDisablesAnalysisIssue2 =
-    null $ shellCheck "#shellcheck disable=SC2086\n#lol\necho $1" []
+import Test.QuickCheck.All (quickCheckAll)
 
 shellCheck :: String -> [AnalysisOption] -> [ShellCheckComment]
 shellCheck script options =
@@ -65,3 +50,23 @@ severityToString s =
 
 formatNote (ParseNote pos severity code text) =
     ShellCheckComment (sourceLine pos) (sourceColumn pos) (severityToString severity) (fromIntegral code) text
+
+prop_findsParseIssue =
+    let comments = shellCheck "echo \"$12\"" [] in
+        length comments == 1 && scCode (head comments) == 1037
+prop_commentDisablesParseIssue1 =
+    null $ shellCheck "#shellcheck disable=SC1037\necho \"$12\"" []
+prop_commentDisablesParseIssue2 =
+    null $ shellCheck "#shellcheck disable=SC1037\n#lol\necho \"$12\"" []
+
+prop_findsAnalysisIssue =
+    let comments = shellCheck "echo $1" [] in
+        length comments == 1 && scCode (head comments) == 2086
+prop_commentDisablesAnalysisIssue1 =
+    null $ shellCheck "#shellcheck disable=SC2086\necho $1" []
+prop_commentDisablesAnalysisIssue2 =
+    null $ shellCheck "#shellcheck disable=SC2086\n#lol\necho $1" []
+
+return []
+runTests = $quickCheckAll
+

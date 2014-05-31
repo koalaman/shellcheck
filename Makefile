@@ -3,16 +3,12 @@
 GHCFLAGS=-O9
 GHCFLAGS_STATIC=$(GHCFLAGS) -optl-static -optl-pthread
 
-all: shellcheck .tests shellcheck.1
+all: shellcheck shellcheck.1
 	: Done
 	
 shellcheck: regardless
 	: Conditionally compiling shellcheck
 	ghc $(GHCFLAGS) --make shellcheck
-
-.tests: *.hs */*.hs
-	: Running unit tests
-	./test/runQuack && touch .tests
 
 shellcheck.1: shellcheck.1.md
 	: Formatting man page
