@@ -1,7 +1,15 @@
-*.hi
-*.o
-.tests
-jsoncheck
-shellcheck
-shellcheck.1
+# Created by http://www.gitignore.io
+
+### Haskell ###
 dist
+cabal-dev
+*.o
+*.hi
+*.chi
+*.chs.h
+.virtualenv
+.hsenv
+.cabal-sandbox/
+cabal.sandbox.config
+cabal.config
+
