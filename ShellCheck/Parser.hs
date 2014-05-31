@@ -15,9 +15,8 @@
     You should have received a copy of the GNU Affero General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -}
-{-# LANGUAGE NoMonomorphismRestriction #-}
-
-module ShellCheck.Parser (Note(..), Severity(..), parseShell, ParseResult(..), ParseNote(..), sortNotes, noteToParseNote) where
+{-# LANGUAGE NoMonomorphismRestriction, TemplateHaskell #-}
+module ShellCheck.Parser (Note(..), Severity(..), parseShell, ParseResult(..), ParseNote(..), sortNotes, noteToParseNote, runTests) where
 
 import ShellCheck.AST
 import ShellCheck.Data
@@ -33,6 +32,7 @@ import Prelude hiding (readList)
 import System.IO
 import Text.Parsec.Error
 import GHC.Exts (sortWith)
+import Test.QuickCheck.All (quickCheckAll)
 
 backslash = char '\\'
 linefeed = (optional carriageReturn) >> char '\n'
@@ -2071,4 +2071,8 @@ parseShell filename contents = do
         "The mentioned parser error was in this " ++ str ++ "."
 
 lt x = trace (show x) x
-ltt t x = trace (show t) x
+ltt t = trace (show t)
+
+return []
+runTests = $quickCheckAll
+

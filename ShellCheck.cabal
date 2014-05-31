@@ -35,7 +35,8 @@ library
       json,
       mtl,
       parsec,
-      regex-compat
+      regex-compat,
+      QuickCheck >= 2.2
     exposed-modules:
       ShellCheck.Analytics
       ShellCheck.AST
@@ -54,6 +55,21 @@ executable shellcheck
       json,
       mtl,
       parsec,
-      regex-compat
+      regex-compat,
+      QuickCheck >= 2.2
     main-is: shellcheck.hs
+
+test-suite test-shellcheck
+    type: exitcode-stdio-1.0
+    build-depends:
+      ShellCheck,
+      base >= 4 && < 5,
+      containers,
+      directory,
+      json,
+      mtl,
+      parsec,
+      regex-compat,
+      QuickCheck >= 2.2
+    main-is: test/shellcheck.hs
 
