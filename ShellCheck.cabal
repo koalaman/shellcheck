@@ -1,5 +1,4 @@
 Name:             ShellCheck
--- Must also be updated in ShellCheck/Data.hs :
 Version:          0.3.3
 Synopsis:         Shell script analysis tool
 License:          OtherLicense
