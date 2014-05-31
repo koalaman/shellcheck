@@ -16,7 +16,7 @@ The goals of ShellCheck are:
   - To point out subtle caveats, corner cases and pitfalls, that may cause an
     advanced user's otherwise working script to fail under future circumstances.
 
-ShellCheck requires at least 1 GB of RAM to compile. Executables can be built with cabal. Tests currently still rely on a Makefile.
+ShellCheck is written in Haskell, and requires at least 1 GB of RAM to compile.
 
 
 ## Building with Cabal
@@ -57,10 +57,17 @@ Verify that your PATH is set up correctly:
     $ which shellcheck
     ~/.cabal/bin/shellcheck
 
+## Running tests
+
+To run the unit test suite:
+
+    cabal configure --enable-tests
+    cabal build
+    cabal test
+
 ## Building with Make
 
-ShellCheck is written in Haskell, and requires GHC, Parsec3, JSON and
-Text.Regex. To run the unit tests, it also requires QuickCheck2.
+ShellCheck requires GHC, Parsec3, JSON and Text.Regex.
 
 On Fedora, these can be installed with:
 
@@ -72,7 +79,7 @@ On Ubuntu and similar, use:
     apt-get install ghc libghc-parsec3-dev libghc-json-dev \
       libghc-regex-compat-dev libghc-quickcheck2-dev pandoc
 
-To build and run the tests, cd to the shellcheck source directory and:
+To build, cd to the shellcheck source directory and:
 
     $ make
 
