@@ -22,6 +22,15 @@ Description:
   * To point out subtle caveats, corner cases and pitfalls, that may cause an
     advanced user's otherwise working script to fail under future circumstances.
 
+Extra-Source-Files:
+    -- documentation
+    README.md
+    shellcheck.1.md
+    -- tests
+    test/shellcheck.hs
+    -- misc
+    Makefile
+
 source-repository head
     type: git
     location: git://github.com/koalaman/shellcheck.git
