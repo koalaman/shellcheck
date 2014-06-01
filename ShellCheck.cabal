@@ -27,8 +27,7 @@ Extra-Source-Files:
     README.md
     shellcheck.1.md
     -- tests
-    test/quackCheck.hs
-    test/runQuack
+    test/shellcheck.hs
     -- misc
     Makefile
 
