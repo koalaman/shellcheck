@@ -205,6 +205,7 @@ nodeChecks = [
     ,checkAliasesUsesArgs
     ,checkShouldUseGrepQ
     ,checkTestGlobs
+    ,checkConcatenatedDollarAt
     ]
 
 
@@ -853,6 +854,20 @@ checkUnquotedDollarAt p word@(T_NormalWord _ parts) | not isAssigned =
     isAssigned = any isAssignment . take 2 $ path
 checkUnquotedDollarAt _ _ = return ()
 
+prop_checkConcatenatedDollarAt1 = verify checkConcatenatedDollarAt "echo \"foo$@\""
+prop_checkConcatenatedDollarAt2 = verify checkConcatenatedDollarAt "echo ${arr[@]}lol"
+prop_checkConcatenatedDollarAt3 = verify checkConcatenatedDollarAt "echo $a$@"
+prop_checkConcatenatedDollarAt4 = verifyNot checkConcatenatedDollarAt "echo $@"
+prop_checkConcatenatedDollarAt5 = verifyNot checkConcatenatedDollarAt "echo \"${arr[@]}\""
+checkConcatenatedDollarAt p word@(T_NormalWord {})
+    | not $ isQuoteFree (parentMap p) word =
+        unless (null $ drop 1 parts) $
+            mapM_ for array
+  where
+    parts = getWordParts word
+    array = take 1 $ filter isArrayExpansion parts
+    for t = err (getId t) 2145 "Argument mixes string and array. Use * or separate argument."
+checkConcatenatedDollarAt _ _ = return ()
 
 prop_checkArrayAsString1 = verify checkArrayAsString "a=$@"
 prop_checkArrayAsString2 = verify checkArrayAsString "a=\"${arr[@]}\""
