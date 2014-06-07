@@ -643,7 +643,7 @@ checkBashisms _ = bashism
     bashism (T_Array id _) =
         warnMsg id "arrays are"
 
-    bashism _ = return()
+    bashism _ = return ()
 
     varChars="_0-9a-zA-Z"
     expansion = let re = mkRegex in [
@@ -2663,8 +2663,10 @@ checkOverridingPath _ _ = return ()
 
 prop_checkUnsupported1 = verifyNot checkUnsupported "#!/bin/zsh\nfunction { echo cow; }"
 prop_checkUnsupported2 = verify checkUnsupported "#!/bin/sh\nfunction { echo cow; }"
+prop_checkUnsupported3 = verify checkUnsupported "#!/bin/sh\ncase foo in bar) baz ;& esac"
+prop_checkUnsupported4 = verify checkUnsupported "#!/bin/ksh\ncase foo in bar) baz ;;& esac"
 checkUnsupported params t =
-    when  (shellType params `notElem` support) $
+    when ((not $ null support) && (shellType params `notElem` support)) $
         report name
  where
     (name, support) = shellSupport t
@@ -2679,7 +2681,13 @@ shellSupport t =
     T_ForIn _ _ (_:_:_) _ _ -> ("multi-index for loops", [Zsh])
     T_ForIn _ ShortForIn _ _ _ -> ("short form for loops", [Zsh])
     T_ProcSub _ "=" _ -> ("=(..) process substitution", [Zsh])
-    otherwise -> ("", [Bash, Ksh, Sh, Zsh])
+    T_CaseExpression _ _ list -> forCase (map (\(a,_,_) -> a) list)
+    otherwise -> ("", [])
+  where
+    forCase seps | any (== CaseContinue) seps = ("cases with ;;&", [Bash])
+    forCase seps | any (== CaseFallThrough) seps = ("cases with ;&", [Bash, Ksh, Zsh])
+    forCase _ = ("", [])
+
 
 getCommandSequences (T_Script _ _ cmds) = [cmds]
 getCommandSequences (T_BraceGroup _ cmds) = [cmds]

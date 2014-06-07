@@ -1305,7 +1305,7 @@ readLineBreak = optional readNewlineList
 prop_readSeparator1 = isWarning readScript "a &; b"
 prop_readSeparator2 = isOk readScript "a & b"
 readSeparatorOp = do
-    notFollowedBy2 (g_AND_IF <|> g_DSEMI)
+    notFollowedBy2 (void g_AND_IF <|> void readCaseSeparator)
     notFollowedBy2 (string "&>")
     f <- try (do
                     char '&'
@@ -1687,6 +1687,8 @@ readInClause = do
 prop_readCaseClause = isOk readCaseClause "case foo in a ) lol; cow;; b|d) fooo; esac"
 prop_readCaseClause2 = isOk readCaseClause "case foo\n in * ) echo bar;; esac"
 prop_readCaseClause3 = isOk readCaseClause "case foo\n in * ) echo bar & ;; esac"
+prop_readCaseClause4 = isOk readCaseClause "case foo\n in *) echo bar ;& bar) foo; esac"
+prop_readCaseClause5 = isOk readCaseClause "case foo\n in *) echo bar;;& foo) baz;; esac"
 readCaseClause = called "case expression" $ do
     id <- getNextId
     g_Case
@@ -1707,14 +1709,21 @@ readCaseItem = called "case item" $ do
     pattern <- readPattern
     g_Rparen
     readLineBreak
-    list <- (lookAhead g_DSEMI >> return []) <|> readCompoundList
-    (g_DSEMI <|> lookAhead (readLineBreak >> g_Esac)) `attempting` do
+    list <- (lookAhead readCaseSeparator >> return []) <|> readCompoundList
+    separator <- readCaseSeparator `attempting` do
         pos <- getPosition
         lookAhead g_Rparen
         parseProblemAt pos ErrorC 1074
             "Did you forget the ;; after the previous case item?"
     readLineBreak
-    return (pattern, list)
+    return (separator, pattern, list)
+
+readCaseSeparator = choice [
+    tryToken ";;&" (const ()) >> return CaseContinue,
+    tryToken ";&" (const ()) >> return CaseFallThrough,
+    g_DSEMI >> return CaseBreak,
+    lookAhead (readLineBreak >> g_Esac) >> return CaseBreak
+    ]
 
 prop_readFunctionDefinition = isOk readFunctionDefinition "foo() { command foo --lol \"$@\"; }"
 prop_readFunctionDefinition1 = isOk readFunctionDefinition "foo   (){ command foo --lol \"$@\"; }"

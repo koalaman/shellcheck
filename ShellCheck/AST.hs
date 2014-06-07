@@ -29,6 +29,7 @@ data AssignmentMode = Assign | Append deriving (Show, Eq)
 data FunctionKeyword = FunctionKeyword Bool deriving (Show, Eq)
 data FunctionParentheses = FunctionParentheses Bool deriving (Show, Eq)
 data ForInType = NormalForIn | ShortForIn deriving (Show, Eq)
+data CaseType = CaseBreak | CaseFallThrough | CaseContinue deriving (Show, Eq)
 
 data Token =
     TA_Base Id String Token
@@ -58,7 +59,7 @@ data Token =
     | T_BraceGroup Id [Token]
     | T_CLOBBER Id
     | T_Case Id
-    | T_CaseExpression Id Token [([Token],[Token])]
+    | T_CaseExpression Id Token [(CaseType, [Token], [Token])]
     | T_Condition Id ConditionType Token
     | T_DGREAT Id
     | T_DLESS Id
@@ -207,10 +208,10 @@ analyze f g i =
     delve (T_SelectIn id v w l) = dll w l $ T_SelectIn id v
     delve (T_CaseExpression id word cases) = do
         newWord <- round word
-        newCases <- mapM (\(c, t) -> do
+        newCases <- mapM (\(o, c, t) -> do
                             x <- mapM round c
                             y <- mapM round t
-                            return (x,y)
+                            return (o, x,y)
                         ) cases
         return $ T_CaseExpression id newWord newCases
 
