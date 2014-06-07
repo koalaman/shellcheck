@@ -18,6 +18,14 @@ The goals of ShellCheck are:
 
 ShellCheck is written in Haskell, and requires at least 1 GB of RAM to compile.
 
+## Installing
+
+Instead of building from source shellcheck can be installed through your
+systems package manager.
+
+On OS X:
+
+    $ brew install shellscript
 
 ## Building with Cabal
 
