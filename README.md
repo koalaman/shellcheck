@@ -53,14 +53,14 @@ Let cabal update itself, in case your distro version is outdated:
 With cabal installed, cd to the ShellCheck source directory and:
 
     $ cabal install
-    
+
 This will install ShellCheck to your ~/.cabal/bin directory.
 
 Add the directory to your PATH (for bash, add this to your ~/.bashrc file):
 
     export PATH=$HOME/.cabal/bin:$PATH
 
-Verify that your PATH is set up correctly:    
+Verify that your PATH is set up correctly:
 
     $ which shellcheck
     ~/.cabal/bin/shellcheck
