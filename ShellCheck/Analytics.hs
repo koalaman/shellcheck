@@ -487,11 +487,19 @@ prop_checkPipePitfalls3 = verify checkPipePitfalls "ls | grep -v mp3"
 prop_checkPipePitfalls4 = verifyNot checkPipePitfalls "find . -print0 | xargs -0 foo"
 prop_checkPipePitfalls5 = verifyNot checkPipePitfalls "ls -N | foo"
 prop_checkPipePitfalls6 = verify checkPipePitfalls "find . | xargs foo"
+prop_checkPipePitfalls7 = verifyNot checkPipePitfalls "find . -printf '%s\\n' | xargs foo"
 checkPipePitfalls _ (T_Pipeline id _ commands) = do
     for ["find", "xargs"] $
-        \(find:xargs:_) -> let args = deadSimple xargs in
-            unless (hasShortParameter args '0') $
-                warn (getId find) 2038 "Use either 'find .. -print0 | xargs -0 ..' or 'find .. -exec .. +' to allow for non-alphanumeric filenames."
+        \(find:xargs:_) ->
+          let args = deadSimple xargs ++ deadSimple find
+          in
+            unless (or $ map ($ args) [
+                hasShortParameter '0',
+                hasParameter "null",
+                hasParameter "print0",
+                hasParameter "printf"
+              ]) $ warn (getId find) 2038
+                      "Use -print0/-0 or -exec + to allow for non-alphanumeric filenames."
 
     for ["?", "echo"] $
         \(_:echo:_) -> info (getId echo) 2008 "echo doesn't read from stdin, are you sure you should be piping to it?"
@@ -510,7 +518,7 @@ checkPipePitfalls _ (T_Pipeline id _ commands) = do
         ]
     unless didLs $ do
         for ["ls", "?"] $
-            \(ls:_) -> unless (hasShortParameter (deadSimple ls) 'N') $
+            \(ls:_) -> unless (hasShortParameter 'N' (deadSimple ls)) $
                 info (getId ls) 2012 "Use find instead of ls to better handle non-alphanumeric filenames."
         return ()
   where
@@ -522,7 +530,8 @@ checkPipePitfalls _ (T_Pipeline id _ commands) = do
     for' l f = for l (first f)
     first func (x:_) = func (getId x)
     first _ _ = return ()
-    hasShortParameter list char = any (\x -> "-" `isPrefixOf` x && char `elem` x) list
+    hasShortParameter char list = any (\x -> "-" `isPrefixOf` x && char `elem` x) list
+    hasParameter string list = any (("--" ++ string) `isPrefixOf`) list
 checkPipePitfalls _ _ = return ()
 
 indexOfSublists sub = f 0
