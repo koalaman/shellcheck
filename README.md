@@ -18,6 +18,14 @@ The goals of ShellCheck are:
 
 ShellCheck is written in Haskell, and requires at least 1 GB of RAM to compile.
 
+## Installing
+
+Instead of building from source shellcheck can be installed through your
+systems package manager.
+
+On OS X:
+
+    $ brew install shellscript
 
 ## Building with Cabal
 
@@ -45,14 +53,14 @@ Let cabal update itself, in case your distro version is outdated:
 With cabal installed, cd to the ShellCheck source directory and:
 
     $ cabal install
-    
+
 This will install ShellCheck to your ~/.cabal/bin directory.
 
 Add the directory to your PATH (for bash, add this to your ~/.bashrc file):
 
     export PATH=$HOME/.cabal/bin:$PATH
 
-Verify that your PATH is set up correctly:    
+Verify that your PATH is set up correctly:
 
     $ which shellcheck
     ~/.cabal/bin/shellcheck
