@@ -490,7 +490,7 @@ prop_checkPipePitfalls6 = verify checkPipePitfalls "find . | xargs foo"
 checkPipePitfalls _ (T_Pipeline id _ commands) = do
     for ["find", "xargs"] $
         \(find:xargs:_) -> let args = deadSimple xargs in
-            unless (hasShortParameter args '0') $
+            unless (hasShortParameter args '0' || hasLongParameter args "--null") $
                 warn (getId find) 2038 "Use either 'find .. -print0 | xargs -0 ..' or 'find .. -exec .. +' to allow for non-alphanumeric filenames."
 
     for ["?", "echo"] $
@@ -523,6 +523,7 @@ checkPipePitfalls _ (T_Pipeline id _ commands) = do
     first func (x:_) = func (getId x)
     first _ _ = return ()
     hasShortParameter list char = any (\x -> "-" `isPrefixOf` x && char `elem` x) list
+    hasLongParameter list string = elem string list
 checkPipePitfalls _ _ = return ()
 
 indexOfSublists sub = f 0
