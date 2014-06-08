@@ -20,16 +20,28 @@ ShellCheck is written in Haskell, and requires at least 1 GB of RAM to compile.
 
 ## Installing
 
-Instead of building from source shellcheck can be installed through your
-systems package manager.
+On systems with Cabal:
 
-On OS X:
+    cabal update
+    cabal install shellcheck
 
-    $ brew install shellscript
+On Arch Linux with community packages enabled:
+
+    pacman -S shellcheck
+
+On OS X with homebrew:
+
+    brew install shellcheck
+
+ShellCheck is also available as an online service:
+
+    http://www.shellcheck.net
 
 ## Building with Cabal
 
-Make sure cabal is installed. On Debian based distros:
+This sections describes how to build ShellCheck from a source directory.
+
+First, make sure cabal is installed. On Debian based distros:
 
     apt-get install cabal-install
 
@@ -72,27 +84,5 @@ To run the unit test suite:
     cabal configure --enable-tests
     cabal build
     cabal test
-
-## Building with Make
-
-ShellCheck requires GHC, Parsec3, JSON and Text.Regex.
-
-On Fedora, these can be installed with:
-
-    yum install ghc ghc-parsec-devel ghc-QuickCheck-devel \
-      ghc-json-devel ghc-regex-compat-devel pandoc
-
-On Ubuntu and similar, use:
-
-    apt-get install ghc libghc-parsec3-dev libghc-json-dev \
-      libghc-regex-compat-dev libghc-quickcheck2-dev pandoc
-
-To build, cd to the shellcheck source directory and:
-
-    $ make
-
-If you want to distribute the binary and/or run it on other distros, you
-can `make shellcheck-static` to build a statically linked executable without
-library dependencies.
 
 Happy ShellChecking!
