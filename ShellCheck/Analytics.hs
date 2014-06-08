@@ -620,6 +620,10 @@ checkBashisms _ = bashism
         | t `isCommand` "source" =
             warnMsg id "'source' in place of '.' is"
     bashism (T_FdRedirect id "&" (T_IoFile _ (T_Greater _) _)) = warnMsg id "&> is"
+    bashism t@(TA_Expansion id _) | getLiteralString t == Just "RANDOM" =
+        warnMsg id "RANDOM is"
+    bashism t@(T_DollarBraced id _) | getBracedReference (bracedString t) == "RANDOM" =
+        warnMsg id "$RANDOM is"
     bashism (T_DollarBraced id token) =
         mapM_ check expansion
       where
@@ -637,8 +641,6 @@ checkBashisms _ = bashism
             warnMsg (getId arg) "exec flags are"
     bashism t@(T_SimpleCommand id _ _)
         | t `isCommand` "let" = warnMsg id "'let' is"
-    bashism t@(TA_Variable id "RANDOM") =
-        warnMsg id "RANDOM is"
     bashism t@(T_Pipe id "|&") =
         warnMsg id "|& in place of 2>&1 | is"
     bashism (T_Array id _) =
@@ -1163,8 +1165,11 @@ checkBraceExpansionVars _ (T_BraceExpansion id s) | "..$" `isInfixOf` s =
 checkBraceExpansionVars _ _ = return ()
 
 prop_checkForDecimals = verify checkForDecimals "((3.14*c))"
-checkForDecimals _ (TA_Literal id s) | '.' `elem` s =
-    err id 2079 "(( )) doesn't support decimals. Use bc or awk."
+checkForDecimals _ t@(TA_Expansion id _) = potentially $ do
+    str <- getLiteralString t
+    first <- str !!! 0
+    guard $ isDigit first && '.' `elem` str
+    return $ err id 2079 "(( )) doesn't support decimals. Use bc or awk."
 checkForDecimals _ _ = return ()
 
 prop_checkDivBeforeMult = verify checkDivBeforeMult "echo $((c/n*100))"
@@ -1178,24 +1183,25 @@ prop_checkArithmeticDeref2 = verify checkArithmeticDeref "cow=14; (( s+= $cow ))
 prop_checkArithmeticDeref3 = verifyNot checkArithmeticDeref "cow=1/40; (( s+= ${cow%%/*} ))"
 prop_checkArithmeticDeref4 = verifyNot checkArithmeticDeref "(( ! $? ))"
 prop_checkArithmeticDeref5 = verifyNot checkArithmeticDeref "(($1))"
-prop_checkArithmeticDeref6 = verifyNot checkArithmeticDeref "(( ${a[$i]} ))"
+prop_checkArithmeticDeref6 = verify checkArithmeticDeref "(( a[$i] ))"
 prop_checkArithmeticDeref7 = verifyNot checkArithmeticDeref "(( 10#$n ))"
-checkArithmeticDeref params t@(TA_Expansion _ (T_DollarBraced id l)) =
-    unless (excepting (bracedString l) || inBaseExpression) $
+checkArithmeticDeref params t@(TA_Expansion _ [T_DollarBraced id l]) =
+    unless (excepting $ bracedString l) $
         style id 2004 "$ on variables in (( )) is unnecessary."
   where
-    inBaseExpression = any isBase $ parents params t
-    isBase (TA_Base {}) = True
-    isBase _ = False
     excepting [] = True
-    excepting s = any (`elem` "/.:#%?*@[]") s || isDigit (head s)
+    excepting s = any (`elem` "/.:#%?*@") s || isDigit (head s)
 checkArithmeticDeref _ _ = return ()
 
 prop_checkArithmeticBadOctal1 = verify checkArithmeticBadOctal "(( 0192 ))"
 prop_checkArithmeticBadOctal2 = verifyNot checkArithmeticBadOctal "(( 0x192 ))"
 prop_checkArithmeticBadOctal3 = verifyNot checkArithmeticBadOctal "(( 1 ^ 0777 ))"
-checkArithmeticBadOctal _ (TA_Base id "0" (TA_Literal _ str)) | '9' `elem` str || '8' `elem` str =
-    err id 2080 "Numbers with leading 0 are considered octal."
+checkArithmeticBadOctal _ t@(TA_Expansion id _) = potentially $ do
+    str <- getLiteralString t
+    guard $ str `matches` octalRE
+    return $ err id 2080 "Numbers with leading 0 are considered octal."
+  where
+    octalRE = mkRegex "^0[0-7]*[8-9]"
 checkArithmeticBadOctal _ _ = return ()
 
 prop_checkComparisonAgainstGlob = verify checkComparisonAgainstGlob "[[ $cow == $bar ]]"
@@ -1285,10 +1291,8 @@ isQuoteFree tree t =
             TC_Noary _ DoubleBracket _ -> return True
             TC_Unary _ DoubleBracket _ _ -> return True
             TC_Binary _ DoubleBracket _ _ _ -> return True
-            TA_Unary {} -> return True
-            TA_Binary {} -> return True
-            TA_Trinary {} -> return True
-            TA_Expansion _ _ -> return True
+            TA_Sequence {} -> return True
+            T_Arithmetic {} -> return True
             T_Assignment {} -> return True
             T_Redirecting {} -> return $
                 any (isCommand t) ["local", "declare", "typeset", "export"]
@@ -1359,10 +1363,11 @@ getGlobOrLiteralString = getLiteralStringExt f
 
 getLiteralStringExt more = g
   where
-    allInList l = let foo = map g l in if all isJust foo then return $ concat (catMaybes foo) else Nothing
-    g s@(T_DoubleQuoted _ l) = allInList l
-    g s@(T_DollarDoubleQuoted _ l) = allInList l
-    g s@(T_NormalWord _ l) = allInList l
+    allInList = liftM concat . sequence . map g
+    g (T_DoubleQuoted _ l) = allInList l
+    g (T_DollarDoubleQuoted _ l) = allInList l
+    g (T_NormalWord _ l) = allInList l
+    g (TA_Expansion _ l) = allInList l
     g (T_SingleQuoted _ s) = return s
     g (T_Literal _ s) = return s
     g x = more x
@@ -1899,10 +1904,16 @@ getModifiedVariables t =
         c@(T_SimpleCommand {}) ->
             getModifiedVariableCommand c
 
-        TA_Unary _ "++|" (TA_Variable id name) -> [(t, t, name, DataFrom [t])]
-        TA_Unary _ "|++" (TA_Variable id name) -> [(t, t, name, DataFrom [t])]
-        TA_Binary _ op (TA_Variable id name) rhs ->
-            [(t, t, name, DataFrom [rhs]) | op `elem` ["=", "*=", "/=", "%=", "+=", "-=", "<<=", ">>=", "&=", "^=", "|="]]
+        TA_Unary _ "++|" var -> maybeToList $ do
+            name <- getLiteralString var
+            return (t, t, name, DataFrom [t])
+        TA_Unary _ "|++" var -> maybeToList $ do
+            name <- getLiteralString var
+            return (t, t, name, DataFrom [t])
+        TA_Binary _ op lhs rhs -> maybeToList $ do
+            guard $ op `elem` ["=", "*=", "/=", "%=", "+=", "-=", "<<=", ">>=", "&=", "^=", "|="]
+            name <- getLiteralString lhs
+            return (t, t, name, DataFrom [rhs])
 
         --Points to 'for' rather than variable
         T_ForIn id _ strs words _ -> map (\str -> (t, t, str, DataFrom words)) strs
@@ -1976,8 +1987,9 @@ getReferencedVariables t =
         T_DollarBraced id l -> let str = bracedString l in
             (t, t, getBracedReference str) :
                 map (\x -> (l, l, x)) (getIndexReferences str)
-        TA_Variable id str ->
-            map (\x -> (t, t, x)) $ getBracedReference str:getIndexReferences str
+        TA_Expansion id _ -> maybeToList $ do
+            str <- getLiteralStringExt (const $ return "#") t
+            return (t, t, getBracedReference str)
         T_Assignment id Append str _ _ -> [(t, t, str)]
         x -> getReferencedVariableCommand x
 

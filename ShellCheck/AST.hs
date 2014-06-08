@@ -32,14 +32,11 @@ data ForInType = NormalForIn | ShortForIn deriving (Show, Eq)
 data CaseType = CaseBreak | CaseFallThrough | CaseContinue deriving (Show, Eq)
 
 data Token =
-    TA_Base Id String Token
-    | TA_Binary Id String Token Token
-    | TA_Expansion Id Token
-    | TA_Literal Id String
+    TA_Binary Id String Token Token
+    | TA_Expansion Id [Token]
     | TA_Sequence Id [Token]
     | TA_Trinary Id Token Token Token
     | TA_Unary Id String Token
-    | TA_Variable Id String
     | TC_And Id ConditionType String Token Token
     | TC_Binary Id ConditionType String Token Token
     | TC_Group Id ConditionType Token
@@ -244,8 +241,7 @@ analyze f g i =
         b <- round t2
         c <- round t3
         return $ TA_Trinary id a b c
-    delve (TA_Expansion id t) = d1 t $ TA_Expansion id
-    delve (TA_Base id b t) = d1 t $ TA_Base id b
+    delve (TA_Expansion id t) = dl t $ TA_Expansion id
     delve (T_Annotation id anns t) = d1 t $ T_Annotation id anns
     delve t = return t
 
@@ -328,11 +324,8 @@ getId t = case t of
         TA_Binary id _ _ _  -> id
         TA_Unary id _ _  -> id
         TA_Sequence id _  -> id
-        TA_Variable id _  -> id
         TA_Trinary id _ _ _  -> id
         TA_Expansion id _  -> id
-        TA_Literal id _ -> id
-        TA_Base id _ _ -> id
         T_ProcSub id _ _ -> id
         T_Glob id _ -> id
         T_ForArithmetic id _ _ _ _ -> id

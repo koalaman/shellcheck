@@ -111,7 +111,7 @@ nbsp = do
 data Note = Note Id Severity Code String deriving (Show, Eq)
 data ParseNote = ParseNote SourcePos Severity Code String deriving (Show, Eq)
 data Severity = ErrorC | WarningC | InfoC | StyleC deriving (Show, Eq, Ord)
-data Context = ContextName SourcePos String | ContextAnnotation [Annotation]
+data Context = ContextName SourcePos String | ContextAnnotation [Annotation] deriving (Show)
 type Code = Integer
 
 codeForParseNote (ParseNote _ _ code _) = code
@@ -468,6 +468,7 @@ prop_aC = isOk readArithmeticContents "\"$((3+2))\" + '37'"
 prop_aD = isOk readArithmeticContents "foo[9*y+x]++"
 prop_aE = isOk readArithmeticContents "1+`echo 2`"
 prop_aF = isOk readArithmeticContents "foo[`echo foo | sed s/foo/4/g` * 3] + 4"
+prop_a10= isOk readArithmeticContents "$foo$bar"
 readArithmeticContents =
     readSequence
   where
@@ -485,25 +486,35 @@ readArithmeticContents =
         spacing
         return $ token id op
 
-    readVar = do
-        id <- getNextId
-        x <- readVariableName
-        y <- readArrayIndex <|> return ""
-        optional spacing
-        return $ TA_Variable id (x ++ y)
-
-    -- Doesn't help with foo[foo]
     readArrayIndex = do
-        char '['
-        x <- many1 $ noneOf "]"
-        char ']'
-        return $ "[" ++ x ++ "]"
+        id <- getNextId
+        start <- literal "["
+        middle <- readArithmeticContents
+        end <- literal "]"
+        return $ T_NormalWord id [start, middle, end]
+
+    literal s = do
+        id <- getNextId
+        string s
+        return $ T_Literal id s
+
+    readArithmeticLiteral =
+        readArrayIndex <|> literal "#"
 
     readExpansion = do
         id <- getNextId
-        x <- readNormalDollar <|> readBackTicked
+        pieces <- many1 $ choice [
+            readArithmeticLiteral,
+            readSingleQuoted,
+            readDoubleQuoted,
+            readNormalDollar,
+            readBraced,
+            readBackTicked,
+            readProcSub,
+            readNormalLiteral "+-*/=%^,]"
+            ]
         spacing
-        return $ TA_Expansion id x
+        return $ TA_Expansion id pieces
 
     readGroup = do
         char '('
@@ -512,40 +523,7 @@ readArithmeticContents =
         spacing
         return s
 
-    readNumber = do
-        id <- getNextId
-        num <- many1 $ oneOf "0123456789."
-        return $ TA_Literal id num
-
-    readBased = getArbitrary <|> getHex <|> getOct
-      where
-        getThing prefix litchars = try $ do
-            id <- getNextId
-            x <- prefix
-            t <- readExpansion <|> (do
-                i <- getNextId
-                stuff <- many1 litchars
-                return $ TA_Literal i stuff)
-            return $ TA_Base id x t
-
-        getArbitrary = getThing arbitrary variableChars
-        getHex = getThing hex hexDigit
-        getOct = getThing oct digit
-
-        arbitrary = try $ do
-            b <- many1 digit
-            s <- char '#'
-            return (b ++ [s])
-        hex = try $ do
-            z <- char '0'
-            x <- oneOf "xX"
-            return [z, x]
-        oct = string "0"
-
-    readArithTerm = readBased <|> readArithTermUnit
-    readArithTermUnit = readGroup <|> readExpansion <|> readQuoted <|> readNumber <|> readVar
-
-    readQuoted = readDoubleQuoted <|> readSingleQuoted
+    readArithTerm = readGroup <|> readExpansion
 
     readSequence = do
         spacing
@@ -724,6 +702,7 @@ checkPossibleTermination pos [T_Literal _ x] =
 checkPossibleTermination _ _ = return ()
 
 readNormalWordPart end = do
+    notFollowedBy2 $ oneOf end
     checkForParenthesis
     choice [
         readSingleQuoted,
@@ -858,7 +837,7 @@ readBackTicked = called "backtick expansion" $ do
       disregard (char '`') <|> do
          pos <- getPosition
          char '´'
-         parseProblemAt pos ErrorC 1077 
+         parseProblemAt pos ErrorC 1077
             "For command expansion, the tick should slant left (` vs ´)."
 
 subParse pos parser input = do
