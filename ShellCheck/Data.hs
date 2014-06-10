@@ -1,9 +1,9 @@
 module ShellCheck.Data where
 
 import Data.Version (showVersion)
---import Paths_ShellCheck (version)
+import Paths_ShellCheck (version)
 
-shellcheckVersion = "1" --showVersion version
+shellcheckVersion = showVersion version
 
 internalVariables = [
     -- Generic
