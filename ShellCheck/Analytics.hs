@@ -531,7 +531,8 @@ checkPipePitfalls _ (T_Pipeline id _ commands) = do
     first func (x:_) = func (getId x)
     first _ _ = return ()
     hasShortParameter char list = any (\x -> "-" `isPrefixOf` x && char `elem` x) list
-    hasParameter string list = any (("--" ++ string) `isPrefixOf`) list
+    hasParameter string list =
+        any (isPrefixOf string . dropWhile (== '-')) list
 checkPipePitfalls _ _ = return ()
 
 indexOfSublists sub = f 0
