@@ -469,6 +469,7 @@ prop_aD = isOk readArithmeticContents "foo[9*y+x]++"
 prop_aE = isOk readArithmeticContents "1+`echo 2`"
 prop_aF = isOk readArithmeticContents "foo[`echo foo | sed s/foo/4/g` * 3] + 4"
 prop_a10= isOk readArithmeticContents "$foo$bar"
+prop_a11= isOk readArithmeticContents "i<(0+(1+1))"
 readArithmeticContents =
     readSequence
   where
@@ -510,7 +511,6 @@ readArithmeticContents =
             readNormalDollar,
             readBraced,
             readBackTicked,
-            readProcSub,
             readNormalLiteral "+-*/=%^,]"
             ]
         spacing
