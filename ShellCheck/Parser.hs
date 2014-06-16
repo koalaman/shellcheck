@@ -1155,6 +1155,7 @@ prop_readHereDoc3 = isOk readHereDoc "<< foo\n$\"\nfoo"
 prop_readHereDoc4 = isOk readHereDoc "<< foo\n`\nfoo"
 prop_readHereDoc5 = isOk readHereDoc "<<- !foo\nbar\n!foo"
 prop_readHereDoc6 = isOk readHereDoc "<< foo\\ bar\ncow\nfoo bar"
+prop_readHereDoc7 = isOk readHereDoc "<< foo\n\\$(f ())\nfoo"
 readHereDoc = called "here document" $ do
     fid <- getNextId
     pos <- getPosition
@@ -1210,11 +1211,11 @@ readHereDoc = called "here document" $ do
     parseHereData Unquoted startPos hereData =
         subParse startPos readHereData hereData
 
-    readHereData = many $ try readNormalDollar <|> try readBackTicked <|> readHereLiteral
+    readHereData = many $ try doubleQuotedPart <|> readHereLiteral
 
     readHereLiteral = do
         id <- getNextId
-        chars <- many1 $ noneOf "`$"
+        chars <- many1 $ noneOf "`$\\"
         return $ T_Literal id chars
 
     verifyHereDoc dashed quoted spacing hereInfo = do
