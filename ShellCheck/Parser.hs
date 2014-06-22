@@ -1345,20 +1345,20 @@ readSimpleCommand = called "simple command" $ do
     case cmd of
       Nothing -> return $ makeSimpleCommand id1 id2 prefix [] []
       Just cmd -> do
-            suffix <- option [] $
-                        if isModifierCommand cmd
-                        then readModifierSuffix
-                        else if isTimeCommand cmd
-                             then readTimeSuffix
-                             else readCmdSuffix
+            suffix <- option [] $ getParser readCmdSuffix cmd [
+                        (["declare", "export", "local", "readonly", "typeset"], readModifierSuffix),
+                        (["time"], readTimeSuffix),
+                        (["let"], readLetSuffix)
+                    ]
             return $ makeSimpleCommand id1 id2 prefix [cmd] suffix
   where
-    isModifierCommand (T_NormalWord _ [T_Literal _ s]) =
-        s `elem` ["declare", "export", "local", "readonly", "typeset"]
-    isModifierCommand _ = False
-    -- Might not belong in T_SimpleCommand. Fixme?
-    isTimeCommand (T_NormalWord _ [T_Literal _ "time"]) = True
-    isTimeCommand _ = False
+    isCommand strings (T_NormalWord _ [T_Literal _ s]) = s `elem` strings
+    isCommand _ _ = False
+    getParser def cmd [] = def
+    getParser def cmd ((list, action):rest) =
+        if isCommand list cmd
+        then action
+        else getParser def cmd rest
 
 prop_readPipeline = isOk readPipeline "! cat /etc/issue | grep -i ubuntu"
 prop_readPipeline2 = isWarning readPipeline "!cat /etc/issue | grep -i ubuntu"
@@ -1781,6 +1781,22 @@ readTimeSuffix = do
     readFlag = do
         lookAhead $ char '-'
         readCmdWord
+
+-- Fixme: this is a hack that doesn't handle let '++c' or let a\>b
+readLetSuffix = many1 (readIoRedirect <|> try readLetExpression <|> readCmdWord)
+  where
+    readLetExpression = do
+        startPos <- getPosition
+        expression <- readStringForParser readCmdWord
+        subParse startPos readArithmeticContents expression
+
+-- Get whatever a parser would parse as a string
+readStringForParser parser = do
+    pos <- lookAhead (parser >> getPosition)
+    s <- readUntil pos
+    return s
+  where
+    readUntil endPos = anyChar `reluctantlyTill` (getPosition >>= guard . (== endPos))
 
 prop_readAssignmentWord = isOk readAssignmentWord "a=42"
 prop_readAssignmentWord2 = isOk readAssignmentWord "b=(1 2 3)"
