@@ -206,6 +206,7 @@ nodeChecks = [
     ,checkShouldUseGrepQ
     ,checkTestGlobs
     ,checkConcatenatedDollarAt
+    ,checkFindActionPrecedence
     ]
 
 
@@ -2860,6 +2861,24 @@ checkTestGlobs params (TC_Unary _ _ op token) | isGlob token =
     err (getId token) 2144 $
        op ++ " doesn't work with globs. Use a for loop."
 checkTestGlobs _ _ = return ()
+
+prop_checkFindActionPrecedence1 = verify checkFindActionPrecedence "find . -name '*.wav' -o -name '*.au' -exec rm {} +"
+prop_checkFindActionPrecedence2 = verifyNot checkFindActionPrecedence "find . -name '*.wav' -o \\( -name '*.au' -exec rm {} + \\)"
+prop_checkFindActionPrecedence3 = verifyNot checkFindActionPrecedence "find . -name '*.wav' -o -name '*.au'"
+checkFindActionPrecedence params = checkCommand "find" (const f)
+  where
+    pattern = [isMatch, const True, isParam ["-o"], isMatch, const True, isAction]
+    f list | length list < length pattern = return ()
+    f list@(_:rest) =
+        if all id (zipWith ($) pattern list)
+        then warnFor (list !! ((length pattern)-1))
+        else f rest
+    isMatch = isParam [ "-name", "-regex", "-iname", "-iregex" ]
+    isAction = isParam [ "-exec", "-execdir", "-delete", "-print" ]
+    isParam strs t = fromMaybe False $ do
+        param <- getLiteralString t
+        return $ param `elem` strs
+    warnFor t = warn (getId t) 2146 "This action ignores everything before the -o. Use \\( \\) to group."
 
 return []
 runTests = $quickCheckAll
