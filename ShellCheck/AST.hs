@@ -47,6 +47,8 @@ data Token =
     | T_AndIf Id (Token) (Token)
     | T_Arithmetic Id Token
     | T_Array Id [Token]
+    | T_IndexedElement Id Token Token
+    | T_ Id [Token]
     | T_Assignment Id AssignmentMode String (Maybe Token) Token
     | T_Backgrounded Id Token
     | T_Backticked Id [Token]
@@ -177,6 +179,7 @@ analyze f g i =
         b <- round value
         return $ T_Assignment id mode var a b
     delve (T_Array id t) = dl t $ T_Array id
+    delve (T_IndexedElement id t1 t2) = d2 t1 t2 $ T_IndexedElement id
     delve (T_Redirecting id redirs cmd) = do
         a <- roundAll redirs
         b <- round cmd
@@ -294,6 +297,7 @@ getId t = case t of
         T_FdRedirect id _ _  -> id
         T_Assignment id _ _ _ _  -> id
         T_Array id _  -> id
+        T_IndexedElement id _ _  -> id
         T_Redirecting id _ _  -> id
         T_SimpleCommand id _ _  -> id
         T_Pipeline id _ _  -> id

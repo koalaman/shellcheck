@@ -1229,10 +1229,13 @@ prop_checkCommarrays1 = verify checkCommarrays "a=(1, 2)"
 prop_checkCommarrays2 = verify checkCommarrays "a+=(1,2,3)"
 prop_checkCommarrays3 = verifyNot checkCommarrays "cow=(1 \"foo,bar\" 3)"
 prop_checkCommarrays4 = verifyNot checkCommarrays "cow=('one,' 'two')"
+prop_checkCommarrays5 = verify checkCommarrays "a=([a]=b, [c]=d)"
+prop_checkCommarrays6 = verify checkCommarrays "a=([a]=b,[c]=d,[e]=f)"
 checkCommarrays _ (T_Array id l) =
     when (any (isCommaSeparated . literal) l) $
         warn id 2054 "Use spaces, not commas, to separate array elements."
   where
+    literal (T_IndexedElement _ _ l) = literal l
     literal (T_NormalWord _ l) = concatMap literal l
     literal (T_Literal _ str) = str
     literal _ = "str"
@@ -2261,6 +2264,7 @@ prop_checkUnused14= verifyNotTree checkUnusedAssignments "x=(1); n=0; echo ${x[n
 prop_checkUnused15= verifyNotTree checkUnusedAssignments "x=(1); n=0; (( x[n] ))"
 prop_checkUnused16= verifyNotTree checkUnusedAssignments "foo=5; declare -x foo"
 prop_checkUnused17= verifyNotTree checkUnusedAssignments "read -i 'foo' -e -p 'Input: ' bar; $bar;"
+prop_checkUnused18= verifyNotTree checkUnusedAssignments "a=1; arr=( [$a]=42 ); echo \"${arr[@]}\""
 checkUnusedAssignments params t = snd $ runWriter (mapM_ checkAssignment flow)
   where
     flow = variableFlow params

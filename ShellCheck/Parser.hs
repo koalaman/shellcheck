@@ -1791,7 +1791,8 @@ prop_readAssignmentWord6 = isWarning readAssignmentWord "b += (1 2 3)"
 prop_readAssignmentWord7 = isOk readAssignmentWord "a[3$n'']=42"
 prop_readAssignmentWord8 = isOk readAssignmentWord "a[4''$(cat foo)]=42"
 prop_readAssignmentWord9 = isOk readAssignmentWord "IFS= "
-prop_readAssignmentWord0 = isWarning readAssignmentWord "foo$n=42"
+prop_readAssignmentWord10= isWarning readAssignmentWord "foo$n=42"
+prop_readAssignmentWord11= isOk readAssignmentWord "foo=([a]=b [c] [d]= [e f )"
 readAssignmentWord = try $ do
     id <- getNextId
     pos <- getPosition
@@ -1842,9 +1843,24 @@ readArray = called "array assignment" $ do
     id <- getNextId
     char '('
     allspacing
-    words <- (readNormalWord `thenSkip` allspacing) `reluctantlyTill` char ')'
+    words <- readElement `reluctantlyTill` char ')'
     char ')'
     return $ T_Array id words
+  where
+    readElement = (readIndexed <|> readRegular) `thenSkip` allspacing
+    readIndexed = do
+        id <- getNextId
+        index <- try $ do
+            x <- readArrayIndex
+            char '='
+            return x
+        value <- readNormalWord <|> nothing
+        return $ T_IndexedElement id index value
+    readRegular = readNormalWord
+
+    nothing = do
+        id <- getNextId
+        return $ T_Literal id ""
 
 tryToken s t = try $ do
     id <- getNextId
