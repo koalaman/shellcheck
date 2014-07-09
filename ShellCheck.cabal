@@ -28,8 +28,6 @@ Extra-Source-Files:
     shellcheck.1.md
     -- tests
     test/shellcheck.hs
-    -- misc
-    Makefile
 
 source-repository head
     type: git
