@@ -207,6 +207,7 @@ nodeChecks = [
     ,checkTestGlobs
     ,checkConcatenatedDollarAt
     ,checkFindActionPrecedence
+    ,checkTildeInPath
     ]
 
 
@@ -2712,6 +2713,22 @@ checkOverridingPath _ (T_SimpleCommand _ vars []) =
     notify id = warn id 2123 "PATH is the shell search path. Use another name."
 checkOverridingPath _ _ = return ()
 
+prop_checkTildeInPath1 = verify checkTildeInPath "PATH=\"$PATH:~/bin\""
+prop_checkTildeInPath2 = verify checkTildeInPath "PATH='~foo/bin'"
+prop_checkTildeInPath3 = verifyNot checkTildeInPath "PATH=~/bin"
+checkTildeInPath _ (T_SimpleCommand _ vars _) =
+    mapM_ checkVar vars
+  where
+    checkVar (T_Assignment id Assign "PATH" Nothing (T_NormalWord _ parts)) =
+        when (any (\x -> isQuoted x && hasTilde x) parts) $
+            warn id 2147 "Literal tilde in PATH works poorly across programs."
+    checkVar _ = return ()
+
+    hasTilde t = fromMaybe False (liftM2 elem (return '~') (getLiteralStringExt (const $ return "") t))
+    isQuoted (T_DoubleQuoted {}) = True
+    isQuoted (T_SingleQuoted {}) = True
+    isQuoted _ = False
+checkTildeInPath _ _ = return ()
 
 prop_checkUnsupported1 = verifyNot checkUnsupported "#!/bin/zsh\nfunction { echo cow; }"
 prop_checkUnsupported2 = verify checkUnsupported "#!/bin/sh\nfunction { echo cow; }"
