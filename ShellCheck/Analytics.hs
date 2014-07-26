@@ -2166,6 +2166,7 @@ prop_checkQuotesInLiterals5 = verifyNotTree checkQuotesInLiterals "param=\"--foo
 prop_checkQuotesInLiterals6 = verifyTree checkQuotesInLiterals "param='my\\ file'; cmd=\"rm $param\"; $cmd"
 prop_checkQuotesInLiterals6a= verifyNotTree checkQuotesInLiterals "param='my\\ file'; cmd=\"rm ${#param}\"; $cmd"
 prop_checkQuotesInLiterals7 = verifyTree checkQuotesInLiterals "param='my\\ file'; rm $param"
+prop_checkQuotesInLiterals8 = verifyTree checkQuotesInLiterals "param=\"/foo/'bar baz'/etc\"; rm $param"
 checkQuotesInLiterals params t =
     doVariableFlowAnalysis readF writeF Map.empty (variableFlow params)
   where
@@ -2173,7 +2174,7 @@ checkQuotesInLiterals params t =
     setQuotes name ref = modify $ Map.insert name ref
     deleteQuotes = modify . Map.delete
     parents = parentMap params
-    quoteRegex = mkRegex "\"|([= ]|^)'|'( |$)|\\\\ "
+    quoteRegex = mkRegex "\"|([/= ]|^)'|'( |$)|\\\\ "
     containsQuotes s = s `matches` quoteRegex
 
     writeF _ _ name (DataFrom values) = do
