@@ -811,6 +811,8 @@ prop_readBackTicked3 = isWarning readBackTicked "´grep \"\\\"\"´"
 prop_readBackTicked4 = isOk readBackTicked "`echo foo\necho bar`"
 prop_readBackTicked5 = isOk readSimpleCommand "echo `foo`bar"
 prop_readBackTicked6 = isWarning readSimpleCommand "echo `foo\necho `bar"
+prop_readBackTicked7 = isOk readSimpleCommand "`#inline comment`"
+prop_readBackTicked8 = isOk readSimpleCommand "echo `#comment` \\\nbar baz"
 readBackTicked = called "backtick expansion" $ do
     id <- getNextId
     startPos <- getPosition
@@ -826,7 +828,7 @@ readBackTicked = called "backtick expansion" $ do
             suggestForgotClosingQuote startPos endPos "backtick expansion"
 
     -- Result positions may be off due to escapes
-    result <- subParse subStart readCompoundList (unEscape subString)
+    result <- subParse subStart readTermOrNone (unEscape subString)
     return $ T_Backticked id result
   where
     unEscape [] = []
@@ -1389,6 +1391,12 @@ readAndOr = do
     return $ if null annotations
                 then andOr
                 else T_Annotation aid annotations andOr
+
+readTermOrNone = do
+    allspacing
+    readTerm <|> do
+        eof
+        return []
 
 readTerm = do
     allspacing
