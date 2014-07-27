@@ -290,6 +290,15 @@ matches string regex = isJust $ matchRegex regex string
 headOrDefault _ (a:_) = a
 headOrDefault def _ = def
 
+getAllMatches :: Regex -> String -> [[String]]
+getAllMatches regex str = fromJust $ f str
+  where
+    f str = do
+        (_, _, rest, groups) <- matchRegexAll regex str
+        more <- f rest
+        return $ groups : more
+      `mappend` return []
+
 isConstant token =
     case token of
         T_NormalWord _ l   -> all isConstant l
@@ -1318,7 +1327,8 @@ isQuoteFree tree t =
             T_Arithmetic {} -> return True
             T_Assignment {} -> return True
             T_Redirecting {} -> return $
-                any (isCommand t) ["local", "declare", "typeset", "export"]
+                -- Not true, just a hack to prevent warning about non-expansion refs
+                any (isCommand t) ["local", "declare", "typeset", "export", "trap"]
             T_DoubleQuoted _ _ -> return True
             T_CaseExpression {} -> return True
             T_HereDoc {} -> return True
@@ -1950,6 +1960,10 @@ getReferencedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Litera
         "declare" -> if "x" `elem` getFlags base
             then concatMap getReference rest
             else []
+        "trap" ->
+            case rest of
+                head:_ -> map (\x -> (head, head, x)) $ getVariablesFromLiteralToken head
+                _ -> []
         _ -> []
   where
     getReference t@(T_Assignment _ _ name _ value) = [(t, t, name)]
@@ -2013,8 +2027,32 @@ getReferencedVariables t =
         TA_Expansion id _ -> maybeToList $ do
             str <- getLiteralStringExt (const $ return "#") t
             return (t, t, getBracedReference str)
-        T_Assignment id Append str _ _ -> [(t, t, str)]
+        T_Assignment id mode str _ word ->
+            (if mode == Append then [(t, t, str)] else []) ++ (specialReferences str t word)
         x -> getReferencedVariableCommand x
+  where
+    -- Try to reduce false positives for unused vars only referenced from evaluated vars
+    specialReferences name base word =
+        if name `elem` [
+            "PS1", "PS2", "PS3", "PS4",
+            "PROMPT_COMMAND"
+          ]
+        then
+            map (\x -> (base, base, x)) $
+                getVariablesFromLiteralToken word
+        else []
+
+-- Try to get referenced variables from a literal string like "$foo"
+-- Ignores tons of cases like arithmetic evaluation and array indices.
+prop_getVariablesFromLiteral1 =
+    getVariablesFromLiteral "$foo${bar//a/b}$BAZ" == ["foo", "bar", "BAZ"]
+getVariablesFromLiteral string =
+    map (!! 0) $ getAllMatches variableRegex string
+  where
+    variableRegex = mkRegex "\\$\\{?([A-Za-z0-9_]+)"
+
+getVariablesFromLiteralToken token =
+    getVariablesFromLiteral (fromJust $ getLiteralStringExt (const $ return " ") token)
 
 getVariableFlow shell parents t =
     let (_, stack) = runState (doStackAnalysis startScope endScope t) []
@@ -2277,6 +2315,8 @@ prop_checkUnused16= verifyNotTree checkUnusedAssignments "foo=5; declare -x foo"
 prop_checkUnused17= verifyNotTree checkUnusedAssignments "read -i 'foo' -e -p 'Input: ' bar; $bar;"
 prop_checkUnused18= verifyNotTree checkUnusedAssignments "a=1; arr=( [$a]=42 ); echo \"${arr[@]}\""
 prop_checkUnused19= verifyNotTree checkUnusedAssignments "a=1; let b=a+1; echo $b"
+prop_checkUnused20= verifyNotTree checkUnusedAssignments "a=1; PS1='$a'"
+prop_checkUnused21= verifyNotTree checkUnusedAssignments "a=1; trap 'echo $a' INT"
 checkUnusedAssignments params t = snd $ runWriter (mapM_ checkAssignment flow)
   where
     flow = variableFlow params
