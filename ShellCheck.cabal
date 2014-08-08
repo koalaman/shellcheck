@@ -62,6 +62,7 @@ executable shellcheck
       mtl,
       parsec,
       regex-compat,
+      transformers,
       QuickCheck >= 2.2
     main-is: shellcheck.hs
 
@@ -76,6 +77,7 @@ test-suite test-shellcheck
       mtl,
       parsec,
       regex-compat,
+      transformers,
       QuickCheck >= 2.2
     main-is: test/shellcheck.hs
 
