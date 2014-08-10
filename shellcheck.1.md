@@ -18,23 +18,27 @@ corner cases can cause delayed failures.
 
 # OPTIONS
 
-**-f** *FORMAT*, **--format=***FORMAT*
-
-:   Specify the output format of shellcheck, which prints its results in the
-    standard output. Subsequent **-f** options are ignored, see **FORMATS**
-    below for more information.
-
 **-e**\ *CODE1*[,*CODE2*...],\ **--exclude=***CODE1*[,*CODE2*...]
 
 :   Explicitly exclude the specified codes from the report. Subsequent **-e**
     options are cumulative, but all the codes can be specified at once,
     comma-separated as a single argument.
 
+**-f** *FORMAT*, **--format=***FORMAT*
+
+:   Specify the output format of shellcheck, which prints its results in the
+    standard output. Subsequent **-f** options are ignored, see **FORMATS**
+    below for more information.
+
 **-s**\ *shell*,\ **--shell=***shell*
 
 :   Specify Bourne shell dialect. Valid values are *sh*, *bash*, *ksh* and
     *zsh*. The default is to use the file's shebang, or *bash* if the target
     shell can't be determined.
+
+**-V**\ *version*,\ **--version**
+
+:   Print version and exit.
 
 # FORMATS
 

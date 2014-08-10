@@ -47,6 +47,7 @@ library
       ShellCheck.Analytics
       ShellCheck.AST
       ShellCheck.Data
+      ShellCheck.Options
       ShellCheck.Parser
       ShellCheck.Simple
     other-modules:

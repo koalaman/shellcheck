@@ -1801,8 +1801,7 @@ readLetSuffix = many1 (readIoRedirect <|> try readLetExpression <|> readCmdWord)
 -- Get whatever a parser would parse as a string
 readStringForParser parser = do
     pos <- lookAhead (parser >> getPosition)
-    s <- readUntil pos
-    return s
+    readUntil pos
   where
     readUntil endPos = anyChar `reluctantlyTill` (getPosition >>= guard . (== endPos))
 
@@ -1995,11 +1994,11 @@ readScript = do
             return $ T_Script id sb commands;
         } <|> do {
             parseProblem WarningC 1014 "Couldn't read any commands.";
-            return $ T_Script id sb [T_EOF id];
+            return $ T_Script id sb []
         }
       else do
         many anyChar
-        return $ T_Script id sb [T_EOF id];
+        return $ T_Script id sb [];
 
   where
     basename s = reverse . takeWhile (/= '/') . reverse $ s

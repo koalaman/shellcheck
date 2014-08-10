@@ -16,7 +16,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -}
 {-# LANGUAGE TemplateHaskell #-}
-module ShellCheck.Analytics (AnalysisOption(..), filterByAnnotation, runAnalytics, shellForExecutable, runTests) where
+module ShellCheck.Analytics (AnalysisOptions(..), defaultAnalysisOptions, filterByAnnotation, runAnalytics, shellForExecutable, runTests) where
 
 import Control.Arrow (first)
 import Control.Monad
@@ -29,22 +29,18 @@ import Data.List
 import Data.Maybe
 import Debug.Trace
 import ShellCheck.AST
+import ShellCheck.Options
 import ShellCheck.Data
 import ShellCheck.Parser hiding (runTests)
 import Text.Regex
 import qualified Data.Map as Map
 import Test.QuickCheck.All (quickCheckAll)
 
-data Shell = Ksh | Zsh | Sh | Bash
-    deriving (Show, Eq)
-
 data Parameters = Parameters {
     variableFlow :: [StackData],
     parentMap :: Map.Map Id Token,
     shellType :: Shell
     }
-
-data AnalysisOption = ForceShell Shell
 
 -- Checks that are run on the AST root
 treeChecks :: [Parameters -> Token -> [Note]]
@@ -55,11 +51,12 @@ treeChecks = [
     ,subshellAssignmentCheck
     ,checkSpacefulness
     ,checkQuotesInLiterals
-    ,checkShebang
+    ,checkShebangParameters
     ,checkFunctionsUsedExternally
     ,checkUnusedAssignments
     ,checkUnpassedInFunctions
     ,checkArrayWithoutIndex
+    ,checkShebang
     ]
 
 checksFor Sh = [
@@ -81,24 +78,19 @@ checksFor Bash = [
     ,checkForDecimals
     ]
 
-runAnalytics :: [AnalysisOption] -> Token -> [Note]
+runAnalytics :: AnalysisOptions -> Token -> [Note]
 runAnalytics options root = runList options root treeChecks
 
 runList options root list = notes
     where
         params = Parameters {
-                shellType = getShellOption,
+                shellType = fromMaybe (determineShell root) $ optionShellType options,
                 parentMap = getParentTree root,
                 variableFlow = getVariableFlow (shellType params) (parentMap params) root
         }
-        notes = concatMap (\f -> f params root) list
+        notes = filter (\c -> getCode c `notElem` optionExcludes options) $ concatMap (\f -> f params root) list
+        getCode (Note _ _ c _) = c
 
-        getShellOption =
-            fromMaybe (determineShell root) . msum $
-                map (\option ->
-                    case option of
-                        ForceShell x -> return x
-                        ) options
 
 checkList l t = concatMap (\f -> f t) l
 
@@ -353,21 +345,21 @@ getFlags _ = []
         [] -> Nothing
         (r:_) -> Just r
 
-verify :: (Parameters -> Token -> Writer [a] ()) -> String -> Bool
+verify :: (Parameters -> Token -> Writer [Note] ()) -> String -> Bool
 verify f s = checkNode f s == Just True
 
-verifyNot :: (Parameters -> Token -> Writer [a] ()) -> String -> Bool
+verifyNot :: (Parameters -> Token -> Writer [Note] ()) -> String -> Bool
 verifyNot f s = checkNode f s == Just False
 
-verifyTree :: (Parameters -> Token -> [a]) -> String -> Bool
+verifyTree :: (Parameters -> Token -> [Note]) -> String -> Bool
 verifyTree f s = checkTree f s == Just True
 
-verifyNotTree :: (Parameters -> Token -> [a]) -> String -> Bool
+verifyNotTree :: (Parameters -> Token -> [Note]) -> String -> Bool
 verifyNotTree f s = checkTree f s == Just False
 
 checkNode f = checkTree (runNodeAnalysis f)
 checkTree f s = case parseShell "-" s of
-        (ParseResult (Just (t, m)) _) -> Just . not . null $ runList [] t [f]
+        (ParseResult (Just (t, m)) _) -> Just . not . null $ runList defaultAnalysisOptions t [f]
         _ -> Nothing
 
 
@@ -504,7 +496,7 @@ checkPipePitfalls _ (T_Pipeline id _ commands) = do
         \(find:xargs:_) ->
           let args = deadSimple xargs ++ deadSimple find
           in
-            unless (or $ map ($ args) [
+            unless (any ($ args) [
                 hasShortParameter '0',
                 hasParameter "null",
                 hasParameter "print0",
@@ -541,9 +533,9 @@ checkPipePitfalls _ (T_Pipeline id _ commands) = do
     for' l f = for l (first f)
     first func (x:_) = func (getId x)
     first _ _ = return ()
-    hasShortParameter char list = any (\x -> "-" `isPrefixOf` x && char `elem` x) list
-    hasParameter string list =
-        any (isPrefixOf string . dropWhile (== '-')) list
+    hasShortParameter char = any (\x -> "-" `isPrefixOf` x && char `elem` x)
+    hasParameter string =
+        any (isPrefixOf string . dropWhile (== '-'))
 checkPipePitfalls _ _ = return ()
 
 indexOfSublists sub = f 0
@@ -593,10 +585,16 @@ mayBecomeMultipleArgs t = willBecomeMultipleArgs t || f t
     f (T_NormalWord _ parts) = any f parts
     f _ = False
 
-prop_checkShebang1 = verifyTree checkShebang "#!/usr/bin/env bash -x\necho cow"
-prop_checkShebang2 = verifyNotTree checkShebang "#! /bin/sh  -l "
-checkShebang _ (T_Script id sb _) =
+prop_checkShebangParameters1 = verifyTree checkShebangParameters "#!/usr/bin/env bash -x\necho cow"
+prop_checkShebangParameters2 = verifyNotTree checkShebangParameters "#! /bin/sh  -l "
+checkShebangParameters _ (T_Script id sb _) =
     [Note id ErrorC 2096 "On most OS, shebangs can only specify a single parameter." | length (words sb) > 2]
+
+prop_checkShebang1 = verifyNotTree checkShebang "#!/usr/bin/env bash -x\necho cow"
+prop_checkShebang2 = verifyNotTree checkShebang "#! /bin/sh  -l "
+prop_checkShebang3 = verifyTree checkShebang "ls -l"
+checkShebang params (T_Script id sb _) = 
+    [Note id ErrorC 2148 "Include a shebang (#!) to specify the shell." | sb == ""]
 
 prop_checkBashisms = verify checkBashisms "while read a; do :; done < <(a)"
 prop_checkBashisms2 = verify checkBashisms "[ foo -nt bar ]"
@@ -618,8 +616,8 @@ prop_checkBashisms17= verify checkBashisms "echo $((RANDOM%6+1))"
 prop_checkBashisms18= verify checkBashisms "foo &> /dev/null"
 checkBashisms _ = bashism
   where
-    errMsg id s = err id 2040 $ "#!/bin/sh was specified, so " ++ s ++ " not supported, even when sh is actually bash."
-    warnMsg id s = warn id 2039 $ "#!/bin/sh was specified, but " ++ s ++ " not standard."
+    errMsg id s = err id 2040 $ "In sh, " ++ s ++ " not supported, even when sh is actually bash."
+    warnMsg id s = warn id 2039 $ "In POSIX sh, " ++ s ++ " not supported."
     bashism (T_ProcSub id _ _) = errMsg id "process substitution is"
     bashism (T_Extglob id _ _) = warnMsg id "extglob is"
     bashism (T_DollarSingleQuoted id _) = warnMsg id "$'..' is"
@@ -1412,7 +1410,7 @@ getWordParts (T_NormalWord _ l)   = concatMap getWordParts l
 getWordParts (T_DoubleQuoted _ l) = l
 getWordParts other                = [other]
 
-isCommand token str = isCommandMatch token (\cmd -> cmd  == str || ("/" ++ str) `isSuffixOf` cmd)
+isCommand token str = isCommandMatch token (\cmd -> cmd  == str || ('/' : str) `isSuffixOf` cmd)
 isUnqualifiedCommand token str = isCommandMatch token (== str)
 
 isCommandMatch token matcher = fromMaybe False $ do

@@ -16,7 +16,7 @@ The goals of ShellCheck are:
   - To point out subtle caveats, corner cases and pitfalls, that may cause an
     advanced user's otherwise working script to fail under future circumstances.
 
-ShellCheck is written in Haskell, and requires at least 1 GB of RAM to compile.
+ShellCheck is written in Haskell, and requires 2 GB of memory to compile.
 
 ## Installing
 

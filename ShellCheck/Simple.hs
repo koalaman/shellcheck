@@ -18,15 +18,16 @@
 {-# LANGUAGE TemplateHaskell #-}
 module ShellCheck.Simple (shellCheck, ShellCheckComment, scLine, scColumn, scSeverity, scCode, scMessage, runTests) where
 
-import ShellCheck.Parser hiding (runTests)
-import ShellCheck.Analytics hiding (runTests)
-import Data.Maybe
-import Text.Parsec.Pos
 import Data.List
+import Data.Maybe
+import ShellCheck.Analytics hiding (runTests)
+import ShellCheck.Options
+import ShellCheck.Parser hiding (runTests)
 import Test.QuickCheck.All (quickCheckAll)
+import Text.Parsec.Pos
 
-shellCheck :: String -> [AnalysisOption] -> [ShellCheckComment]
-shellCheck script options =
+shellCheck :: AnalysisOptions -> String -> [ShellCheckComment]
+shellCheck options script =
     let (ParseResult result notes) = parseShell "-" script in
         let allNotes = notes ++ concat (maybeToList $ do
             (tree, posMap) <- result
@@ -51,21 +52,25 @@ severityToString s =
 formatNote (ParseNote pos severity code text) =
     ShellCheckComment (sourceLine pos) (sourceColumn pos) (severityToString severity) (fromIntegral code) text
 
+testCheck = shellCheck defaultAnalysisOptions { optionExcludes = [2148] } -- Ignore #! warnings
 prop_findsParseIssue =
-    let comments = shellCheck "echo \"$12\"" [] in
+    let comments = testCheck "echo \"$12\"" in
         length comments == 1 && scCode (head comments) == 1037
 prop_commentDisablesParseIssue1 =
-    null $ shellCheck "#shellcheck disable=SC1037\necho \"$12\"" []
+    null $ testCheck "#shellcheck disable=SC1037\necho \"$12\""
 prop_commentDisablesParseIssue2 =
-    null $ shellCheck "#shellcheck disable=SC1037\n#lol\necho \"$12\"" []
+    null $ testCheck "#shellcheck disable=SC1037\n#lol\necho \"$12\""
 
 prop_findsAnalysisIssue =
-    let comments = shellCheck "echo $1" [] in
+    let comments = testCheck "echo $1" in
         length comments == 1 && scCode (head comments) == 2086
 prop_commentDisablesAnalysisIssue1 =
-    null $ shellCheck "#shellcheck disable=SC2086\necho $1" []
+    null $ testCheck "#shellcheck disable=SC2086\necho $1"
 prop_commentDisablesAnalysisIssue2 =
-    null $ shellCheck "#shellcheck disable=SC2086\n#lol\necho $1" []
+    null $ testCheck "#shellcheck disable=SC2086\n#lol\necho $1"
+
+prop_optionDisablesIssue1 =
+    null $ shellCheck (defaultAnalysisOptions { optionExcludes = [2086, 2148] }) "echo $1"
 
 return []
 runTests = $quickCheckAll

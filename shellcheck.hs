@@ -26,6 +26,7 @@ import GHC.Exts
 import GHC.IO.Device
 import Prelude hiding (catch)
 import ShellCheck.Data
+import ShellCheck.Options
 import ShellCheck.Simple
 import ShellCheck.Analytics
 import System.Console.GetOpt
@@ -48,10 +49,10 @@ instance Monoid Status where
 
 header = "Usage: shellcheck [OPTIONS...] FILES..."
 options = [
-    Option "f" ["format"]
-        (ReqArg (Flag "format") "FORMAT") "output format",
     Option "e" ["exclude"]
         (ReqArg (Flag "exclude") "CODE1,CODE2..") "exclude types of warnings",
+    Option "f" ["format"]
+        (ReqArg (Flag "format") "FORMAT") "output format",
     Option "s" ["shell"]
         (ReqArg (Flag "shell") "SHELLNAME") "Specify dialect (bash,sh,ksh,zsh)",
     Option "V" ["version"]
@@ -74,15 +75,12 @@ instance JSON ShellCheckComment where
 parseArguments :: [String] -> ErrorT Status IO ([Flag], [FilePath])
 parseArguments argv =
     case getOpt Permute options argv of
-        (opts, files, []) -> do
-            verifyOptions opts files
-            return (opts, files)
-
+        (opts, files, []) -> return (opts, files)
         (_, _, errors) -> do
             liftIO . printErr $ concat errors ++ "\n" ++ usageInfo header options
             throwError SyntaxFailure
 
-formats :: Map.Map String ([Flag] -> [FilePath] -> IO Status)
+formats :: Map.Map String (AnalysisOptions -> [FilePath] -> IO Status)
 formats = Map.fromList [
     ("json", forJson),
     ("gcc", forGcc),
@@ -93,7 +91,7 @@ formats = Map.fromList [
 toStatus = liftM (either id (const NoProblems)) . runErrorT
 
 catchExceptions :: IO Status -> IO Status
-catchExceptions action = action `catch` handler
+catchExceptions action = action -- action `catch` handler
   where
     handler err = do
         printErr $ show (err :: SomeException)
@@ -101,7 +99,7 @@ catchExceptions action = action `catch` handler
 
 checkComments comments = if null comments then NoProblems else SomeProblems
 
-forTty :: [Flag] -> [FilePath] -> IO Status
+forTty :: AnalysisOptions -> [FilePath] -> IO Status
 forTty options files = do
     output <- mapM doFile files
     return $ mconcat output
@@ -155,14 +153,14 @@ forTty options files = do
         return $ if term then colorComment else const id
 
 -- This totally ignores the filenames. Fixme?
-forJson :: [Flag] -> [FilePath] -> IO Status
+forJson :: AnalysisOptions -> [FilePath] -> IO Status
 forJson options files = catchExceptions $ do
     comments <- liftM concat $ mapM (commentsFor options) files
     putStrLn $ encodeStrict comments
     return $ checkComments comments
 
 -- Mimic GCC "file:line:col: (error|warning|note): message" format
-forGcc :: [Flag] -> [FilePath] -> IO Status
+forGcc :: AnalysisOptions -> [FilePath] -> IO Status
 forGcc options files = do
     files <- mapM process files
     return $ mconcat files
@@ -187,7 +185,7 @@ forGcc options files = do
       ]
 
 -- Checkstyle compatible output. A bit of a hack to avoid XML dependencies
-forCheckstyle :: [Flag] -> [FilePath] -> IO Status
+forCheckstyle :: AnalysisOptions -> [FilePath] -> IO Status
 forCheckstyle options files = do
     putStrLn "<?xml version='1.0' encoding='UTF-8'?>"
     putStrLn "<checkstyle version='4.3'>"
@@ -226,23 +224,13 @@ forCheckstyle options files = do
 
 commentsFor options file = liftM (getComments options) $ readContents file
 
-getComments options contents =
-    excludeCodes (getExclusions options) $ shellCheck contents analysisOptions
-  where
-    analysisOptions = catMaybes [ shellOption ]
-    shellOption = do
-        option <- getOption options "shell"
-        sh <- shellForExecutable option
-        return $ ForceShell sh
-
+getComments = shellCheck
 
 readContents :: FilePath -> IO String
 readContents file =
     if file == "-"
     then getContents
     else readFile file
-  where
-    force s = foldr (flip const) s s
 
 -- Realign comments from a tabstop of 8 to 1
 makeNonVirtual comments contents =
@@ -300,8 +288,10 @@ statusToCode status =
         RuntimeException -> ExitFailure 2
 
 process :: [Flag] -> [FilePath] -> ErrorT Status IO ()
-process options files =
-  let format = fromMaybe "tty" $ getOption options "format" in
+process flags files = do
+    options <- foldM (flip parseOption) defaultAnalysisOptions flags
+    verifyFiles files
+    let format = fromMaybe "tty" $ getOption flags "format"
     case Map.lookup format formats of
         Nothing -> do
             liftIO $ do
@@ -312,17 +302,35 @@ process options files =
           where write s = "  " ++ s
         Just f -> ErrorT $ liftM Left $ f options files
 
-verifyOptions :: [Flag] -> [FilePath] -> ErrorT Status IO ()
-verifyOptions opts files = do
-    when (isJust $ getOption opts "version") $ do
-        liftIO printVersion
-        throwError NoProblems
+parseOption flag options =
+    case flag of
+        Flag "shell" str ->
+                fromMaybe (die $ "Unknown shell: " ++ str) $ do
+                    shell <- shellForExecutable str
+                    return $ return options { optionShellType = Just shell }
 
-    let shell = getOption opts "shell" in
-        when (isJust shell && isNothing (shell >>= shellForExecutable)) $ do
-            liftIO $ printErr ("Unknown shell: " ++ fromJust shell)
-            throwError SupportFailure
+        Flag "exclude" str -> do
+            new <- mapM parseNum $ split ',' str
+            let old = optionExcludes options
+            return options { optionExcludes = new ++ old }
 
+        Flag "version" _ -> do
+            liftIO printVersion
+            throwError NoProblems
+
+        _ -> return options
+  where
+    die s = do
+        liftIO $ printErr s
+        throwError SupportFailure
+    parseNum ('S':'C':str) = parseNum str
+    parseNum num = do
+        unless (all isDigit num) $ do
+            liftIO . printErr $ "Bad exclusion: " ++ num
+            throwError SyntaxFailure
+        return (Prelude.read num :: Integer)
+
+verifyFiles files =
     when (null files) $ do
         liftIO $ printErr "No files specified.\n"
         liftIO $ printErr $ usageInfo header options
