@@ -42,7 +42,7 @@ library
       mtl,
       parsec,
       regex-compat,
-      QuickCheck >= 2.2
+      QuickCheck >= 2.7.4
     exposed-modules:
       ShellCheck.Analytics
       ShellCheck.AST
@@ -64,7 +64,7 @@ executable shellcheck
       parsec,
       regex-compat,
       transformers,
-      QuickCheck >= 2.2
+      QuickCheck >= 2.7.4
     main-is: shellcheck.hs
 
 test-suite test-shellcheck
@@ -79,6 +79,6 @@ test-suite test-shellcheck
       parsec,
       regex-compat,
       transformers,
-      QuickCheck >= 2.2
+      QuickCheck >= 2.7.4
     main-is: test/shellcheck.hs
 
