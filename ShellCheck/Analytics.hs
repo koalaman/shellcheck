@@ -593,7 +593,7 @@ checkShebangParameters _ (T_Script id sb _) =
 prop_checkShebang1 = verifyNotTree checkShebang "#!/usr/bin/env bash -x\necho cow"
 prop_checkShebang2 = verifyNotTree checkShebang "#! /bin/sh  -l "
 prop_checkShebang3 = verifyTree checkShebang "ls -l"
-checkShebang params (T_Script id sb _) = 
+checkShebang params (T_Script id sb _) =
     [Note id ErrorC 2148 "Include a shebang (#!) to specify the shell." | sb == ""]
 
 prop_checkBashisms = verify checkBashisms "while read a; do :; done < <(a)"
@@ -1394,7 +1394,7 @@ getGlobOrLiteralString = getLiteralStringExt f
 
 getLiteralStringExt more = g
   where
-    allInList = liftM concat . sequence . map g
+    allInList = liftM concat . mapM g
     g (T_DoubleQuoted _ l) = allInList l
     g (T_DollarDoubleQuoted _ l) = allInList l
     g (T_NormalWord _ l) = allInList l
@@ -1409,6 +1409,13 @@ isLiteral t = isJust $ getLiteralString t
 getWordParts (T_NormalWord _ l)   = concatMap getWordParts l
 getWordParts (T_DoubleQuoted _ l) = l
 getWordParts other                = [other]
+
+getUnquotedLiteral (T_NormalWord _ list) =
+    liftM concat $ mapM str list
+  where
+    str (T_Literal _ s) = return s
+    str _ = Nothing
+getUnquotedLiteral _ = Nothing
 
 isCommand token str = isCommandMatch token (\cmd -> cmd  == str || ('/' : str) `isSuffixOf` cmd)
 isUnqualifiedCommand token str = isCommandMatch token (== str)
@@ -2256,6 +2263,8 @@ prop_checkFunctionsUsedExternally2 =
   verifyTree checkFunctionsUsedExternally "alias f='a'; xargs -n 1 f"
 prop_checkFunctionsUsedExternally3 =
   verifyNotTree checkFunctionsUsedExternally "f() { :; }; echo f"
+prop_checkFunctionsUsedExternally4 =
+  verifyNotTree checkFunctionsUsedExternally "foo() { :; }; sudo \"foo\""
 checkFunctionsUsedExternally params t =
     runNodeAnalysis checkCommand params t
   where
@@ -2284,14 +2293,14 @@ checkFunctionsUsedExternally params t =
         let string = concat $ deadSimple arg
         in when ('=' `elem` string) $
             modify ((takeWhile (/= '=') string, getId arg):)
-    checkArg cmd arg =
-        case Map.lookup (concat $ deadSimple arg) functions of
-            Nothing -> return ()
-            Just id -> do
-              warn (getId arg) 2033
-                "Shell functions can't be passed to external commands."
-              info id 2032 $
-                "Use own script or sh -c '..' to run this from " ++ cmd ++ "."
+    checkArg cmd arg = potentially $ do
+        literalArg <- getUnquotedLiteral arg  -- only consider unquoted literals
+        definitionId <- Map.lookup literalArg functions
+        return $ do
+            warn (getId arg) 2033
+              "Shell functions can't be passed to external commands."
+            info definitionId 2032 $
+              "Use own script or sh -c '..' to run this from " ++ cmd ++ "."
 
 prop_checkUnused0 = verifyNotTree checkUnusedAssignments "var=foo; echo $var"
 prop_checkUnused1 = verifyTree checkUnusedAssignments "var=foo; echo $bar"
