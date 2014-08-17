@@ -34,6 +34,7 @@ data CaseType = CaseBreak | CaseFallThrough | CaseContinue deriving (Show, Eq)
 data Token =
     TA_Binary Id String Token Token
     | TA_Expansion Id [Token]
+    | TA_Index Id Token
     | TA_Sequence Id [Token]
     | TA_Trinary Id Token Token Token
     | TA_Unary Id String Token
@@ -245,6 +246,7 @@ analyze f g i =
         c <- round t3
         return $ TA_Trinary id a b c
     delve (TA_Expansion id t) = dl t $ TA_Expansion id
+    delve (TA_Index id t) = d1 t $ TA_Index id
     delve (T_Annotation id anns t) = d1 t $ T_Annotation id anns
     delve t = return t
 
@@ -330,6 +332,7 @@ getId t = case t of
         TA_Sequence id _  -> id
         TA_Trinary id _ _ _  -> id
         TA_Expansion id _  -> id
+        TA_Index id _  -> id
         T_ProcSub id _ _ -> id
         T_Glob id _ -> id
         T_ForArithmetic id _ _ _ _ -> id

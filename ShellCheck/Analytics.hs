@@ -1205,19 +1205,28 @@ prop_checkArithmeticDeref5 = verifyNot checkArithmeticDeref "(($1))"
 prop_checkArithmeticDeref6 = verify checkArithmeticDeref "(( a[$i] ))"
 prop_checkArithmeticDeref7 = verifyNot checkArithmeticDeref "(( 10#$n ))"
 prop_checkArithmeticDeref8 = verifyNot checkArithmeticDeref "let i=$i+1"
+prop_checkArithmeticDeref9 = verifyNot checkArithmeticDeref "(( a[foo] ))"
+prop_checkArithmeticDeref10= verifyNot checkArithmeticDeref "(( a[\\$foo] ))"
+prop_checkArithmeticDeref11= verifyNot checkArithmeticDeref "a[$foo]=wee"
+prop_checkArithmeticDeref12= verify checkArithmeticDeref "for ((i=0; $i < 3; i)); do true; done"
 checkArithmeticDeref params t@(TA_Expansion _ [T_DollarBraced id l]) =
-    unless ((isException $ bracedString l) || (not isNormal)) $
-        style id 2004 "$ on variables in (( )) is unnecessary."
+    unless (isException $ bracedString l) getWarning
   where
     isException [] = True
     isException s = any (`elem` "/.:#%?*@") s || isDigit (head s)
-    isNormal = fromMaybe True $ msum $ map isNormalContext $ (parents params t)
-    isNormalContext t =
+    getWarning = fromMaybe noWarning . msum . map warningFor $ parents params t
+    warningFor t =
         case t of
-            T_Arithmetic {} -> return True
-            T_DollarArithmetic {} -> return True
-            T_SimpleCommand {} -> return False
-            _ -> fail "Irrelevant"
+            T_Arithmetic {} -> return normalWarning
+            T_DollarArithmetic {} -> return normalWarning
+            T_ForArithmetic {} -> return normalWarning
+            TA_Index {} -> return indexWarning
+            T_SimpleCommand {} -> return noWarning
+            _ -> Nothing
+
+    normalWarning = style id 2004 "$/${} is unnecessary on arithmetic variables."
+    indexWarning = style id 2149 "Remove $/${} for numeric index, or escape it for string."
+    noWarning = return ()
 checkArithmeticDeref _ _ = return ()
 
 prop_checkArithmeticBadOctal1 = verify checkArithmeticBadOctal "(( 0192 ))"

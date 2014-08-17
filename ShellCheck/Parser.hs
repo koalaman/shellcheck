@@ -489,10 +489,10 @@ readArithmeticContents =
 
     readArrayIndex = do
         id <- getNextId
-        start <- literal "["
+        char '['
         middle <- readArithmeticContents
-        end <- literal "]"
-        return $ T_NormalWord id [start, middle, end]
+        char ']'
+        return $ TA_Index id middle
 
     literal s = do
         id <- getNextId
@@ -596,7 +596,7 @@ readArithmeticContents =
             id <- getNextId
             op <- try $ string "++" <|> string "--"
             spacing
-            return $ TA_Unary id ("|" ++ op) x
+            return $ TA_Unary id ('|':op) x
          <|>
             return x
 
@@ -1816,6 +1816,7 @@ prop_readAssignmentWord8 = isOk readAssignmentWord "a[4''$(cat foo)]=42"
 prop_readAssignmentWord9 = isOk readAssignmentWord "IFS= "
 prop_readAssignmentWord10= isWarning readAssignmentWord "foo$n=42"
 prop_readAssignmentWord11= isOk readAssignmentWord "foo=([a]=b [c] [d]= [e f )"
+prop_readAssignmentWord12= isOk readAssignmentWord "a[b <<= 3 + c]='thing'"
 readAssignmentWord = try $ do
     id <- getNextId
     pos <- getPosition
@@ -1851,14 +1852,10 @@ readAssignmentWord = try $ do
         id <- getNextId
         return $ T_Literal id ""
 
--- This is only approximate. Fixme?
--- * Bash allows foo[' ' "" $(true) 2 ``]=var
--- * foo[bar] dereferences bar
 readArrayIndex = do
     char '['
     optional space
-    x <- readNormalishWord "]"
-    optional space
+    x <- readArithmeticContents
     char ']'
     return x
 
