@@ -1414,7 +1414,11 @@ getLiteralStringExt more = g
 
 isLiteral t = isJust $ getLiteralString t
 
--- turn a NormalWord like foo="bar $baz" into a series of constituent elements like [foo=,bar ,$baz]
+-- Get a literal string ignoring all non-literals
+onlyLiteralString :: Token -> String
+onlyLiteralString = fromJust . getLiteralStringExt (const $ return "")
+
+-- Turn a NormalWord like foo="bar $baz" into a series of constituent elements like [foo=,bar ,$baz]
 getWordParts (T_NormalWord _ l)   = concatMap getWordParts l
 getWordParts (T_DoubleQuoted _ l) = l
 getWordParts other                = [other]
@@ -1469,11 +1473,16 @@ prop_checkUuoeCmd4 = verify checkUuoeCmd "echo \"`date`\""
 prop_checkUuoeCmd5 = verifyNot checkUuoeCmd "echo \"The time is $(date)\""
 checkUuoeCmd _ = checkUnqualifiedCommand "echo" (const f) where
     msg id = style id 2005 "Useless echo? Instead of 'echo $(cmd)', just use 'cmd'."
-    f [T_NormalWord id [T_DollarExpansion _ _]] = msg id
-    f [T_NormalWord id [T_DoubleQuoted _ [T_DollarExpansion _ _]]] = msg id
-    f [T_NormalWord id [T_Backticked _ _]] = msg id
-    f [T_NormalWord id [T_DoubleQuoted _ [T_Backticked _ _]]] = msg id
+    f [token] = when (tokenIsJustCommandOutput token) $ msg (getId token)
     f _ = return ()
+
+-- Check whether a word is entirely output from a single command
+tokenIsJustCommandOutput t = case t of
+    T_NormalWord id [T_DollarExpansion _ _] -> True
+    T_NormalWord id [T_DoubleQuoted _ [T_DollarExpansion _ _]] -> True
+    T_NormalWord id [T_Backticked _ _] -> True
+    T_NormalWord id [T_DoubleQuoted _ [T_Backticked _ _]] -> True
+    _ -> False
 
 prop_checkUuoeVar1 = verify checkUuoeVar "for f in $(echo $tmp); do echo lol; done"
 prop_checkUuoeVar2 = verify checkUuoeVar "date +`echo \"$format\"`"
@@ -1481,6 +1490,7 @@ prop_checkUuoeVar3 = verifyNot checkUuoeVar "foo \"$(echo -e '\r')\""
 prop_checkUuoeVar4 = verifyNot checkUuoeVar "echo $tmp"
 prop_checkUuoeVar5 = verify checkUuoeVar "foo \"$(echo \"$(date) value:\" $value)\""
 prop_checkUuoeVar6 = verifyNot checkUuoeVar "foo \"$(echo files: *.png)\""
+prop_checkUuoeVar7 = verifyNot checkUuoeVar "foo $(echo $(bar))" -- covered by 2005
 checkUuoeVar _ p =
     case p of
         T_Backticked id [cmd] -> check id cmd
@@ -1497,8 +1507,9 @@ checkUuoeVar _ p =
 
     check id (T_Pipeline _ _ [T_Redirecting _ _ c]) = warnForEcho id c
     check _ _ = return ()
-    warnForEcho id = checkUnqualifiedCommand "echo" $ \_ vars ->
-        unless ("-" `isPrefixOf` concat (concatMap deadSimple vars)) $
+    isCovered first rest = null rest && tokenIsJustCommandOutput first
+    warnForEcho id = checkUnqualifiedCommand "echo" $ \_ vars@(first:rest) ->
+        unless (isCovered first rest || "-" `isPrefixOf` onlyLiteralString first) $
             when (all couldBeOptimized vars) $ style id 2116
                 "Useless echo? Instead of 'cmd $(echo foo)', just use 'cmd foo'."
 
