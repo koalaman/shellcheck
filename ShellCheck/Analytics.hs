@@ -2344,7 +2344,7 @@ prop_checkUnused18= verifyNotTree checkUnusedAssignments "a=1; arr=( [$a]=42 ); 
 prop_checkUnused19= verifyNotTree checkUnusedAssignments "a=1; let b=a+1; echo $b"
 prop_checkUnused20= verifyNotTree checkUnusedAssignments "a=1; PS1='$a'"
 prop_checkUnused21= verifyNotTree checkUnusedAssignments "a=1; trap 'echo $a' INT"
-checkUnusedAssignments params t = snd $ runWriter (mapM_ checkAssignment flow)
+checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
     flow = variableFlow params
     references = foldl (flip ($)) defaultMap (map insertRef flow)
@@ -2352,13 +2352,16 @@ checkUnusedAssignments params t = snd $ runWriter (mapM_ checkAssignment flow)
         Map.insert (stripSuffix name) ()
     insertRef _ = id
 
-    checkAssignment (Assignment (_, token, name, _)) | isVariableName name =
-        case Map.lookup name references of
-            Just _ -> return ()
-            Nothing ->
-                info (getId token) 2034 $
-                    name ++ " appears unused. Verify it or export it."
-    checkAssignment _ = return ()
+    assignments = foldl (flip ($)) Map.empty (map insertAssignment flow)
+    insertAssignment (Assignment (_, token, name, _)) | isVariableName name =
+        Map.insert name token
+    insertAssignment _ = id
+
+    unused = Map.assocs $ Map.difference assignments references
+
+    warnFor (name, token) =
+        info (getId token) 2034 $
+            name ++ " appears unused. Verify it or export it."
 
     stripSuffix = takeWhile isVariableChar
     defaultMap = Map.fromList $ zip internalVariables $ repeat ()
