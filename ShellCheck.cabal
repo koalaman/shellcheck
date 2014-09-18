@@ -1,7 +1,7 @@
 Name:             ShellCheck
 Version:          0.3.4
 Synopsis:         Shell script analysis tool
-License:          OtherLicense
+License:          AGPL-3
 License-file:     LICENSE
 Category:         Static Analysis
 Author:           Vidar Holen
