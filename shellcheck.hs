@@ -237,7 +237,12 @@ makeNonVirtual comments contents =
     map fix comments
   where
     ls = lines contents
-    fix c = c { scColumn = real (ls !! (scLine c - 1)) 0 0 (scColumn c) }
+    fix c = c {
+        scColumn =
+            if scLine c > 0 && scLine c <= length ls
+            then real (ls !! (scLine c - 1)) 0 0 (scColumn c)
+            else scColumn c
+    }
     real _ r v target | target <= v = r
     real [] r v _ = r -- should never happen
     real ('\t':rest) r v target =
