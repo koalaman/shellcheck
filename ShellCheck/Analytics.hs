@@ -1337,6 +1337,7 @@ isQuoteFree tree t =
                 -- Not true, just a hack to prevent warning about non-expansion refs
                 any (isCommand t) ["local", "declare", "typeset", "export", "trap"]
             T_DoubleQuoted _ _ -> return True
+            T_DollarDoubleQuoted _ _ -> return True
             T_CaseExpression {} -> return True
             T_HereDoc {} -> return True
             T_DollarBraced {} -> return True
