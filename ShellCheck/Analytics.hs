@@ -1209,11 +1209,12 @@ prop_checkArithmeticDeref9 = verifyNot checkArithmeticDeref "(( a[foo] ))"
 prop_checkArithmeticDeref10= verifyNot checkArithmeticDeref "(( a[\\$foo] ))"
 prop_checkArithmeticDeref11= verifyNot checkArithmeticDeref "a[$foo]=wee"
 prop_checkArithmeticDeref12= verify checkArithmeticDeref "for ((i=0; $i < 3; i)); do true; done"
+prop_checkArithmeticDeref13= verifyNot checkArithmeticDeref "(( $$ ))"
 checkArithmeticDeref params t@(TA_Expansion _ [T_DollarBraced id l]) =
     unless (isException $ bracedString l) getWarning
   where
     isException [] = True
-    isException s = any (`elem` "/.:#%?*@") s || isDigit (head s)
+    isException s = any (`elem` "/.:#%?*@$") s || isDigit (head s)
     getWarning = fromMaybe noWarning . msum . map warningFor $ parents params t
     warningFor t =
         case t of
@@ -2160,6 +2161,7 @@ prop_checkSpacefulnessI = verifyNotTree checkSpacefulness "$1 --flags"
 prop_checkSpacefulnessJ = verifyTree checkSpacefulness "echo $PWD"
 prop_checkSpacefulnessK = verifyNotTree checkSpacefulness "n+='foo bar'"
 prop_checkSpacefulnessL = verifyNotTree checkSpacefulness "select foo in $bar; do true; done"
+prop_checkSpacefulnessM = verifyNotTree checkSpacefulness "echo $\"$1\""
 
 checkSpacefulness params t =
     doVariableFlowAnalysis readF writeF (Map.fromList defaults) (variableFlow params)
