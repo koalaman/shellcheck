@@ -1962,12 +1962,21 @@ readKeyword = choice [ g_Then, g_Else, g_Elif, g_Fi, g_Do, g_Done, g_Esac, g_Rbr
 ifParse p t f =
     (lookAhead (try p) >> t) <|> f
 
+prop_readShebang1 = isOk readShebang "#!/bin/sh\n"
+prop_readShebang2 = isWarning readShebang "!# /bin/sh\n"
 readShebang = do
-    try $ string "#!"
+    try readCorrect <|> try readSwapped
     str <- many $ noneOf "\r\n"
     optional carriageReturn
     optional linefeed
     return str
+  where
+    readCorrect = void $ string "#!"
+    readSwapped = do
+        pos <- getPosition
+        string "!#"
+        parseProblemAt pos ErrorC 1084
+            "Use #!, not !#, for the shebang."
 
 prop_readScript1 = isOk readScript "#!/bin/bash\necho hello world\n"
 prop_readScript2 = isWarning readScript "#!/bin/bash\r\necho hello world\n"
