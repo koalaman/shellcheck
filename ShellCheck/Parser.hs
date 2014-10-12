@@ -1483,9 +1483,8 @@ readIfPart = do
     allspacing
     condition <- readTerm
 
-    optional (do
-        try . lookAhead $ g_Fi
-        parseProblemAt pos ErrorC 1049 "Did you forget the 'then' for this 'if'?")
+    ifNextToken (g_Fi <|> g_Elif) $
+        parseProblemAt pos ErrorC 1049 "Did you forget the 'then' for this 'if'?"
 
     called "then clause" $ do
         g_Then `orFail` parseProblem ErrorC 1050 "Expected 'then'."
@@ -1504,6 +1503,10 @@ readElifPart = called "elif clause" $ do
         parseProblemAt pos ErrorC 1075 "Use 'elif' instead of 'else if'."
     allspacing
     condition <- readTerm
+
+    ifNextToken (g_Fi <|> g_Elif) $
+        parseProblemAt pos ErrorC 1049 "Did you forget the 'then' for this 'elif'?"
+
     g_Then
     acceptButWarn g_Semi ErrorC 1052 "No semicolons directly after 'then'."
     allspacing
@@ -1521,6 +1524,11 @@ readElsePart = called "else clause" $ do
     allspacing
     verifyNotEmptyIf "else"
     readTerm
+
+ifNextToken parser action =
+    optional $ do
+        try . lookAhead $ parser
+        action
 
 prop_readSubshell = isOk readSubshell "( cd /foo; tar cf stuff.tar * )"
 readSubshell = called "explicit subshell" $ do
