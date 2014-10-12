@@ -956,6 +956,8 @@ prop_checkSingleQuotedVariables5 = verifyNot checkSingleQuotedVariables "trap 'e
 prop_checkSingleQuotedVariables6 = verifyNot checkSingleQuotedVariables "sed -n '$p'"
 prop_checkSingleQuotedVariables6a= verify checkSingleQuotedVariables "sed -n '$pattern'"
 prop_checkSingleQuotedVariables7 = verifyNot checkSingleQuotedVariables "PS1='$PWD \\$ '"
+prop_checkSingleQuotedVariables8 = verify checkSingleQuotedVariables "find . -exec echo '$1' {} +"
+prop_checkSingleQuotedVariables9 = verifyNot checkSingleQuotedVariables "find . -exec awk '{print $1}' {} \\;"
 checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
     when (s `matches` re) $
         if "sed" == commandName
@@ -967,7 +969,10 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
         "Expressions don't expand in single quotes, use double quotes for that."
     commandName = fromMaybe "" $ do
         cmd <- getClosestCommand parents t
-        getCommandBasename cmd
+        name <- getCommandBasename cmd
+        if name == "find"
+            then return $ getFindCommand cmd
+            else return name
 
     isProbablyOk =
             any isOkAssignment (take 3 $ getPath parents t)
@@ -992,6 +997,16 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
 
     re = mkRegex "\\$[{(0-9a-zA-Z_]"
     sedContra = mkRegex "\\$[dpsaic]($|[^a-zA-Z])"
+
+    getFindCommand (T_SimpleCommand _ _ words) =
+        let list = map getLiteralString words
+            cmd  = dropWhile (\x -> x /= Just "-exec" && x /= Just "-execdir") list
+        in
+          case cmd of
+            (flag:cmd:rest) -> fromMaybe "find" cmd
+            _ -> "find"
+    getFindCommand (T_Redirecting _ _ cmd) = getFindCommand cmd
+    getFindCommand _ = "find"
 checkSingleQuotedVariables _ _ = return ()
 
 
