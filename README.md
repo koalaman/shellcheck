@@ -25,9 +25,9 @@ On systems with Cabal:
     cabal update
     cabal install shellcheck
 
-On Arch Linux with community packages enabled:
+On Debian based distros:
 
-    pacman -S shellcheck
+    apt-get install shellcheck
 
 On OS X with homebrew:
 
