@@ -2026,6 +2026,7 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal 
         "declare" -> concatMap getModifierParam rest
         "typeset" -> concatMap getModifierParam rest
         "local" -> concatMap getModifierParam rest
+        "set" -> [(base, base, "@", DataFrom rest)]
 
         _ -> []
   where
@@ -2068,6 +2069,8 @@ getReferencedVariables t =
                 map (\x -> (l, l, x)) (getIndexReferences str)
         TA_Expansion id _ -> maybeToList $ do
             str <- getLiteralStringExt (const $ return "#") t
+            firstChar <- if null str then fail "" else return $ head str
+            when (isDigit firstChar) $ fail "is a number"
             return (t, t, getBracedReference str)
         T_Assignment id mode str _ word ->
             (if mode == Append then [(t, t, str)] else []) ++ (specialReferences str t word)
@@ -2709,6 +2712,9 @@ prop_checkUnpassedInFunctions2 = verifyNotTree checkUnpassedInFunctions "foo() {
 prop_checkUnpassedInFunctions3 = verifyNotTree checkUnpassedInFunctions "foo() { echo $lol; }; foo"
 prop_checkUnpassedInFunctions4 = verifyNotTree checkUnpassedInFunctions "foo() { echo $0; }; foo"
 prop_checkUnpassedInFunctions5 = verifyNotTree checkUnpassedInFunctions "foo() { echo $1; }; foo 'lol'; foo"
+prop_checkUnpassedInFunctions6 = verifyNotTree checkUnpassedInFunctions "foo() { set -- *; echo $1; }; foo"
+prop_checkUnpassedInFunctions7 = verifyTree checkUnpassedInFunctions "foo() { echo $1; }; foo; foo;"
+prop_checkUnpassedInFunctions8 = verifyNotTree checkUnpassedInFunctions "foo() { echo $((1)); }; foo;"
 checkUnpassedInFunctions params root =
     execWriter $ mapM_ warnForGroup referenceGroups
   where
@@ -2716,15 +2722,23 @@ checkUnpassedInFunctions params root =
     functionMap = Map.fromList $
         map (\t@(T_Function _ _ _ name _) -> (name,t)) functions
     functions = execWriter $ doAnalysis (tell . maybeToList . findFunction) root
-    findFunction t@(T_DollarBraced id token) = do
-        str <- getLiteralString token
-        unless (isPositional str) $ fail "Not positional"
-        let path = getPath (parentMap params) t
-        find isFunction path
+
+    findFunction t@(T_Function id _ _ name body) =
+        let flow = getVariableFlow (shellType params) (parentMap params) body
+        in
+          if any isPositionalReference flow && not (any isPositionalAssignment flow)
+            then return t
+            else Nothing
     findFunction _ = Nothing
 
-    isFunction (T_Function {}) = True
-    isFunction _ = False
+    isPositionalAssignment x =
+        case x of
+            Assignment (_, _, str, _) -> isPositional str
+            _ -> False
+    isPositionalReference x =
+        case x of
+            Reference (_, _, str) -> isPositional str
+            _ -> False
 
     referenceList :: [(String, Bool, Token)]
     referenceList = execWriter $
