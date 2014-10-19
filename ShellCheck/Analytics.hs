@@ -462,15 +462,13 @@ prop_checkUuoc1 = verify checkUuoc "cat foo | grep bar"
 prop_checkUuoc2 = verifyNot checkUuoc "cat * | grep bar"
 prop_checkUuoc3 = verify checkUuoc "cat $var | grep bar"
 prop_checkUuoc4 = verifyNot checkUuoc "cat $var"
+prop_checkUuoc5 = verifyNot checkUuoc "cat \"$@\""
 checkUuoc _ (T_Pipeline _ _ (T_Redirecting _ _ cmd:_:_)) =
     checkCommand "cat" (const f) cmd
   where
-    f [word] = when (isSimple word) $
+    f [word] = unless (mayBecomeMultipleArgs word) $
         style (getId word) 2002 "Useless cat. Consider 'cmd < file | ..' or 'cmd file | ..' instead."
     f _ = return ()
-    isSimple (T_NormalWord _ parts) = all isSimple parts
-    isSimple (T_DollarBraced _ _) = True
-    isSimple x = not $ willSplit x
 checkUuoc _ _ = return ()
 
 prop_checkNeedlessCommands = verify checkNeedlessCommands "foo=$(expr 3 + 2)"
