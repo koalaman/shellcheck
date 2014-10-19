@@ -2068,12 +2068,12 @@ getReferencedVariables t =
             (t, t, getBracedReference str) :
                 map (\x -> (l, l, x)) (getIndexReferences str)
         TA_Expansion id _ -> maybeToList $ do
-            str <- getLiteralStringExt (const $ return "#") t
-            firstChar <- if null str then fail "" else return $ head str
-            when (isDigit firstChar) $ fail "is a number"
+            str <- getLiteralStringExt literalizer t
+            guard . not $ null str
+            when (isDigit $ head str) $ fail "is a number"
             return (t, t, getBracedReference str)
         T_Assignment id mode str _ word ->
-            (if mode == Append then [(t, t, str)] else []) ++ (specialReferences str t word)
+            [(t, t, str) | mode == Append] ++ specialReferences str t word
         x -> getReferencedVariableCommand x
   where
     -- Try to reduce false positives for unused vars only referenced from evaluated vars
@@ -2086,6 +2086,9 @@ getReferencedVariables t =
             map (\x -> (base, base, x)) $
                 getVariablesFromLiteralToken word
         else []
+
+    literalizer (TA_Index {}) = return ""  -- x[0] becomes a reference of x
+    literalizer _ = Nothing
 
 -- Try to get referenced variables from a literal string like "$foo"
 -- Ignores tons of cases like arithmetic evaluation and array indices.
@@ -2715,6 +2718,7 @@ prop_checkUnpassedInFunctions5 = verifyNotTree checkUnpassedInFunctions "foo() {
 prop_checkUnpassedInFunctions6 = verifyNotTree checkUnpassedInFunctions "foo() { set -- *; echo $1; }; foo"
 prop_checkUnpassedInFunctions7 = verifyTree checkUnpassedInFunctions "foo() { echo $1; }; foo; foo;"
 prop_checkUnpassedInFunctions8 = verifyNotTree checkUnpassedInFunctions "foo() { echo $((1)); }; foo;"
+prop_checkUnpassedInFunctions9 = verifyNotTree checkUnpassedInFunctions "foo() { echo $(($b)); }; foo;"
 checkUnpassedInFunctions params root =
     execWriter $ mapM_ warnForGroup referenceGroups
   where
