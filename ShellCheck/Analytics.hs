@@ -864,13 +864,12 @@ prop_checkUnquotedDollarAt3 = verifyNot checkUnquotedDollarAt "ls ${#foo[@]}"
 prop_checkUnquotedDollarAt4 = verifyNot checkUnquotedDollarAt "ls \"$@\""
 prop_checkUnquotedDollarAt5 = verifyNot checkUnquotedDollarAt "ls ${foo/@/ at }"
 prop_checkUnquotedDollarAt6 = verifyNot checkUnquotedDollarAt "a=$@"
-checkUnquotedDollarAt p word@(T_NormalWord _ parts) | not isAssigned =
+prop_checkUnquotedDollarAt7 = verify checkUnquotedDollarAt "for f in ${var[@]}; do true; done"
+prop_checkUnquotedDollarAt8 = verifyNot checkUnquotedDollarAt "echo \"${args[@]:+${args[@]}}\""
+checkUnquotedDollarAt p word@(T_NormalWord _ parts) | not $ isStrictlyQuoteFree (parentMap p) word =
     forM_ (take 1 $ filter isArrayExpansion parts) $ \x ->
         err (getId x) 2068
             "Double quote array expansions, otherwise they're like $* and break on spaces."
-  where
-    path = getPath (parentMap p) word
-    isAssigned = any isAssignment . take 2 $ path
 checkUnquotedDollarAt _ _ = return ()
 
 prop_checkConcatenatedDollarAt1 = verify checkConcatenatedDollarAt "echo \"foo$@\""
@@ -1328,8 +1327,14 @@ getTokenMap t =
     f t = modify (Map.insert (getId t) t)
 
 
--- Is this node self quoting?
-isQuoteFree tree t =
+-- Is this node self quoting for a regular element?
+isQuoteFree = isQuoteFreeNode False
+
+-- Is this node striclty self quoting, for array expansions
+isStrictlyQuoteFree = isQuoteFreeNode True
+
+
+isQuoteFreeNode strict tree t =
     (isQuoteFreeElement t == Just True) ||
         head (mapMaybe isQuoteFreeContext (drop 1 $ getPath tree t) ++ [False])
   where
@@ -1349,16 +1354,17 @@ isQuoteFree tree t =
             T_Arithmetic {} -> return True
             T_Assignment {} -> return True
             T_Redirecting {} -> return $
-                -- Not true, just a hack to prevent warning about non-expansion refs
-                any (isCommand t) ["local", "declare", "typeset", "export", "trap"]
+                if strict then False else
+                    -- Not true, just a hack to prevent warning about non-expansion refs
+                    any (isCommand t) ["local", "declare", "typeset", "export", "trap"]
             T_DoubleQuoted _ _ -> return True
             T_DollarDoubleQuoted _ _ -> return True
             T_CaseExpression {} -> return True
             T_HereDoc {} -> return True
             T_DollarBraced {} -> return True
-            -- Pragmatically assume it's desirable to split here
-            T_ForIn {} -> return True
-            T_SelectIn {} -> return True
+            -- When non-strict, pragmatically assume it's desirable to split here
+            T_ForIn {} -> return (not strict)
+            T_SelectIn {} -> return (not strict)
             _ -> Nothing
 
 isParamTo tree cmd =
