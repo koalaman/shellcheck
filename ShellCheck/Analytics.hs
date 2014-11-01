@@ -39,7 +39,8 @@ import Test.QuickCheck.All (quickCheckAll)
 data Parameters = Parameters {
     variableFlow :: [StackData],
     parentMap :: Map.Map Id Token,
-    shellType :: Shell
+    shellType :: Shell,
+    shellTypeSpecified :: Bool
     }
 
 -- Checks that are run on the AST root
@@ -85,6 +86,7 @@ runList options root list = notes
     where
         params = Parameters {
                 shellType = fromMaybe (determineShell root) $ optionShellType options,
+                shellTypeSpecified = isJust $ optionShellType options,
                 parentMap = getParentTree root,
                 variableFlow = getVariableFlow (shellType params) (parentMap params) root
         }
@@ -592,7 +594,8 @@ prop_checkShebang1 = verifyNotTree checkShebang "#!/usr/bin/env bash -x\necho co
 prop_checkShebang2 = verifyNotTree checkShebang "#! /bin/sh  -l "
 prop_checkShebang3 = verifyTree checkShebang "ls -l"
 checkShebang params (T_Script id sb _) =
-    [Note id ErrorC 2148 "Include a shebang (#!) to specify the shell." | sb == ""]
+    [Note id InfoC 2148 $ "Shebang (#!) missing. Assuming " ++ (show $ shellType params) ++ "."
+        | not (shellTypeSpecified params) && sb == "" ]
 
 prop_checkBashisms = verify checkBashisms "while read a; do :; done < <(a)"
 prop_checkBashisms2 = verify checkBashisms "[ foo -nt bar ]"
