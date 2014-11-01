@@ -2989,14 +2989,14 @@ prop_checkFindActionPrecedence2 = verifyNot checkFindActionPrecedence "find . -n
 prop_checkFindActionPrecedence3 = verifyNot checkFindActionPrecedence "find . -name '*.wav' -o -name '*.au'"
 checkFindActionPrecedence params = checkCommand "find" (const f)
   where
-    pattern = [isMatch, const True, isParam ["-o"], isMatch, const True, isAction]
+    pattern = [isMatch, const True, isParam ["-o", "-or"], isMatch, const True, isAction]
     f list | length list < length pattern = return ()
     f list@(_:rest) =
         if all id (zipWith ($) pattern list)
         then warnFor (list !! ((length pattern)-1))
         else f rest
-    isMatch = isParam [ "-name", "-regex", "-iname", "-iregex" ]
-    isAction = isParam [ "-exec", "-execdir", "-delete", "-print" ]
+    isMatch = isParam [ "-name", "-regex", "-iname", "-iregex", "-wholename", "-iwholename" ]
+    isAction = isParam [ "-exec", "-execdir", "-delete", "-print", "-print0" ]
     isParam strs t = fromMaybe False $ do
         param <- getLiteralString t
         return $ param `elem` strs
