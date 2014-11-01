@@ -1740,7 +1740,7 @@ checkInexplicablyUnquoted _ (T_NormalWord id tokens) = mapM_ check (tails tokens
         case trapped of
             T_DollarExpansion id _ -> warnAboutExpansion id
             T_DollarBraced id _ -> warnAboutExpansion id
-            T_Literal id s -> unless (s == "/") $ warnAboutLiteral id
+            T_Literal id s -> unless (s == "/" || s == "=") $ warnAboutLiteral id
             _ -> return ()
 
     check _ = return ()
