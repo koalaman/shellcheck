@@ -956,6 +956,7 @@ prop_checkSingleQuotedVariables6a= verify checkSingleQuotedVariables "sed -n '$p
 prop_checkSingleQuotedVariables7 = verifyNot checkSingleQuotedVariables "PS1='$PWD \\$ '"
 prop_checkSingleQuotedVariables8 = verify checkSingleQuotedVariables "find . -exec echo '$1' {} +"
 prop_checkSingleQuotedVariables9 = verifyNot checkSingleQuotedVariables "find . -exec awk '{print $1}' {} \\;"
+prop_checkSingleQuotedVariables10= verify checkSingleQuotedVariables "echo '`pwd`'"
 checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
     when (s `matches` re) $
         if "sed" == commandName
@@ -993,7 +994,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
             T_Assignment _ _ name _ _ -> name `elem` commonlyQuoted
             otherwise -> False
 
-    re = mkRegex "\\$[{(0-9a-zA-Z_]"
+    re = mkRegex "\\$[{(0-9a-zA-Z_]|`.*`"
     sedContra = mkRegex "\\$[dpsaic]($|[^a-zA-Z])"
 
     getFindCommand (T_SimpleCommand _ _ words) =
