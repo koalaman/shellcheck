@@ -802,18 +802,18 @@ prop_checkRedirectToSame3 = verifyNot checkRedirectToSame "cat lol | sed -e 's/a
 prop_checkRedirectToSame4 = verifyNot checkRedirectToSame "foo /dev/null > /dev/null"
 prop_checkRedirectToSame5 = verifyNot checkRedirectToSame "foo > bar 2> bar"
 checkRedirectToSame params s@(T_Pipeline _ _ list) =
-    mapM_ (\l -> (mapM_ (\x -> doAnalysis (checkOccurences x) l) (getAllRedirs list))) list
+    mapM_ (\l -> (mapM_ (\x -> doAnalysis (checkOccurrences x) l) (getAllRedirs list))) list
   where
     note x = Note x InfoC 2094
                 "Make sure not to read and write the same file in the same pipeline."
-    checkOccurences t@(T_NormalWord exceptId x) u@(T_NormalWord newId y) =
+    checkOccurrences t@(T_NormalWord exceptId x) u@(T_NormalWord newId y) =
         when (exceptId /= newId
                 && x == y
                 && not (isOutput t && isOutput u)
                 && not (special t)) $ do
             addNote $ note newId
             addNote $ note exceptId
-    checkOccurences _ _ = return ()
+    checkOccurrences _ _ = return ()
     getAllRedirs = concatMap (\(T_Redirecting _ ls _) -> concatMap getRedirs ls)
     getRedirs (T_FdRedirect _ _ (T_IoFile _ op file)) =
             case op of T_Greater _ -> [file]
