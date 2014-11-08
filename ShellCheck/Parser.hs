@@ -61,7 +61,7 @@ unicodeDoubleQuoteChars = "\x201C\x201D\x2033\x2036"
 
 prop_spacing = isOk spacing "  \\\n # Comment"
 spacing = do
-    x <- many (many1 linewhitespace <|> try (string "\\\n"))
+    x <- many (many1 linewhitespace <|> try (string "\\\n" >> return ""))
     optional readComment
     return $ concat x
 
@@ -270,12 +270,22 @@ readConditionContents single =
                                     parseProblemAt pos WarningC 1009 "Use 'if cmd; then ..' to check exit code, or 'if [[ $(cmd) == .. ]]' to check output.")
 
   where
+    spacingOrLf = condSpacing True
+    condSpacing required = do
+        pos <- getPosition
+        space <- allspacing
+        when (required && null space) $
+            parseProblemAt pos ErrorC 1035 "You are missing a required space here."
+        when (single && '\n' `elem` space) $
+            parseProblemAt pos ErrorC 1080 "When breaking lines in [ ], you need \\ before the linefeed."
+        return space
+
     typ = if single then SingleBracket else DoubleBracket
     readCondBinaryOp = try $ do
         optional guardArithmetic
         id <- getNextId
         op <- choice (map tryOp ["==", "!=", "<=", ">=", "=~", ">", "<", "=", "\\<=", "\\>=", "\\<", "\\>"]) <|> otherOp
-        hardCondSpacing
+        spacingOrLf
         return op
       where
         tryOp s = try $ do
@@ -308,7 +318,7 @@ readConditionContents single =
     readCondUnaryOp = try $ do
         id <- getNextId
         s <- readOp
-        hardCondSpacing
+        spacingOrLf
         return $ TC_Unary id typ s
 
     readOp = try $ do
@@ -337,18 +347,19 @@ readConditionContents single =
 
     readCondAndOp = do
         id <- getNextId
-        x <- try (string "&&" <|> string "-a")
-        softCondSpacing
-        skipLineFeeds
+        x <- try (readAndOrOp "&&" False <|> readAndOrOp "-a" True)
         return $ TC_And id typ x
 
     readCondOrOp = do
         optional guardArithmetic
         id <- getNextId
-        x <- try (string "||" <|> string "-o")
-        softCondSpacing
-        skipLineFeeds
+        x <- try (readAndOrOp "||" False <|> readAndOrOp "-o" True)
         return $ TC_Or id typ x
+
+    readAndOrOp op requiresSpacing = do
+        x <- string op
+        condSpacing requiresSpacing
+        return x
 
     readCondNoaryOrBinary = do
       id <- getNextId
@@ -373,16 +384,21 @@ readConditionContents single =
           id <- getNextId
           pos <- getPosition
           lparen <- try $ string "(" <|> string "\\("
-          when (single && lparen == "(") $ parseProblemAt pos ErrorC 1028 "In [..] you have to escape (). Use [[..]] instead."
-          when (not single && lparen == "\\(") $ parseProblemAt pos ErrorC 1029 "In [[..]] you shouldn't escape ()."
-          if single then hardCondSpacing else disregard spacing
+          when (single && lparen == "(") $
+              parseProblemAt pos ErrorC 1028 "In [..] you have to escape (). Use [[..]] instead."
+          when (not single && lparen == "\\(") $
+              parseProblemAt pos ErrorC 1029 "In [[..]] you shouldn't escape ()."
+          condSpacing single
           x <- readCondContents
           cpos <- getPosition
           rparen <- string ")" <|> string "\\)"
-          if single then hardCondSpacing else disregard spacing
-          when (single && rparen == ")") $ parseProblemAt cpos ErrorC 1030 "In [..] you have to escape (). Use [[..]] instead."
-          when (not single && rparen == "\\)") $ parseProblemAt cpos ErrorC 1031 "In [[..]] you shouldn't escape ()."
-          when (isEscaped lparen `xor` isEscaped rparen) $ parseProblemAt pos ErrorC 1032 "Did you just escape one half of () but not the other?"
+          condSpacing single
+          when (single && rparen == ")") $
+              parseProblemAt cpos ErrorC 1030 "In [..] you have to escape (). Use [[..]] instead."
+          when (not single && rparen == "\\)") $
+              parseProblemAt cpos ErrorC 1031 "In [[..]] you shouldn't escape ()."
+          when (isEscaped lparen `xor` isEscaped rparen) $
+              parseProblemAt pos ErrorC 1032 "Did you just escape one half of () but not the other?"
           return $ TC_Group id typ x
       where
         isEscaped ('\\':_) = True
@@ -426,21 +442,15 @@ readConditionContents single =
             str <- string "|"
             return $ T_Literal id str
 
-    skipLineFeeds = do
-        pos <- getPosition
-        spacing <- allspacing
-        when (single  && '\n' `elem` spacing) $
-            parseProblemAt pos ErrorC 1080 "In [ ] you need \\ before line feeds."
-
     readCondTerm = do
         term <- readCondNot <|> readCondExpr
-        skipLineFeeds
+        condSpacing False
         return term
 
     readCondNot = do
         id <- getNextId
         char '!'
-        softCondSpacing
+        spacingOrLf
         expr <- readCondExpr
         return $ TC_Unary id typ "!" expr
 
@@ -450,7 +460,6 @@ readConditionContents single =
     readCondOr = chainl1 readCondAnd readCondAndOp
     readCondAnd = chainl1 readCondTerm readCondOrOp
     readCondContents = readCondOr
-
 
 
 prop_a1 = isOk readArithmeticContents " n++ + ++c"
@@ -613,8 +622,10 @@ prop_readCondition6 = isOk readCondition "[[ $c =~ ^[yY]$ ]]"
 prop_readCondition7 = isOk readCondition "[[ ${line} =~ ^[[:space:]]*# ]]"
 prop_readCondition8 = isOk readCondition "[[ $l =~ ogg|flac ]]"
 prop_readCondition9 = isOk readCondition "[ foo -a -f bar ]"
-prop_readCondition10= isOk readCondition "[[ a == b \n || c == d ]]"
-prop_readCondition11= isOk readCondition "[[ a == b || \n c == d ]]"
+prop_readCondition10= isOk readCondition "[[\na == b\n||\nc == d ]]"
+prop_readCondition10a= isOk readCondition "[[\na == b  ||\nc == d ]]"
+prop_readCondition10b= isOk readCondition "[[ a == b\n||\nc == d ]]"
+prop_readCondition11= isOk readCondition "[[ a == b ||\n c == d ]]"
 prop_readCondition12= isWarning readCondition "[ a == b \n -o c == d ]"
 prop_readCondition13= isOk readCondition "[[ foo =~ ^fo{1,3}$ ]]"
 readCondition = called "test expression" $ do
@@ -622,9 +633,17 @@ readCondition = called "test expression" $ do
     id <- getNextId
     open <- try (string "[[") <|> string "["
     let single = open == "["
-    condSpacingMsg False $ if single
-          then "You need spaces after the opening [ and before the closing ]."
-          else "You need spaces after the opening [[ and before the closing ]]."
+
+    pos <- getPosition
+    space <- allspacing
+    when (null space) $
+        parseProblemAt pos ErrorC 1035 $ "You need a space after the " ++
+            if single
+                then "[ and before the ]."
+                else "[[ and before the ]]."
+    when (single && '\n' `elem` space) $
+        parseProblemAt pos ErrorC 1080 "You need \\ before line feeds to break lines in [ ]."
+
     condition <- readConditionContents single
 
     cpos <- getPosition
@@ -634,14 +653,6 @@ readCondition = called "test expression" $ do
     spacing
     many readCmdWord -- Read and throw away remainders to get then/do warnings. Fixme?
     return $ T_Condition id (if single then SingleBracket else DoubleBracket) condition
-
-
-hardCondSpacing = condSpacingMsg False "You need a space here."
-softCondSpacing = condSpacingMsg True "You need a space here."
-condSpacingMsg soft msg = do
-  pos <- getPosition
-  space <- spacing
-  when (null space) $ (if soft then parseNoteAt else parseProblemAt) pos ErrorC 1035 msg
 
 readAnnotationPrefix = do
     char '#'
@@ -1954,9 +1965,11 @@ g_Rparen = tryToken ")" T_Rparen
 g_Bang = do
     id <- getNextId
     char '!'
-    softCondSpacing
+    void spacing1 <|> do
+        pos <- getPosition
+        parseProblemAt pos ErrorC 1035
+            "You are missing a required space after the !."
     return $ T_Bang id
-
 
 g_Semi = do
     notFollowedBy2 g_DSEMI
