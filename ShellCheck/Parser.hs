@@ -67,7 +67,7 @@ spacing = do
 
 spacing1 = do
     spacing <- spacing
-    when (null spacing) $ fail "no spacing"
+    when (null spacing) $ fail "Expected whitespace"
     return spacing
 
 prop_allspacing = isOk allspacing "#foo"
@@ -84,7 +84,7 @@ allspacing = do
 
 allspacingOrFail = do
     s <- allspacing
-    when (null s) $ fail "Expected spaces"
+    when (null s) $ fail "Expected whitespace"
 
 unicodeDoubleQuote = do
     pos <- getPosition
@@ -183,9 +183,9 @@ popContext = do
         then do
             let (a:r) = v
             setCurrentContexts r
-            return [a]
+            return $ Just a
         else
-            return []
+            return Nothing
 
 pushContext c = do
     v <- getCurrentContexts
@@ -233,8 +233,8 @@ reluctantlyTill1 p end = do
 attempting rest branch =
     (try branch >> rest) <|> rest
 
-orFail parser stuff =
-    try (disregard parser) <|> (disregard stuff >> fail "nope")
+orFail parser errorAction =
+    try parser <|> (errorAction >>= fail)
 
 wasIncluded p = option False (p >> return True)
 
@@ -252,7 +252,7 @@ withContext entry p = do
         popContext
         return v
      <|> do -- p failed without consuming input, abort context
-        popContext
+        v <- popContext
         fail ""
 
 called s p = do
@@ -295,7 +295,7 @@ readConditionContents single =
         otherOp = try $ do
             id <- getNextId
             s <- readOp
-            when (s == "-a" || s == "-o") $ fail "Wrong operator"
+            when (s == "-a" || s == "-o") $ fail "Unexpected operator"
             return $ TC_Binary id typ s
 
     guardArithmetic = do
@@ -308,12 +308,9 @@ readConditionContents single =
     readCondUnaryExp = do
       op <- readCondUnaryOp
       pos <- getPosition
-      (do
-          arg <- readCondWord
-          return $ op arg)
-        <|> (do
-              parseProblemAt pos ErrorC 1019 "Expected this to be an argument to the unary condition."
-              fail "oops")
+      (readCondWord >>= return . op) `orFail` do
+          parseProblemAt pos ErrorC 1019 "Expected this to be an argument to the unary condition."
+          return "Expected an argument for the unary operator"
 
     readCondUnaryOp = try $ do
         id <- getNextId
@@ -1479,6 +1476,7 @@ readIfClause = called "if expression" $ do
     g_Fi `orFail` do
         parseProblemAt pos ErrorC 1046 "Couldn't find 'fi' for this 'if'."
         parseProblem ErrorC 1047 "Expected 'fi' matching previously mentioned 'if'."
+        return "Expected 'fi'."
 
     return $ T_IfExpression id ((condition, action):elifs) elses
 
@@ -1498,7 +1496,9 @@ readIfPart = do
         parseProblemAt pos ErrorC 1049 "Did you forget the 'then' for this 'if'?"
 
     called "then clause" $ do
-        g_Then `orFail` parseProblem ErrorC 1050 "Expected 'then'."
+        g_Then `orFail` do
+            parseProblem ErrorC 1050 "Expected 'then'."
+            return "Expected 'then'."
 
         acceptButWarn g_Semi ErrorC 1051 "No semicolons directly after 'then'."
         allspacing
@@ -1564,7 +1564,7 @@ readBraceGroup = called "brace group" $ do
     list <- readTerm
     char '}' <|> do
         parseProblem ErrorC 1056 "Expected a '}'. If you have one, try a ; or \\n in front of it."
-        fail "Unable to parse"
+        fail "Missing '}'"
     return $ T_BraceGroup id list
 
 prop_readWhileClause = isOk readWhileClause "while [[ -e foo ]]; do sleep 1; done"
@@ -1589,7 +1589,9 @@ readDoGroup loopPos = do
                 try . lookAhead $ g_Done
                 parseProblemAt loopPos ErrorC 1057 "Did you forget the 'do' for this loop?")
 
-    g_Do `orFail` parseProblem ErrorC 1058 "Expected 'do'."
+    g_Do `orFail` do
+        parseProblem ErrorC 1058 "Expected 'do'."
+        return "Expected 'do'."
 
     acceptButWarn g_Semi ErrorC 1059 "No semicolons directly after 'do'."
     allspacing
@@ -1602,6 +1604,7 @@ readDoGroup loopPos = do
     g_Done `orFail` do
             parseProblemAt pos ErrorC 1061 "Couldn't find 'done' for this 'do'."
             parseProblem ErrorC 1062 "Expected 'done' matching previously mentioned 'do'."
+            return "Expected 'done'."
     return commands
 
 
@@ -1714,7 +1717,10 @@ readCaseItem = called "case item" $ do
     optional g_Lparen
     spacing
     pattern <- readPattern
-    g_Rparen
+    void g_Rparen <|> do
+        parseProblem ErrorC 1085
+            "Did you forget to move the ;; after extending this case item?"
+        fail "Expected ) to open a new case item"
     readLineBreak
     list <- (lookAhead readCaseSeparator >> return []) <|> readCompoundList
     separator <- readCaseSeparator `attempting` do
@@ -1926,8 +1932,8 @@ tryParseWordToken keyword t = try $ do
             "Scripts are case sensitive. Use '" ++ keyword ++ "', not '" ++ str ++ "'."
     return $ t id
 
-anycaseString =
-    mapM anycaseChar
+anycaseString str =
+    mapM anycaseChar str <?> str
   where
     anycaseChar c = char (toLower c) <|> char (toUpper c)
 
@@ -2094,20 +2100,21 @@ sortNotes = sortBy compareNotes
 data ParseResult = ParseResult { parseResult :: Maybe (Token, Map.Map Id SourcePos), parseNotes :: [ParseNote] } deriving (Show)
 
 makeErrorFor parsecError =
-    ParseNote (errorPos parsecError) ErrorC 1072 $ getStringFromParsec $ errorMessages parsecError
+    ParseNote (errorPos parsecError) ErrorC 1072 $
+        getStringFromParsec $ errorMessages parsecError
 
 getStringFromParsec errors =
-        case map snd $ sortWith fst $ map f errors of
-            r -> unwords (take 1 $ nub r)  ++ " Fix any mentioned problems and try again."
-    where f err =
+        case map f errors of
+            r -> unwords (take 1 $ catMaybes $ reverse r)  ++
+                " Fix any mentioned problems and try again."
+    where
+        f err =
             case err of
-                UnExpect s    -> (1, unexpected s)
-                SysUnExpect s -> (2, unexpected s)
-                Expect s      -> (3, "Expected " ++ s ++ ".")
-                Message s     -> (4, s ++ ".")
-          wut "" = "eof"
-          wut x = x
-          unexpected s = "Unexpected " ++ wut s ++ "."
+                UnExpect s    ->  return $ unexpected s
+                SysUnExpect s ->  return $ unexpected s
+                Expect s      ->  return $ "Expected " ++ s ++ "."
+                Message s     ->  if null s then Nothing else return $ s ++ "."
+        unexpected s = "Unexpected " ++ (if null s then "eof" else s) ++ "."
 
 parseShell filename contents =
     case rp (parseWithNotes readScript) filename contents of
