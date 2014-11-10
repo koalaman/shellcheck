@@ -1618,11 +1618,12 @@ prop_readForClause8 = isOk readForClause "for ((;;)) ; do echo $i\ndone"
 prop_readForClause9 = isOk readForClause "for i do true; done"
 prop_readForClause10= isOk readForClause "for ((;;)) { true; }"
 prop_readForClause11= isOk readForClause "for a b in *; do echo $a $b; done"
+prop_readForClause12= isWarning readForClause "for $a in *; do echo \"$a\"; done"
 readForClause = called "for loop" $ do
     pos <- getPosition
     (T_For id) <- g_For
     spacing
-    readRegular id pos <|> readArithmetic id pos
+    readArithmetic id pos <|> readRegular id pos
   where
     readArithmetic id pos = called "arithmetic for condition" $ do
         try $ string "(("
@@ -1643,6 +1644,8 @@ readForClause = called "for loop" $ do
         return list
 
     readRegular id pos = do
+        acceptButWarn (char '$') ErrorC 1086
+            "Don't use $ on the iterator name in for loops."
         names <- readNames
         readShort names <|> readLong names
       where
