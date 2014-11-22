@@ -1121,23 +1121,33 @@ readDollarExpansion = called "command expansion" $ do
     return $ T_DollarExpansion id cmds
 
 prop_readDollarVariable = isOk readDollarVariable "$@"
+prop_readDollarVariable2 = isOk (readDollarVariable >> anyChar) "$?!"
+prop_readDollarVariable3 = isWarning (readDollarVariable >> anyChar) "$10"
+prop_readDollarVariable4 = isWarning (readDollarVariable >> string "[@]") "$arr[@]"
+
 readDollarVariable = do
     id <- getNextId
+    pos <- getPosition
+
     let singleCharred p = do
         n <- p
         value <- wrap [n]
-        return (T_DollarBraced id value) `attempting` do
-            pos <- getPosition
-            num <- lookAhead $ many1 p
-            parseNoteAt pos ErrorC 1037 $ "$" ++ (n:num) ++ " is equivalent to ${" ++ [n] ++ "}"++ num ++"."
+        return (T_DollarBraced id value)
 
-    let positional = singleCharred digit
+    let positional = do
+        value <- singleCharred digit
+        return value `attempting` do
+            lookAhead digit
+            parseNoteAt pos ErrorC 1037 "Braces are required for positionals over 9, e.g. ${10}."
+
     let special = singleCharred specialVariable
 
     let regular = do
         name <- readVariableName
         value <- wrap name
-        return $ T_DollarBraced id value
+        return (T_DollarBraced id value) `attempting` do
+            lookAhead $ void (string "[@]") <|> void (string "[*]") <|> void readArrayIndex
+            parseNoteAt pos ErrorC 1087 "Braces are required when expanding arrays, as in ${array[idx]}."
 
     try $ char '$' >> (positional <|> special <|> regular)
 
