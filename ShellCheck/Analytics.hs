@@ -2066,7 +2066,17 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal 
 getModifiedVariableCommand _ = []
 
 -- TODO:
-getBracedReference s = takeWhile (`notElem` ":[#%/^,") $ dropWhile (`elem` "#!") s
+getBracedReference s =
+    case filter (not . null) [
+        dropSuffix $ dropPrefix s,
+        dropSuffix s,
+        s] of
+            (a:_) -> a
+            [] -> error "Internal ShellCheck error (empty braced reference). Please file a bug!"
+  where
+    dropSuffix = takeWhile (`notElem` ":[#%/^,")
+    dropPrefix = dropWhile (`elem` "#!")
+
 getIndexReferences s = fromMaybe [] $ do
     (_, index, _, _) <- matchRegexAll re s
     return $ matchAll variableNameRegex index
@@ -2730,6 +2740,7 @@ prop_checkUnpassedInFunctions6 = verifyNotTree checkUnpassedInFunctions "foo() {
 prop_checkUnpassedInFunctions7 = verifyTree checkUnpassedInFunctions "foo() { echo $1; }; foo; foo;"
 prop_checkUnpassedInFunctions8 = verifyNotTree checkUnpassedInFunctions "foo() { echo $((1)); }; foo;"
 prop_checkUnpassedInFunctions9 = verifyNotTree checkUnpassedInFunctions "foo() { echo $(($b)); }; foo;"
+prop_checkUnpassedInFunctions10= verifyNotTree checkUnpassedInFunctions "foo() { echo $!; }; foo;"
 checkUnpassedInFunctions params root =
     execWriter $ mapM_ warnForGroup referenceGroups
   where
