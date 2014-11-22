@@ -615,6 +615,7 @@ prop_checkBashisms15= verify checkBashisms "let n++"
 prop_checkBashisms16= verify checkBashisms "echo $RANDOM"
 prop_checkBashisms17= verify checkBashisms "echo $((RANDOM%6+1))"
 prop_checkBashisms18= verify checkBashisms "foo &> /dev/null"
+prop_checkBashisms19= verify checkBashisms "foo > file*.txt"
 checkBashisms _ = bashism
   where
     errMsg id s = err id 2040 $ "In sh, " ++ s ++ " not supported, even when sh is actually bash."
@@ -665,6 +666,8 @@ checkBashisms _ = bashism
         warnMsg id "|& in place of 2>&1 | is"
     bashism (T_Array id _) =
         warnMsg id "arrays are"
+    bashism (T_IoFile id _ t) | isGlob t =
+        warnMsg id "redirecting to/from globs is"
 
     bashism _ = return ()
 
