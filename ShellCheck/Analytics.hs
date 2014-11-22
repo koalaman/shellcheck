@@ -202,6 +202,7 @@ nodeChecks = [
     ,checkConcatenatedDollarAt
     ,checkFindActionPrecedence
     ,checkTildeInPath
+    ,checkFindExecWithSingleArgument
     ]
 
 
@@ -3025,6 +3026,24 @@ checkFindActionPrecedence params = checkCommand "find" (const f)
         param <- getLiteralString t
         return $ param `elem` strs
     warnFor t = warn (getId t) 2146 "This action ignores everything before the -o. Use \\( \\) to group."
+
+
+prop_checkFindExecWithSingleArgument1 = verify checkFindExecWithSingleArgument "find . -exec 'cat {} | wc -l' \\;"
+prop_checkFindExecWithSingleArgument2 = verify checkFindExecWithSingleArgument "find . -execdir 'cat {} | wc -l' +"
+prop_checkFindExecWithSingleArgument3 = verifyNot checkFindExecWithSingleArgument "find . -exec wc -l {} \\;"
+checkFindExecWithSingleArgument _ = checkCommand "find" (const f)
+  where
+    f = void . sequence . mapMaybe check . tails
+    check (exec:arg:term:_) = do
+        execS <- getLiteralString exec
+        termS <- getLiteralString term
+        cmdS <- getLiteralStringExt (const $ return " ") arg
+
+        guard $ execS `elem` ["-exec", "-execdir"] && termS `elem` [";", "+"]
+        guard $ cmdS `matches` commandRegex
+        return $ warn (getId exec) 2150 "-exec does not invoke a shell. Rewrite or use -exec sh -c .. ."
+    check _ = Nothing
+    commandRegex = mkRegex "[ |;]"
 
 return []
 runTests = $quickCheckAll
