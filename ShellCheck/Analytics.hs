@@ -1743,20 +1743,32 @@ prop_checkInexplicablyUnquoted2 = verifyNot checkInexplicablyUnquoted "'foo'*"
 prop_checkInexplicablyUnquoted3 = verifyNot checkInexplicablyUnquoted "wget --user-agent='something'"
 prop_checkInexplicablyUnquoted4 = verify checkInexplicablyUnquoted "echo \"VALUES (\"id\")\""
 prop_checkInexplicablyUnquoted5 = verifyNot checkInexplicablyUnquoted "\"$dir\"/\"$file\""
+prop_checkInexplicablyUnquoted6 = verifyNot checkInexplicablyUnquoted "\"$dir\"some_stuff\"$file\""
 checkInexplicablyUnquoted _ (T_NormalWord id tokens) = mapM_ check (tails tokens)
   where
     check (T_SingleQuoted _ _:T_Literal id str:_)
         | all isAlphaNum str =
         info id 2026 "This word is outside of quotes. Did you intend to 'nest '\"'single quotes'\"' instead'? "
 
-    check (T_DoubleQuoted _ _:trapped:T_DoubleQuoted _ _:_) =
+    check (T_DoubleQuoted _ a:trapped:T_DoubleQuoted _ b:_) =
         case trapped of
             T_DollarExpansion id _ -> warnAboutExpansion id
             T_DollarBraced id _ -> warnAboutExpansion id
-            T_Literal id s -> unless (s == "/" || s == "=") $ warnAboutLiteral id
+            T_Literal id s ->
+                unless (quotesSingleThing a && quotesSingleThing b) $
+                    warnAboutLiteral id
             _ -> return ()
 
     check _ = return ()
+
+    -- If the surrounding quotes quote single things, like "$foo"_and_then_some_"$stuff",
+    -- the quotes were probably intentional and harmless.
+    quotesSingleThing x = case x of
+        [T_DollarExpansion _ _] -> True
+        [T_DollarBraced _ _] -> True
+        [T_Backticked _ _] -> True
+        _ -> False
+
     warnAboutExpansion id =
         warn id 2027 "The surrounding quotes actually unquote this. Remove or escape them."
     warnAboutLiteral id =
@@ -2864,7 +2876,7 @@ prop_checkUnsupported2 = verify checkUnsupported "#!/bin/sh\nfunction { echo cow
 prop_checkUnsupported3 = verify checkUnsupported "#!/bin/sh\ncase foo in bar) baz ;& esac"
 prop_checkUnsupported4 = verify checkUnsupported "#!/bin/ksh\ncase foo in bar) baz ;;& esac"
 checkUnsupported params t =
-    when ((not $ null support) && (shellType params `notElem` support)) $
+    when (not (null support) && (shellType params `notElem` support)) $
         report name
  where
     (name, support) = shellSupport t
@@ -2882,8 +2894,8 @@ shellSupport t =
     T_CaseExpression _ _ list -> forCase (map (\(a,_,_) -> a) list)
     otherwise -> ("", [])
   where
-    forCase seps | any (== CaseContinue) seps = ("cases with ;;&", [Bash])
-    forCase seps | any (== CaseFallThrough) seps = ("cases with ;&", [Bash, Ksh, Zsh])
+    forCase seps | CaseContinue `elem` seps = ("cases with ;;&", [Bash])
+    forCase seps | CaseFallThrough `elem` seps = ("cases with ;&", [Bash, Ksh, Zsh])
     forCase _ = ("", [])
 
 
@@ -3018,7 +3030,7 @@ checkFindActionPrecedence params = checkCommand "find" (const f)
     f list | length list < length pattern = return ()
     f list@(_:rest) =
         if all id (zipWith ($) pattern list)
-        then warnFor (list !! ((length pattern)-1))
+        then warnFor (list !! (length pattern - 1))
         else f rest
     isMatch = isParam [ "-name", "-regex", "-iname", "-iregex", "-wholename", "-iwholename" ]
     isAction = isParam [ "-exec", "-execdir", "-delete", "-print", "-print0" ]
@@ -3047,4 +3059,3 @@ checkFindExecWithSingleArgument _ = checkCommand "find" (const f)
 
 return []
 runTests = $quickCheckAll
-
