@@ -1520,6 +1520,7 @@ prop_checkUuoeVar4 = verifyNot checkUuoeVar "echo $tmp"
 prop_checkUuoeVar5 = verify checkUuoeVar "foo \"$(echo \"$(date) value:\" $value)\""
 prop_checkUuoeVar6 = verifyNot checkUuoeVar "foo \"$(echo files: *.png)\""
 prop_checkUuoeVar7 = verifyNot checkUuoeVar "foo $(echo $(bar))" -- covered by 2005
+prop_checkUuoeVar8 = verifyNot checkUuoeVar "#!/bin/sh\nz=$(echo)"
 checkUuoeVar _ p =
     case p of
         T_Backticked id [cmd] -> check id cmd
@@ -1537,10 +1538,13 @@ checkUuoeVar _ p =
     check id (T_Pipeline _ _ [T_Redirecting _ _ c]) = warnForEcho id c
     check _ _ = return ()
     isCovered first rest = null rest && tokenIsJustCommandOutput first
-    warnForEcho id = checkUnqualifiedCommand "echo" $ \_ vars@(first:rest) ->
-        unless (isCovered first rest || "-" `isPrefixOf` onlyLiteralString first) $
-            when (all couldBeOptimized vars) $ style id 2116
-                "Useless echo? Instead of 'cmd $(echo foo)', just use 'cmd foo'."
+    warnForEcho id = checkUnqualifiedCommand "echo" $ \_ vars ->
+        case vars of
+          (first:rest) ->
+            unless (isCovered first rest || "-" `isPrefixOf` onlyLiteralString first) $
+                when (all couldBeOptimized vars) $ style id 2116
+                    "Useless echo? Instead of 'cmd $(echo foo)', just use 'cmd foo'."
+          otherwise -> return ()
 
 prop_checkTr1 = verify checkTr "tr [a-f] [A-F]"
 prop_checkTr2 = verify checkTr "tr 'a-z' 'A-Z'"
