@@ -26,6 +26,8 @@ Extra-Source-Files:
     -- documentation
     README.md
     shellcheck.1.md
+    -- built with a cabal sdist hook
+    shellcheck.1
     -- tests
     test/shellcheck.hs
 
