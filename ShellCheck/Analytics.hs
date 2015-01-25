@@ -1715,7 +1715,7 @@ checkPS1Assignments _ _ = return ()
 prop_checkBackticks1 = verify checkBackticks "echo `foo`"
 prop_checkBackticks2 = verifyNot checkBackticks "echo $(foo)"
 checkBackticks _ (T_Backticked id _) =
-    style id 2006 "Use $(..) instead of deprecated `..`"
+    style id 2006 "Use $(..) instead of legacy `..`."
 checkBackticks _ _ = return ()
 
 prop_checkIndirectExpansion1 = verify checkIndirectExpansion "${foo$n}"
