@@ -123,6 +123,7 @@ data Token =
     | T_WhileExpression Id [Token] [Token]
     | T_Annotation Id [Annotation] Token
     | T_Pipe Id String
+    | T_CoProc Id (Maybe String) Token
     deriving (Show)
 
 data Annotation = DisableComment Integer deriving (Show, Eq)
@@ -248,6 +249,7 @@ analyze f g i =
     delve (TA_Expansion id t) = dl t $ TA_Expansion id
     delve (TA_Index id t) = d1 t $ TA_Index id
     delve (T_Annotation id anns t) = d1 t $ T_Annotation id anns
+    delve (T_CoProc id var body) = d1 body $ T_CoProc id var
     delve t = return t
 
 getId t = case t of
@@ -341,6 +343,7 @@ getId t = case t of
         T_DollarBracket id _ -> id
         T_Annotation id _ _ -> id
         T_Pipe id _ -> id
+        T_CoProc id _ _ -> id
 
 blank :: Monad m => Token -> m ()
 blank = const $ return ()

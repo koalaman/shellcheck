@@ -669,6 +669,8 @@ checkBashisms _ = bashism
         warnMsg id "arrays are"
     bashism (T_IoFile id _ t) | isGlob t =
         warnMsg id "redirecting to/from globs is"
+    bashism (T_CoProc id _ _) =
+        warnMsg id "coproc is"
 
     bashism _ = return ()
 
@@ -818,7 +820,10 @@ checkRedirectToSame params s@(T_Pipeline _ _ list) =
             addNote $ note newId
             addNote $ note exceptId
     checkOccurrences _ _ = return ()
-    getAllRedirs = concatMap (\(T_Redirecting _ ls _) -> concatMap getRedirs ls)
+    getAllRedirs = concatMap (\t ->
+        case t of
+            T_Redirecting _ ls _ -> concatMap getRedirs ls
+            _ -> [])
     getRedirs (T_FdRedirect _ _ (T_IoFile _ op file)) =
             case op of T_Greater _ -> [file]
                        T_Less _    -> [file]
@@ -1969,6 +1974,7 @@ leadType shell parents t =
         T_Backticked _ _  -> SubshellScope "`..` expansion"
         T_Backgrounded _ _  -> SubshellScope "backgrounding &"
         T_Subshell _ _  -> SubshellScope "(..) group"
+        T_CoProc _ _ _  -> SubshellScope "coproc"
         T_Redirecting {}  ->
             if fromMaybe False causesSubshell
             then SubshellScope "pipeline"

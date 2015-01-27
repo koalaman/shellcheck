@@ -1459,7 +1459,11 @@ readPipe = do
     spacing
     return $ T_Pipe id ('|':qualifier)
 
-readCommand = readCompoundCommand <|> readSimpleCommand
+readCommand = choice [
+    readCompoundCommand,
+    readCoProc,
+    readSimpleCommand
+    ]
 
 readCmdName = do
     f <- readNormalWord
@@ -1796,6 +1800,26 @@ readFunctionDefinition = called "function" $ do
             return ()
 
         readFunctionName = many functionChars
+
+prop_readCoProc1 = isOk readCoProc "coproc foo { echo bar; }"
+prop_readCoProc2 = isOk readCoProc "coproc { echo bar; }"
+prop_readCoProc3 = isOk readCoProc "coproc echo bar"
+readCoProc = called "coproc" $ do
+    id <- getNextId
+    try $ do
+        string "coproc"
+        whitespace
+    choice [ try $ readCompoundCoProc id, readSimpleCoProc id ]
+  where
+    readCompoundCoProc id = do
+        var <- optionMaybe $
+            readVariableName `thenSkip` whitespace
+        body <- readCompoundCommand
+        return $ T_CoProc id var body
+    readSimpleCoProc id = do
+        body <- readSimpleCommand
+        return $ T_CoProc id Nothing body
+
 
 readPattern = (readNormalWord `thenSkip` spacing) `sepBy1` (char '|' `thenSkip` spacing)
 
