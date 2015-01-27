@@ -27,7 +27,7 @@ internalVariables = [
     "LC_MESSAGES", "LC_NUMERIC", "LINES", "MAIL", "MAILCHECK", "MAILPATH",
     "OPTERR", "PATH", "POSIXLY_CORRECT", "PROMPT_COMMAND",
     "PROMPT_DIRTRIM", "PS1", "PS2", "PS3", "PS4", "SHELL", "TIMEFORMAT",
-    "TMOUT", "TMPDIR", "auto_resume", "histchars",
+    "TMOUT", "TMPDIR", "auto_resume", "histchars", "COPROC",
 
     -- Zsh
     "ARGV0", "BAUD", "cdpath", "COLUMNS", "CORRECT_IGNORE",

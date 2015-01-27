@@ -919,6 +919,8 @@ checkArrayAsString _ _ = return ()
 
 prop_checkArrayWithoutIndex1 = verifyTree checkArrayWithoutIndex "foo=(a b); echo $foo"
 prop_checkArrayWithoutIndex2 = verifyNotTree checkArrayWithoutIndex "foo='bar baz'; foo=($foo); echo ${foo[0]}"
+prop_checkArrayWithoutIndex3 = verifyTree checkArrayWithoutIndex "coproc foo while true; do echo cow; done; echo $foo"
+prop_checkArrayWithoutIndex4 = verifyTree checkArrayWithoutIndex "coproc tail -f log; echo $COPROC"
 checkArrayWithoutIndex params _ =
     concat $ doVariableFlowAnalysis readF writeF Map.empty (variableFlow params)
   where
@@ -932,6 +934,9 @@ checkArrayWithoutIndex params _ =
     readF _ _ _ = return []
 
     writeF _ t name (DataFrom [T_Array {}]) = do
+        modify (Map.insert name t)
+        return []
+    writeF _ t name DataExternalArray = do
         modify (Map.insert name t)
         return []
     writeF _ _ name _ = do
@@ -1963,7 +1968,7 @@ data StackData =
     | Assignment (Token, Token, String, DataSource)
     | Reference (Token, Token, String)
   deriving (Show, Eq)
-data DataSource = DataFrom [Token] | DataExternal
+data DataSource = DataFrom [Token] | DataExternalValue | DataExternalArray
   deriving (Show, Eq)
 
 data VariableState = Dead Token String | Alive deriving (Show, Eq)
@@ -1974,7 +1979,7 @@ leadType shell parents t =
         T_Backticked _ _  -> SubshellScope "`..` expansion"
         T_Backgrounded _ _  -> SubshellScope "backgrounding &"
         T_Subshell _ _  -> SubshellScope "(..) group"
-        T_CoProc _ _ _  -> SubshellScope "coproc"
+        T_CoProcBody _ _  -> SubshellScope "coproc"
         T_Redirecting {}  ->
             if fromMaybe False causesSubshell
             then SubshellScope "pipeline"
@@ -2023,6 +2028,9 @@ getModifiedVariables t =
             guard $ op `elem` ["=", "*=", "/=", "%=", "+=", "-=", "<<=", ">>=", "&=", "^=", "|="]
             name <- getLiteralString lhs
             return (t, t, name, DataFrom [rhs])
+
+        t@(T_CoProc _ name _) ->
+            [(t, t, fromMaybe "COPROC" name, DataExternalArray)]
 
         --Points to 'for' rather than variable
         T_ForIn id _ strs words _ -> map (\str -> (t, t, str, DataFrom words)) strs
@@ -2075,7 +2083,7 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal 
     getLiteral t = do
         s <- getLiteralString t
         when ("-" `isPrefixOf` s) $ fail "argument"
-        return (base, t, s, DataExternal)
+        return (base, t, s, DataExternalValue)
 
     getModifierParam t@(T_Assignment _ _ name _ value) =
         [(base, t, name, DataFrom [value])]
@@ -2251,7 +2259,7 @@ checkSpacefulness params t =
       where
         warning = "Double quote to prevent globbing and word splitting."
 
-    writeF _ _ name DataExternal = do
+    writeF _ _ name DataExternalValue = do
         setSpaces name True
         return []
 
@@ -2260,6 +2268,8 @@ checkSpacefulness params t =
         setSpaces name
             (isSpacefulWord (\x -> Map.findWithDefault True x map) vals)
         return []
+
+    writeF _ _ _ _ = return []
 
     parents = parentMap params
 

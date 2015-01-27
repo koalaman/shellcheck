@@ -1814,11 +1814,15 @@ readCoProc = called "coproc" $ do
     readCompoundCoProc id = do
         var <- optionMaybe $
             readVariableName `thenSkip` whitespace
-        body <- readCompoundCommand
+        body <- readBody readCompoundCommand
         return $ T_CoProc id var body
     readSimpleCoProc id = do
-        body <- readSimpleCommand
+        body <- readBody readSimpleCommand
         return $ T_CoProc id Nothing body
+    readBody parser = do
+        id <- getNextId
+        body <- parser
+        return $ T_CoProcBody id body
 
 
 readPattern = (readNormalWord `thenSkip` spacing) `sepBy1` (char '|' `thenSkip` spacing)
