@@ -1954,6 +1954,7 @@ prop_subshellAssignmentCheck12 = verifyTree subshellAssignmentCheck "cat /etc/pa
 prop_subshellAssignmentCheck13 = verifyTree subshellAssignmentCheck "#!/bin/bash\necho foo | read bar; echo $bar"
 prop_subshellAssignmentCheck14 = verifyNotTree subshellAssignmentCheck "#!/bin/ksh93\necho foo | read bar; echo $bar"
 prop_subshellAssignmentCheck15 = verifyNotTree subshellAssignmentCheck "#!/bin/zsh\ncat foo | while read bar; do a=$bar; done\necho \"$a\""
+prop_subshellAssignmentCheck16 = verifyNotTree subshellAssignmentCheck "(set -e); echo $@"
 subshellAssignmentCheck params t =
     let flow = variableFlow params
         check = findSubshelled flow [("oops",[])] Map.empty
@@ -2068,7 +2069,9 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal 
         "declare" -> concatMap getModifierParam rest
         "typeset" -> concatMap getModifierParam rest
         "local" -> concatMap getModifierParam rest
-        "set" -> [(base, base, "@", DataFrom rest)]
+        "set" -> maybeToList $ do
+            params <- getSetParams rest
+            return (base, base, "@", DataFrom params)
 
         _ -> []
   where
@@ -2094,6 +2097,16 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal 
             then []
             else [(base, token, var, DataFrom [stripEqualsFrom token])]
         where var = takeWhile isVariableChar $ dropWhile (`elem` "+-") $ concat $ deadSimple token
+
+    getSetParams (t:_:rest) | getLiteralString t == Just "-o" = getSetParams rest
+    getSetParams (t:rest) =
+        let s = getLiteralString t in
+            case s of
+                Just "--" -> return rest
+                Just ('-':_) -> getSetParams rest
+                _ -> return (t:fromMaybe [] (getSetParams rest))
+    getSetParams [] = Nothing
+
 getModifiedVariableCommand _ = []
 
 -- TODO:
@@ -2192,12 +2205,15 @@ findSubshelled [] _ _ = return ()
 findSubshelled (Assignment x@(_, _, str, _):rest) ((reason,scope):lol) deadVars =
     findSubshelled rest ((reason, x:scope):lol) $ Map.insert str Alive deadVars
 findSubshelled (Reference (_, readToken, str):rest) scopes deadVars = do
-    case Map.findWithDefault Alive str deadVars of
+    unless (shouldIgnore str) $ case Map.findWithDefault Alive str deadVars of
         Alive -> return ()
         Dead writeToken reason -> do
                     info (getId writeToken) 2030 $ "Modification of " ++ str ++ " is local (to subshell caused by "++ reason ++")."
                     info (getId readToken) 2031 $ str ++ " was modified in a subshell. That change might be lost."
     findSubshelled rest scopes deadVars
+  where
+    shouldIgnore str =
+        str `elem` ["@", "*", "IFS"]
 
 findSubshelled (StackScope (SubshellScope reason):rest) scopes deadVars =
     findSubshelled rest ((reason,[]):scopes) deadVars
