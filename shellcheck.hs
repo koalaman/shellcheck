@@ -19,6 +19,7 @@ import Control.Exception
 import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Trans.Error
+import Control.Monad.Trans.List
 import Data.Char
 import Data.Maybe
 import Data.Monoid
@@ -39,6 +40,8 @@ import qualified Data.Map as Map
 
 data Flag = Flag String String
 data Status = NoProblems | SomeProblems | BadInput | SupportFailure | SyntaxFailure | RuntimeException deriving (Ord, Eq)
+
+data JsonComment = JsonComment FilePath ShellCheckComment
 
 instance Error Status where
     noMsg = RuntimeException
@@ -62,8 +65,9 @@ options = [
 printErr = hPutStrLn stderr
 
 
-instance JSON ShellCheckComment where
-  showJSON c = makeObj [
+instance JSON (JsonComment) where
+  showJSON (JsonComment filename c) = makeObj [
+      ("file", showJSON $ filename),
       ("line", showJSON $ scLine c),
       ("column", showJSON $ scColumn c),
       ("level", showJSON $ scSeverity c),
@@ -152,10 +156,12 @@ forTty options files = do
         term <- hIsTerminalDevice stdout
         return $ if term then colorComment else const id
 
--- This totally ignores the filenames. Fixme?
 forJson :: AnalysisOptions -> [FilePath] -> IO Status
 forJson options files = catchExceptions $ do
-    comments <- liftM concat $ mapM (commentsFor options) files
+    comments <- runListT $ do
+        file <- ListT $ return files
+        comment <- ListT $ commentsFor options file
+        return $ JsonComment file comment
     putStrLn $ encodeStrict comments
     return $ checkComments comments
 
