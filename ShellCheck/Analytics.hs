@@ -203,6 +203,7 @@ nodeChecks = [
     ,checkFindActionPrecedence
     ,checkTildeInPath
     ,checkFindExecWithSingleArgument
+    ,checkReturn
     ]
 
 
@@ -1698,6 +1699,35 @@ checkSudoRedirect _ (T_Redirecting _ redirs cmd) | cmd `isCommand` "sudo" =
     warnAbout _ = return ()
     special file = concat (deadSimple file) == "/dev/null"
 checkSudoRedirect _ _ = return ()
+
+prop_checkReturn1 = verifyNot checkReturn "return"
+prop_checkReturn2 = verifyNot checkReturn "return 1"
+prop_checkReturn3 = verifyNot checkReturn "return $var"
+prop_checkReturn4 = verifyNot checkReturn "return $((a|b))"
+prop_checkReturn5 = verify checkReturn "return -1"
+prop_checkReturn6 = verify checkReturn "return 1000"
+prop_checkReturn7 = verify checkReturn "return 'hello world'"
+checkReturn _ = checkCommand "return" (const f)
+  where
+    f (first:second:_) =
+        err (getId second) 2151
+            "Only one integer 0-255 can be returned. Use stdout for other data."
+    f [value] =
+        when (isInvalid $ literal value) $
+            err (getId value) 2152
+                "Can only return 0-255. Other data should be written to stdout."
+    f _ = return ()
+
+    isInvalid s = s == "" || any (not . isDigit) s || length s > 5
+        || let value = (read s :: Integer) in value > 255
+
+    literal token = fromJust $ getLiteralStringExt lit token
+    lit (T_DollarBraced {}) = return "0"
+    lit (T_DollarArithmetic {}) = return "0"
+    lit (T_DollarExpansion {}) = return "0"
+    lit (T_Backticked {}) = return "0"
+    lit _ = return "WTF"
+
 
 prop_checkPS11 = verify checkPS1Assignments "PS1='\\033[1;35m\\$ '"
 prop_checkPS11a= verify checkPS1Assignments "export PS1='\\033[1;35m\\$ '"
