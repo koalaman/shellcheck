@@ -2119,13 +2119,12 @@ getReferencedVariables t =
         T_DollarBraced id l -> let str = bracedString l in
             (t, t, getBracedReference str) :
                 map (\x -> (l, l, x)) (getIndexReferences str)
-        TA_Expansion id _ -> maybeToList $ do
-            str <- getLiteralStringExt literalizer t
-            guard . not $ null str
-            when (isDigit $ head str) $ fail "is a number"
-            return (t, t, getBracedReference str)
+        TA_Expansion id _ -> getIfReference t t
         T_Assignment id mode str _ word ->
             [(t, t, str) | mode == Append] ++ specialReferences str t word
+
+        TC_Unary id _ "-v" token -> getIfReference t token
+        TC_Unary id _ "-R" token -> getIfReference t token
         x -> getReferencedVariableCommand x
   where
     -- Try to reduce false positives for unused vars only referenced from evaluated vars
@@ -2141,6 +2140,12 @@ getReferencedVariables t =
 
     literalizer (TA_Index {}) = return ""  -- x[0] becomes a reference of x
     literalizer _ = Nothing
+
+    getIfReference context token = maybeToList $ do
+            str <- getLiteralStringExt literalizer token
+            guard . not $ null str
+            when (isDigit $ head str) $ fail "is a number"
+            return (context, token, getBracedReference str)
 
 -- Try to get referenced variables from a literal string like "$foo"
 -- Ignores tons of cases like arithmetic evaluation and array indices.
@@ -2422,6 +2427,8 @@ prop_checkUnused18= verifyNotTree checkUnusedAssignments "a=1; arr=( [$a]=42 ); 
 prop_checkUnused19= verifyNotTree checkUnusedAssignments "a=1; let b=a+1; echo $b"
 prop_checkUnused20= verifyNotTree checkUnusedAssignments "a=1; PS1='$a'"
 prop_checkUnused21= verifyNotTree checkUnusedAssignments "a=1; trap 'echo $a' INT"
+prop_checkUnused22= verifyNotTree checkUnusedAssignments "a=1; [ -v a ]"
+prop_checkUnused23= verifyNotTree checkUnusedAssignments "a=1; [ -R a ]"
 checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
     flow = variableFlow params
