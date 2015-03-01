@@ -2171,16 +2171,29 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal 
 
 getModifiedVariableCommand _ = []
 
-getBracedReference s =
-    let name = takeName $ dropPrefix s in
-        if null name then s else name
+prop_getBracedReference1 = getBracedReference "foo" == "foo"
+prop_getBracedReference2 = getBracedReference "#foo" == "foo"
+prop_getBracedReference3 = getBracedReference "#" == "#"
+prop_getBracedReference4 = getBracedReference "##" == "#"
+prop_getBracedReference5 = getBracedReference "#!" == "!"
+prop_getBracedReference6 = getBracedReference "!#" == "#"
+prop_getBracedReference7 = getBracedReference "!foo#?" == "foo"
+prop_getBracedReference8 = getBracedReference "foo-bar" == "foo"
+prop_getBracedReference9 = getBracedReference "foo:-bar" == "foo"
+prop_getBracedReference10= getBracedReference "foo: -1" == "foo"
+getBracedReference s = fromMaybe s $
+    takeName noPrefix `mplus` getSpecial noPrefix `mplus` getSpecial s
   where
-    dropPrefix = dropWhile (`elem` "#!")
-    takeName s =
-        let special = getSpecial s in
-            if null special then takeWhile isVariableChar s else special
+    noPrefix = dropPrefix s
+    dropPrefix (c:rest) = if c `elem` "!#" then rest else c:rest
+    dropPrefix "" = ""
+    takeName s = do
+        let name = takeWhile isVariableChar s
+        guard . not $ null name
+        return name
     getSpecial (c:_) =
-        if c `elem` "*@#?-$!" then [c] else ""
+        if c `elem` "*@#?-$!" then return [c] else fail "not special"
+    getSpecial _ = fail "empty"
 
 getIndexReferences s = fromMaybe [] $ do
     (_, index, _, _) <- matchRegexAll re s
