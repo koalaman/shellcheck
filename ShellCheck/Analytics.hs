@@ -27,6 +27,7 @@ import Data.Functor
 import Data.Function (on)
 import Data.List
 import Data.Maybe
+import Data.Ord
 import Debug.Trace
 import ShellCheck.AST
 import ShellCheck.Options
@@ -58,6 +59,7 @@ treeChecks = [
     ,checkUnpassedInFunctions
     ,checkArrayWithoutIndex
     ,checkShebang
+    ,checkUnassignedReferences
     ]
 
 checksFor Sh = [
@@ -331,6 +333,8 @@ deadSimple (T_SimpleCommand _ vars words) = concatMap deadSimple words
 deadSimple (T_Redirecting _ _ foo) = deadSimple foo
 deadSimple (T_DollarSingleQuoted _ s) = [s]
 deadSimple (T_Annotation _ _ s) = deadSimple s
+-- Workaround for let "foo = bar" parsing
+deadSimple (TA_Sequence _ [TA_Expansion _ v]) = concatMap deadSimple v
 deadSimple _ = []
 
 -- Turn a SimpleCommand foo -avz --bar=baz into args ["a", "v", "z", "bar"]
@@ -365,6 +369,29 @@ checkNode f = checkTree (runNodeAnalysis f)
 checkTree f s = case parseShell "-" s of
         (ParseResult (Just (t, m)) _) -> Just . not . null $ runList defaultAnalysisOptions t [f]
         _ -> Nothing
+
+
+-- Copied from https://wiki.haskell.org/Edit_distance
+dist :: Eq a => [a] -> [a] -> Int
+dist a b
+    = last (if lab == 0 then mainDiag
+            else if lab > 0 then lowers !! (lab - 1)
+                 else{- < 0 -}   uppers !! (-1 - lab))
+    where mainDiag = oneDiag a b (head uppers) (-1 : head lowers)
+          uppers = eachDiag a b (mainDiag : uppers) -- upper diagonals
+          lowers = eachDiag b a (mainDiag : lowers) -- lower diagonals
+          eachDiag a [] diags = []
+          eachDiag a (bch:bs) (lastDiag:diags) = oneDiag a bs nextDiag lastDiag : eachDiag a bs diags
+              where nextDiag = head (tail diags)
+          oneDiag a b diagAbove diagBelow = thisdiag
+              where doDiag [] b nw n w = []
+                    doDiag a [] nw n w = []
+                    doDiag (ach:as) (bch:bs) nw n w = me : (doDiag as bs me (tail n) (tail w))
+                        where me = if ach == bch then nw else 1 + min3 (head w) nw (head n)
+                    firstelt = 1 + head diagBelow
+                    thisdiag = firstelt : doDiag a b firstelt diagAbove (tail diagBelow)
+          lab = length a - length b
+          min3 x y z = if x < y then x else min y z
 
 
 prop_checkEchoWc3 = verify checkEchoWc "n=$(echo $foo | wc -c)"
@@ -2093,6 +2120,11 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal 
         "read" ->
             let params = map getLiteral rest in
                 catMaybes . takeWhile isJust . reverse $ params
+        "getopts" ->
+            case rest of
+                opts:var:_ -> maybeToList $ getLiteral var
+                _ -> []
+
         "let" -> concatMap letParamToLiteral rest
 
         "export" -> concatMap getModifierParam rest
@@ -2139,17 +2171,16 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal 
 
 getModifiedVariableCommand _ = []
 
--- TODO:
 getBracedReference s =
-    case filter (not . null) [
-        dropSuffix $ dropPrefix s,
-        dropSuffix s,
-        s] of
-            (a:_) -> a
-            [] -> error "Internal ShellCheck error (empty braced reference). Please file a bug!"
+    let name = takeName $ dropPrefix s in
+        if null name then s else name
   where
-    dropSuffix = takeWhile (`notElem` ":[#%/^,")
     dropPrefix = dropWhile (`elem` "#!")
+    takeName s =
+        let special = getSpecial s in
+            if null special then takeWhile isVariableChar s else special
+    getSpecial (c:_) =
+        if c `elem` "*@#?-$!" then [c] else ""
 
 getIndexReferences s = fromMaybe [] $ do
     (_, index, _, _) <- matchRegexAll re s
@@ -2491,11 +2522,83 @@ checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
     unused = Map.assocs $ Map.difference assignments references
 
     warnFor (name, token) =
-        info (getId token) 2034 $
+        warn (getId token) 2034 $
             name ++ " appears unused. Verify it or export it."
 
     stripSuffix = takeWhile isVariableChar
     defaultMap = Map.fromList $ zip internalVariables $ repeat ()
+
+prop_checkUnassignedReferences1 = verifyTree checkUnassignedReferences "echo $foo"
+prop_checkUnassignedReferences2 = verifyNotTree checkUnassignedReferences "foo=hello; echo $foo"
+prop_checkUnassignedReferences3 = verifyTree checkUnassignedReferences "MY_VALUE=3; echo $MYVALUE"
+prop_checkUnassignedReferences4 = verifyNotTree checkUnassignedReferences "RANDOM2=foo; echo $RANDOM"
+prop_checkUnassignedReferences5 = verifyNotTree checkUnassignedReferences "declare -A foo=([bar]=baz); echo ${foo[bar]}"
+prop_checkUnassignedReferences6 = verifyNotTree checkUnassignedReferences "foo=..; echo ${foo-bar}"
+prop_checkUnassignedReferences7 = verifyNotTree checkUnassignedReferences "getopts ':h' foo; echo $foo"
+prop_checkUnassignedReferences8 = verifyNotTree checkUnassignedReferences "let 'foo = 1'; echo $foo"
+prop_checkUnassignedReferences9 = verifyNotTree checkUnassignedReferences "echo ${foo-bar}"
+prop_checkUnassignedReferences10= verifyNotTree checkUnassignedReferences "echo ${foo:?}"
+checkUnassignedReferences params t = warnings
+  where
+    (readMap, writeMap) = execState (mapM tally $ variableFlow params) (Map.empty, Map.empty)
+    defaultAssigned = Map.fromList $ map (\a -> (a, ())) $ filter (not . null) internalVariables
+
+    tally (Assignment (_, _, name, _))  =
+        modify (\(read, written) -> (read, Map.insert name () written))
+    tally (Reference (_, place, name)) =
+        modify (\(read, written) -> (Map.insertWith' (const id) name place read, written))
+    tally _ = return ()
+
+    unassigned = Map.toList $ Map.difference (Map.difference readMap writeMap) defaultAssigned
+    writtenVars = filter isVariableName $ Map.keys writeMap
+
+    getBestMatch var = do
+        (match, score) <- listToMaybe best
+        guard $ goodMatch var match score
+        return match
+      where
+        matches = map (\x -> (x, dist var x)) writtenVars
+        best = sortBy (comparing snd) matches
+        goodMatch var match score =
+            let l = length match in
+                l > 3 && score <= 1
+                || l > 7 && score <= 2
+
+    isLocal = any isLower
+
+    warningForGlobals var place = do
+        match <- getBestMatch var
+        return $ warn (getId place) 2153 $
+            "Possible misspelling: " ++ var ++ " may not be assigned, but " ++ match ++ " is."
+
+    warningForLocals var place =
+        return $ warn (getId place) 2154 $
+            var ++ " is referenced but apparently never assigned" ++ optionalTip ++ "."
+      where
+        optionalTip = fromMaybe "" $ do
+            match <- getBestMatch var
+            return $ " (did you mean '" ++ match ++ "'?)"
+
+    warningFor var place = do
+        guard . not $ isInArray place || isGuarded place
+        (if isLocal var then warningForLocals else warningForGlobals) var place
+
+    warnings = execWriter . sequence $ mapMaybe (uncurry warningFor) unassigned
+
+    -- Due to parsing, foo=( [bar]=baz ) parses 'bar' as a reference even for assoc arrays.
+    -- This works around it by ignoring references in array assignemnts.
+    isInArray t = any isArray $ getPath (parentMap params) t
+      where
+        isArray (T_Array {}) = True
+        isArray _ = False
+
+    isGuarded (T_DollarBraced _ v) =
+        any (`isPrefixOf` rest) ["-", ":-", "?", ":?"]
+      where
+        name = concat $ deadSimple v
+        rest = dropWhile isVariableChar $ dropWhile (`elem` "#!") $ name
+    isGuarded _ = False
+
 
 prop_checkGlobsAsOptions1 = verify checkGlobsAsOptions "rm *.txt"
 prop_checkGlobsAsOptions2 = verify checkGlobsAsOptions "ls ??.*"
@@ -3091,5 +3194,5 @@ checkFindExecWithSingleArgument _ = checkCommand "find" (const f)
     check _ = Nothing
     commandRegex = mkRegex "[ |;]"
 
-return []
+
 runTests = $quickCheckAll
