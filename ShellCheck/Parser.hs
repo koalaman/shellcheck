@@ -20,6 +20,7 @@ module ShellCheck.Parser (Note(..), Severity(..), parseShell, ParseResult(..), P
 
 import ShellCheck.AST
 import ShellCheck.Data
+import ShellCheck.Options
 import Text.Parsec
 import Debug.Trace
 import Control.Monad
@@ -2157,13 +2158,13 @@ getStringFromParsec errors =
                 Message s     ->  if null s then Nothing else return $ s ++ "."
         unexpected s = "Unexpected " ++ (if null s then "eof" else s) ++ "."
 
-parseShell filename contents =
+parseShell options filename contents =
     case rp (parseWithNotes readScript) filename contents of
         (Right (script, map, notes), (parsenotes, _)) ->
-            ParseResult (Just (script, map)) (nub $ sortNotes $ notes ++ parsenotes)
+            ParseResult (Just (script, map)) (nub . sortNotes . excludeNotes $ notes ++ parsenotes)
         (Left err, (p, context)) ->
             ParseResult Nothing
-                (nub $ sortNotes $ p ++ notesForContext context ++ [makeErrorFor err])
+                (nub . sortNotes . excludeNotes $ p ++ notesForContext context ++ [makeErrorFor err])
   where
     isName (ContextName _ _) = True
     isName _ = False
@@ -2172,6 +2173,7 @@ parseShell filename contents =
         "Couldn't parse this " ++ str ++ "."
     second (ContextName pos str) = ParseNote pos InfoC 1009 $
         "The mentioned parser error was in this " ++ str ++ "."
+    excludeNotes = filter (\c -> codeForParseNote c `notElem` optionExcludes options)
 
 lt x = trace (show x) x
 ltt t = trace (show t)

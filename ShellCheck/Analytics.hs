@@ -366,7 +366,7 @@ verifyNotTree :: (Parameters -> Token -> [Note]) -> String -> Bool
 verifyNotTree f s = checkTree f s == Just False
 
 checkNode f = checkTree (runNodeAnalysis f)
-checkTree f s = case parseShell "-" s of
+checkTree f s = case parseShell defaultAnalysisOptions "-" s of
         (ParseResult (Just (t, m)) _) -> Just . not . null $ runList defaultAnalysisOptions t [f]
         _ -> Nothing
 

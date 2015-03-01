@@ -28,7 +28,7 @@ import Text.Parsec.Pos
 
 shellCheck :: AnalysisOptions -> String -> [ShellCheckComment]
 shellCheck options script =
-    let (ParseResult result notes) = parseShell "-" script in
+    let (ParseResult result notes) = parseShell options "-" script in
         let allNotes = notes ++ concat (maybeToList $ do
             (tree, posMap) <- result
             let list = runAnalytics options tree
@@ -71,6 +71,9 @@ prop_commentDisablesAnalysisIssue2 =
 
 prop_optionDisablesIssue1 =
     null $ shellCheck (defaultAnalysisOptions { optionExcludes = [2086, 2148] }) "echo $1"
+
+prop_optionDisablesIssue2 =
+    null $ shellCheck (defaultAnalysisOptions { optionExcludes = [2148, 1037] }) "echo \"$10\""
 
 return []
 runTests = $quickCheckAll
