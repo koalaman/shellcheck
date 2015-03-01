@@ -3133,8 +3133,8 @@ checkShouldUseGrepQ params t =
         let op = if bool then "-n" else "-z"
         let flip = if bool then "" else "! "
         return . style id 2143 $
-            "Instead of [ " ++ op ++ " $(foo | " ++ name ++ " bar) ], " ++
-                "use " ++ flip ++ "foo | " ++ name ++ " -q bar ."
+            "Use " ++ flip ++ name ++ " -q instead of " ++
+                "comparing output with [ " ++ op ++ " .. ]."
 
     getFinalGrep t = do
         cmds <- getPipeline t
