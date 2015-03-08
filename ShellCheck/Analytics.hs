@@ -35,7 +35,8 @@ import ShellCheck.Data
 import ShellCheck.Parser hiding (runTests)
 import Text.Regex
 import qualified Data.Map as Map
-import Test.QuickCheck.All (quickCheckAll)
+import Test.QuickCheck.All (forAllProperties)
+import Test.QuickCheck.Test (quickCheckWithResult, stdArgs, maxSuccess)
 
 data Parameters = Parameters {
     variableFlow :: [StackData],
@@ -346,7 +347,7 @@ getFlags (T_SimpleCommand _ _ (_:args)) =
     flag ('-':args) = map (:[]) args
     flag _ = []
 
-getFlags _ = []
+getFlags _ = error "Internal shellcheck error, please report! (getFlags on non-command)"
 
 (!!!) list i =
     case drop i list of
@@ -961,10 +962,7 @@ checkArrayWithoutIndex params _ =
                     "Expanding an array without an index only gives the first element."]
     readF _ _ _ = return []
 
-    writeF _ t name (DataFrom [T_Array {}]) = do
-        modify (Map.insert name t)
-        return []
-    writeF _ t name DataExternalArray = do
+    writeF _ t name (DataArray _) = do
         modify (Map.insert name t)
         return []
     writeF _ _ name _ = do
@@ -1401,11 +1399,12 @@ isQuoteFreeNode strict tree t =
             T_Redirecting {} -> return $
                 if strict then False else
                     -- Not true, just a hack to prevent warning about non-expansion refs
-                    any (isCommand t) ["local", "declare", "typeset", "export", "trap"]
+                    any (isCommand t) ["local", "declare", "typeset", "export", "trap", "readonly"]
             T_DoubleQuoted _ _ -> return True
             T_DollarDoubleQuoted _ _ -> return True
             T_CaseExpression {} -> return True
             T_HereDoc {} -> return True
+            T_HereString {} -> return True
             T_DollarBraced {} -> return True
             -- When non-strict, pragmatically assume it's desirable to split here
             T_ForIn {} -> return (not strict)
@@ -2023,13 +2022,19 @@ data StackData =
     StackScope Scope
     | StackScopeEnd
     -- (Base expression, specific position, var name, assigned values)
-    | Assignment (Token, Token, String, DataSource)
+    | Assignment (Token, Token, String, DataType)
     | Reference (Token, Token, String)
   deriving (Show, Eq)
-data DataSource = DataFrom [Token] | DataExternalValue | DataExternalArray
+
+data DataType = DataString DataSource | DataArray DataSource
+  deriving (Show, Eq)
+
+data DataSource = SourceFrom [Token] | SourceExternal | SourceDeclaration
   deriving (Show, Eq)
 
 data VariableState = Dead Token String | Alive deriving (Show, Eq)
+
+dataTypeFrom defaultType v = (case v of T_Array {} -> DataArray; _ -> defaultType) $ SourceFrom [v]
 
 leadType shell parents t =
     case t of
@@ -2069,8 +2074,8 @@ getModifiedVariables t =
     case t of
         T_SimpleCommand _ vars [] ->
             concatMap (\x -> case x of
-                                T_Assignment id _ name _ w ->
-                                    [(x, x, name, DataFrom [w])]
+                                T_Assignment id _ name _ w  ->
+                                    [(x, x, name, dataTypeFrom DataString w)]
                                 _ -> []
                       ) vars
         c@(T_SimpleCommand {}) ->
@@ -2078,30 +2083,33 @@ getModifiedVariables t =
 
         TA_Unary _ "++|" var -> maybeToList $ do
             name <- getLiteralString var
-            return (t, t, name, DataFrom [t])
+            return (t, t, name, DataString $ SourceFrom [t])
         TA_Unary _ "|++" var -> maybeToList $ do
             name <- getLiteralString var
-            return (t, t, name, DataFrom [t])
+            return (t, t, name, DataString $ SourceFrom [t])
         TA_Binary _ op lhs rhs -> maybeToList $ do
             guard $ op `elem` ["=", "*=", "/=", "%=", "+=", "-=", "<<=", ">>=", "&=", "^=", "|="]
             name <- getLiteralString lhs
-            return (t, t, name, DataFrom [rhs])
+            return (t, t, name, DataString $ SourceFrom [rhs])
 
         t@(T_CoProc _ name _) ->
-            [(t, t, fromMaybe "COPROC" name, DataExternalArray)]
+            [(t, t, fromMaybe "COPROC" name, DataArray SourceExternal)]
 
         --Points to 'for' rather than variable
-        T_ForIn id _ strs words _ -> map (\str -> (t, t, str, DataFrom words)) strs
-        T_SelectIn id str words _ -> [(t, t, str, DataFrom words)]
+        T_ForIn id _ strs words _ -> map (\str -> (t, t, str, DataString $ SourceFrom words)) strs
+        T_SelectIn id str words _ -> [(t, t, str, DataString $ SourceFrom words)]
         _ -> []
 
 -- Consider 'export/declare -x' a reference, since it makes the var available
 getReferencedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal _ x:_):rest)) =
     case x of
-        "export" -> concatMap getReference rest
-        "declare" -> if "x" `elem` getFlags base
+        "export" -> if "f" `elem` flags
+            then []
+            else concatMap getReference rest
+        "declare" -> if "x" `elem` flags
             then concatMap getReference rest
             else []
+        "readonly" -> concatMap getReference rest
         "trap" ->
             case rest of
                 head:_ -> map (\x -> (head, head, x)) $ getVariablesFromLiteralToken head
@@ -2111,6 +2119,7 @@ getReferencedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Litera
     getReference t@(T_Assignment _ _ name _ value) = [(t, t, name)]
     getReference t@(T_NormalWord _ [T_Literal _ name]) | not ("-" `isPrefixOf` name) = [(t, t, name)]
     getReference _ = []
+    flags = getFlags base
 
 getReferencedVariableCommand _ = []
 
@@ -2127,16 +2136,23 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal 
 
         "let" -> concatMap letParamToLiteral rest
 
-        "export" -> concatMap getModifierParam rest
-        "declare" -> concatMap getModifierParam rest
-        "typeset" -> concatMap getModifierParam rest
-        "local" -> concatMap getModifierParam rest
+        "export" ->
+            if "f" `elem` flags then [] else concatMap getModifierParamString rest
+
+        "declare" -> declaredVars
+        "typeset" -> declaredVars
+
+        "local" -> concatMap getModifierParamString rest
+        "readonly" -> concatMap getModifierParamString rest
         "set" -> maybeToList $ do
             params <- getSetParams rest
-            return (base, base, "@", DataFrom params)
+            return (base, base, "@", DataString $ SourceFrom params)
+
+        "printf" -> maybeToList $ getPrintfVariable rest
 
         _ -> []
   where
+    flags = getFlags base
     stripEquals s = let rest = dropWhile (/= '=') s in
         if rest == "" then "" else tail rest
     stripEqualsFrom (T_NormalWord id1 (T_Literal id2 s:rs)) =
@@ -2145,19 +2161,29 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal 
         T_NormalWord id1 [T_DoubleQuoted id2 [T_Literal id3 (stripEquals s)]]
     stripEqualsFrom t = t
 
+    declaredVars = concatMap (getModifierParam defaultType) rest
+      where
+        defaultType = if any (`elem` flags) ["a", "A"] then DataArray else DataString
+
     getLiteral t = do
         s <- getLiteralString t
         when ("-" `isPrefixOf` s) $ fail "argument"
-        return (base, t, s, DataExternalValue)
+        return (base, t, s, DataString SourceExternal)
 
-    getModifierParam t@(T_Assignment _ _ name _ value) =
-        [(base, t, name, DataFrom [value])]
-    getModifierParam _ = []
+    getModifierParamString = getModifierParam DataString
+
+    getModifierParam def t@(T_Assignment _ _ name _ value) =
+        [(base, t, name, dataTypeFrom def value)]
+    getModifierParam def t@(T_NormalWord {}) = maybeToList $ do
+        name <- getLiteralString t
+        guard $ isVariableName name
+        return (base, t, name, def SourceDeclaration)
+    getModifierParam _ _ = []
 
     letParamToLiteral token =
           if var == ""
             then []
-            else [(base, token, var, DataFrom [stripEqualsFrom token])]
+            else [(base, token, var, DataString $ SourceFrom [stripEqualsFrom token])]
         where var = takeWhile isVariableChar $ dropWhile (`elem` "+-") $ concat $ deadSimple token
 
     getSetParams (t:_:rest) | getLiteralString t == Just "-o" = getSetParams rest
@@ -2168,6 +2194,12 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal 
                 Just ('-':_) -> getSetParams rest
                 _ -> return (t:fromMaybe [] (getSetParams rest))
     getSetParams [] = Nothing
+
+    getPrintfVariable list = f $ map (\x -> (x, getLiteralString x)) list
+      where
+        f ((_, Just "-v") : (t, Just var) : _) = return (base, t, var, DataString $ SourceFrom list)
+        f (_:rest) = f rest
+        f [] = fail "not found"
 
 getModifiedVariableCommand _ = []
 
@@ -2317,19 +2349,21 @@ prop_checkSpacefulness5 = verifyTree checkSpacefulness "a='*'; b=$a; c=lol${b//f
 prop_checkSpacefulness6 = verifyTree checkSpacefulness "a=foo$(lol); echo $a"
 prop_checkSpacefulness7 = verifyTree checkSpacefulness "a=foo\\ bar; rm $a"
 prop_checkSpacefulness8 = verifyNotTree checkSpacefulness "a=foo\\ bar; a=foo; rm $a"
-prop_checkSpacefulnessA = verifyTree checkSpacefulness "rm $1"
-prop_checkSpacefulnessB = verifyTree checkSpacefulness "rm ${10//foo/bar}"
-prop_checkSpacefulnessC = verifyNotTree checkSpacefulness "(( $1 + 3 ))"
-prop_checkSpacefulnessD = verifyNotTree checkSpacefulness "if [[ $2 -gt 14 ]]; then true; fi"
-prop_checkSpacefulnessE = verifyNotTree checkSpacefulness "foo=$3 env"
-prop_checkSpacefulnessF = verifyNotTree checkSpacefulness "local foo=$1"
-prop_checkSpacefulnessG = verifyNotTree checkSpacefulness "declare foo=$1"
-prop_checkSpacefulnessH = verifyTree checkSpacefulness "echo foo=$1"
-prop_checkSpacefulnessI = verifyNotTree checkSpacefulness "$1 --flags"
-prop_checkSpacefulnessJ = verifyTree checkSpacefulness "echo $PWD"
-prop_checkSpacefulnessK = verifyNotTree checkSpacefulness "n+='foo bar'"
-prop_checkSpacefulnessL = verifyNotTree checkSpacefulness "select foo in $bar; do true; done"
-prop_checkSpacefulnessM = verifyNotTree checkSpacefulness "echo $\"$1\""
+prop_checkSpacefulness10= verifyTree checkSpacefulness "rm $1"
+prop_checkSpacefulness11= verifyTree checkSpacefulness "rm ${10//foo/bar}"
+prop_checkSpacefulness12= verifyNotTree checkSpacefulness "(( $1 + 3 ))"
+prop_checkSpacefulness13= verifyNotTree checkSpacefulness "if [[ $2 -gt 14 ]]; then true; fi"
+prop_checkSpacefulness14= verifyNotTree checkSpacefulness "foo=$3 env"
+prop_checkSpacefulness15= verifyNotTree checkSpacefulness "local foo=$1"
+prop_checkSpacefulness16= verifyNotTree checkSpacefulness "declare foo=$1"
+prop_checkSpacefulness17= verifyTree checkSpacefulness "echo foo=$1"
+prop_checkSpacefulness18= verifyNotTree checkSpacefulness "$1 --flags"
+prop_checkSpacefulness19= verifyTree checkSpacefulness "echo $PWD"
+prop_checkSpacefulness20= verifyNotTree checkSpacefulness "n+='foo bar'"
+prop_checkSpacefulness21= verifyNotTree checkSpacefulness "select foo in $bar; do true; done"
+prop_checkSpacefulness22= verifyNotTree checkSpacefulness "echo $\"$1\""
+prop_checkSpacefulness23= verifyNotTree checkSpacefulness "a=(1); echo ${a[@]}"
+prop_checkSpacefulness24= verifyNotTree checkSpacefulness "a='a b'; cat <<< $a"
 
 checkSpacefulness params t =
     doVariableFlowAnalysis readF writeF (Map.fromList defaults) (variableFlow params)
@@ -2347,18 +2381,18 @@ checkSpacefulness params t =
         spaced <- hasSpaces name
         return [Note (getId token) InfoC 2086 warning |
                   spaced
-                  && not ("@" `isPrefixOf` name) -- There's another warning for this
+                  && not (isArrayExpansion token) -- There's another warning for this
                   && not (isCounting token)
                   && not (isQuoteFree parents token)
                   && not (usedAsCommandName parents token)]
       where
         warning = "Double quote to prevent globbing and word splitting."
 
-    writeF _ _ name DataExternalValue = do
+    writeF _ _ name (DataString SourceExternal) = do
         setSpaces name True
         return []
 
-    writeF _ _ name (DataFrom vals) = do
+    writeF _ _ name (DataString (SourceFrom vals)) = do
         map <- get
         setSpaces name
             (isSpacefulWord (\x -> Map.findWithDefault True x map) vals)
@@ -2393,7 +2427,6 @@ checkSpacefulness params t =
         globspace = "*? \t\n"
         containsAny s = any (`elem` s)
 
-
 prop_checkQuotesInLiterals1 = verifyTree checkQuotesInLiterals "param='--foo=\"bar\"'; app $param"
 prop_checkQuotesInLiterals1a= verifyTree checkQuotesInLiterals "param=\"--foo='lolbar'\"; app $param"
 prop_checkQuotesInLiterals2 = verifyNotTree checkQuotesInLiterals "param='--foo=\"bar\"'; app \"$param\""
@@ -2414,7 +2447,7 @@ checkQuotesInLiterals params t =
     quoteRegex = mkRegex "\"|([/= ]|^)'|'( |$)|\\\\ "
     containsQuotes s = s `matches` quoteRegex
 
-    writeF _ _ name (DataFrom values) = do
+    writeF _ _ name (DataString (SourceFrom values)) = do
         quoteMap <- get
         let quotedVars = msum $ map (forToken quoteMap) values
         case quotedVars of
@@ -2551,6 +2584,17 @@ prop_checkUnassignedReferences7 = verifyNotTree checkUnassignedReferences "getop
 prop_checkUnassignedReferences8 = verifyNotTree checkUnassignedReferences "let 'foo = 1'; echo $foo"
 prop_checkUnassignedReferences9 = verifyNotTree checkUnassignedReferences "echo ${foo-bar}"
 prop_checkUnassignedReferences10= verifyNotTree checkUnassignedReferences "echo ${foo:?}"
+prop_checkUnassignedReferences11= verifyNotTree checkUnassignedReferences "declare -A foo; echo \"${foo[@]}\""
+prop_checkUnassignedReferences12= verifyNotTree checkUnassignedReferences "typeset -a foo; echo \"${foo[@]}\""
+prop_checkUnassignedReferences13= verifyNotTree checkUnassignedReferences "f() { local foo; echo $foo; }"
+prop_checkUnassignedReferences14= verifyNotTree checkUnassignedReferences "foo=; echo $foo"
+prop_checkUnassignedReferences15= verifyNotTree checkUnassignedReferences "f() { true; }; export -f f"
+prop_checkUnassignedReferences16= verifyNotTree checkUnassignedReferences "declare -A foo=( [a b]=bar ); echo ${foo[a b]}"
+prop_checkUnassignedReferences17= verifyNotTree checkUnassignedReferences "USERS=foo; echo $USER"
+prop_checkUnassignedReferences18= verifyNotTree checkUnassignedReferences "FOOBAR=42; export FOOBAR="
+prop_checkUnassignedReferences19= verifyNotTree checkUnassignedReferences "readonly foo=bar; echo $foo"
+prop_checkUnassignedReferences20= verifyNotTree checkUnassignedReferences "printf -v foo bar; echo $foo"
+
 checkUnassignedReferences params t = warnings
   where
     (readMap, writeMap) = execState (mapM tally $ variableFlow params) (Map.empty, Map.empty)
@@ -2570,7 +2614,7 @@ checkUnassignedReferences params t = warnings
         guard $ goodMatch var match score
         return match
       where
-        matches = map (\x -> (x, dist var x)) writtenVars
+        matches = map (\x -> (x, match var x)) writtenVars
         best = sortBy (comparing snd) matches
         goodMatch var match score =
             let l = length match in
@@ -2586,23 +2630,27 @@ checkUnassignedReferences params t = warnings
 
     warningForLocals var place =
         return $ warn (getId place) 2154 $
-            var ++ " is referenced but apparently never assigned" ++ optionalTip ++ "."
+            var ++ " is referenced but not assigned" ++ optionalTip ++ "."
       where
-        optionalTip = fromMaybe "" $ do
-            match <- getBestMatch var
-            return $ " (did you mean '" ++ match ++ "'?)"
+        optionalTip =
+            if var `elem` commonCommands
+            then " (for output from commands, use \"$(" ++ var ++ " ..." ++ ")\" )"
+            else fromMaybe "" $ do
+                    match <- getBestMatch var
+                    return $ " (did you mean '" ++ match ++ "'?)"
 
     warningFor var place = do
-        guard . not $ isInArray place || isGuarded place
+        guard . not $ isInArray var place || isGuarded place
         (if isLocal var then warningForLocals else warningForGlobals) var place
 
     warnings = execWriter . sequence $ mapMaybe (uncurry warningFor) unassigned
 
     -- Due to parsing, foo=( [bar]=baz ) parses 'bar' as a reference even for assoc arrays.
-    -- This works around it by ignoring references in array assignemnts.
-    isInArray t = any isArray $ getPath (parentMap params) t
+    -- Similarly, ${foo[bar baz]} may not be referencing bar/baz. Just skip these.
+    isInArray var t = any isArray $ getPath (parentMap params) t
       where
         isArray (T_Array {}) = True
+        isArray (T_DollarBraced _ l) | var /= bracedString l = True
         isArray _ = False
 
     isGuarded (T_DollarBraced _ v) =
@@ -2611,6 +2659,11 @@ checkUnassignedReferences params t = warnings
         name = concat $ deadSimple v
         rest = dropWhile isVariableChar $ dropWhile (`elem` "#!") $ name
     isGuarded _ = False
+
+    match var candidate =
+        if var /= candidate && (map toLower var) == (map toLower candidate)
+        then 1
+        else dist var candidate
 
 
 prop_checkGlobsAsOptions1 = verify checkGlobsAsOptions "rm *.txt"
@@ -3208,4 +3261,5 @@ checkFindExecWithSingleArgument _ = checkCommand "find" (const f)
     commandRegex = mkRegex "[ |;]"
 
 
-runTests = $quickCheckAll
+return []
+runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

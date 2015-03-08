@@ -1881,6 +1881,7 @@ prop_readAssignmentWord6 = isWarning readAssignmentWord "b += (1 2 3)"
 prop_readAssignmentWord7 = isOk readAssignmentWord "a[3$n'']=42"
 prop_readAssignmentWord8 = isOk readAssignmentWord "a[4''$(cat foo)]=42"
 prop_readAssignmentWord9 = isOk readAssignmentWord "IFS= "
+prop_readAssignmentWord9a= isOk readAssignmentWord "foo="
 prop_readAssignmentWord10= isWarning readAssignmentWord "foo$n=42"
 prop_readAssignmentWord11= isOk readAssignmentWord "foo=([a]=b [c] [d]= [e f )"
 prop_readAssignmentWord12= isOk readAssignmentWord "a[b <<= 3 + c]='thing'"
@@ -1895,19 +1896,20 @@ readAssignmentWord = try $ do
     optional (readNormalDollar >> parseNoteAt pos ErrorC
                                 1067 "For indirection, use (associative) arrays or 'read \"var$n\" <<< \"value\"'")
     index <- optionMaybe readArrayIndex
-    space <- spacing
+    hasLeftSpace <- liftM (not . null) spacing
     pos <- getPosition
     op <- readAssignmentOp
-    space2 <- spacing
-    if space == "" && space2 /= ""
+    hasRightSpace <- liftM (not . null) spacing
+    isEndOfCommand <- liftM isJust $ optionMaybe (try . lookAhead $ (disregard (oneOf "\r\n;&|)") <|> eof))
+    if not hasLeftSpace && (hasRightSpace || isEndOfCommand)
       then do
-        when (variable /= "IFS") $
+        when (variable /= "IFS" && hasRightSpace) $
             parseNoteAt pos WarningC 1007
                 "Remove space after = if trying to assign a value (for empty string, use var='' ... )."
         value <- readEmptyLiteral
         return $ T_Assignment id op variable index value
       else do
-        when (space /= "" || space2 /= "") $
+        when (hasLeftSpace || hasRightSpace) $
             parseNoteAt pos ErrorC 1068 "Don't put spaces around the = in assignments."
         value <- readArray <|> readNormalWord
         spacing

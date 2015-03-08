@@ -42,7 +42,10 @@ internalVariables = [
     "RPS1", "RPROMPT2", "RPS2", "SAVEHIST", "SPROMPT", "STTY", "TERM",
     "TERMINFO", "TIMEFMT", "TMOUT", "TMPPREFIX", "watch", "WATCHFMT",
     "WORDCHARS", "ZBEEP", "ZDOTDIR", "ZLE_LINE_ABORTED",
-    "ZLE_REMOVE_SUFFIX_CHARS", "ZLE_SPACE_SUFFIX_CHARS"
+    "ZLE_REMOVE_SUFFIX_CHARS", "ZLE_SPACE_SUFFIX_CHARS",
+
+    -- Other
+    "USER", "TZ"
   ]
 
 variablesWithoutSpaces = [
