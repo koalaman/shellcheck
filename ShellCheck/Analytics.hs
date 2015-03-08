@@ -2594,7 +2594,7 @@ prop_checkUnassignedReferences17= verifyNotTree checkUnassignedReferences "USERS
 prop_checkUnassignedReferences18= verifyNotTree checkUnassignedReferences "FOOBAR=42; export FOOBAR="
 prop_checkUnassignedReferences19= verifyNotTree checkUnassignedReferences "readonly foo=bar; echo $foo"
 prop_checkUnassignedReferences20= verifyNotTree checkUnassignedReferences "printf -v foo bar; echo $foo"
-
+prop_checkUnassignedReferences21= verifyTree checkUnassignedReferences "echo ${#foo}"
 checkUnassignedReferences params t = warnings
   where
     (readMap, writeMap) = execState (mapM tally $ variableFlow params) (Map.empty, Map.empty)
@@ -2650,7 +2650,7 @@ checkUnassignedReferences params t = warnings
     isInArray var t = any isArray $ getPath (parentMap params) t
       where
         isArray (T_Array {}) = True
-        isArray (T_DollarBraced _ l) | var /= bracedString l = True
+        isArray (T_DollarBraced _ l) | var /= getBracedReference (bracedString l) = True
         isArray _ = False
 
     isGuarded (T_DollarBraced _ v) =
