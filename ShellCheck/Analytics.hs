@@ -624,7 +624,7 @@ prop_checkShebang1 = verifyNotTree checkShebang "#!/usr/bin/env bash -x\necho co
 prop_checkShebang2 = verifyNotTree checkShebang "#! /bin/sh  -l "
 prop_checkShebang3 = verifyTree checkShebang "ls -l"
 checkShebang params (T_Script id sb _) =
-    [Note id InfoC 2148 $ "Shebang (#!) missing. Assuming " ++ (show $ shellType params) ++ "."
+    [Note id ErrorC 2148 "Tips depend on target shell and yours is unknown. Add a shebang."
         | not (shellTypeSpecified params) && sb == "" ]
 
 prop_checkBashisms = verify checkBashisms "while read a; do :; done < <(a)"
