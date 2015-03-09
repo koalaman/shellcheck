@@ -469,14 +469,15 @@ prop_a6 = isOk readArithmeticContents " 1 | 2 ||3|4"
 prop_a7 = isOk readArithmeticContents "3*2**10"
 prop_a8 = isOk readArithmeticContents "3"
 prop_a9 = isOk readArithmeticContents "a^!-b"
-prop_aA = isOk readArithmeticContents "! $?"
-prop_aB = isOk readArithmeticContents "10#08 * 16#f"
-prop_aC = isOk readArithmeticContents "\"$((3+2))\" + '37'"
-prop_aD = isOk readArithmeticContents "foo[9*y+x]++"
-prop_aE = isOk readArithmeticContents "1+`echo 2`"
-prop_aF = isOk readArithmeticContents "foo[`echo foo | sed s/foo/4/g` * 3] + 4"
-prop_a10= isOk readArithmeticContents "$foo$bar"
-prop_a11= isOk readArithmeticContents "i<(0+(1+1))"
+prop_a10= isOk readArithmeticContents "! $?"
+prop_a11= isOk readArithmeticContents "10#08 * 16#f"
+prop_a12= isOk readArithmeticContents "\"$((3+2))\" + '37'"
+prop_a13= isOk readArithmeticContents "foo[9*y+x]++"
+prop_a14= isOk readArithmeticContents "1+`echo 2`"
+prop_a15= isOk readArithmeticContents "foo[`echo foo | sed s/foo/4/g` * 3] + 4"
+prop_a16= isOk readArithmeticContents "$foo$bar"
+prop_a17= isOk readArithmeticContents "i<(0+(1+1))"
+prop_a18= isOk readArithmeticContents "a?b:c"
 readArithmeticContents =
     readSequence
   where
@@ -518,7 +519,7 @@ readArithmeticContents =
             readNormalDollar,
             readBraced,
             readBackTicked,
-            readNormalLiteral "+-*/=%^,]"
+            readNormalLiteral "+-*/=%^,]?:"
             ]
         spacing
         return $ TA_Expansion id pieces
@@ -1095,6 +1096,7 @@ readDollarBracket = called "$[..] expression" $ do
     string "]"
     return (T_DollarBracket id c)
 
+prop_readArithmeticExpression = isOk readArithmeticExpression "((a?b:c))"
 readArithmeticExpression = called "((..)) command" $ do
     id <- getNextId
     try (string "((")
