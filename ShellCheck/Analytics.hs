@@ -3188,6 +3188,7 @@ prop_checkGrepQ2= verify checkShouldUseGrepQ "[ -z $(fgrep lol) ]"
 prop_checkGrepQ3= verify checkShouldUseGrepQ "[ -n \"$(foo | zgrep lol)\" ]"
 prop_checkGrepQ4= verifyNot checkShouldUseGrepQ "[ -z $(grep bar | cmd) ]"
 prop_checkGrepQ5= verifyNot checkShouldUseGrepQ "rm $(ls | grep file)"
+prop_checkGrepQ6= verifyNot checkShouldUseGrepQ "[[ -n $(pgrep foo) ]]"
 checkShouldUseGrepQ params t =
     potentially $ case t of
         TC_Noary id _ token -> check id True token
@@ -3216,7 +3217,7 @@ checkShouldUseGrepQ params t =
             T_DollarExpansion _ [x] -> getPipeline x
             T_Pipeline _ _ cmds -> return cmds
             _ -> fail "unknown"
-    isGrep = isSuffixOf "grep"
+    isGrep = (`elem` ["grep", "egrep", "fgrep", "zgrep"])
 
 prop_checkTestGlobs1 = verify checkTestGlobs "[ -e *.mp3 ]"
 prop_checkTestGlobs2 = verifyNot checkTestGlobs "[[ $a == *b* ]]"
