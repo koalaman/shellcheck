@@ -1,6 +1,6 @@
 module ShellCheck.Options where
 
-data Shell = Ksh | Zsh | Sh | Bash
+data Shell = Ksh | Sh | Bash
     deriving (Show, Eq)
 
 data AnalysisOptions = AnalysisOptions {

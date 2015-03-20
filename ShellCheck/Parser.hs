@@ -765,11 +765,10 @@ readDollarBracedLiteral = do
 
 prop_readProcSub1 = isOk readProcSub "<(echo test | wc -l)"
 prop_readProcSub2 = isOk readProcSub "<(  if true; then true; fi )"
-prop_readProcSub3 = isOk readProcSub "=(ls)"
 readProcSub = called "process substitution" $ do
     id <- getNextId
     dir <- try $ do
-                    x <- oneOf "<>="
+                    x <- oneOf "<>"
                     char '('
                     return [x]
     allspacing
@@ -1358,7 +1357,6 @@ prop_readSimpleCommand3 = isOk readSimpleCommand "export foo=(bar baz)"
 prop_readSimpleCommand4 = isOk readSimpleCommand "typeset -a foo=(lol)"
 prop_readSimpleCommand5 = isOk readSimpleCommand "time if true; then echo foo; fi"
 prop_readSimpleCommand6 = isOk readSimpleCommand "time -p ( ls -l; )"
-prop_readSimpleCommand7 = isOk readSimpleCommand "cat =(ls)"
 readSimpleCommand = called "simple command" $ do
     id1 <- getNextId
     id2 <- getNextId
@@ -1634,7 +1632,6 @@ prop_readForClause7 = isOk readForClause "for ((;;)) do echo $i\ndone"
 prop_readForClause8 = isOk readForClause "for ((;;)) ; do echo $i\ndone"
 prop_readForClause9 = isOk readForClause "for i do true; done"
 prop_readForClause10= isOk readForClause "for ((;;)) { true; }"
-prop_readForClause11= isOk readForClause "for a b in *; do echo $a $b; done"
 prop_readForClause12= isWarning readForClause "for $a in *; do echo \"$a\"; done"
 readForClause = called "for loop" $ do
     pos <- getPosition
@@ -1663,25 +1660,10 @@ readForClause = called "for loop" $ do
     readRegular id pos = do
         acceptButWarn (char '$') ErrorC 1086
             "Don't use $ on the iterator name in for loops."
-        names <- readNames
-        readShort names <|> readLong names
-      where
-        readLong names = do
-            values <- readInClause <|> (optional readSequentialSep >> return [])
-            group <- readDoGroup pos
-            return $ T_ForIn id NormalForIn names values group
-        readShort names = do
-            char '('
-            allspacing
-            words <- many (readNormalWord `thenSkip` allspacing)
-            char ')'
-            allspacing
-            command <- readAndOr
-            return $ T_ForIn id ShortForIn names words [command]
-
-    readNames =
-        reluctantlyTill1 (readVariableName `thenSkip` spacing) $
-            disregard g_Do <|> disregard readInClause <|> disregard readSequentialSep
+        name <- readVariableName `thenSkip` spacing
+        values <- readInClause <|> (optional readSequentialSep >> return [])
+        group <- readDoGroup pos
+        return $ T_ForIn id name values group
 
 prop_readSelectClause1 = isOk readSelectClause "select foo in *; do echo $foo; done"
 prop_readSelectClause2 = isOk readSelectClause "select foo; do echo $foo; done"
@@ -1802,7 +1784,7 @@ readFunctionDefinition = called "function" $ do
                 g_Rparen
             return ()
 
-        readFunctionName = many functionChars
+        readFunctionName = many1 functionChars
 
 prop_readCoProc1 = isOk readCoProc "coproc foo { echo bar; }"
 prop_readCoProc2 = isOk readCoProc "coproc { echo bar; }"
@@ -1892,9 +1874,6 @@ readAssignmentWord = try $ do
     pos <- getPosition
     optional (char '$' >> parseNote ErrorC 1066 "Don't use $ on the left side of assignments.")
     variable <- readVariableName
-    notFollowedBy2 $ do -- Special case for zsh =(..) syntax
-        spacing1
-        string "=("
     optional (readNormalDollar >> parseNoteAt pos ErrorC
                                 1067 "For indirection, use (associative) arrays or 'read \"var$n\" <<< \"value\"'")
     index <- optionMaybe readArrayIndex
@@ -2093,8 +2072,8 @@ readScript = do
     verifyShell pos s =
         case isValidShell s of
             Just True -> return ()
-            Just False -> parseProblemAt pos ErrorC 1071 "ShellCheck only supports Bourne based shell scripts, sorry!"
-            Nothing -> parseProblemAt pos InfoC 1008 "This shebang was unrecognized. Note that ShellCheck only handles Bourne based shells."
+            Just False -> parseProblemAt pos ErrorC 1071 "ShellCheck only supports sh/bash/ksh scripts. Sorry!"
+            Nothing -> parseProblemAt pos InfoC 1008 "This shebang was unrecognized. Note that ShellCheck only handles sh/bash/ksh."
 
     isValidShell s =
         let good = s == "" || any (`isPrefixOf` s) goodShells
@@ -2108,9 +2087,10 @@ readScript = do
 
     goodShells = [
         "sh",
+        "ash",
+        "dash",
         "bash",
-        "ksh",
-        "zsh"
+        "ksh"
         ]
     badShells = [
         "awk",
@@ -2118,7 +2098,8 @@ readScript = do
         "perl",
         "python",
         "ruby",
-        "tcsh"
+        "tcsh",
+        "zsh"
         ]
 
     readUtf8Bom = called "Byte Order Mark" $ string "\xFEFF"

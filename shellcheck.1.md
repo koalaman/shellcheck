@@ -16,6 +16,20 @@ errors and pitfalls where the shell just gives a cryptic error message or
 strange behavior, but it also reports on a few more advanced issues where
 corner cases can cause delayed failures.
 
+ShellCheck gives shell specific advice. Consider the line:
+
+    (( area = 3.14*r*r ))
+
++ For scripts starting with `#!/bin/sh` (or when using `-s sh`), ShellCheck
+will warn that `(( .. ))` is not POSIX compliant (similar to checkbashisms).
+
++ For scripts starting with `#!/bin/bash` (or using `-s bash`), ShellCheck
+will warn that decimals are not supported.
+
++ For scripts starting with `#!/bin/ksh` (or using `-s ksh`), ShellCheck will
+not warn at all, as `ksh` supports decimals in arithmetic contexts.
+
+
 # OPTIONS
 
 **-e**\ *CODE1*[,*CODE2*...],\ **--exclude=***CODE1*[,*CODE2*...]
@@ -32,9 +46,9 @@ corner cases can cause delayed failures.
 
 **-s**\ *shell*,\ **--shell=***shell*
 
-:   Specify Bourne shell dialect. Valid values are *sh*, *bash*, *ksh* and
-    *zsh*. The default is to use the file's shebang, or *bash* if the target
-    shell can't be determined.
+:   Specify Bourne shell dialect. Valid values are *sh*, *bash* and *ksh*.
+    The default is to use the file's shebang, or *bash* if the target shell
+    can't be determined.
 
 **-V**\ *version*,\ **--version**
 
@@ -83,11 +97,12 @@ corner cases can cause delayed failures.
 
         [
           {
-            "line": line,
-            "column": column,
-            "level": level,
-            "code": ####,
-            "message": message
+            "file": "filename",
+            "line": lineNumber,
+            "column": columnNumber,
+            "level": "severitylevel",
+            "code": errorCode,
+            "message": "warning message"
           },
           ...
         ]
@@ -103,6 +118,14 @@ For example, to suppress SC2035 about using `./*.jpg`:
 
     # shellcheck disable=SC2035
     echo "Files: " *.jpg
+
+Here a shell brace group is used to suppress on multiple lines:
+
+    # shellcheck disable=SC2016
+    {
+      echo 'Modifying $PATH'
+      echo 'PATH=foo:$PATH' >> ~/.bashrc
+    }
 
 Valid keys are:
 

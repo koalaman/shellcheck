@@ -57,7 +57,7 @@ options = [
     Option "f" ["format"]
         (ReqArg (Flag "format") "FORMAT") "output format",
     Option "s" ["shell"]
-        (ReqArg (Flag "shell") "SHELLNAME") "Specify dialect (bash,sh,ksh,zsh)",
+        (ReqArg (Flag "shell") "SHELLNAME") "Specify dialect (bash,sh,ksh)",
     Option "V" ["version"]
         (NoArg $ Flag "version" "true") "Print version information"
     ]

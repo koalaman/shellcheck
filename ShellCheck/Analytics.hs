@@ -71,10 +71,6 @@ checksFor Sh = [
 checksFor Ksh = [
     checkEchoSed
     ]
-checksFor Zsh = [
-    checkTimeParameters
-    ,checkEchoSed
-    ]
 checksFor Bash = [
     checkTimeParameters
     ,checkBraceExpansionVars
@@ -116,7 +112,6 @@ shellForExecutable "ksh" = return Ksh
 shellForExecutable "ksh88" = return Ksh
 shellForExecutable "ksh93" = return Ksh
 
-shellForExecutable "zsh" = return Zsh
 shellForExecutable "bash" = return Bash
 shellForExecutable _ = Nothing
 
@@ -723,17 +718,17 @@ prop_checkForInQuoted4 = verify checkForInQuoted "for f in 1,2,3; do true; done"
 prop_checkForInQuoted4a = verifyNot checkForInQuoted "for f in foo{1,2,3}; do true; done"
 prop_checkForInQuoted5 = verify checkForInQuoted "for f in ls; do true; done"
 prop_checkForInQuoted6 = verifyNot checkForInQuoted "for f in \"${!arr}\"; do true; done"
-checkForInQuoted _ (T_ForIn _ _ f [T_NormalWord _ [word@(T_DoubleQuoted id list)]] _) =
+checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [word@(T_DoubleQuoted id list)]] _) =
     when (any (\x -> willSplit x && not (mayBecomeMultipleArgs x)) list
             || (liftM wouldHaveBeenGlob (getLiteralString word) == Just True)) $
         err id 2066 "Since you double quoted this, it will not word split, and the loop will only run once."
-checkForInQuoted _ (T_ForIn _ _ f [T_NormalWord _ [T_SingleQuoted id s]] _) =
+checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [T_SingleQuoted id s]] _) =
     warn id 2041 $ "This is a literal string. To run as a command, use $(" ++ s ++ ")."
-checkForInQuoted _ (T_ForIn _ _ f [T_NormalWord _ [T_Literal id s]] _) =
+checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [T_Literal id s]] _) =
     if ',' `elem` s
       then unless ('{' `elem` s) $
             warn id 2042 "Use spaces, not commas, to separate loop elements."
-      else warn id 2043 $ "This loop will only run once, with " ++ head f ++ "='" ++ s ++ "'."
+      else warn id 2043 $ "This loop will only run once, with " ++ f ++ "='" ++ s ++ "'."
 checkForInQuoted _ _ = return ()
 
 prop_checkForInCat1 = verify checkForInCat "for f in $(cat foo); do stuff; done"
@@ -741,7 +736,7 @@ prop_checkForInCat1a= verify checkForInCat "for f in `cat foo`; do stuff; done"
 prop_checkForInCat2 = verify checkForInCat "for f in $(cat foo | grep lol); do stuff; done"
 prop_checkForInCat2a= verify checkForInCat "for f in `cat foo | grep lol`; do stuff; done"
 prop_checkForInCat3 = verifyNot checkForInCat "for f in $(cat foo | grep bar | wc -l); do stuff; done"
-checkForInCat _ (T_ForIn _ _ f [T_NormalWord _ w] _) = mapM_ checkF w
+checkForInCat _ (T_ForIn _ f [T_NormalWord _ w] _) = mapM_ checkF w
   where
     checkF (T_DollarExpansion id [T_Pipeline _ _ r])
         | all isLineBased r =
@@ -757,9 +752,9 @@ prop_checkForInLs2 = verify checkForInLs "for f in `ls *.mp3`; do mplayer \"$f\"
 prop_checkForInLs3 = verify checkForInLs "for f in `find / -name '*.mp3'`; do mplayer \"$f\"; done"
 checkForInLs _ = try
   where
-   try (T_ForIn _ _ f [T_NormalWord _ [T_DollarExpansion id [x]]] _) =
+   try (T_ForIn _ f [T_NormalWord _ [T_DollarExpansion id [x]]] _) =
         check id f x
-   try (T_ForIn _ _ f [T_NormalWord _ [T_Backticked id [x]]] _) =
+   try (T_ForIn _ f [T_NormalWord _ [T_Backticked id [x]]] _) =
         check id f x
    try _ = return ()
    check id f x =
@@ -1068,7 +1063,6 @@ prop_checkNumberComparisons6 = verify checkNumberComparisons "[[ 3.14 -eq $foo ]
 prop_checkNumberComparisons7 = verifyNot checkNumberComparisons "[[ 3.14 == $foo ]]"
 prop_checkNumberComparisons8 = verify checkNumberComparisons "[[ foo <= bar ]]"
 prop_checkNumberComparisons9 = verify checkNumberComparisons "[ foo \\>= bar ]"
-prop_checkNumberComparisons10= verify checkNumberComparisons "#!/bin/zsh -x\n[ foo >= bar ]]"
 prop_checkNumberComparisons11= verify checkNumberComparisons "[[ $foo -eq 'N' ]]"
 prop_checkNumberComparisons12= verify checkNumberComparisons "[ x$foo -gt x${N} ]"
 checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
@@ -1097,9 +1091,7 @@ checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
       isLtGt = flip elem ["<", "\\<", ">", "\\>"]
       isLeGe = flip elem ["<=", "\\<=", ">=", "\\>="]
 
-      supportsDecimals =
-        let sh = shellType params in
-            sh == Ksh || sh == Zsh
+      supportsDecimals = (shellType params) == Ksh
       checkDecimals hs =
         when (isFraction hs && not supportsDecimals) $
             err (getId hs) 2072 decimalError
@@ -1882,7 +1874,7 @@ checkSpuriousExec _ = doLists
     doLists (T_BraceGroup _ cmds) = doList cmds
     doLists (T_WhileExpression _ _ cmds) = doList cmds
     doLists (T_UntilExpression _ _ cmds) = doList cmds
-    doLists (T_ForIn _ _ _ _ cmds) = doList cmds
+    doLists (T_ForIn _ _ _ cmds) = doList cmds
     doLists (T_ForArithmetic _ _ _ _ cmds) = doList cmds
     doLists (T_IfExpression _ thens elses) = do
         mapM_ (\(_, l) -> doList l) thens
@@ -2010,7 +2002,7 @@ prop_subshellAssignmentCheck11 = verifyTree subshellAssignmentCheck "cat /etc/pa
 prop_subshellAssignmentCheck12 = verifyTree subshellAssignmentCheck "cat /etc/passwd | while read line; do let ++n; done\necho $n"
 prop_subshellAssignmentCheck13 = verifyTree subshellAssignmentCheck "#!/bin/bash\necho foo | read bar; echo $bar"
 prop_subshellAssignmentCheck14 = verifyNotTree subshellAssignmentCheck "#!/bin/ksh93\necho foo | read bar; echo $bar"
-prop_subshellAssignmentCheck15 = verifyNotTree subshellAssignmentCheck "#!/bin/zsh\ncat foo | while read bar; do a=$bar; done\necho \"$a\""
+prop_subshellAssignmentCheck15 = verifyNotTree subshellAssignmentCheck "#!/bin/ksh\ncat foo | while read bar; do a=$bar; done\necho \"$a\""
 prop_subshellAssignmentCheck16 = verifyNotTree subshellAssignmentCheck "(set -e); echo $@"
 subshellAssignmentCheck params t =
     let flow = variableFlow params
@@ -2069,7 +2061,6 @@ leadType shell parents t =
             Bash -> True
             Sh -> True
             Ksh -> False
-            Zsh -> False
 
 getModifiedVariables t =
     case t of
@@ -2097,7 +2088,7 @@ getModifiedVariables t =
             [(t, t, fromMaybe "COPROC" name, DataArray SourceExternal)]
 
         --Points to 'for' rather than variable
-        T_ForIn id _ strs words _ -> map (\str -> (t, t, str, DataString $ SourceFrom words)) strs
+        T_ForIn id str words _ -> [(t, t, str, DataString $ SourceFrom words)]
         T_SelectIn id str words _ -> [(t, t, str, DataString $ SourceFrom words)]
         _ -> []
 
@@ -2782,7 +2773,7 @@ prop_checkCdAndBack3 = verifyNot checkCdAndBack "while [[ $PWD != / ]]; do cd ..
 checkCdAndBack params = doLists
   where
     shell = shellType params
-    doLists (T_ForIn _ _ _ _ cmds) = doList cmds
+    doLists (T_ForIn _ _ _ cmds) = doList cmds
     doLists (T_ForArithmetic _ _ _ _ cmds) = doList cmds
     doLists (T_WhileExpression _ _ cmds) = doList cmds
     doLists (T_UntilExpression _ _ cmds) = doList cmds
@@ -2806,7 +2797,7 @@ checkCdAndBack params = doLists
                warn (getId $ head cds) 2103 message
 
     message =
-        if shell == Bash || shell == Zsh
+        if shell == Bash
         then "Consider using ( subshell ), 'cd foo||exit', or pushd/popd instead."
         else "Consider using ( subshell ) or 'cd foo||exit' instead."
 
@@ -2846,7 +2837,6 @@ checkFunctionDeclarations params
         (T_Function id (FunctionKeyword hasKeyword) (FunctionParentheses hasParens) _ _) =
     case shellType params of
         Bash -> return ()
-        Zsh -> return ()
         Ksh ->
             when (hasKeyword && hasParens) $
                 err id 2111 "ksh does not allow 'function' keyword and '()' at the same time."
@@ -2939,7 +2929,7 @@ checkInteractiveSu params = checkCommand "su" f
 
 
 prop_checkStderrPipe1 = verify checkStderrPipe "#!/bin/ksh\nfoo |& bar"
-prop_checkStderrPipe2 = verifyNot checkStderrPipe "#!/bin/zsh\nfoo |& bar"
+prop_checkStderrPipe2 = verifyNot checkStderrPipe "#!/bin/bash\nfoo |& bar"
 checkStderrPipe params =
     case shellType params of
         Ksh -> match
@@ -3076,8 +3066,6 @@ checkTildeInPath _ (T_SimpleCommand _ vars _) =
     isQuoted _ = False
 checkTildeInPath _ _ = return ()
 
-prop_checkUnsupported1 = verifyNot checkUnsupported "#!/bin/zsh\nfunction { echo cow; }"
-prop_checkUnsupported2 = verify checkUnsupported "#!/bin/sh\nfunction { echo cow; }"
 prop_checkUnsupported3 = verify checkUnsupported "#!/bin/sh\ncase foo in bar) baz ;& esac"
 prop_checkUnsupported4 = verify checkUnsupported "#!/bin/ksh\ncase foo in bar) baz ;;& esac"
 checkUnsupported params t =
@@ -3092,15 +3080,11 @@ checkUnsupported params t =
 -- TODO: Move more of these checks here
 shellSupport t =
   case t of
-    T_Function _ _ _ "" _ -> ("anonymous functions", [Zsh])
-    T_ForIn _ _ (_:_:_) _ _ -> ("multi-index for loops", [Zsh])
-    T_ForIn _ ShortForIn _ _ _ -> ("short form for loops", [Zsh])
-    T_ProcSub _ "=" _ -> ("=(..) process substitution", [Zsh])
     T_CaseExpression _ _ list -> forCase (map (\(a,_,_) -> a) list)
     otherwise -> ("", [])
   where
     forCase seps | CaseContinue `elem` seps = ("cases with ;;&", [Bash])
-    forCase seps | CaseFallThrough `elem` seps = ("cases with ;&", [Bash, Ksh, Zsh])
+    forCase seps | CaseFallThrough `elem` seps = ("cases with ;&", [Bash, Ksh])
     forCase _ = ("", [])
 
 
@@ -3109,7 +3093,7 @@ getCommandSequences (T_BraceGroup _ cmds) = [cmds]
 getCommandSequences (T_Subshell _ cmds) = [cmds]
 getCommandSequences (T_WhileExpression _ _ cmds) = [cmds]
 getCommandSequences (T_UntilExpression _ _ cmds) = [cmds]
-getCommandSequences (T_ForIn _ _ _ _ cmds) = [cmds]
+getCommandSequences (T_ForIn _ _ _ cmds) = [cmds]
 getCommandSequences (T_ForArithmetic _ _ _ _ cmds) = [cmds]
 getCommandSequences (T_IfExpression _ thens elses) = map snd thens ++ [elses]
 getCommandSequences _ = []
