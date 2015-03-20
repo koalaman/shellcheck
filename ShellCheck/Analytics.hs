@@ -2365,6 +2365,7 @@ prop_checkSpacefulness21= verifyNotTree checkSpacefulness "select foo in $bar; d
 prop_checkSpacefulness22= verifyNotTree checkSpacefulness "echo $\"$1\""
 prop_checkSpacefulness23= verifyNotTree checkSpacefulness "a=(1); echo ${a[@]}"
 prop_checkSpacefulness24= verifyNotTree checkSpacefulness "a='a b'; cat <<< $a"
+prop_checkSpacefulness25= verifyTree checkSpacefulness "a='s/[0-9]//g'; sed $a"
 
 checkSpacefulness params t =
     doVariableFlowAnalysis readF writeF (Map.fromList defaults) (variableFlow params)
@@ -2425,7 +2426,7 @@ checkSpacefulness params t =
           T_DoubleQuoted _ w -> isSpacefulWord spacefulF w
           _ -> False
       where
-        globspace = "*? \t\n"
+        globspace = "*?[] \t\n"
         containsAny s = any (`elem` s)
 
 prop_checkQuotesInLiterals1 = verifyTree checkQuotesInLiterals "param='--foo=\"bar\"'; app $param"
