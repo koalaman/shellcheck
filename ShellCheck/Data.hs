@@ -29,23 +29,8 @@ internalVariables = [
     "PROMPT_DIRTRIM", "PS1", "PS2", "PS3", "PS4", "SHELL", "TIMEFORMAT",
     "TMOUT", "TMPDIR", "auto_resume", "histchars", "COPROC",
 
-    -- Zsh
-    "ARGV0", "BAUD", "cdpath", "COLUMNS", "CORRECT_IGNORE",
-    "DIRSTACKSIZE", "ENV", "FCEDIT", "fignore", "fpath", "histchars",
-    "HISTCHARS", "HISTFILE", "HISTSIZE", "HOME", "IFS", "KEYBOARD_HACK",
-    "KEYTIMEOUT", "LANG", "LC_ALL", "LC_COLLATE", "LC_CTYPE",
-    "LC_MESSAGES", "LC_NUMERIC", "LC_TIME", "LINES", "LISTMAX",
-    "LOGCHECK", "MAIL", "MAILCHECK", "mailpath", "manpath", "module_path",
-    "NULLCMD", "path", "POSTEDIT", "PROMPT", "PROMPT2", "PROMPT3",
-    "PROMPT4", "prompt", "PROMPT_EOL_MARK", "PS1", "PS2", "PS3", "PS4",
-    "psvar", "READNULLCMD", "REPORTTIME", "REPLY", "reply", "RPROMPT",
-    "RPS1", "RPROMPT2", "RPS2", "SAVEHIST", "SPROMPT", "STTY", "TERM",
-    "TERMINFO", "TIMEFMT", "TMOUT", "TMPPREFIX", "watch", "WATCHFMT",
-    "WORDCHARS", "ZBEEP", "ZDOTDIR", "ZLE_LINE_ABORTED",
-    "ZLE_REMOVE_SUFFIX_CHARS", "ZLE_SPACE_SUFFIX_CHARS",
-
     -- Other
-    "USER", "TZ"
+    "USER", "TZ", "TERM"
   ]
 
 variablesWithoutSpaces = [
