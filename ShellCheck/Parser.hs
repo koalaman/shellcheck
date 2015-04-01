@@ -15,7 +15,7 @@
     You should have received a copy of the GNU Affero General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -}
-{-# LANGUAGE NoMonomorphismRestriction, TemplateHaskell #-}
+{-# LANGUAGE NoMonomorphismRestriction, TemplateHaskell, FlexibleContexts #-}
 module ShellCheck.Parser (Note(..), Severity(..), parseShell, ParseResult(..), ParseNote(..), sortNotes, noteToParseNote, runTests, readScript) where
 
 import ShellCheck.AST

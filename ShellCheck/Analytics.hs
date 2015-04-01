@@ -15,7 +15,7 @@
     You should have received a copy of the GNU Affero General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, FlexibleContexts #-}
 module ShellCheck.Analytics (AnalysisOptions(..), defaultAnalysisOptions, filterByAnnotation, runAnalytics, shellForExecutable, runTests) where
 
 import Control.Arrow (first)
