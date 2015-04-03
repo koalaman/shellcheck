@@ -2095,6 +2095,7 @@ readScript = do
     badShells = [
         "awk",
         "csh",
+        "expect",
         "perl",
         "python",
         "ruby",
