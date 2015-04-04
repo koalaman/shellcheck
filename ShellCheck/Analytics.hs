@@ -33,7 +33,7 @@ import ShellCheck.AST
 import ShellCheck.Options
 import ShellCheck.Data
 import ShellCheck.Parser hiding (runTests)
-import Text.Regex
+import ShellCheck.Regex
 import qualified Data.Map as Map
 import Test.QuickCheck.All (forAllProperties)
 import Test.QuickCheck.Test (quickCheckWithResult, stdArgs, maxSuccess)
@@ -240,12 +240,6 @@ isVariableName _ = False
 
 potentially = fromMaybe (return ())
 
-matchAll re = unfoldr f
-  where
-    f str = do
-        (_, match, rest, _) <- matchRegexAll re str
-        return (match, rest)
-
 willSplit x =
   case x of
     T_DollarBraced {} -> True
@@ -280,19 +274,8 @@ getSuspiciousRegexWildcard str =
     suspicious = mkRegex "([A-Za-z1-9])\\*"
     contra = mkRegex "[^a-zA-Z1-9]\\*|[][^$+\\\\]"
 
-matches string regex = isJust $ matchRegex regex string
-
 headOrDefault _ (a:_) = a
 headOrDefault def _ = def
-
-getAllMatches :: Regex -> String -> [[String]]
-getAllMatches regex str = fromJust $ f str
-  where
-    f str = do
-        (_, _, rest, groups) <- matchRegexAll regex str
-        more <- f rest
-        return $ groups : more
-      `mappend` return []
 
 isConstant token =
     case token of
@@ -413,14 +396,19 @@ checkEchoSed _ (T_Pipeline id _ [a, b]) =
             ["sed", "-e", v] -> checkIn v
             _ -> return ()
   where
-    sedRe = mkRegex "^s(.)(.*)\\1(.*)\\1g?$"
+    -- This should have used backreferences, but TDFA doesn't support them
+    sedRe = mkRegex "^s(.)([^\n]*)g?$"
+    isSimpleSed s = fromMaybe False $ do
+        [first,rest] <- matchRegex sedRe s
+        let delimiters = filter (== (first !! 0)) rest
+        guard $ length delimiters == 2
+        return True
+
     acmd = deadSimple a
     bcmd = deadSimple b
     checkIn s =
-        case matchRegex sedRe s of
-                Just _ -> style id 2001
-                    "See if you can use ${variable//search/replace} instead."
-                _        -> return ()
+        when (isSimpleSed s) $
+            style id 2001 "See if you can use ${variable//search/replace} instead."
 checkEchoSed _ _ = return ()
 
 prop_checkPipedAssignment1 = verify checkPipedAssignment "A=ls | grep foo"
@@ -2017,15 +2005,15 @@ data StackData =
     -- (Base expression, specific position, var name, assigned values)
     | Assignment (Token, Token, String, DataType)
     | Reference (Token, Token, String)
-  deriving (Show, Eq)
+  deriving (Show)
 
 data DataType = DataString DataSource | DataArray DataSource
-  deriving (Show, Eq)
+  deriving (Show)
 
 data DataSource = SourceFrom [Token] | SourceExternal | SourceDeclaration
-  deriving (Show, Eq)
+  deriving (Show)
 
-data VariableState = Dead Token String | Alive deriving (Show, Eq)
+data VariableState = Dead Token String | Alive deriving (Show)
 
 dataTypeFrom defaultType v = (case v of T_Array {} -> DataArray; _ -> defaultType) $ SourceFrom [v]
 
@@ -2220,10 +2208,11 @@ getBracedReference s = fromMaybe s $
     getSpecial _ = fail "empty"
 
 getIndexReferences s = fromMaybe [] $ do
-    (_, index, _, _) <- matchRegexAll re s
-    return $ matchAll variableNameRegex index
+    match <- matchRegex re s
+    index <- match !!! 0
+    return $ matchAllStrings variableNameRegex index
   where
-    re = mkRegex "\\[.*\\]"
+    re = mkRegex "(\\[.*\\])"
 
 getReferencedVariables t =
     case t of
@@ -2263,7 +2252,7 @@ getReferencedVariables t =
 prop_getVariablesFromLiteral1 =
     getVariablesFromLiteral "$foo${bar//a/b}$BAZ" == ["foo", "bar", "BAZ"]
 getVariablesFromLiteral string =
-    map (!! 0) $ getAllMatches variableRegex string
+    map (!! 0) $ matchAllSubgroups variableRegex string
   where
     variableRegex = mkRegex "\\$\\{?([A-Za-z0-9_]+)"
 
@@ -3107,9 +3096,7 @@ checkMultipleAppends params t =
     mapM_ checkList $ getCommandSequences t
   where
     checkList list =
-        mapM_ checkGroup groups
-      where
-        groups = groupWith (liftM fst) $ map getTarget list
+        mapM_ checkGroup (groupWith (liftM fst) $ map getTarget list)
     checkGroup (f:_:_:_) | isJust f =
         style (snd $ fromJust f) 2129
             "Consider using { cmd1; cmd2; } >> file instead of individual redirects."

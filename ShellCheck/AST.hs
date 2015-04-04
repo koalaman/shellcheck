@@ -19,7 +19,7 @@ module ShellCheck.AST where
 
 import Control.Monad
 import Control.Monad.Identity
-import qualified Text.Regex as Re
+import qualified ShellCheck.Regex as Re
 
 data Id = Id Int deriving (Show, Eq, Ord)
 
@@ -128,11 +128,13 @@ data Token =
 data Annotation = DisableComment Integer deriving (Show, Eq)
 data ConditionType = DoubleBracket | SingleBracket deriving (Show, Eq)
 
--- I apologize for nothing!
-lolHax s = Re.subRegex (Re.mkRegex "(Id [0-9]+)") (show s) "(Id 0)"
-instance Eq Token where
-    (==) a b = lolHax a == lolHax b
+-- This is an abomination.
+tokenEquals :: Token -> Token -> Bool
+tokenEquals a b = kludge a == kludge b
+    where kludge s = Re.subRegex (Re.mkRegex "\\(Id [0-9]+\\)") (show s) "(Id 0)"
 
+instance Eq Token where
+    (==) = tokenEquals
 
 analyze :: Monad m => (Token -> m ()) -> (Token -> m ()) -> (Token -> Token) -> Token -> m Token
 analyze f g i =

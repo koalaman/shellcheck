@@ -43,7 +43,7 @@ library
       json,
       mtl,
       parsec,
-      regex-compat,
+      regex-tdfa,
       QuickCheck >= 2.7.4
     exposed-modules:
       ShellCheck.Analytics
@@ -51,6 +51,7 @@ library
       ShellCheck.Data
       ShellCheck.Options
       ShellCheck.Parser
+      ShellCheck.Regex
       ShellCheck.Simple
     other-modules:
       Paths_ShellCheck
@@ -64,7 +65,7 @@ executable shellcheck
       json,
       mtl,
       parsec,
-      regex-compat,
+      regex-tdfa,
       transformers,
       QuickCheck >= 2.7.4
     main-is: shellcheck.hs
@@ -79,7 +80,7 @@ test-suite test-shellcheck
       json,
       mtl,
       parsec,
-      regex-compat,
+      regex-tdfa,
       transformers,
       QuickCheck >= 2.7.4
     main-is: test/shellcheck.hs
