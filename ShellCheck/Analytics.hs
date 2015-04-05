@@ -318,15 +318,18 @@ deadSimple (TA_Sequence _ [TA_Expansion _ v]) = concatMap deadSimple v
 deadSimple _ = []
 
 -- Turn a SimpleCommand foo -avz --bar=baz into args ["a", "v", "z", "bar"]
-getFlags (T_SimpleCommand _ _ (_:args)) =
-    let textArgs = takeWhile (/= "--") $ map (concat . deadSimple) args in
+getFlagsUntil stopCondition (T_SimpleCommand _ _ (_:args)) =
+    let textArgs = takeWhile (not . stopCondition . snd) $ map (\x -> (x, concat $ deadSimple x)) args in
         concatMap flag textArgs
   where
-    flag ('-':'-':arg) = [ takeWhile (/= '=') arg ]
-    flag ('-':args) = map (:[]) args
+    flag (x, ('-':'-':arg)) = [ (x, takeWhile (/= '=') arg) ]
+    flag (x, ('-':args)) = map (\v -> (x, [v])) args
     flag _ = []
 
-getFlags _ = error "Internal shellcheck error, please report! (getFlags on non-command)"
+getFlagsUntil _ _ = error "Internal shellcheck error, please report! (getFlags on non-command)"
+
+getAllFlags = getFlagsUntil (== "--")
+getLeadingFlags = getFlagsUntil (not . ("-" `isPrefixOf`))
 
 (!!!) list i =
     case drop i list of
@@ -630,6 +633,12 @@ prop_checkBashisms16= verify checkBashisms "echo $RANDOM"
 prop_checkBashisms17= verify checkBashisms "echo $((RANDOM%6+1))"
 prop_checkBashisms18= verify checkBashisms "foo &> /dev/null"
 prop_checkBashisms19= verify checkBashisms "foo > file*.txt"
+prop_checkBashisms20= verify checkBashisms "read -ra foo"
+prop_checkBashisms21= verify checkBashisms "[ -a foo ]"
+prop_checkBashisms22= verifyNot checkBashisms "[ foo -a bar ]"
+prop_checkBashisms23= verify checkBashisms "trap mything err int"
+prop_checkBashisms24= verifyNot checkBashisms "trap mything int term"
+prop_checkBashisms25= verify checkBashisms "cat < /dev/tcp/host/123"
 checkBashisms _ = bashism
   where
     errMsg id s = err id 2040 $ "In sh, " ++ s ++ " not supported, even when sh is actually bash."
@@ -648,23 +657,41 @@ checkBashisms _ = bashism
     bashism (TC_Binary id SingleBracket op _ _)
         | op `elem` [ "-nt", "-ef", "\\<", "\\>", "==" ] =
             warnMsg id $ op ++ " is"
+    bashism (TC_Unary id _ "-a" _) =
+            warnMsg id "unary -a in place of -e is"
     bashism (TA_Unary id op _)
         | op `elem` [ "|++", "|--", "++|", "--|"] =
             warnMsg id $ filter (/= '|') op ++ " is"
-    bashism t@(T_SimpleCommand id _ _)
-        | t `isCommand` "source" =
-            warnMsg id "'source' in place of '.' is"
+    bashism (TA_Binary id "**" _ _) = warnMsg id "exponentials are"
     bashism (T_FdRedirect id "&" (T_IoFile _ (T_Greater _) _)) = warnMsg id "&> is"
-    bashism t@(TA_Expansion id _) | getLiteralString t == Just "RANDOM" =
-        warnMsg id "RANDOM is"
-    bashism t@(T_DollarBraced id _) | getBracedReference (bracedString t) == "RANDOM" =
-        warnMsg id "$RANDOM is"
-    bashism (T_DollarBraced id token) =
+    bashism (T_IoFile id _ word) | isNetworked =
+            warnMsg id "/dev/{tcp,udp} is"
+        where
+            file = onlyLiteralString word
+            isNetworked = any (`isPrefixOf` file) ["/dev/tcp", "/dev/udp"]
+
+    bashism t@(TA_Expansion id _) | isBashism =
+        warnMsg id $ fromJust str ++ " is"
+      where
+        str = getLiteralString t
+        isBashism = isJust str && fromJust str `elem` bashVars
+    bashism t@(T_DollarBraced id token) = do
         mapM_ check expansion
+        when (var `elem` bashVars) $ warnMsg id $ var ++ " is"
       where
         str = concat $ deadSimple token
+        var = getBracedReference (bracedString token)
         check (regex, feature) =
             when (isJust $ matchRegex regex str) $ warnMsg id feature
+
+    bashism t@(T_Pipe id "|&") =
+        warnMsg id "|& in place of 2>&1 | is"
+    bashism (T_Array id _) =
+        warnMsg id "arrays are"
+    bashism (T_IoFile id _ t) | isGlob t =
+        warnMsg id "redirecting to/from globs is"
+    bashism (T_CoProc id _ _) =
+        warnMsg id "coproc is"
 
     bashism t@(T_SimpleCommand _ _ (cmd:arg:_))
         | t `isCommand` "echo" && "-" `isPrefixOf` argString =
@@ -676,14 +703,38 @@ checkBashisms _ = bashism
             warnMsg (getId arg) "exec flags are"
     bashism t@(T_SimpleCommand id _ _)
         | t `isCommand` "let" = warnMsg id "'let' is"
-    bashism t@(T_Pipe id "|&") =
-        warnMsg id "|& in place of 2>&1 | is"
-    bashism (T_Array id _) =
-        warnMsg id "arrays are"
-    bashism (T_IoFile id _ t) | isGlob t =
-        warnMsg id "redirecting to/from globs is"
-    bashism (T_CoProc id _ _) =
-        warnMsg id "coproc is"
+
+    bashism t@(T_SimpleCommand id _ (cmd:rest)) =
+        let name = fromMaybe "" $ getCommandName t
+            flags = getLeadingFlags t
+        in do
+            when (name `elem` bashCommands) $ warnMsg id $ "'" ++ name ++ "' is"
+            potentially $ do
+                allowed <- Map.lookup name allowedFlags
+                (word, flag) <- listToMaybe $ filter (\x -> snd x `notElem` allowed) flags
+                return . warnMsg (getId word) $ name ++ " -" ++ flag ++ " is"
+
+            when (name == "source") $ warnMsg id "'source' in place of '.' is"
+            when (name == "trap") $
+                let
+                    check token = potentially $ do
+                        word <- getLiteralString token
+                        guard $ word `elem` ["err", "debug", "return"]
+                        return $ warnMsg (getId token) $ "trapping " ++ word ++ " is"
+                in
+                    mapM_ check (reverse rest)
+      where
+        bashCommands = [
+            "let", "caller", "builtin", "complete", "compgen", "declare", "dirs", "disown",
+            "enable", "mapfile", "readarray", "pushd", "popd", "shopt", "suspend", "type",
+            "typeset"
+            ]
+        allowedFlags = Map.fromList [
+            ("read", ["r"]),
+            ("ulimit", ["f"]),
+            ("echo", []),
+            ("exec", [])
+            ]
 
     bashism _ = return ()
 
@@ -693,8 +744,11 @@ checkBashisms _ = bashism
         (re $ "^![" ++ varChars ++ "]+\\[[*@]]$", "array key expansion is"),
         (re $ "^![" ++ varChars ++ "]+[*@]$", "name matching prefixes are"),
         (re $ "^[" ++ varChars ++ "]+:[^-=?+]", "string indexing is"),
-        (re $ "^[" ++ varChars ++ "]+(\\[.*\\])?/", "string replacement is"),
-        (re "^RANDOM$", "$RANDOM is")
+        (re $ "^[" ++ varChars ++ "]+(\\[.*\\])?/", "string replacement is")
+        ]
+    bashVars = [
+        "RANDOM", "LINENO", "OSTYPE", "MACHTYPE", "HOSTTYPE", "HOSTNAME",
+        "DIRSTACK", "EUID", "UID", "SECONDS", "SHLVL", "PIPESTATUS", "SHELLOPTS"
         ]
 
 prop_checkForInQuoted = verify checkForInQuoted "for f in \"$(ls)\"; do echo foo; done"
@@ -2099,7 +2153,7 @@ getReferencedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Litera
     getReference t@(T_Assignment _ _ name _ value) = [(t, t, name)]
     getReference t@(T_NormalWord _ [T_Literal _ name]) | not ("-" `isPrefixOf` name) = [(t, t, name)]
     getReference _ = []
-    flags = getFlags base
+    flags = map snd $ getAllFlags base
 
 getReferencedVariableCommand _ = []
 
@@ -2132,7 +2186,7 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal 
 
         _ -> []
   where
-    flags = getFlags base
+    flags = map snd $ getAllFlags base
     stripEquals s = let rest = dropWhile (/= '=') s in
         if rest == "" then "" else tail rest
     stripEqualsFrom (T_NormalWord id1 (T_Literal id2 s:rs)) =
@@ -3243,7 +3297,7 @@ prop_checkMaskedReturns5 = verifyNot checkMaskedReturns "f() { local -r a=$(fals
 checkMaskedReturns _ t@(T_SimpleCommand id _ (cmd:rest)) = potentially $ do
     name <- getCommandName t
     guard $ name `elem` ["declare", "export"]
-        || name == "local" && "r" `notElem` getFlags t
+        || name == "local" && "r" `notElem` (map snd $ getAllFlags t)
     return $ mapM_ checkArgs rest
   where
     checkArgs (T_Assignment id _ _ _ word) | any hasReturn $ getWordParts word =
