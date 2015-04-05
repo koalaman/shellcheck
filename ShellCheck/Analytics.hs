@@ -639,6 +639,7 @@ prop_checkBashisms22= verifyNot checkBashisms "[ foo -a bar ]"
 prop_checkBashisms23= verify checkBashisms "trap mything err int"
 prop_checkBashisms24= verifyNot checkBashisms "trap mything int term"
 prop_checkBashisms25= verify checkBashisms "cat < /dev/tcp/host/123"
+prop_checkBashisms26= verify checkBashisms "trap mything ERR SIGTERM"
 checkBashisms _ = bashism
   where
     errMsg id s = err id 2040 $ "In sh, " ++ s ++ " not supported, even when sh is actually bash."
@@ -718,7 +719,7 @@ checkBashisms _ = bashism
             when (name == "trap") $
                 let
                     check token = potentially $ do
-                        word <- getLiteralString token
+                        word <- liftM (map toLower) $ getLiteralString token
                         guard $ word `elem` ["err", "debug", "return"]
                         return $ warnMsg (getId token) $ "trapping " ++ word ++ " is"
                 in
