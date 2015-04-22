@@ -989,6 +989,7 @@ prop_checkArrayWithoutIndex1 = verifyTree checkArrayWithoutIndex "foo=(a b); ech
 prop_checkArrayWithoutIndex2 = verifyNotTree checkArrayWithoutIndex "foo='bar baz'; foo=($foo); echo ${foo[0]}"
 prop_checkArrayWithoutIndex3 = verifyTree checkArrayWithoutIndex "coproc foo while true; do echo cow; done; echo $foo"
 prop_checkArrayWithoutIndex4 = verifyTree checkArrayWithoutIndex "coproc tail -f log; echo $COPROC"
+prop_checkArrayWithoutIndex5 = verifyTree checkArrayWithoutIndex "a[0]=foo; echo $a"
 checkArrayWithoutIndex params _ =
     concat $ doVariableFlowAnalysis readF writeF Map.empty (variableFlow params)
   where
@@ -1004,9 +1005,16 @@ checkArrayWithoutIndex params _ =
     writeF _ t name (DataArray _) = do
         modify (Map.insert name t)
         return []
-    writeF _ _ name _ = do
-        modify (Map.delete name)
+    writeF _ expr name _ = do
+        if isIndexed expr
+          then modify (Map.insert name expr)
+          else modify (Map.delete name)
         return []
+
+    isIndexed expr =
+        case expr of
+            T_Assignment _ _ _ (Just _) _ -> True
+            _ -> False
 
 prop_checkStderrRedirect = verify checkStderrRedirect "test 2>&1 > cow"
 prop_checkStderrRedirect2 = verifyNot checkStderrRedirect "test > cow 2>&1"
