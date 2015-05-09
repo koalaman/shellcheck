@@ -1453,7 +1453,6 @@ isQuoteFreeNode strict tree t =
             T_DollarDoubleQuoted _ _ -> return True
             T_CaseExpression {} -> return True
             T_HereDoc {} -> return True
-            T_HereString {} -> return True
             T_DollarBraced {} -> return True
             -- When non-strict, pragmatically assume it's desirable to split here
             T_ForIn {} -> return (not strict)
@@ -2412,7 +2411,7 @@ prop_checkSpacefulness20= verifyNotTree checkSpacefulness "n+='foo bar'"
 prop_checkSpacefulness21= verifyNotTree checkSpacefulness "select foo in $bar; do true; done"
 prop_checkSpacefulness22= verifyNotTree checkSpacefulness "echo $\"$1\""
 prop_checkSpacefulness23= verifyNotTree checkSpacefulness "a=(1); echo ${a[@]}"
-prop_checkSpacefulness24= verifyNotTree checkSpacefulness "a='a b'; cat <<< $a"
+prop_checkSpacefulness24= verifyTree checkSpacefulness "a='a    b'; cat <<< $a"
 prop_checkSpacefulness25= verifyTree checkSpacefulness "a='s/[0-9]//g'; sed $a"
 
 checkSpacefulness params t =
