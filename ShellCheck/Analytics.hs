@@ -376,6 +376,7 @@ dist a b
           lab = length a - length b
           min3 x y z = if x < y then x else min y z
 
+hasFloatingPoint params = shellType params == Ksh
 
 prop_checkEchoWc3 = verify checkEchoWc "n=$(echo $foo | wc -c)"
 checkEchoWc _ (T_Pipeline id _ [a, b]) =
@@ -1293,8 +1294,10 @@ checkForDecimals _ _ = return ()
 
 prop_checkDivBeforeMult = verify checkDivBeforeMult "echo $((c/n*100))"
 prop_checkDivBeforeMult2 = verifyNot checkDivBeforeMult "echo $((c*100/n))"
-checkDivBeforeMult _ (TA_Binary _ "*" (TA_Binary id "/" _ _) _) =
-    info id 2017 "Increase precision by replacing a/b*c with a*c/b."
+prop_checkDivBeforeMult3 = verifyNot checkDivBeforeMult "echo $((c/10*10))"
+checkDivBeforeMult params (TA_Binary _ "*" (TA_Binary id "/" _ x) y)
+    | not (hasFloatingPoint params) && x /= y =
+        info id 2017 "Increase precision by replacing a/b*c with a*c/b."
 checkDivBeforeMult _ _ = return ()
 
 prop_checkArithmeticDeref = verify checkArithmeticDeref "echo $((3+$foo))"
