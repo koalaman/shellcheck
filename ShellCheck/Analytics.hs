@@ -950,7 +950,7 @@ prop_checkUnquotedDollarAt8 = verifyNot checkUnquotedDollarAt "echo \"${args[@]:
 checkUnquotedDollarAt p word@(T_NormalWord _ parts) | not $ isStrictlyQuoteFree (parentMap p) word =
     forM_ (take 1 $ filter isArrayExpansion parts) $ \x ->
         err (getId x) 2068
-            "Double quote array expansions, otherwise they're like $* and break on spaces."
+            "Double quote array expansions to avoid re-splitting elements."
 checkUnquotedDollarAt _ _ = return ()
 
 prop_checkConcatenatedDollarAt1 = verify checkConcatenatedDollarAt "echo \"foo$@\""
