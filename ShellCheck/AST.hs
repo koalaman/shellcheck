@@ -53,7 +53,7 @@ data Token =
     | T_Backticked Id [Token]
     | T_Bang Id
     | T_Banged Id Token
-    | T_BraceExpansion Id String
+    | T_BraceExpansion Id [Token]
     | T_BraceGroup Id [Token]
     | T_CLOBBER Id
     | T_Case Id
@@ -171,6 +171,7 @@ analyze f g i =
     delve (T_DoubleQuoted id list) = dl list $ T_DoubleQuoted id
     delve (T_DollarDoubleQuoted id list) = dl list $ T_DollarDoubleQuoted id
     delve (T_DollarExpansion id list) = dl list $ T_DollarExpansion id
+    delve (T_BraceExpansion id list) = dl list $ T_BraceExpansion id
     delve (T_Backticked id list) = dl list $ T_Backticked id
     delve (T_DollarArithmetic id c) = d1 c $ T_DollarArithmetic id
     delve (T_DollarBracket id c) = d1 c $ T_DollarBracket id

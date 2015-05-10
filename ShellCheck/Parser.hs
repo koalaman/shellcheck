@@ -237,6 +237,12 @@ attempting rest branch =
 orFail parser errorAction =
     try parser <|> (errorAction >>= fail)
 
+-- Construct a node with a parser, e.g. T_Literal `withParser` (readGenericLiteral ",")
+withParser node parser = do
+    id <- getNextId
+    contents <- parser
+    return $ node id contents
+
 wasIncluded p = option False (p >> return True)
 
 acceptButWarn parser level code note =
@@ -1045,16 +1051,29 @@ readGenericEscaped = do
 
 prop_readBraced = isOk readBraced "{1..4}"
 prop_readBraced2 = isOk readBraced "{foo,bar,\"baz lol\"}"
-readBraced = try $ do
-    let strip (T_Literal _ s) = return ("\"" ++ s ++ "\"")
-    id <- getNextId
-    char '{'
-    str <- many1 ((readDoubleQuotedLiteral >>= strip) <|> readGenericLiteral1 (oneOf "}\"" <|> whitespace))
-    char '}'
-    let result = concat str
-    unless (',' `elem` result || ".." `isInfixOf` result) $
-        fail "Not a brace expression"
-    return $ T_BraceExpansion id result
+prop_readBraced3 = isOk readBraced "{1,\\},2}"
+prop_readBraced4 = isOk readBraced "{1,{2,3}}"
+prop_readBraced5 = isOk readBraced "{JP{,E}G,jp{,e}g}"
+prop_readBraced6 = isOk readBraced "{foo,bar,$((${var}))}"
+readBraced = try braceExpansion
+  where
+    braceExpansion =
+        T_BraceExpansion `withParser` do
+            char '{'
+            elements <- bracedElement `sepBy1` char ','
+            char '}'
+            return elements
+    bracedElement =
+        T_NormalWord `withParser` do
+            many $ choice [
+                braceExpansion,
+                readDollarExpression,
+                readSingleQuoted,
+                readDoubleQuoted,
+                braceLiteral
+                ]
+    braceLiteral =
+        T_Literal `withParser` readGenericLiteral1 (oneOf "{}\"$'," <|> whitespace)
 
 readNormalDollar = readDollarExpression <|> readDollarDoubleQuote <|> readDollarSingleQuote <|> readDollarLonely
 readDoubleQuotedDollar = readDollarExpression <|> readDollarLonely
@@ -1077,7 +1096,6 @@ readDollarDoubleQuote = do
     x <- many doubleQuotedPart
     doubleQuote <?> "end of translated double quoted string"
     return $ T_DollarDoubleQuoted id x
-
 
 prop_readDollarArithmetic = isOk readDollarArithmetic "$(( 3 * 4 +5))"
 prop_readDollarArithmetic2 = isOk readDollarArithmetic "$(((3*4)+(1*2+(3-1))))"

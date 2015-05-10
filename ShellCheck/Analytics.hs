@@ -1280,8 +1280,18 @@ checkConstantNoary _ _ = return ()
 
 prop_checkBraceExpansionVars1 = verify checkBraceExpansionVars "echo {1..$n}"
 prop_checkBraceExpansionVars2 = verifyNot checkBraceExpansionVars "echo {1,3,$n}"
-checkBraceExpansionVars _ (T_BraceExpansion id s) | "..$" `isInfixOf` s =
-    warn id 2051 "Bash doesn't support variables in brace range expansions."
+checkBraceExpansionVars _ (T_BraceExpansion id list) = mapM_ check list
+  where
+    check element =
+        when ("..$" `isInfixOf` toString element) $
+            warn id 2051 "Bash doesn't support variables in brace range expansions."
+    literalExt t =
+        case t of
+            T_DollarBraced {} -> return "$"
+            T_DollarExpansion {} -> return "$"
+            T_DollarArithmetic {} -> return "$"
+            otherwise -> return "-"
+    toString t = fromJust $ getLiteralStringExt literalExt t
 checkBraceExpansionVars _ _ = return ()
 
 prop_checkForDecimals = verify checkForDecimals "((3.14*c))"
@@ -2413,6 +2423,7 @@ prop_checkSpacefulness22= verifyNotTree checkSpacefulness "echo $\"$1\""
 prop_checkSpacefulness23= verifyNotTree checkSpacefulness "a=(1); echo ${a[@]}"
 prop_checkSpacefulness24= verifyTree checkSpacefulness "a='a    b'; cat <<< $a"
 prop_checkSpacefulness25= verifyTree checkSpacefulness "a='s/[0-9]//g'; sed $a"
+prop_checkSpacefulness26= verifyTree checkSpacefulness "a='foo bar'; echo {1,2,$a}"
 
 checkSpacefulness params t =
     doVariableFlowAnalysis readF writeF (Map.fromList defaults) (variableFlow params)
