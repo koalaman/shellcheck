@@ -2207,6 +2207,9 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal 
 
         "printf" -> maybeToList $ getPrintfVariable rest
 
+        "mapfile" -> maybeToList $ getMapfileArray base rest
+        "readarray" -> maybeToList $ getMapfileArray base rest
+
         _ -> []
   where
     flags = map snd $ getAllFlags base
@@ -2257,6 +2260,15 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal 
         f ((_, Just "-v") : (t, Just var) : _) = return (base, t, var, DataString $ SourceFrom list)
         f (_:rest) = f rest
         f [] = fail "not found"
+
+    -- mapfile has some curious syntax allowing flags plus 0..n variable names
+    -- where only the first non-option one is used if any. Here we cheat and
+    -- just get the last one, if it's a variable name.
+    getMapfileArray base arguments = do
+        lastArg <- listToMaybe (reverse arguments)
+        name <- getLiteralString lastArg
+        guard $ isVariableName name
+        return (base, lastArg, name, DataArray $ SourceExternal)
 
 getModifiedVariableCommand _ = []
 
@@ -2612,6 +2624,8 @@ prop_checkUnused20= verifyNotTree checkUnusedAssignments "a=1; PS1='$a'"
 prop_checkUnused21= verifyNotTree checkUnusedAssignments "a=1; trap 'echo $a' INT"
 prop_checkUnused22= verifyNotTree checkUnusedAssignments "a=1; [ -v a ]"
 prop_checkUnused23= verifyNotTree checkUnusedAssignments "a=1; [ -R a ]"
+prop_checkUnused24= verifyNotTree checkUnusedAssignments "mapfile -C a b; echo ${b[@]}"
+prop_checkUnused25= verifyNotTree checkUnusedAssignments "readarray foo; echo ${foo[@]}"
 checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
     flow = variableFlow params
