@@ -203,6 +203,7 @@ nodeChecks = [
     ,checkFindExecWithSingleArgument
     ,checkReturn
     ,checkMaskedReturns
+    ,checkInjectableFindSh
     ]
 
 
@@ -3347,6 +3348,30 @@ checkMaskedReturns _ t@(T_SimpleCommand id _ (cmd:rest)) = potentially $ do
         T_DollarExpansion {} -> True
         _ -> False
 checkMaskedReturns _ _ = return ()
+
+prop_checkInjectableFindSh1 = verify checkInjectableFindSh "find . -exec sh -c 'echo {}' \\;"
+prop_checkInjectableFindSh2 = verify checkInjectableFindSh "find . -execdir bash -c 'rm \"{}\"' ';'"
+prop_checkInjectableFindSh3 = verifyNot checkInjectableFindSh "find . -exec sh -c 'rm \"$@\"' _ {} \\;"
+checkInjectableFindSh _ = checkCommand "find" (const check)
+  where
+    check args = do
+        let idStrings = map (\x -> (getId x, onlyLiteralString x)) args
+        match pattern idStrings
+
+    match _ [] = return ()
+    match [] (next:_) = action next
+    match (p:tests) ((id, arg):args) = do
+        when (p arg) $ match tests args
+        match (p:tests) args
+
+    pattern = [
+        (`elem` ["-exec", "-execdir"]),
+        (`elem` ["sh", "bash", "ksh"]),
+        (== "-c")
+        ]
+    action (id, arg) =
+        when ("{}" `isInfixOf` arg) $
+            warn id 2156 "Injecting filenames is fragile and insecure. Use parameters."
 
 
 return []
