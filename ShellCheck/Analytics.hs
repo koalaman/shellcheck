@@ -916,13 +916,14 @@ prop_checkShorthandIf  = verify checkShorthandIf "[[ ! -z file ]] && scp file ho
 prop_checkShorthandIf2 = verifyNot checkShorthandIf "[[ ! -z file ]] && { scp file host || echo 'Eek'; }"
 prop_checkShorthandIf3 = verifyNot checkShorthandIf "foo && bar || echo baz"
 prop_checkShorthandIf4 = verifyNot checkShorthandIf "foo && a=b || a=c"
+prop_checkShorthandIf5 = verifyNot checkShorthandIf "foo && rm || printf b"
 checkShorthandIf _ (T_AndIf id _ (T_OrIf _ _ (T_Pipeline _ _ t)))
         | not $ isOk t =
     info id 2015 "Note that A && B || C is not if-then-else. C may run when A is true."
   where
     isOk [t] = isAssignment t || fromMaybe False (do
         name <- getCommandBasename t
-        return $ name `elem` ["echo", "exit", "return"])
+        return $ name `elem` ["echo", "exit", "return", "printf"])
     isOk _ = False
 checkShorthandIf _ _ = return ()
 
