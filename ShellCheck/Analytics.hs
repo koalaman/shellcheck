@@ -1556,6 +1556,16 @@ getUnquotedLiteral (T_NormalWord _ list) =
     str _ = Nothing
 getUnquotedLiteral _ = Nothing
 
+-- Return a list of NormalWords resulting from brace expansion
+braceExpand (T_NormalWord id list) = take 1000 $ do
+    items <- mapM part list
+    return $ T_NormalWord id items
+  where
+    part (T_BraceExpansion id items) = do
+        item <- items
+        braceExpand item
+    part x = return x
+
 isCommand token str = isCommandMatch token (\cmd -> cmd  == str || ('/' : str) `isSuffixOf` cmd)
 isUnqualifiedCommand token str = isCommandMatch token (== str)
 
@@ -2939,11 +2949,15 @@ prop_checkCatastrophicRm5 = verifyNot checkCatastrophicRm "rm -r /home/${USER:-t
 prop_checkCatastrophicRm6 = verify checkCatastrophicRm "rm --recursive /etc/*$config*"
 prop_checkCatastrophicRm8 = verify checkCatastrophicRm "rm -rf /home"
 prop_checkCatastrophicRm9 = verifyNot checkCatastrophicRm "rm -rf -- /home"
+prop_checkCatastrophicRm10= verifyNot checkCatastrophicRm "rm -r \"${DIR}\"/{.gitignore,.gitattributes,ci}"
+prop_checkCatastrophicRm11= verify checkCatastrophicRm "rm -r /{bin,sbin}/$exec"
+prop_checkCatastrophicRm12= verify checkCatastrophicRm "rm -r /{{usr,},{bin,sbin}}/$exec"
+prop_checkCatastrophicRm13= verifyNot checkCatastrophicRm "rm -r /{{a,b},{c,d}}/$exec"
 prop_checkCatastrophicRmA = verify checkCatastrophicRm "rm -rf /usr /lib/nvidia-current/xorg/xorg"
 prop_checkCatastrophicRmB = verify checkCatastrophicRm "rm -rf \"$STEAMROOT/\"*"
 checkCatastrophicRm params t@(T_SimpleCommand id _ tokens) | t `isCommand` "rm" =
     when (any isRecursiveFlag simpleArgs) $
-        mapM_ checkWord tokens
+        mapM_ (mapM_ checkWord . braceExpand) tokens
   where
     simpleArgs = deadSimple t
 
