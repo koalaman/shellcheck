@@ -21,6 +21,7 @@ import Control.Monad.Trans
 import Control.Monad.Trans.Error
 import Control.Monad.Trans.List
 import Data.Char
+import Data.List
 import Data.Maybe
 import Data.Monoid
 import GHC.Exts
@@ -34,6 +35,7 @@ import System.Console.GetOpt
 import System.Directory
 import System.Environment
 import System.Exit
+import System.Info
 import System.IO
 import Text.JSON
 import qualified Data.Map as Map
@@ -154,7 +156,8 @@ forTty options files = do
 
     getColorFunc = do
         term <- hIsTerminalDevice stdout
-        return $ if term then colorComment else const id
+        let windows = "mingw" `isPrefixOf` os
+        return $ if term && not windows then colorComment else const id
 
 forJson :: AnalysisOptions -> [FilePath] -> IO Status
 forJson options files = catchExceptions $ do
