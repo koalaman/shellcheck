@@ -2227,7 +2227,7 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal 
         "export" ->
             if "f" `elem` flags then [] else concatMap getModifierParamString rest
 
-        "declare" -> declaredVars
+        "declare" -> if any (`elem` flags) ["F", "f", "p"] then [] else declaredVars
         "typeset" -> declaredVars
 
         "local" -> concatMap getModifierParamString rest
@@ -2657,6 +2657,7 @@ prop_checkUnused22= verifyNotTree checkUnusedAssignments "a=1; [ -v a ]"
 prop_checkUnused23= verifyNotTree checkUnusedAssignments "a=1; [ -R a ]"
 prop_checkUnused24= verifyNotTree checkUnusedAssignments "mapfile -C a b; echo ${b[@]}"
 prop_checkUnused25= verifyNotTree checkUnusedAssignments "readarray foo; echo ${foo[@]}"
+prop_checkUnused26= verifyNotTree checkUnusedAssignments "declare -F foo"
 checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
     flow = variableFlow params
