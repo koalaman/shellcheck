@@ -1922,7 +1922,7 @@ prop_checkTildeInQuotes5 = verifyNot checkTildeInQuotes "echo '/~foo/cow'"
 prop_checkTildeInQuotes6 = verifyNot checkTildeInQuotes "awk '$0 ~ /foo/'"
 checkTildeInQuotes _ = check
   where
-    verify id ('~':'/':_) = warn id 2088 "Note that ~ does not expand in quotes."
+    verify id ('~':'/':_) = warn id 2088 "Tilde does not expand in quotes. Use $HOME."
     verify _ _ = return ()
     check (T_NormalWord _ (T_SingleQuoted id str:_)) =
         verify id str
