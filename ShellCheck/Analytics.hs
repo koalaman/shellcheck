@@ -1021,14 +1021,30 @@ checkArrayWithoutIndex params _ =
 
 prop_checkStderrRedirect = verify checkStderrRedirect "test 2>&1 > cow"
 prop_checkStderrRedirect2 = verifyNot checkStderrRedirect "test > cow 2>&1"
-checkStderrRedirect _ (T_Redirecting _ [
+prop_checkStderrRedirect3 = verifyNot checkStderrRedirect "test 2>&1 > file | grep stderr"
+prop_checkStderrRedirect4 = verifyNot checkStderrRedirect "errors=$(test 2>&1 > file)"
+prop_checkStderrRedirect5 = verifyNot checkStderrRedirect "read < <(test 2>&1 > file)"
+prop_checkStderrRedirect6 = verify checkStderrRedirect "foo | bar 2>&1 > /dev/null"
+checkStderrRedirect params redir@(T_Redirecting _ [
     T_FdRedirect id "2" (T_IoFile _ (T_GREATAND _) (T_NormalWord _ [T_Literal _ "1"])),
     T_FdRedirect _ _ (T_IoFile _ op _)
     ] _) = case op of
             T_Greater _ -> error
             T_DGREAT _ -> error
             _ -> return ()
-         where error = err id 2069 "The order of the 2>&1 and the redirect matters. The 2>&1 has to be last."
+  where
+    usesOutput t =
+        case t of
+            (T_Pipeline _ _ list) -> length list > 1 && not (isParentOf (parentMap params) (last list) redir)
+            (T_ProcSub {}) -> True
+            (T_DollarExpansion {}) -> True
+            (T_Backticked {}) -> True
+            _ -> False
+    isCaptured = any usesOutput $ getPath (parentMap params) redir
+
+    error = unless isCaptured $
+        err id 2069 "The order of the 2>&1 and the redirect matters. The 2>&1 has to be last."
+
 checkStderrRedirect _ _ = return ()
 
 lt x = trace ("FAILURE " ++ show x) x
@@ -1507,6 +1523,9 @@ getPath tree t = t :
     case Map.lookup (getId t) tree of
         Nothing -> []
         Just parent -> getPath tree parent
+
+isParentOf tree parent child =
+    elem (getId parent) . map getId $ getPath tree child
 
 parents params = getPath (parentMap params)
 
