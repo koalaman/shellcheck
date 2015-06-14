@@ -771,14 +771,14 @@ readDollarBracedLiteral = do
 
 prop_readProcSub1 = isOk readProcSub "<(echo test | wc -l)"
 prop_readProcSub2 = isOk readProcSub "<(  if true; then true; fi )"
+prop_readProcSub3 = isOk readProcSub "<( # nothing here \n)"
 readProcSub = called "process substitution" $ do
     id <- getNextId
     dir <- try $ do
                     x <- oneOf "<>"
                     char '('
                     return [x]
-    allspacing
-    list <- readCompoundList
+    list <- readCompoundListOrEmpty
     allspacing
     char ')'
     return $ T_ProcSub id dir list
@@ -843,19 +843,23 @@ readBackTicked = called "backtick expansion" $ do
             suggestForgotClosingQuote startPos endPos "backtick expansion"
 
     -- Result positions may be off due to escapes
-    result <- subParse subStart readTermOrNone (unEscape subString)
+    result <- subParse subStart subParser (unEscape subString)
     return $ T_Backticked id result
   where
     unEscape [] = []
     unEscape ('\\':x:rest) | x `elem` "$`\\" = x : unEscape rest
     unEscape ('\\':'\n':rest) = unEscape rest
     unEscape (c:rest) = c : unEscape rest
+    subParser = do
+        cmds <- readCompoundListOrEmpty
+        verifyEof
+        return cmds
     backtick =
       disregard (char '`') <|> do
          pos <- getPosition
          char '´'
          parseProblemAt pos ErrorC 1077
-            "For command expansion, the tick should slant left (` vs ´)."
+            "For command expansion, the tick should slant left (` vs ´). Use $(..) instead."
 
 subParse pos parser input = do
     lastPosition <- getPosition
@@ -1132,11 +1136,13 @@ readDollarBraced = called "parameter expansion" $ do
     char '}'
     return $ T_DollarBraced id word
 
-prop_readDollarExpansion = isOk readDollarExpansion "$(echo foo; ls\n)"
+prop_readDollarExpansion1= isOk readDollarExpansion "$(echo foo; ls\n)"
+prop_readDollarExpansion2= isOk readDollarExpansion "$(  )"
+prop_readDollarExpansion3= isOk readDollarExpansion "$( command \n#comment \n)"
 readDollarExpansion = called "command expansion" $ do
     id <- getNextId
     try (string "$(")
-    cmds <- readCompoundList
+    cmds <- readCompoundListOrEmpty
     char ')' <?> "end of $(..) expression"
     return $ T_DollarExpansion id cmds
 
@@ -1845,6 +1851,9 @@ readCompoundCommand = do
 
 
 readCompoundList = readTerm
+readCompoundListOrEmpty = do
+    allspacing
+    readTerm <|> return []
 
 readCmdPrefix = many1 (readIoRedirect <|> readAssignmentWord)
 readCmdSuffix = many1 (readIoRedirect <|> readCmdWord)
@@ -2048,10 +2057,25 @@ readShebang = do
         parseProblemAt pos ErrorC 1084
             "Use #!, not !#, for the shebang."
 
+verifyEof = eof <|> choice [
+        ifParsable g_Lparen $
+            parseProblem ErrorC 1088 "Parsing stopped here. Invalid use of parentheses?",
+
+        ifParsable readKeyword $
+            parseProblem ErrorC 1089 "Parsing stopped here. Is this keyword correctly matched up?",
+
+        parseProblem ErrorC 1070 "Parsing stopped here. Mismatched keywords or invalid parentheses?"
+    ]
+  where
+    ifParsable p action = do
+        try (lookAhead p)
+        action
+
 prop_readScript1 = isOk readScript "#!/bin/bash\necho hello world\n"
 prop_readScript2 = isWarning readScript "#!/bin/bash\r\necho hello world\n"
 prop_readScript3 = isWarning readScript "#!/bin/bash\necho hello\xA0world"
 prop_readScript4 = isWarning readScript "#!/usr/bin/perl\nfoo=("
+prop_readScript5 = isOk readScript "#!/bin/bash\n#This is an empty script\n\n"
 readScript = do
     id <- getNextId
     pos <- getPosition
@@ -2062,19 +2086,13 @@ readScript = do
     sb <- option "" readShebang
     verifyShell pos (getShell sb)
     if isValidShell (getShell sb) /= Just False
-      then
-        do {
-            allspacing;
-            commands <- readTerm;
-            eof <|> parseProblem ErrorC 1070 "Parsing stopped here because of parsing errors.";
-            return $ T_Script id sb commands;
-        } <|> do {
-            parseProblem WarningC 1014 "Couldn't read any commands.";
+      then do
+            commands <- readCompoundListOrEmpty
+            verifyEof
+            return $ T_Script id sb commands
+        else do
+            many anyChar
             return $ T_Script id sb []
-        }
-      else do
-        many anyChar
-        return $ T_Script id sb [];
 
   where
     basename s = reverse . takeWhile (/= '/') . reverse $ s
