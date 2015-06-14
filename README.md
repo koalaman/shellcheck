@@ -57,6 +57,10 @@ On Mac OS X with MacPorts (http://www.macports.org/):
 
     port install hs-cabal-install
 
+On native Windows (https://www.haskell.org/platform/):
+
+    Download and install the latest version of the Haskell Platform.
+
 Let cabal update itself, in case your distro version is outdated:
 
     $ cabal update
@@ -66,16 +70,28 @@ With cabal installed, cd to the ShellCheck source directory and:
 
     $ cabal install
 
-This will install ShellCheck to your ~/.cabal/bin directory.
+This will install ShellCheck to your `~/.cabal/bin` directory.
 
-Add the directory to your PATH (for bash, add this to your ~/.bashrc file):
+Add the directory to your `PATH` (for bash, add this to your `~/.bashrc`):
 
-    export PATH=$HOME/.cabal/bin:$PATH
+    export PATH="$HOME/.cabal/bin:$PATH"
 
 Verify that your PATH is set up correctly:
 
     $ which shellcheck
     ~/.cabal/bin/shellcheck
+
+On native Windows, the `PATH` should already be set up, but the system
+may use a legacy codepage. In `cmd.exe`, `powershell.exe` and Powershell ISE,
+make sure to use a TrueType font, not a Raster font, and set the active
+codepage to UTF-8 (65001) with `chcp`:
+
+    > chcp 65001
+    Active code page: 65001
+
+In Powershell ISE, you may need to additionally update the output encoding:
+
+    > [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 ## Running tests
 
