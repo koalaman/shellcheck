@@ -3065,6 +3065,7 @@ prop_checkUnpassedInFunctions7 = verifyTree checkUnpassedInFunctions "foo() { ec
 prop_checkUnpassedInFunctions8 = verifyNotTree checkUnpassedInFunctions "foo() { echo $((1)); }; foo;"
 prop_checkUnpassedInFunctions9 = verifyNotTree checkUnpassedInFunctions "foo() { echo $(($b)); }; foo;"
 prop_checkUnpassedInFunctions10= verifyNotTree checkUnpassedInFunctions "foo() { echo $!; }; foo;"
+prop_checkUnpassedInFunctions11= verifyNotTree checkUnpassedInFunctions "foo() { bar() { echo $1; }; bar baz; }; foo;"
 checkUnpassedInFunctions params root =
     execWriter $ mapM_ warnForGroup referenceGroups
   where
@@ -3076,7 +3077,7 @@ checkUnpassedInFunctions params root =
     findFunction t@(T_Function id _ _ name body) =
         let flow = getVariableFlow (shellType params) (parentMap params) body
         in
-          if any isPositionalReference flow && not (any isPositionalAssignment flow)
+          if any (isPositionalReference t) flow && not (any isPositionalAssignment flow)
             then return t
             else Nothing
     findFunction _ = Nothing
@@ -3085,10 +3086,14 @@ checkUnpassedInFunctions params root =
         case x of
             Assignment (_, _, str, _) -> isPositional str
             _ -> False
-    isPositionalReference x =
+    isPositionalReference function x =
         case x of
-            Reference (_, _, str) -> isPositional str
+            Reference (_, t, str) -> isPositional str && t `isDirectChildOf` function
             _ -> False
+
+    isDirectChildOf child parent = fromMaybe False $ do
+        function <- find (\x -> case x of T_Function {} -> True; _ -> False) $ getPath (parentMap params) child
+        return $ getId parent == getId function
 
     referenceList :: [(String, Bool, Token)]
     referenceList = execWriter $
