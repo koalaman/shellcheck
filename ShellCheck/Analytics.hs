@@ -1880,7 +1880,7 @@ prop_checkIndirectExpansion4 = verify checkIndirectExpansion "${var${n}_$((i%2))
 prop_checkIndirectExpansion5 = verifyNot checkIndirectExpansion "${bar}"
 checkIndirectExpansion _ (T_DollarBraced i (T_NormalWord _ contents)) =
     when (isIndirection contents) $
-        err i 2082 "To expand via indirection, use name=\"foo$n\"; echo \"${!name}\"."
+        err i 2082 "To expand via indirection, use arrays, ${!name} or (for sh only) eval."
   where
     isIndirection vars =
         let list = mapMaybe isIndirectionPart vars in
