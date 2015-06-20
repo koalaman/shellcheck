@@ -3,7 +3,7 @@
 http://www.shellcheck.net
 
 Copyright 2012-2015, Vidar 'koala_man' Holen
-Licensed under the GNU Affero General Public License, v3
+Licensed under the GNU General Public License, v3
 
 The goals of ShellCheck are:
 
