@@ -1,4 +1,6 @@
 {-
+    Copyright 2012-2015 Vidar Holen
+
     This file is part of ShellCheck.
     http://www.vidarholen.net/contents/shellcheck
 
