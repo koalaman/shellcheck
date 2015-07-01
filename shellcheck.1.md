@@ -143,6 +143,12 @@ Bugs and issues can be reported on GitHub:
 
 https://github.com/koalaman/shellcheck/issues
 
+# COPYRIGHT
+Copyright 2012-2015, Vidar Holen.
+Licensed under the GNU General Public License version 3 or later,
+see http://gnu.org/licenses/gpl.html
+
+
 # SEE ALSO
 
 sh(1) bash(1)
