@@ -50,7 +50,7 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
     The default is to use the file's shebang, or *bash* if the target shell
     can't be determined.
 
-**-V**\ *version*,\ **--version**
+**-V**,\ **--version**
 
 :   Print version and exit.
 
