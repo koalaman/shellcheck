@@ -101,4 +101,10 @@ To run the unit test suite:
     cabal build
     cabal test
 
+## Reporting bugs
+
+Please use the Github issue tracker for any bugs or feature suggestions:
+
+https://github.com/koalaman/shellcheck/issues
+
 Happy ShellChecking!
