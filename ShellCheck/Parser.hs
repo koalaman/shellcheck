@@ -486,10 +486,13 @@ prop_a15= isOk readArithmeticContents "foo[`echo foo | sed s/foo/4/g` * 3] + 4"
 prop_a16= isOk readArithmeticContents "$foo$bar"
 prop_a17= isOk readArithmeticContents "i<(0+(1+1))"
 prop_a18= isOk readArithmeticContents "a?b:c"
+prop_a19= isOk readArithmeticContents "\\\n3 +\\\n  2"
 readArithmeticContents =
     readSequence
   where
-    spacing = many whitespace
+    spacing =
+        let lf = try (string "\\\n") >> return '\n'
+        in many (whitespace <|> lf)
 
     splitBy x ops = chainl1 x (readBinary ops)
     readBinary ops = readComboOp ops TA_Binary
