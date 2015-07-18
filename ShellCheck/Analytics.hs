@@ -134,7 +134,7 @@ nodeChecks = [
     ,checkNumberComparisons
     ,checkSingleBracketOperators
     ,checkDoubleBracketOperators
-    ,checkNoaryTestAlwaysTrue
+    ,checkLiteralBreakingTest
     ,checkConstantNoary
     ,checkDivBeforeMult
     ,checkArithmeticDeref
@@ -1282,12 +1282,26 @@ checkConstantIfs _ (TC_Binary id typ op lhs rhs)
         rLit = getLiteralString rhs
 checkConstantIfs _ _ = return ()
 
-prop_checkNoaryTestAlwaysTrue = verify checkNoaryTestAlwaysTrue "[[ a==$foo ]]"
-prop_checkNoaryTestAlwaysTrue2 = verify checkNoaryTestAlwaysTrue "[ $foo=3 ]"
-prop_checkNoaryTestAlwaysTrue3 = verify checkNoaryTestAlwaysTrue "[ $foo!=3 ]"
-prop_checkNoaryTestAlwaysTrue4 = verify checkNoaryTestAlwaysTrue "[ \"$(ls) \" ]"
-checkNoaryTestAlwaysTrue _ (TC_Noary _ _ t@(T_NormalWord _ l)) | not $ isConstant t =
-    potentially $ comparisonWarning `mplus` tautologyWarning
+prop_checkLiteralBreakingTest = verify checkLiteralBreakingTest "[[ a==$foo ]]"
+prop_checkLiteralBreakingTest2 = verify checkLiteralBreakingTest "[ $foo=3 ]"
+prop_checkLiteralBreakingTest3 = verify checkLiteralBreakingTest "[ $foo!=3 ]"
+prop_checkLiteralBreakingTest4 = verify checkLiteralBreakingTest "[ \"$(ls) \" ]"
+prop_checkLiteralBreakingTest5 = verify checkLiteralBreakingTest "[ -n \"$(true) \" ]"
+prop_checkLiteralBreakingTest6 = verify checkLiteralBreakingTest "[ -z $(true)z ]"
+prop_checkLiteralBreakingTest7 = verifyNot checkLiteralBreakingTest "[ -z $(true) ]"
+prop_checkLiteralBreakingTest8 = verifyNot checkLiteralBreakingTest "[ $(true)$(true) ]"
+checkLiteralBreakingTest _ t = potentially $
+        case t of
+            (TC_Noary _ _ w@(T_NormalWord _ l)) -> do
+                guard . not $ isConstant w
+                comparisonWarning l `mplus` tautologyWarning w "Argument to implicit -n is always true due to literal strings."
+            (TC_Unary _ _ op w@(T_NormalWord _ l)) -> do
+                guard $ not $ isConstant w
+                case op of
+                    "-n" -> tautologyWarning w "Argument to -n is always true due to literal strings."
+                    "-z" -> tautologyWarning w "Argument to -z is always false due to literal strings."
+                    _ -> fail "not relevant"
+            _ -> fail "not my problem"
   where
     hasEquals = matchToken ('=' `elem`)
     isNonEmpty = matchToken (not . null)
@@ -1296,20 +1310,19 @@ checkNoaryTestAlwaysTrue _ (TC_Noary _ _ t@(T_NormalWord _ l)) | not $ isConstan
         guard $ m str
         return ()
 
-    comparisonWarning = do
-        token <- listToMaybe $ filter hasEquals l
+    comparisonWarning list = do
+        token <- listToMaybe $ filter hasEquals list
         return $ err (getId token) 2077 "You need spaces around the comparison operator."
-    tautologyWarning = do
+    tautologyWarning t s = do
         token <- listToMaybe $ filter isNonEmpty $ getWordParts t
-        return $ err (getId token) 2157 "Argument to implicit -n is always true due to literal strings."
-checkNoaryTestAlwaysTrue _ _ = return ()
+        return $ err (getId token) 2157 s
 
 prop_checkConstantNoary = verify checkConstantNoary "[[ '$(foo)' ]]"
 prop_checkConstantNoary2 = verify checkConstantNoary "[ \"-f lol\" ]"
 prop_checkConstantNoary3 = verify checkConstantNoary "[[ cmd ]]"
 prop_checkConstantNoary4 = verify checkConstantNoary "[[ ! cmd ]]"
-checkConstantNoary _ (TC_Noary _ _ t@(T_NormalWord id _)) | isConstant t =
-    err id 2078 "This expression is constant. Did you forget a $ somewhere?"
+checkConstantNoary _ (TC_Noary _ _ t) | isConstant t =
+    err (getId t) 2078 "This expression is constant. Did you forget a $ somewhere?"
 checkConstantNoary _ _ = return ()
 
 prop_checkBraceExpansionVars1 = verify checkBraceExpansionVars "echo {1..$n}"
