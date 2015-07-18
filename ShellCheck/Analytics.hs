@@ -1321,8 +1321,19 @@ prop_checkConstantNoary = verify checkConstantNoary "[[ '$(foo)' ]]"
 prop_checkConstantNoary2 = verify checkConstantNoary "[ \"-f lol\" ]"
 prop_checkConstantNoary3 = verify checkConstantNoary "[[ cmd ]]"
 prop_checkConstantNoary4 = verify checkConstantNoary "[[ ! cmd ]]"
+prop_checkConstantNoary5 = verify checkConstantNoary "[[ true ]]"
+prop_checkConstantNoary6 = verify checkConstantNoary "[ 1 ]"
+prop_checkConstantNoary7 = verify checkConstantNoary "[ false ]"
 checkConstantNoary _ (TC_Noary _ _ t) | isConstant t =
-    err (getId t) 2078 "This expression is constant. Did you forget a $ somewhere?"
+    case fromMaybe "" $ getLiteralString t of
+        "false" -> err (getId t) 2158 "[ false ] is true. Remove the brackets."
+        "0" -> err (getId t) 2159 "[ 0 ] is true. Use 'false' instead."
+        "true" -> style (getId t) 2160 "Instead of '[ true ]', just use 'true'."
+        "1" -> style (getId t) 2161 "Instead of '[ 1 ]', use 'true'."
+        _ -> err (getId t) 2078 "This expression is constant. Did you forget a $ somewhere?"
+  where
+    string = fromMaybe "" $ getLiteralString t
+
 checkConstantNoary _ _ = return ()
 
 prop_checkBraceExpansionVars1 = verify checkBraceExpansionVars "echo {1..$n}"
