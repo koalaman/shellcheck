@@ -207,6 +207,7 @@ nodeChecks = [
     ,checkMaskedReturns
     ,checkInjectableFindSh
     ,checkReadWithoutR
+    ,checkExportedExpansions
     ]
 
 
@@ -3460,6 +3461,18 @@ checkReadWithoutR _ t@(T_SimpleCommand {}) | t `isUnqualifiedCommand` "read" =
     unless ("r" `elem` map snd (getAllFlags t)) $
         info (getId t) 2162 "read without -r will mangle backslashes."
 checkReadWithoutR _ _ = return ()
+
+prop_checkExportedExpansions1 = verify checkExportedExpansions "export $foo"
+prop_checkExportedExpansions2 = verify checkExportedExpansions "export \"$foo\""
+prop_checkExportedExpansions3 = verifyNot checkExportedExpansions "export foo"
+checkExportedExpansions _ = checkUnqualifiedCommand "export" (const check)
+  where
+    check = mapM_ checkForVariables
+    checkForVariables f =
+        case getWordParts f of
+            [t@(T_DollarBraced {})] ->
+                warn (getId t) 2163 "Exporting an expansion rather than a variable."
+            _ -> return ()
 
 
 return []
