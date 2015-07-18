@@ -206,6 +206,7 @@ nodeChecks = [
     ,checkReturn
     ,checkMaskedReturns
     ,checkInjectableFindSh
+    ,checkReadWithoutR
     ]
 
 
@@ -3452,6 +3453,13 @@ checkInjectableFindSh _ = checkCommand "find" (const check)
     action (id, arg) =
         when ("{}" `isInfixOf` arg) $
             warn id 2156 "Injecting filenames is fragile and insecure. Use parameters."
+
+prop_checkReadWithoutR1 = verify checkReadWithoutR "read -a foo"
+prop_checkReadWithoutR2 = verifyNot checkReadWithoutR "read -ar foo"
+checkReadWithoutR _ t@(T_SimpleCommand {}) | t `isUnqualifiedCommand` "read" =
+    unless ("r" `elem` map snd (getAllFlags t)) $
+        info (getId t) 2162 "read without -r will mangle backslashes."
+checkReadWithoutR _ _ = return ()
 
 
 return []
