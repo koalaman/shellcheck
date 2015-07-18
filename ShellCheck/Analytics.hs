@@ -134,7 +134,7 @@ nodeChecks = [
     ,checkNumberComparisons
     ,checkSingleBracketOperators
     ,checkDoubleBracketOperators
-    ,checkNoaryWasBinary
+    ,checkNoaryTestAlwaysTrue
     ,checkConstantNoary
     ,checkDivBeforeMult
     ,checkArithmeticDeref
@@ -1282,19 +1282,27 @@ checkConstantIfs _ (TC_Binary id typ op lhs rhs)
         rLit = getLiteralString rhs
 checkConstantIfs _ _ = return ()
 
-prop_checkNoaryWasBinary = verify checkNoaryWasBinary "[[ a==$foo ]]"
-prop_checkNoaryWasBinary2 = verify checkNoaryWasBinary "[ $foo=3 ]"
-prop_checkNoaryWasBinary3 = verify checkNoaryWasBinary "[ $foo!=3 ]"
-checkNoaryWasBinary _ (TC_Noary _ _ t@(T_NormalWord _ l)) | not $ isConstant t = potentially $ do
-    token <- getEqualsPart
-    return $ err (getId token) 2077 "You need spaces around the comparison operator."
+prop_checkNoaryTestAlwaysTrue = verify checkNoaryTestAlwaysTrue "[[ a==$foo ]]"
+prop_checkNoaryTestAlwaysTrue2 = verify checkNoaryTestAlwaysTrue "[ $foo=3 ]"
+prop_checkNoaryTestAlwaysTrue3 = verify checkNoaryTestAlwaysTrue "[ $foo!=3 ]"
+prop_checkNoaryTestAlwaysTrue4 = verify checkNoaryTestAlwaysTrue "[ \"$(ls) \" ]"
+checkNoaryTestAlwaysTrue _ (TC_Noary _ _ t@(T_NormalWord _ l)) | not $ isConstant t =
+    potentially $ comparisonWarning `mplus` tautologyWarning
   where
-    hasEquals t = isJust $ do
+    hasEquals = matchToken ('=' `elem`)
+    isNonEmpty = matchToken (not . null)
+    matchToken m t = isJust $ do
         str <- getLiteralString t
-        guard $ '=' `elem` str
+        guard $ m str
         return ()
-    getEqualsPart = listToMaybe $ filter hasEquals l
-checkNoaryWasBinary _ _ = return ()
+
+    comparisonWarning = do
+        token <- listToMaybe $ filter hasEquals l
+        return $ err (getId token) 2077 "You need spaces around the comparison operator."
+    tautologyWarning = do
+        token <- listToMaybe $ filter isNonEmpty $ getWordParts t
+        return $ err (getId token) 2157 "Argument to implicit -n is always true due to literal strings."
+checkNoaryTestAlwaysTrue _ _ = return ()
 
 prop_checkConstantNoary = verify checkConstantNoary "[[ '$(foo)' ]]"
 prop_checkConstantNoary2 = verify checkConstantNoary "[ \"-f lol\" ]"
