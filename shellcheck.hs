@@ -93,6 +93,7 @@ formats = Map.fromList [
     ("json", forJson),
     ("gcc", forGcc),
     ("checkstyle", forCheckstyle),
+    ("junit", forJunit),
     ("tty", forTty)
     ]
 
@@ -232,6 +233,47 @@ forCheckstyle options files = do
         attr "source" $ "ShellCheck.SC" ++ show (scCode c),
         "/>\n"
         ]
+
+-- JUnit compatible output. A bit of a hack to avoid XML dependencies
+forJunit :: AnalysisOptions -> [FilePath] -> IO Status
+forJunit options files = do
+    putStrLn "<?xml version='1.0' encoding='UTF-8'?>"
+    putStrLn "<testsuites>"
+    statuses <- mapM process files
+    putStrLn "</testsuites>"
+    return $ mconcat statuses
+  where
+    process file = catchExceptions $ do
+        comments <- commentsFor options file
+        putStrLn (formatFile file comments)
+        return $ checkComments comments
+
+    severity "error" = "error"
+    severity "warning" = "warning"
+    severity _ = "info"
+    attr s v = concat [ s, "='", escape v, "' " ]
+    escape = concatMap escape'
+    escape' c = if isOk c then [c] else "&#" ++ show (ord c) ++ ";"
+    isOk x = any ($x) [isAsciiUpper, isAsciiLower, isDigit, (`elem` " ./")]
+
+    formatFile name comments = concat [
+        "<testsuite>\n<properties>\n",
+        "<property ",
+        attr "name" "filename",
+        attr "value" name,
+        "/>\n</properties>\n",
+            concatMap format comments,
+        "</testsuite>"
+        ]
+
+    format c = concat [
+        "<testcase ", attr "time" "0.0", attr "name" $ "ShellCheck.SC" ++ show (scCode c), ">\n",
+        "<failure ",
+        attr "type" $ severity . scSeverity $ c,
+        attr "message" $ "Line " ++ show (scLine c) ++ ", char " ++ show (scColumn c) ++ ": " ++ scMessage c,
+        "/>\n</testcase>\n"
+        ]
+
 
 commentsFor options file = liftM (getComments options) $ readContents file
 
