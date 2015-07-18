@@ -1285,9 +1285,15 @@ checkConstantIfs _ _ = return ()
 prop_checkNoaryWasBinary = verify checkNoaryWasBinary "[[ a==$foo ]]"
 prop_checkNoaryWasBinary2 = verify checkNoaryWasBinary "[ $foo=3 ]"
 prop_checkNoaryWasBinary3 = verify checkNoaryWasBinary "[ $foo!=3 ]"
-checkNoaryWasBinary _ (TC_Noary _ _ t@(T_NormalWord id l)) | not $ isConstant t = do
-    let str = concat $ deadSimple t
-    when ('=' `elem` str) $ err id 2077 "You need spaces around the comparison operator."
+checkNoaryWasBinary _ (TC_Noary _ _ t@(T_NormalWord _ l)) | not $ isConstant t = potentially $ do
+    token <- getEqualsPart
+    return $ err (getId token) 2077 "You need spaces around the comparison operator."
+  where
+    hasEquals t = isJust $ do
+        str <- getLiteralString t
+        guard $ '=' `elem` str
+        return ()
+    getEqualsPart = listToMaybe $ filter hasEquals l
 checkNoaryWasBinary _ _ = return ()
 
 prop_checkConstantNoary = verify checkConstantNoary "[[ '$(foo)' ]]"
