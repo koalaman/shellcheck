@@ -970,10 +970,16 @@ prop_checkUnquotedDollarAt5 = verifyNot checkUnquotedDollarAt "ls ${foo/@/ at }"
 prop_checkUnquotedDollarAt6 = verifyNot checkUnquotedDollarAt "a=$@"
 prop_checkUnquotedDollarAt7 = verify checkUnquotedDollarAt "for f in ${var[@]}; do true; done"
 prop_checkUnquotedDollarAt8 = verifyNot checkUnquotedDollarAt "echo \"${args[@]:+${args[@]}}\""
+prop_checkUnquotedDollarAt9 = verifyNot checkUnquotedDollarAt "echo ${args[@]:+\"${args[@]}\"}"
 checkUnquotedDollarAt p word@(T_NormalWord _ parts) | not $ isStrictlyQuoteFree (parentMap p) word =
     forM_ (take 1 $ filter isArrayExpansion parts) $ \x ->
-        err (getId x) 2068
-            "Double quote array expansions to avoid re-splitting elements."
+        unless (isAlternative x) $
+            err (getId x) 2068
+                "Double quote array expansions to avoid re-splitting elements."
+  where
+    -- Fixme: should detect whether the alterantive is quoted
+    isAlternative (T_DollarBraced _ t) = ":+" `isInfixOf` bracedString t
+    isAlternative _ = False
 checkUnquotedDollarAt _ _ = return ()
 
 prop_checkConcatenatedDollarAt1 = verify checkConcatenatedDollarAt "echo \"foo$@\""
@@ -2526,6 +2532,7 @@ prop_checkSpacefulness23= verifyNotTree checkSpacefulness "a=(1); echo ${a[@]}"
 prop_checkSpacefulness24= verifyTree checkSpacefulness "a='a    b'; cat <<< $a"
 prop_checkSpacefulness25= verifyTree checkSpacefulness "a='s/[0-9]//g'; sed $a"
 prop_checkSpacefulness26= verifyTree checkSpacefulness "a='foo bar'; echo {1,2,$a}"
+prop_checkSpacefulness27= verifyNotTree checkSpacefulness "echo ${a:+'foo'}"
 
 checkSpacefulness params t =
     doVariableFlowAnalysis readF writeF (Map.fromList defaults) (variableFlow params)
@@ -2546,6 +2553,7 @@ checkSpacefulness params t =
                   && not (isArrayExpansion token) -- There's another warning for this
                   && not (isCounting token)
                   && not (isQuoteFree parents token)
+                  && not (isQuotedAlternative token)
                   && not (usedAsCommandName parents token)]
       where
         warning = "Double quote to prevent globbing and word splitting."
@@ -2569,6 +2577,13 @@ checkSpacefulness params t =
             '#':_ -> True
             _ -> False
     isCounting _ = False
+
+    -- FIXME: doesn't handle ${a:+$var} vs ${a:+"$var"}
+    isQuotedAlternative t =
+        case t of
+            T_DollarBraced _ l ->
+                ":+" `isInfixOf` bracedString l
+            _ -> False
 
     isSpacefulWord :: (String -> Bool) -> [Token] -> Bool
     isSpacefulWord f = any (isSpaceful f)
@@ -3437,7 +3452,7 @@ prop_checkMaskedReturns5 = verifyNot checkMaskedReturns "f() { local -r a=$(fals
 checkMaskedReturns _ t@(T_SimpleCommand id _ (cmd:rest)) = potentially $ do
     name <- getCommandName t
     guard $ name `elem` ["declare", "export"]
-        || name == "local" && "r" `notElem` (map snd $ getAllFlags t)
+        || name == "local" && "r" `notElem` map snd (getAllFlags t)
     return $ mapM_ checkArgs rest
   where
     checkArgs (T_Assignment id _ _ _ word) | any hasReturn $ getWordParts word =
