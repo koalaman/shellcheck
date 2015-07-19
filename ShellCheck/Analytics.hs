@@ -2941,6 +2941,7 @@ checkCharRangeGlob _ _ = return ()
 prop_checkCdAndBack1 = verify checkCdAndBack "for f in *; do cd $f; git pull; cd ..; done"
 prop_checkCdAndBack2 = verifyNot checkCdAndBack "for f in *; do cd $f || continue; git pull; cd ..; done"
 prop_checkCdAndBack3 = verifyNot checkCdAndBack "while [[ $PWD != / ]]; do cd ..; done"
+prop_checkCdAndBack4 = verify checkCdAndBack "cd $tmp; foo; cd -"
 checkCdAndBack params = doLists
   where
     shell = shellType params
@@ -2948,6 +2949,7 @@ checkCdAndBack params = doLists
     doLists (T_ForArithmetic _ _ _ _ cmds) = doList cmds
     doLists (T_WhileExpression _ _ cmds) = doList cmds
     doLists (T_UntilExpression _ _ cmds) = doList cmds
+    doLists (T_Script _ _ cmds) = doList cmds
     doLists (T_IfExpression _ thens elses) = do
         mapM_ (\(_, l) -> doList l) thens
         doList elses
