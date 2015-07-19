@@ -63,6 +63,7 @@ treeChecks = [
     ,checkArrayWithoutIndex
     ,checkShebang
     ,checkUnassignedReferences
+    ,checkUncheckedCd
     ]
 
 checksFor Sh = [
@@ -327,8 +328,8 @@ getFlagsUntil stopCondition (T_SimpleCommand _ _ (_:args)) =
     let textArgs = takeWhile (not . stopCondition . snd) $ map (\x -> (x, concat $ deadSimple x)) args in
         concatMap flag textArgs
   where
-    flag (x, ('-':'-':arg)) = [ (x, takeWhile (/= '=') arg) ]
-    flag (x, ('-':args)) = map (\v -> (x, [v])) args
+    flag (x, '-':'-':arg) = [ (x, takeWhile (/= '=') arg) ]
+    flag (x, '-':args) = map (\v -> (x, [v])) args
     flag _ = []
 
 getFlagsUntil _ _ = error "Internal shellcheck error, please report! (getFlags on non-command)"
@@ -382,6 +383,21 @@ dist a b
           min3 x y z = if x < y then x else min y z
 
 hasFloatingPoint params = shellType params == Ksh
+
+-- Checks whether the current parent path is part of a condition
+isCondition [] = False
+isCondition [_] = False
+isCondition (child:parent:rest) =
+    getId child `elem` map getId (getConditionChildren parent) || isCondition (parent:rest)
+  where
+    getConditionChildren t =
+        case t of
+            T_AndIf _ left right -> [left]
+            T_OrIf id left right -> [left]
+            T_IfExpression id conditions elses -> concatMap (take 1 . reverse . fst) conditions
+            T_WhileExpression id c l -> take 1 . reverse $ c
+            T_UntilExpression id c l -> take 1 . reverse $ c
+            _ -> []
 
 prop_checkEchoWc3 = verify checkEchoWc "n=$(echo $foo | wc -c)"
 checkEchoWc _ (T_Pipeline id _ [a, b]) =
@@ -3474,6 +3490,25 @@ checkExportedExpansions _ = checkUnqualifiedCommand "export" (const check)
                 warn (getId t) 2163 "Exporting an expansion rather than a variable."
             _ -> return ()
 
+
+prop_checkUncheckedCd1 = verifyTree checkUncheckedCd "cd ~/src; rm -r foo"
+prop_checkUncheckedCd2 = verifyNotTree checkUncheckedCd "cd ~/src || exit; rm -r foo"
+prop_checkUncheckedCd3 = verifyNotTree checkUncheckedCd "set -e; cd ~/src; rm -r foo"
+prop_checkUncheckedCd4 = verifyNotTree checkUncheckedCd "if cd foo; then rm foo; fi"
+prop_checkUncheckedCd5 = verifyTree checkUncheckedCd "if true; then cd foo; fi"
+checkUncheckedCd params root =
+    if hasSetE then [] else execWriter $ doAnalysis checkElement root
+  where
+    checkElement t@(T_SimpleCommand {}) =
+        when(t `isUnqualifiedCommand` "cd" && not (isCondition $ getPath (parentMap params) t)) $
+            warn (getId t) 2164 "Use cd ... || exit in case cd fails."
+    checkElement _ = return ()
+    hasSetE = isNothing $ doAnalysis (guard . not . isSetE) root
+    isSetE t =
+        case t of
+            T_SimpleCommand {} ->
+                t `isUnqualifiedCommand` "set" && "e" `elem` map snd (getAllFlags t)
+            _ -> False
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
