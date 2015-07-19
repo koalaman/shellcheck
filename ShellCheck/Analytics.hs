@@ -209,6 +209,7 @@ nodeChecks = [
     ,checkInjectableFindSh
     ,checkReadWithoutR
     ,checkExportedExpansions
+    ,checkLoopVariableReassignment
     ]
 
 
@@ -3511,6 +3512,33 @@ checkUncheckedCd params root =
             T_SimpleCommand {} ->
                 t `isUnqualifiedCommand` "set" && "e" `elem` map snd (getAllFlags t)
             _ -> False
+
+prop_checkLoopVariableReassignment1 = verify checkLoopVariableReassignment "for i in *; do for i in *.bar; do true; done; done"
+prop_checkLoopVariableReassignment2 = verify checkLoopVariableReassignment "for i in *; do for((i=0; i<3; i++)); do true; done; done"
+prop_checkLoopVariableReassignment3 = verifyNot checkLoopVariableReassignment "for i in *; do for j in *.bar; do true; done; done"
+checkLoopVariableReassignment params token =
+    potentially $ case token of
+        T_ForIn {} -> check
+        T_ForArithmetic {} -> check
+        _ -> Nothing
+  where
+    check = do
+        str <- loopVariable token
+        next <- listToMaybe $ filter (\x -> loopVariable x == Just str) path
+        return $ do
+            warn (getId token) 2165 "This nested loop overrides the index variable of its parent."
+            warn (getId next)  2165 "This parent loop has its index variable overridden."
+    path = drop 1 $ getPath (parentMap params) token
+    loopVariable :: Token -> Maybe String
+    loopVariable t =
+        case t of
+            T_ForIn _ s _ _ -> return s
+            T_ForArithmetic _
+                (TA_Sequence _
+                    [TA_Binary _ "="
+                        (TA_Expansion _ [T_Literal _ var]) _])
+                            _ _ _ -> return var
+            _ -> fail "not loop"
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
