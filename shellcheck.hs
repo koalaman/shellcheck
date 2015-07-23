@@ -71,7 +71,7 @@ printErr = hPutStrLn stderr
 
 instance JSON (JsonComment) where
   showJSON (JsonComment filename c) = makeObj [
-      ("file", showJSON $ filename),
+      ("file", showJSON filename),
       ("line", showJSON $ scLine c),
       ("column", showJSON $ scColumn c),
       ("level", showJSON $ scSeverity c),
