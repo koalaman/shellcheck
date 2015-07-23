@@ -376,7 +376,7 @@ dist a b
           oneDiag a b diagAbove diagBelow = thisdiag
               where doDiag [] b nw n w = []
                     doDiag a [] nw n w = []
-                    doDiag (ach:as) (bch:bs) nw n w = me : (doDiag as bs me (tail n) (tail w))
+                    doDiag (ach:as) (bch:bs) nw n w = me : doDiag as bs me (tail n) (tail w)
                         where me = if ach == bch then nw else 1 + min3 (head w) nw (head n)
                     firstelt = 1 + head diagBelow
                     thisdiag = firstelt : doDiag a b firstelt diagAbove (tail diagBelow)
@@ -426,7 +426,7 @@ checkEchoSed _ (T_Pipeline id _ [a, b]) =
     sedRe = mkRegex "^s(.)([^\n]*)g?$"
     isSimpleSed s = fromMaybe False $ do
         [first,rest] <- matchRegex sedRe s
-        let delimiters = filter (== (first !! 0)) rest
+        let delimiters = filter (== (head first)) rest
         guard $ length delimiters == 2
         return True
 
@@ -2364,7 +2364,7 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal 
         lastArg <- listToMaybe (reverse arguments)
         name <- getLiteralString lastArg
         guard $ isVariableName name
-        return (base, lastArg, name, DataArray $ SourceExternal)
+        return (base, lastArg, name, DataArray SourceExternal)
 
 getModifiedVariableCommand _ = []
 
@@ -2837,7 +2837,7 @@ checkUnassignedReferences params t = warnings
         any (`isPrefixOf` rest) ["-", ":-", "?", ":?"]
       where
         name = concat $ deadSimple v
-        rest = dropWhile isVariableChar $ dropWhile (`elem` "#!") $ name
+        rest = dropWhile isVariableChar $ dropWhile (`elem` "#!") name
     isGuarded _ = False
 
     match var candidate =
@@ -3415,7 +3415,7 @@ checkFindActionPrecedence params = checkCommand "find" (const f)
     pattern = [isMatch, const True, isParam ["-o", "-or"], isMatch, const True, isAction]
     f list | length list < length pattern = return ()
     f list@(_:rest) =
-        if all id (zipWith ($) pattern list)
+        if and (zipWith ($) pattern list)
         then warnFor (list !! (length pattern - 1))
         else f rest
     isMatch = isParam [ "-name", "-regex", "-iname", "-iregex", "-wholename", "-iwholename" ]
