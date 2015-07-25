@@ -46,14 +46,14 @@ variableStart = upper <|> lower <|> oneOf "_"
 variableChars = upper <|> lower <|> digit <|> oneOf "_"
 functionChars = variableChars <|> oneOf ":+-.?"
 specialVariable = oneOf "@*#?-$!"
-tokenDelimiter = oneOf "&|;<> \t\n\r" <|> nbsp
+tokenDelimiter = oneOf "&|;<> \t\n\r" <|> almostSpace
 quotableChars = "|&;<>()\\ '\t\n\r\xA0" ++ doubleQuotableChars
-quotable = nbsp <|> unicodeDoubleQuote <|> oneOf quotableChars
+quotable = almostSpace <|> unicodeDoubleQuote <|> oneOf quotableChars
 bracedQuotable = oneOf "}\"$`'"
 doubleQuotableChars = "\"$`" ++ unicodeDoubleQuoteChars
 doubleQuotable = unicodeDoubleQuote <|> oneOf doubleQuotableChars
-whitespace = oneOf " \t\n" <|> carriageReturn <|> nbsp
-linewhitespace = oneOf " \t" <|> nbsp
+whitespace = oneOf " \t\n" <|> carriageReturn <|> almostSpace
+linewhitespace = oneOf " \t" <|> almostSpace
 
 suspectCharAfterQuotes = variableChars <|> char '%'
 
@@ -105,10 +105,16 @@ carriageReturn = do
     parseNote ErrorC 1017 "Literal carriage return. Run script through tr -d '\\r' ."
     char '\r'
 
-nbsp = do
-    parseNote ErrorC 1018 "This is a &nbsp;. Delete it and retype as space."
-    char '\xA0'
-    return ' '
+almostSpace =
+    choice [
+        check '\xA0' "unicode non-breaking space",
+        check '\x200B' "unicode zerowidth space"
+    ]
+  where
+    check c name = do
+        parseNote ErrorC 1018 $ "This is a " ++ name ++ ". Delete and retype it."
+        char c
+        return ' '
 
 --------- Message/position annotation on top of user state
 data Note = Note Id Severity Code String deriving (Show, Eq)
