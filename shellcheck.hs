@@ -99,7 +99,7 @@ formats = Map.fromList [
 toStatus = liftM (either id (const NoProblems)) . runErrorT
 
 catchExceptions :: IO Status -> IO Status
-catchExceptions action = action -- action `catch` handler
+catchExceptions action = action `catch` handler
   where
     handler err = do
         printErr $ show (err :: SomeException)
