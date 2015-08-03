@@ -1996,7 +1996,7 @@ checkInexplicablyUnquoted _ (T_NormalWord id tokens) = mapM_ check (tails tokens
     warnAboutExpansion id =
         warn id 2027 "The surrounding quotes actually unquote this. Remove or escape them."
     warnAboutLiteral id =
-        warn id 2140 "The double quotes around this do nothing. Remove or escape them."
+        warn id 2140 "Word is on the form \"A\"B\"C\" (B indicated). Did you mean \"ABC\" or \"A\\\"B\\\"C\"?"
 checkInexplicablyUnquoted _ _ = return ()
 
 prop_checkTildeInQuotes1 = verify checkTildeInQuotes "var=\"~/out.txt\""
