@@ -72,7 +72,6 @@ _check_file() {
   }
 
   _simple_check "$_file" || return
-  _perl_check || return
   _shellcheck < "$_file"
 }
 
@@ -94,6 +93,8 @@ EOF
 case "${1:-}" in
 ""|"help"|"-h"|"--help") _help; exit ;;
 esac
+
+_perl_check || exit 1
 
 while (( $# )); do
   echo >&2 ":: Checking '${1}'..."
