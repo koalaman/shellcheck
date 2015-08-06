@@ -82,11 +82,16 @@ Description
 
 Requirements
 
-  Perl with URI::Escape and JSON modules
+  Perl with URI::Escape and JSON modules.
 
 Syntax
 
   webcheck.sh [file1] [file2] [...]
+
+Security note
+
+  Your whole script is encoded and sent over internet to the service.
+  Please make sure your script is safe. You have been warned.
 EOF
 }
 
