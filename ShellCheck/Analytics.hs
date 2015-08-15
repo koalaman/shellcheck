@@ -680,6 +680,7 @@ prop_checkBashisms23= verify checkBashisms "trap mything err int"
 prop_checkBashisms24= verifyNot checkBashisms "trap mything int term"
 prop_checkBashisms25= verify checkBashisms "cat < /dev/tcp/host/123"
 prop_checkBashisms26= verify checkBashisms "trap mything ERR SIGTERM"
+prop_checkBashisms27= verify checkBashisms "echo *[^0-9]*"
 checkBashisms _ = bashism
   where
     errMsg id s = err id 2040 $ "In sh, " ++ s ++ " not supported, even when sh is actually bash."
@@ -710,6 +711,8 @@ checkBashisms _ = bashism
         where
             file = onlyLiteralString word
             isNetworked = any (`isPrefixOf` file) ["/dev/tcp", "/dev/udp"]
+    bashism (T_Glob id str) | "[^" `isInfixOf` str =
+            warnMsg id "^ in place of ! in glob bracket expressions is"
 
     bashism t@(TA_Expansion id _) | isBashism =
         warnMsg id $ fromJust str ++ " is"
