@@ -3338,6 +3338,7 @@ checkMultipleAppends params t =
         style (snd $ fromJust f) 2129
             "Consider using { cmd1; cmd2; } >> file instead of individual redirects."
     checkGroup _ = return ()
+    getTarget (T_Annotation _ _ t) = getTarget t
     getTarget (T_Pipeline _ _ args@(_:_)) = getTarget (last args)
     getTarget (T_Redirecting id list _) = do
         file <- mapMaybe getAppend list !!! 0
