@@ -18,10 +18,17 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -}
 {-# LANGUAGE TemplateHaskell, FlexibleContexts #-}
-module ShellCheck.Analytics (AnalysisOptions(..), defaultAnalysisOptions, filterByAnnotation, runAnalytics, shellForExecutable, runTests) where
+module ShellCheck.Analytics (runAnalytics, ShellCheck.Analytics.runTests) where
+
+import ShellCheck.AST
+import ShellCheck.Data
+import ShellCheck.Parser
+import ShellCheck.Interface
+import ShellCheck.Regex
 
 import Control.Arrow (first)
 import Control.Monad
+import Control.Monad.Identity
 import Control.Monad.State
 import Control.Monad.Writer
 import Data.Char
@@ -31,11 +38,6 @@ import Data.List
 import Data.Maybe
 import Data.Ord
 import Debug.Trace
-import ShellCheck.AST
-import ShellCheck.Options
-import ShellCheck.Data
-import ShellCheck.Parser hiding (runTests)
-import ShellCheck.Regex
 import qualified Data.Map as Map
 import Test.QuickCheck.All (forAllProperties)
 import Test.QuickCheck.Test (quickCheckWithResult, stdArgs, maxSuccess)
@@ -48,7 +50,7 @@ data Parameters = Parameters {
     }
 
 -- Checks that are run on the AST root
-treeChecks :: [Parameters -> Token -> [Note]]
+treeChecks :: [Parameters -> Token -> [TokenComment]]
 treeChecks = [
     runNodeAnalysis
         (\p t -> (mapM_ ((\ f -> f t) . (\ f -> f p))
@@ -81,19 +83,28 @@ checksFor Bash = [
     ,checkForDecimals
     ]
 
-runAnalytics :: AnalysisOptions -> Token -> [Note]
-runAnalytics options root = runList options root treeChecks
+runAnalytics :: AnalysisSpec -> AnalysisResult
+runAnalytics options = AnalysisResult {
+        arComments = 
+            nub . filterByAnnotation (asScript options) $
+                runList options treeChecks
+    }
 
-runList options root list = notes
+runList :: AnalysisSpec -> [Parameters -> Token -> [TokenComment]]
+    -> [TokenComment]
+runList spec list = notes
     where
+        root = asScript spec
         params = Parameters {
-                shellType = fromMaybe (determineShell root) $ optionShellType options,
-                shellTypeSpecified = isJust $ optionShellType options,
+                shellType = fromMaybe (determineShell root) $ asShellType spec,
+                shellTypeSpecified = isJust $ asShellType spec,
                 parentMap = getParentTree root,
-                variableFlow = getVariableFlow (shellType params) (parentMap params) root
+                variableFlow =
+                    getVariableFlow (shellType params) (parentMap params) root
         }
-        notes = filter (\c -> getCode c `notElem` optionExcludes options) $ concatMap (\f -> f params root) list
-        getCode (Note _ _ c _) = c
+        notes = concatMap (\f -> f params root) list
+
+getCode (TokenComment _ (Comment _ c _)) = c
 
 
 checkList l t = concatMap (\f -> f t) l
@@ -107,21 +118,10 @@ determineShell (T_Script _ shebang _) = fromMaybe Bash . shellForExecutable $ sh
           shellFor s | ' ' `elem` s = shellFor $ takeWhile (/= ' ') s
           shellFor s = reverse . takeWhile (/= '/') . reverse $ s
 
-shellForExecutable "sh" = return Sh
-shellForExecutable "ash" = return Sh
-shellForExecutable "dash" = return Sh
-
-shellForExecutable "ksh" = return Ksh
-shellForExecutable "ksh88" = return Ksh
-shellForExecutable "ksh93" = return Ksh
-
-shellForExecutable "bash" = return Bash
-shellForExecutable _ = Nothing
-
 -- Checks that are run on each node in the AST
 runNodeAnalysis f p t = execWriter (doAnalysis (f p) t)
 
-nodeChecks :: [Parameters -> Token -> Writer [Note] ()]
+nodeChecks :: [Parameters -> Token -> Writer [TokenComment] ()]
 nodeChecks = [
     checkUuoc
     ,checkPipePitfalls
@@ -216,10 +216,9 @@ nodeChecks = [
 filterByAnnotation token =
     filter (not . shouldIgnore)
   where
-    numFor (Note _ _ code _) = code
-    idFor (Note id  _ _ _) = id
+    idFor (TokenComment id _) = id
     shouldIgnore note =
-        any (shouldIgnoreFor (numFor note)) $
+        any (shouldIgnoreFor (getCode note)) $
             getPath parents (T_Bang $ idFor note)
     shouldIgnoreFor num (T_Annotation _ anns _) =
         any hasNum anns
@@ -228,12 +227,17 @@ filterByAnnotation token =
     shouldIgnoreFor _ _ = False
     parents = getParentTree token
 
-addNote note = tell [note]
-makeNote severity id code note = addNote $ Note id severity code note
-warn = makeNote WarningC
-err = makeNote ErrorC
-info = makeNote InfoC
-style = makeNote StyleC
+makeComment :: Severity -> Id -> Code -> String -> TokenComment
+makeComment severity id code note =
+    TokenComment id $ Comment severity code note
+
+addComment note = tell [note]
+
+warn :: MonadWriter [TokenComment] m => Id -> Code -> String -> m ()
+warn  id code str = addComment $ makeComment WarningC id code str
+err   id code str = addComment $ makeComment ErrorC id code str
+info  id code str = addComment $ makeComment InfoC id code str
+style id code str = addComment $ makeComment StyleC id code str
 
 isVariableStartChar x = x == '_' || isAsciiLower x || isAsciiUpper x
 isVariableChar x = isVariableStartChar x || isDigit x
@@ -343,23 +347,33 @@ getLeadingFlags = getFlagsUntil (not . ("-" `isPrefixOf`))
         [] -> Nothing
         (r:_) -> Just r
 
-verify :: (Parameters -> Token -> Writer [Note] ()) -> String -> Bool
+verify :: (Parameters -> Token -> Writer [TokenComment] ()) -> String -> Bool
 verify f s = checkNode f s == Just True
 
-verifyNot :: (Parameters -> Token -> Writer [Note] ()) -> String -> Bool
+verifyNot :: (Parameters -> Token -> Writer [TokenComment] ()) -> String -> Bool
 verifyNot f s = checkNode f s == Just False
 
-verifyTree :: (Parameters -> Token -> [Note]) -> String -> Bool
-verifyTree f s = checkTree f s == Just True
+verifyTree :: (Parameters -> Token -> [TokenComment]) -> String -> Bool
+verifyTree f s = producesComments f s == Just True
 
-verifyNotTree :: (Parameters -> Token -> [Note]) -> String -> Bool
-verifyNotTree f s = checkTree f s == Just False
+verifyNotTree :: (Parameters -> Token -> [TokenComment]) -> String -> Bool
+verifyNotTree f s = producesComments f s == Just False
 
-checkNode f = checkTree (runNodeAnalysis f)
-checkTree f s = case parseShell defaultAnalysisOptions "-" s of
-        (ParseResult (Just (t, m)) _) -> Just . not . null $ runList defaultAnalysisOptions t [f]
-        _ -> Nothing
 
+defaultSpec root = AnalysisSpec {
+    asScript = root,
+    asShellType = Nothing,
+    asExecutionMode = Executed
+}
+
+checkNode f = producesComments (runNodeAnalysis f)
+producesComments :: (Parameters -> Token -> [TokenComment]) -> String -> Maybe Bool
+producesComments f s = do
+        root <- prRoot pResult
+        return . not . null $ runList (defaultSpec root) [f]
+  where
+    pSpec = ParseSpec { psScript = s }
+    pResult = runIdentity $ parseScript (mockedSystemInterface []) pSpec
 
 -- Copied from https://wiki.haskell.org/Edit_distance
 dist :: Eq a => [a] -> [a] -> Int
@@ -628,13 +642,13 @@ mayBecomeMultipleArgs t = willBecomeMultipleArgs t || f t
 prop_checkShebangParameters1 = verifyTree checkShebangParameters "#!/usr/bin/env bash -x\necho cow"
 prop_checkShebangParameters2 = verifyNotTree checkShebangParameters "#! /bin/sh  -l "
 checkShebangParameters _ (T_Script id sb _) =
-    [Note id ErrorC 2096 "On most OS, shebangs can only specify a single parameter." | length (words sb) > 2]
+    [makeComment ErrorC id 2096 "On most OS, shebangs can only specify a single parameter." | length (words sb) > 2]
 
 prop_checkShebang1 = verifyNotTree checkShebang "#!/usr/bin/env bash -x\necho cow"
 prop_checkShebang2 = verifyNotTree checkShebang "#! /bin/sh  -l "
 prop_checkShebang3 = verifyTree checkShebang "ls -l"
 checkShebang params (T_Script id sb _) =
-    [Note id ErrorC 2148 "Tips depend on target shell and yours is unknown. Add a shebang."
+    [makeComment ErrorC id 2148 "Tips depend on target shell and yours is unknown. Add a shebang."
         | not (shellTypeSpecified params) && sb == "" ]
 
 prop_checkBashisms = verify checkBashisms "while read a; do :; done < <(a)"
@@ -901,15 +915,15 @@ prop_checkRedirectToSame5 = verifyNot checkRedirectToSame "foo > bar 2> bar"
 checkRedirectToSame params s@(T_Pipeline _ _ list) =
     mapM_ (\l -> (mapM_ (\x -> doAnalysis (checkOccurrences x) l) (getAllRedirs list))) list
   where
-    note x = Note x InfoC 2094
+    note x = makeComment InfoC x 2094
                 "Make sure not to read and write the same file in the same pipeline."
     checkOccurrences t@(T_NormalWord exceptId x) u@(T_NormalWord newId y) =
         when (exceptId /= newId
                 && x == y
                 && not (isOutput t && isOutput u)
                 && not (special t)) $ do
-            addNote $ note newId
-            addNote $ note exceptId
+            addComment $ note newId
+            addComment $ note exceptId
     checkOccurrences _ _ = return ()
     getAllRedirs = concatMap (\t ->
         case t of
@@ -1028,7 +1042,7 @@ checkArrayWithoutIndex params _ =
         return . maybeToList $ do
             name <- getLiteralString token
             assignment <- Map.lookup name map
-            return [Note id WarningC 2128
+            return [makeComment WarningC id 2128
                     "Expanding an array without an index only gives the first element."]
     readF _ _ _ = return []
 
@@ -2495,6 +2509,17 @@ findSubshelled (StackScopeEnd:rest) ((reason, scope):oldScopes) deadVars =
         foldl (\m (_, token, var, _) ->
             Map.insert var (Dead token reason) m) deadVars scope
 
+
+-- FIXME: This is a very strange way of doing it.
+-- For each variable read/write, run a stateful function that emits
+-- comments. The comments are collected and returned.
+doVariableFlowAnalysis ::
+    (Token -> Token -> String -> State t [v])
+    -> (Token -> Token -> String -> DataType -> State t [v])
+    -> t
+    -> [StackData]
+    -> [v]
+
 doVariableFlowAnalysis readFunc writeFunc empty flow = evalState (
     foldM (\list x -> do { l <- doFlow x;  return $ l ++ list; }) [] flow
     ) empty
@@ -2548,7 +2573,7 @@ checkSpacefulness params t =
 
     readF _ token name = do
         spaced <- hasSpaces name
-        return [Note (getId token) InfoC 2086 warning |
+        return [makeComment InfoC (getId token) 2086 warning |
                   spaced
                   && not (isArrayExpansion token) -- There's another warning for this
                   && not (isCounting token)
@@ -2652,9 +2677,9 @@ checkQuotesInLiterals params t =
               && not (isParamTo parents "eval" expr)
               && not (isQuoteFree parents expr)
               then [
-                  Note (fromJust assignment)WarningC 2089
+                  makeComment WarningC (fromJust assignment) 2089
                       "Quotes/backslashes will be treated literally. Use an array.",
-                  Note (getId expr) WarningC 2090
+                  makeComment WarningC (getId expr) 2090
                       "Quotes/backslashes in this variable will not be respected."
                 ]
               else [])

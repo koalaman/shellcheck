@@ -1,5 +1,6 @@
 module ShellCheck.Data where
 
+import ShellCheck.Interface
 import Data.Version (showVersion)
 import Paths_ShellCheck (version)
 
@@ -73,3 +74,15 @@ sampleWords = [
     "tango", "uniform", "victor", "whiskey", "xray", "yankee",
     "zulu"
   ]
+
+shellForExecutable :: String -> Maybe Shell
+shellForExecutable "sh" = return Sh
+shellForExecutable "ash" = return Sh
+shellForExecutable "dash" = return Sh
+
+shellForExecutable "ksh" = return Ksh
+shellForExecutable "ksh88" = return Ksh
+shellForExecutable "ksh93" = return Ksh
+
+shellForExecutable "bash" = return Bash
+shellForExecutable _ = Nothing

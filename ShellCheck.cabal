@@ -41,18 +41,19 @@ library
       containers,
       directory,
       json,
-      mtl,
+      mtl >= 2.2.1,
       parsec,
       regex-tdfa,
       QuickCheck >= 2.7.4
     exposed-modules:
+      ShellCheck.Checker
+      ShellCheck.Analyzer
+      ShellCheck.Parser
       ShellCheck.Analytics
       ShellCheck.AST
       ShellCheck.Data
-      ShellCheck.Options
-      ShellCheck.Parser
+      ShellCheck.Interface
       ShellCheck.Regex
-      ShellCheck.Simple
     other-modules:
       Paths_ShellCheck
 
@@ -63,10 +64,9 @@ executable shellcheck
       containers,
       directory,
       json,
-      mtl,
+      mtl >= 2.2.1,
       parsec,
       regex-tdfa,
-      transformers,
       QuickCheck >= 2.7.4
     main-is: shellcheck.hs
 
@@ -78,10 +78,9 @@ test-suite test-shellcheck
       containers,
       directory,
       json,
-      mtl,
+      mtl >= 2.2.1,
       parsec,
       regex-tdfa,
-      transformers,
       QuickCheck >= 2.7.4
     main-is: test/shellcheck.hs
 

@@ -18,19 +18,21 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -}
 {-# LANGUAGE NoMonomorphismRestriction, TemplateHaskell, FlexibleContexts #-}
-module ShellCheck.Parser (Note(..), Severity(..), parseShell, ParseResult(..), ParseNote(..), sortNotes, noteToParseNote, runTests, readScript) where
+module ShellCheck.Parser (parseScript, runTests) where
 
 import ShellCheck.AST
 import ShellCheck.Data
-import ShellCheck.Options
-import Text.Parsec
+import ShellCheck.Interface
+import Text.Parsec hiding (runParser)
 import Debug.Trace
 import Control.Monad
-import Control.Arrow (first)
+import Control.Monad.Identity
 import Data.Char
+import Data.Functor
 import Data.List (isPrefixOf, isInfixOf, isSuffixOf, partition, sortBy, intercalate, nub)
 import qualified Data.Map as Map
 import qualified Control.Monad.State as Ms
+import qualified Control.Monad.Reader as Mr
 import Data.Maybe
 import Prelude hiding (readList)
 import System.IO
@@ -38,6 +40,10 @@ import Text.Parsec.Error
 import GHC.Exts (sortWith)
 import Test.QuickCheck.All (quickCheckAll)
 
+type SCBase m = Mr.ReaderT (SystemInterface m) (Ms.StateT SystemState m)
+type SCParser m v = ParsecT String UserState (SCBase m) v
+
+backslash :: Monad m => SCParser m Char
 backslash = char '\\'
 linefeed = optional carriageReturn >> char '\n'
 singleQuote = char '\'' <|> unicodeSingleQuote
@@ -119,9 +125,18 @@ almostSpace =
 --------- Message/position annotation on top of user state
 data Note = Note Id Severity Code String deriving (Show, Eq)
 data ParseNote = ParseNote SourcePos Severity Code String deriving (Show, Eq)
-data Severity = ErrorC | WarningC | InfoC | StyleC deriving (Show, Eq, Ord)
 data Context = ContextName SourcePos String | ContextAnnotation [Annotation] deriving (Show)
-type Code = Integer
+
+data UserState = UserState {
+    lastId :: Id,
+    positionMap :: Map.Map Id SourcePos,
+    parseNotes :: [ParseNote]
+}
+initialUserState = UserState {
+    lastId = Id $ -1,
+    positionMap = Map.empty,
+    parseNotes = []
+}
 
 codeForParseNote (ParseNote _ _ code _) = code
 noteToParseNote map (Note id severity code message) =
@@ -129,17 +144,17 @@ noteToParseNote map (Note id severity code message) =
     where
         pos = fromJust $ Map.lookup id map
 
-initialState = (Id $ -1, Map.empty, [])
 
-getLastId = do
-    (id, _, _) <- getState
-    return id
+getLastId = lastId <$> getState
 
 getNextIdAt sourcepos = do
-    (id, map, notes) <- getState
-    let newId = incId id
-    let newMap = Map.insert newId sourcepos map
-    putState (newId, newMap, notes)
+    state <- getState
+    let newId = incId (lastId state)
+    let newMap = Map.insert newId sourcepos (positionMap state)
+    putState $ state {
+        lastId = newId,
+        positionMap = newMap
+    }
     return newId
   where incId (Id n) = Id $ n+1
 
@@ -147,23 +162,16 @@ getNextId = do
     pos <- getPosition
     getNextIdAt pos
 
-modifyMap f = do
-    (id, map, parsenotes) <- getState
-    putState (id, f map, parsenotes)
-
-getMap = do
-    (_, map, _) <- getState
-    return map
-
-getParseNotes = do
-    (_, _, notes) <- getState
-    return notes
+getMap = positionMap <$> getState
+getParseNotes = parseNotes <$> getState
 
 addParseNote n = do
     irrelevant <- shouldIgnoreCode (codeForParseNote n)
     unless irrelevant $ do
-        (a, b, notes) <- getState
-        putState (a, b, n:notes)
+        state <- getState
+        putState $ state {
+            parseNotes = n : parseNotes state
+        }
 
 shouldIgnoreCode code = do
     context <- getCurrentContexts
@@ -175,16 +183,22 @@ shouldIgnoreCode code = do
     disabling' (DisableComment n) = code == n
 
 -- Store potential parse problems outside of parsec
+
+data SystemState = SystemState {
+    contextStack :: [Context],
+    parseProblems :: [ParseNote]
+}
+initialSystemState = SystemState {
+    contextStack = [],
+    parseProblems = []
+}
+
 parseProblem level code msg = do
     pos <- getPosition
     parseProblemAt pos level code msg
 
-setCurrentContexts c =
-    Ms.modify (\(list, _) -> (list, c))
-
-getCurrentContexts = do
-    (_, context) <- Ms.get
-    return context
+setCurrentContexts c = Ms.modify (\state -> state { contextStack = c })
+getCurrentContexts = contextStack <$> Ms.get
 
 popContext = do
     v <- getCurrentContexts
@@ -203,7 +217,11 @@ pushContext c = do
 parseProblemAt pos level code msg = do
     irrelevant <- shouldIgnoreCode code
     unless irrelevant $
-        Ms.modify (first ((:) (ParseNote pos level code msg)))
+        Ms.modify (\state -> state {
+            parseProblems = note:parseProblems state
+        })
+  where
+    note = ParseNote pos level code msg
 
 -- Store non-parse problems inside
 
@@ -2152,15 +2170,17 @@ readScript = do
 
     readUtf8Bom = called "Byte Order Mark" $ string "\xFEFF"
 
-rp p filename contents = Ms.runState (runParserT p initialState filename contents) ([], [])
 
-isWarning p s = fst cs && (not . null . snd $ cs) where cs = checkString p s
-isOk p s = fst cs && (null . snd $ cs) where cs = checkString p s
+isWarning p s = parsesCleanly p s == Just False
+isOk p s =      parsesCleanly p s == Just True
 
-checkString parser string =
-    case rp (parser >> eof >> getState) "-" string of
-        (Right (tree, map, notes), (problems, _)) -> (True, notes ++ problems)
-        (Left _, (n, _)) -> (False, n)
+parsesCleanly parser string = runIdentity $ do
+    (res, sys) <- runParser (mockedSystemInterface [])
+                    (parser >> eof >> getState) "-" string
+    case (res, sys) of
+        (Right userState, systemState) ->
+            return $ Just . null $ parseNotes userState ++ parseProblems systemState
+        (Left _, _) -> return Nothing
 
 parseWithNotes parser = do
     item <- parser
@@ -2171,8 +2191,6 @@ parseWithNotes parser = do
 compareNotes (ParseNote pos1 level1 _ s1) (ParseNote pos2 level2 _ s2) = compare (pos1, level1) (pos2, level2)
 sortNotes = sortBy compareNotes
 
-
-data ParseResult = ParseResult { parseResult :: Maybe (Token, Map.Map Id SourcePos), parseNotes :: [ParseNote] } deriving (Show)
 
 makeErrorFor parsecError =
     ParseNote (errorPos parsecError) ErrorC 1072 $
@@ -2191,13 +2209,39 @@ getStringFromParsec errors =
                 Message s     ->  if null s then Nothing else return $ s ++ "."
         unexpected s = "Unexpected " ++ (if null s then "eof" else s) ++ "."
 
-parseShell options filename contents =
-    case rp (parseWithNotes readScript) filename contents of
-        (Right (script, map, notes), (parsenotes, _)) ->
-            ParseResult (Just (script, map)) (nub . sortNotes . excludeNotes $ notes ++ parsenotes)
-        (Left err, (p, context)) ->
-            ParseResult Nothing
-                (nub . sortNotes . excludeNotes $ p ++ notesForContext context ++ [makeErrorFor err])
+runParser :: Monad m =>
+    SystemInterface m ->
+    SCParser m v ->
+    String ->
+    String ->
+    m (Either ParseError v, SystemState)
+
+runParser sys p filename contents =
+    Ms.runStateT
+        (Mr.runReaderT
+            (runParserT p initialUserState filename contents)
+            sys)
+        initialSystemState
+
+parseShell sys contents = do
+    (result, state) <- runParser sys (parseWithNotes readScript) "" contents
+    case result of
+        Right (script, tokenMap, notes) ->
+            return ParseResult {
+                prComments = map toPositionedComment $ nub $ notes ++ parseProblems state,
+                prTokenPositions = Map.map posToPos tokenMap,
+                prRoot = Just script
+            }
+        Left err ->
+            return ParseResult {
+                prComments =
+                    map toPositionedComment $
+                        notesForContext (contextStack state)
+                        ++ [makeErrorFor err]
+                        ++ parseProblems state,
+                prTokenPositions = Map.empty,
+                prRoot = Nothing
+            }
   where
     isName (ContextName _ _) = True
     isName _ = False
@@ -2206,7 +2250,25 @@ parseShell options filename contents =
         "Couldn't parse this " ++ str ++ "."
     second (ContextName pos str) = ParseNote pos InfoC 1009 $
         "The mentioned parser error was in this " ++ str ++ "."
-    excludeNotes = filter (\c -> codeForParseNote c `notElem` optionExcludes options)
+
+
+toPositionedComment :: ParseNote -> PositionedComment
+toPositionedComment (ParseNote pos severity code message) =
+    PositionedComment (posToPos pos) $ Comment severity code message
+
+posToPos :: SourcePos -> Position
+posToPos sp = Position {
+    posFile = sourceName sp,
+    posLine = fromIntegral $ sourceLine sp,
+    posColumn = fromIntegral $ sourceColumn sp
+}
+
+-- TODO: Clean up crusty old code that this is layered on top of
+parseScript :: Monad m =>
+        SystemInterface m -> ParseSpec -> m ParseResult
+parseScript sys spec =
+    parseShell sys (psScript spec)
+
 
 lt x = trace (show x) x
 ltt t = trace (show t)
