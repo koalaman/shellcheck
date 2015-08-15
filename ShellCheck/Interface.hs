@@ -31,16 +31,19 @@ data SystemInterface m = SystemInterface {
 
 -- ShellCheck input and output
 data CheckSpec = CheckSpec {
+    csFilename :: String,
     csScript :: String,
     csExcludedWarnings :: [Integer],
     csShellTypeOverride :: Maybe Shell
 } deriving (Show, Eq)
 
 data CheckResult = CheckResult {
+    crFilename :: String,
     crComments :: [PositionedComment]
 } deriving (Show, Eq)
 
 emptyCheckSpec = CheckSpec {
+    csFilename = "",
     csScript = "",
     csExcludedWarnings = [],
     csShellTypeOverride = Nothing
@@ -48,6 +51,7 @@ emptyCheckSpec = CheckSpec {
 
 -- Parser input and output
 data ParseSpec = ParseSpec {
+    psFilename :: String,
     psScript :: String
 } deriving (Show, Eq)
 

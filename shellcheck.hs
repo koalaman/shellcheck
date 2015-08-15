@@ -21,27 +21,26 @@ import ShellCheck.Data
 import ShellCheck.Checker
 import ShellCheck.Interface
 
+import ShellCheck.Formatter.Format
+import qualified ShellCheck.Formatter.CheckStyle
+import qualified ShellCheck.Formatter.GCC
+import qualified ShellCheck.Formatter.JSON
+import qualified ShellCheck.Formatter.TTY
+
 import Control.Exception
 import Control.Monad
 import Control.Monad.Except
 import Data.Char
 import Data.Functor
 import Data.Either
-import Data.IORef
-import Data.List
 import qualified Data.Map as Map
 import Data.Maybe
 import Data.Monoid
-import GHC.Exts
-import GHC.IO.Device
 import Prelude hiding (catch)
 import System.Console.GetOpt
 import System.Environment
 import System.Exit
 import System.IO
-import System.Info
-import Text.JSON
-import qualified Data.Map as Map
 
 data Flag = Flag String String
 data Status =
@@ -51,26 +50,13 @@ data Status =
     | SupportFailure
     | SyntaxFailure
     | RuntimeException
-  deriving (Ord, Eq)
+  deriving (Ord, Eq, Show)
 
 instance Monoid Status where
     mempty = NoProblems
     mappend = max
 
-lineNo (PositionedComment pos _) = posLine pos
-colNo  (PositionedComment pos _) = posColumn pos
-codeNo (PositionedComment _ (Comment _ code _)) = code
-messageText (PositionedComment _ (Comment _ _ t)) = t
-
-severityText :: PositionedComment -> String
-severityText (PositionedComment _ (Comment c _ _)) =
-    case c of
-        ErrorC   -> "error"
-        WarningC -> "warning"
-        InfoC    -> "info"
-        StyleC   -> "style"
-
-header = "Usage: shellcheck [OPTIONS...] FILES..."
+usageHeader = "Usage: shellcheck [OPTIONS...] FILES..."
 options = [
     Option "e" ["exclude"]
         (ReqArg (Flag "exclude") "CODE1,CODE2..") "exclude types of warnings",
@@ -82,205 +68,23 @@ options = [
         (NoArg $ Flag "version" "true") "Print version information"
     ]
 
-printOut = lift . hPutStrLn stdout
 printErr = lift . hPutStrLn stderr
-
-instance JSON (PositionedComment) where
-  showJSON comment@(PositionedComment pos (Comment level code string)) = makeObj [
-      ("file", showJSON $ posFile pos),
-      ("line", showJSON $ posLine pos),
-      ("column", showJSON $ posColumn pos),
-      ("level", showJSON $ severityText comment),
-      ("code", showJSON code),
-      ("message", showJSON string)
-      ]
-    where
-
-  readJSON = undefined
-
 
 parseArguments :: [String] -> ExceptT Status IO ([Flag], [FilePath])
 parseArguments argv =
     case getOpt Permute options argv of
         (opts, files, []) -> return (opts, files)
         (_, _, errors) -> do
-            printErr $ concat errors ++ "\n" ++ usageInfo header options
+            printErr $ concat errors ++ "\n" ++ usageInfo usageHeader options
             throwError SyntaxFailure
 
+formats :: Map.Map String (IO Formatter)
 formats = Map.fromList [
-{-
-    ("json", forJson),
-    ("gcc", forGcc),
-    ("checkstyle", forCheckstyle),
--}
-    ("tty", forTty)
+    ("checkstyle", ShellCheck.Formatter.CheckStyle.format),
+    ("gcc", ShellCheck.Formatter.GCC.format),
+    ("json", ShellCheck.Formatter.JSON.format),
+    ("tty", ShellCheck.Formatter.TTY.format)
     ]
-
-forTty :: SystemInterface IO -> CheckSpec -> [FilePath] -> ExceptT Status IO ()
-forTty sys spec files = mapM_ doFile files
-  where
-    clear = ansi 0
-    ansi n = "\x1B[" ++ show n ++ "m"
-
-    colorForLevel "error" = 31 -- red
-    colorForLevel "warning" = 33 -- yellow
-    colorForLevel "info" = 32 -- green
-    colorForLevel "style" = 32 -- green
-    colorForLevel "message" = 1 -- bold
-    colorForLevel "source" = 0 -- none
-    colorForLevel _ = 0 -- none
-
-    colorComment level comment =
-        ansi (colorForLevel level) ++ comment ++ clear
-
-    doFile filename = do
-        contents <- lift $ inputFile filename
-        comments <- lift (crComments <$> checkScript sys spec { csScript = contents })
-        let fileLines = lines contents
-        let lineCount = fromIntegral $ length fileLines
-        let groups = groupWith lineNo comments
-        colorFunc <- getColorFunc
-        mapM_ (\x -> do
-            let lineNum = lineNo (head x)
-            let line = if lineNum < 1 || lineNum > lineCount
-                            then ""
-                            else fileLines !! (fromIntegral $ lineNum - 1)
-            printOut ""
-            printOut $ colorFunc "message"
-                ("In " ++ filename ++" line " ++ show lineNum ++ ":")
-            printOut (colorFunc "source" line)
-            mapM_ (\c -> printOut (colorFunc (severityText c) $ cuteIndent c)) x
-            printOut ""
-          ) groups
-
-    cuteIndent :: PositionedComment -> String
-    cuteIndent comment =
-        replicate (fromIntegral $ colNo comment - 1) ' ' ++
-            "^-- " ++ code (codeNo comment) ++ ": " ++ messageText comment
-
-    code code = "SC" ++ show code
-
-    getColorFunc = do
-        term <- lift $ hIsTerminalDevice stdout
-        let windows = "mingw" `isPrefixOf` os
-        return $ if term && not windows then colorComment else const id
-
-{-
-forJson :: a -> Formatter
-forJson _ result = do
-    let comments = concatMap getComments (crComments result)
-    lift $ putStrLn $ encodeStrict comments
-  where
-    getComments (_, FileResult comments) = comments
-    getComments (file, FileError str) = [
-        PositionedComment
-            Position {
-                posFile = file,
-                posLine = 1,
-                posColumn = 1
-            }
-            (Comment ErrorC 1000 str)
-        ]
-
--- Mimic GCC "file:line:col: (error|warning|note): message" format
-forGcc :: SystemInterface IO -> Formatter
-forGcc io result = do
-    mapM_ (uncurry process) (crComments result)
-  where
-    process filename (FileError string) = do
-        printErr $ string
-
-    process filename (FileResult result) = do
-        fileInput <- lift $ siReadFile io filename
-        when (isLeft fileInput) $ do
-            printErr $ "Failed to re-open " ++ filename
-            throwError RuntimeException
-        let contents = fromRight fileInput
-        let comments = makeNonVirtual result contents
-        mapM_ (printOut . format filename) comments
-
-    format filename c = concat [
-            filename, ":",
-            show $ lineNo c, ":",
-            show $ colNo c, ": ",
-            case severityText c of
-                "error" -> "error"
-                "warning" -> "warning"
-                _ -> "note",
-            ": ",
-            concat . lines $ messageText c,
-            " [SC", show $ codeNo c, "]"
-      ]
-
--- Checkstyle compatible output. A bit of a hack to avoid XML dependencies
-forCheckstyle :: SystemInterface IO -> Formatter
-forCheckstyle _ result = do
-    printOut "<?xml version='1.0' encoding='UTF-8'?>"
-    printOut "<checkstyle version='4.3'>"
-    statuses <- mapM process (crComments result)
-    printOut "</checkstyle>"
-    return $ mconcat statuses
-  where
-    process (file, FileError str) =
-        printOut (formatError file str)
-
-    process (file, FileResult comments) =
-        printOut (formatFile file comments)
-
-    severity "error" = "error"
-    severity "warning" = "warning"
-    severity _ = "info"
-    attr s v = concat [ s, "='", escape v, "' " ]
-    escape = concatMap escape'
-    escape' c = if isOk c then [c] else "&#" ++ show (ord c) ++ ";"
-    isOk x = any ($x) [isAsciiUpper, isAsciiLower, isDigit, (`elem` " ./")]
-
-    formatFile name comments = concat [
-        "<file ", attr "name" name, ">\n",
-            concatMap format comments,
-        "</file>"
-        ]
-
-    format c = concat [
-        "<error ",
-        attr "line" $ show . lineNo $ c,
-        attr "column" $ show . colNo $ c,
-        attr "severity" . severity $ severityText c,
-        attr "message" $ messageText c,
-        attr "source" $ "ShellCheck.SC" ++ show (codeNo c),
-        "/>\n"
-        ]
-
-    formatError file msg = concat [
-        "<file ", attr "name" file, ">\n",
-        "<error ",
-            attr "line" "1",
-            attr "column" "1",
-            attr "severity" $ severity "error",
-            attr "message" msg,
-            attr "source" "ShellCheck",
-        "/>\n",
-        "</file>"
-        ]
--}
-
-
--- Realign comments from a tabstop of 8 to 1
-makeNonVirtual comments contents =
-    map fix comments
-  where
-    ls = lines contents
-    fix c@(PositionedComment pos comment) = PositionedComment pos {
-        posColumn =
-            if lineNo c > 0 && lineNo c <= fromIntegral (length ls)
-            then real (ls !! (fromIntegral $ lineNo c - 1)) 0 0 (colNo c)
-            else colNo c
-    } comment
-    real _ r v target | target <= v = r
-    real [] r v _ = r -- should never happen
-    real ('\t':rest) r v target =
-        real rest (r+1) (v + 8 - (v `mod` 8)) target
-    real (_:rest) r v target = real rest (r+1) (v+1) target
 
 getOption [] _ = Nothing
 getOption (Flag var val:_) name | name == var = return val
@@ -304,12 +108,7 @@ getExclusions options =
     in
         map (Prelude.read . clean) elements :: [Int]
 
-excludeCodes codes =
-    filter (not . hasCode)
-  where
-    hasCode c = codeNo c `elem` codes
-
-toStatus = liftM (either id (const NoProblems)) . runExceptT
+toStatus = liftM (either id id) . runExceptT
 
 main = do
     args <- getArgs
@@ -327,7 +126,7 @@ statusToCode status =
         SupportFailure -> ExitFailure 4
         RuntimeException -> ExitFailure 2
 
-process :: [Flag] -> [FilePath] -> ExceptT Status IO ()
+process :: [Flag] -> [FilePath] -> ExceptT Status IO Status
 process flags files = do
     options <- foldM (flip parseOption) emptyCheckSpec flags
     verifyFiles files
@@ -340,9 +139,40 @@ process flags files = do
                 mapM_ (printErr . write) $ Map.keys formats
                 throwError SupportFailure
               where write s = "  " ++ s
-            Just f -> ExceptT $ fmap Right $ return f
+            Just f -> ExceptT $ fmap Right f
     let sys = ioInterface (const False)
-    formatter sys options files
+    lift $ runFormatter sys formatter options files
+
+runFormatter :: SystemInterface IO -> Formatter -> CheckSpec -> [FilePath]
+            -> IO Status
+runFormatter sys format spec files = do
+    header format
+    result <- foldM f NoProblems files
+    footer format
+    return result
+  where
+    f :: Status -> FilePath -> IO Status
+    f status file = do
+        newStatus <- process file `catch` handler file
+        return $ status `mappend` newStatus
+    handler :: FilePath -> IOException -> IO Status
+    handler file e = do
+        onFailure format file (show e)
+        return RuntimeException
+
+    process :: FilePath -> IO Status
+    process filename = do
+        contents <- inputFile filename
+        let checkspec = spec {
+            csFilename = filename,
+            csScript = contents
+        }
+        result <- checkScript sys checkspec
+        onResult format result contents
+        return $
+            if null (crComments result)
+            then NoProblems
+            else SomeProblems
 
 parseOption flag options =
     case flag of
@@ -372,12 +202,12 @@ parseOption flag options =
             throwError SyntaxFailure
         return (Prelude.read num :: Integer)
 
-ioInterface filter = do
+ioInterface filter =
     SystemInterface {
         siReadFile = get
     }
   where
-    get file = do
+    get file =
         if filter file
           then (Right <$> inputFile file) `catch` handler
           else return $ Left (file ++ " was not specified as input.")
@@ -390,12 +220,14 @@ inputFile file = do
             if file == "-"
             then getContents
             else readFile file
-    return contents
+
+    seq (length contents) $
+        return contents
 
 verifyFiles files =
     when (null files) $ do
         printErr "No files specified.\n"
-        printErr $ usageInfo header options
+        printErr $ usageInfo usageHeader options
         throwError SyntaxFailure
 
 printVersion = do

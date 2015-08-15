@@ -372,7 +372,10 @@ producesComments f s = do
         root <- prRoot pResult
         return . not . null $ runList (defaultSpec root) [f]
   where
-    pSpec = ParseSpec { psScript = s }
+    pSpec = ParseSpec {
+        psFilename = "script",
+        psScript = s
+    }
     pResult = runIdentity $ parseScript (mockedSystemInterface []) pSpec
 
 -- Copied from https://wiki.haskell.org/Edit_distance

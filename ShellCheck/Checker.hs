@@ -47,18 +47,22 @@ checkScript :: Monad m => SystemInterface m -> CheckSpec -> m CheckResult
 checkScript sys spec = do
     results <- checkScript (csScript spec)
     return CheckResult {
+        crFilename = csFilename spec,
         crComments = results
     }
   where
     checkScript contents = do
-        result <- parseScript sys ParseSpec { psScript = contents }
+        result <- parseScript sys ParseSpec {
+            psFilename = csFilename spec,
+            psScript = contents
+        }
         let parseMessages = prComments result
         let analysisMessages =
                 fromMaybe [] $
                     (arComments . analyzeScript . analysisSpec)
                         <$> prRoot result
         let translator = tokenToPosition (prTokenPositions result)
-        return . sortMessages . filter shouldInclude $
+        return . nub . sortMessages . filter shouldInclude $
             (parseMessages ++ map translator analysisMessages)
 
     shouldInclude (PositionedComment _ (Comment _ code _)) =
@@ -66,7 +70,7 @@ checkScript sys spec = do
 
     sortMessages = sortBy (comparing order)
     order (PositionedComment pos (Comment severity code message)) =
-        (posFile pos, posLine pos, posColumn pos, code, message)
+        (posFile pos, posLine pos, posColumn pos, severity, code, message)
     getPosition (PositionedComment pos _) = pos
 
     analysisSpec root =

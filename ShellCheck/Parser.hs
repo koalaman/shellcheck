@@ -2223,8 +2223,8 @@ runParser sys p filename contents =
             sys)
         initialSystemState
 
-parseShell sys contents = do
-    (result, state) <- runParser sys (parseWithNotes readScript) "" contents
+parseShell sys name contents = do
+    (result, state) <- runParser sys (parseWithNotes readScript) name contents
     case result of
         Right (script, tokenMap, notes) ->
             return ParseResult {
@@ -2267,7 +2267,7 @@ posToPos sp = Position {
 parseScript :: Monad m =>
         SystemInterface m -> ParseSpec -> m ParseResult
 parseScript sys spec =
-    parseShell sys (psScript spec)
+    parseShell sys (psFilename spec) (psScript spec)
 
 
 lt x = trace (show x) x

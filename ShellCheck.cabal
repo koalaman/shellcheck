@@ -46,13 +46,14 @@ library
       regex-tdfa,
       QuickCheck >= 2.7.4
     exposed-modules:
-      ShellCheck.Checker
-      ShellCheck.Analyzer
-      ShellCheck.Parser
-      ShellCheck.Analytics
       ShellCheck.AST
+      ShellCheck.Analytics
+      ShellCheck.Analyzer
+      ShellCheck.Checker
       ShellCheck.Data
+      ShellCheck.Formatter.Format
       ShellCheck.Interface
+      ShellCheck.Parser
       ShellCheck.Regex
     other-modules:
       Paths_ShellCheck
