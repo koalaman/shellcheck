@@ -85,7 +85,7 @@ checksFor Bash = [
 
 runAnalytics :: AnalysisSpec -> AnalysisResult
 runAnalytics options = AnalysisResult {
-        arComments = 
+        arComments =
             nub . filterByAnnotation (asScript options) $
                 runList options treeChecks
     }
@@ -3014,12 +3014,9 @@ checkCdAndBack params = doLists
     doList list =
         let cds = filter ((== Just "cd") . getCmd) list in
             when (length cds >= 2 && isCdRevert (last cds)) $
-               warn (getId $ head cds) 2103 message
+               info (getId $ last cds) 2103 message
 
-    message =
-        if shell == Bash
-        then "Consider using ( subshell ), 'cd foo||exit', or pushd/popd instead."
-        else "Consider using ( subshell ) or 'cd foo||exit' instead."
+    message = "Use a ( subshell ) to avoid having to cd back."
 
 prop_checkLoopKeywordScope1 = verify checkLoopKeywordScope "continue 2"
 prop_checkLoopKeywordScope2 = verify checkLoopKeywordScope "for f; do ( break; ); done"
@@ -3545,13 +3542,17 @@ prop_checkUncheckedCd2 = verifyNotTree checkUncheckedCd "cd ~/src || exit; rm -r
 prop_checkUncheckedCd3 = verifyNotTree checkUncheckedCd "set -e; cd ~/src; rm -r foo"
 prop_checkUncheckedCd4 = verifyNotTree checkUncheckedCd "if cd foo; then rm foo; fi"
 prop_checkUncheckedCd5 = verifyTree checkUncheckedCd "if true; then cd foo; fi"
+prop_checkUncheckedCd6 = verifyNotTree checkUncheckedCd "cd .."
 checkUncheckedCd params root =
     if hasSetE then [] else execWriter $ doAnalysis checkElement root
   where
     checkElement t@(T_SimpleCommand {}) =
-        when(t `isUnqualifiedCommand` "cd" && not (isCondition $ getPath (parentMap params) t)) $
-            warn (getId t) 2164 "Use cd ... || exit in case cd fails."
+        when(t `isUnqualifiedCommand` "cd"
+            && not (isCdDotDot t)
+            && not (isCondition $ getPath (parentMap params) t)) $
+                warn (getId t) 2164 "Use cd ... || exit in case cd fails."
     checkElement _ = return ()
+    isCdDotDot t = deadSimple t == ["cd", ".."]
     hasSetE = isNothing $ doAnalysis (guard . not . isSetE) root
     isSetE t =
         case t of
