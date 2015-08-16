@@ -1280,15 +1280,25 @@ checkDoubleBracketOperators _ _ = return ()
 prop_checkConditionalAndOrs1 = verify checkConditionalAndOrs "[ foo && bar ]"
 prop_checkConditionalAndOrs2 = verify checkConditionalAndOrs "[[ foo -o bar ]]"
 prop_checkConditionalAndOrs3 = verifyNot checkConditionalAndOrs "[[ foo || bar ]]"
-checkConditionalAndOrs _ (TC_And id SingleBracket "&&" _ _) =
-    err id 2107 "You can't use && inside [..]. Use -a instead."
-checkConditionalAndOrs _ (TC_And id DoubleBracket "-a" _ _) =
-    err id 2108 "In [[..]], use && instead of -a."
-checkConditionalAndOrs _ (TC_Or id SingleBracket "||" _ _) =
-    err id 2109 "You can't use || inside [..]. Use -o instead."
-checkConditionalAndOrs _ (TC_Or id DoubleBracket "-o" _ _) =
-    err id 2110 "In [[..]], use || instead of -o."
-checkConditionalAndOrs _ _ = return ()
+prop_checkConditionalAndOrs4 = verify checkConditionalAndOrs "[ foo -a bar ]"
+prop_checkConditionalAndOrs5 = verify checkConditionalAndOrs "[ -z 3 -o a = b ]"
+checkConditionalAndOrs _ t =
+    case t of
+        (TC_And id SingleBracket "&&" _ _) ->
+            err id 2107 "Instead of [ a && b ], use [ a ] && [ b ]."
+        (TC_And id DoubleBracket "-a" _ _) ->
+            err id 2108 "In [[..]], use && instead of -a."
+        (TC_Or id SingleBracket "||" _ _) ->
+            err id 2109 "Instead of [ a || b ], use [ a ] || [ b ]."
+        (TC_Or id DoubleBracket "-o" _ _) ->
+            err id 2110 "In [[..]], use || instead of -o."
+
+        (TC_And id SingleBracket "-a" _ _) ->
+            warn id 2166 "Prefer [ p ] && [ q ] as [ p -a q ] is not well defined."
+        (TC_Or id SingleBracket "-o" _ _) ->
+            warn id 2166 "Prefer [ p ] || [ q ] as [ p -o q ] is not well defined."
+
+        otherwise -> return ()
 
 prop_checkQuotedCondRegex1 = verify checkQuotedCondRegex "[[ $foo =~ \"bar\" ]]"
 prop_checkQuotedCondRegex2 = verify checkQuotedCondRegex "[[ $foo =~ 'cow' ]]"
