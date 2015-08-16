@@ -47,6 +47,7 @@ library
       QuickCheck >= 2.7.4
     exposed-modules:
       ShellCheck.AST
+      ShellCheck.ASTLib
       ShellCheck.Analytics
       ShellCheck.Analyzer
       ShellCheck.Checker

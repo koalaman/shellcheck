@@ -357,10 +357,3 @@ doAnalysis f = analyze f blank id
 doStackAnalysis startToken endToken = analyze startToken endToken id
 doTransform i = runIdentity . analyze blank blank i
 
-isLoop t = case t of
-        T_WhileExpression {} -> True
-        T_UntilExpression {} -> True
-        T_ForIn {} -> True
-        T_ForArithmetic {} -> True
-        T_SelectIn {}  -> True
-        _ -> False
