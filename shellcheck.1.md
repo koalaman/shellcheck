@@ -52,7 +52,13 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 
 **-V**,\ **--version**
 
-:   Print version and exit.
+:   Print version information and exit.
+
+**-x**,\ **-external-sources**
+
+:   Follow 'source' statements even when the file is not specified as input.
+    By default, `shellcheck` will only follow files specified on the command
+    line. This option allows following any file the script may `source`.
 
 # FORMATS
 
