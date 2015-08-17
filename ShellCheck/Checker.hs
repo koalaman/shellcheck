@@ -81,7 +81,7 @@ checkScript sys spec = do
          }
 
 getErrors sys spec =
-    map getCode . crComments $
+    sort . map getCode . crComments $
         runIdentity (checkScript sys spec)
   where
     getCode (PositionedComment _ (Comment _ code _)) = code
@@ -122,6 +122,46 @@ prop_optionDisablesIssue2 =
                 emptyCheckSpec {
                     csScript = "echo \"$10\"",
                     csExcludedWarnings = [2148, 1037]
+                }
+
+prop_failsWhenNotSourcing =
+    [1091, 2154] == getErrors
+                (mockedSystemInterface [])
+                emptyCheckSpec {
+                    csScript = "source lob; echo \"$bar\"",
+                    csExcludedWarnings = [2148]
+                }
+
+prop_worksWhenSourcing =
+    null $ getErrors
+                (mockedSystemInterface [("lib", "bar=1")])
+                emptyCheckSpec {
+                    csScript = "source lib; echo \"$bar\"",
+                    csExcludedWarnings = [2148]
+                }
+
+prop_worksWhenDotting =
+    null $ getErrors
+                (mockedSystemInterface [("lib", "bar=1")])
+                emptyCheckSpec {
+                    csScript = ". lib; echo \"$bar\"",
+                    csExcludedWarnings = [2148]
+                }
+
+prop_noInfiniteSourcing =
+    [] == getErrors
+                (mockedSystemInterface [("lib", "source lib")])
+                emptyCheckSpec {
+                    csScript = "source lib",
+                    csExcludedWarnings = [2148]
+                }
+
+prop_canSourceBadSyntax =
+    [1094, 2086] == getErrors
+                (mockedSystemInterface [("lib", "for f; do")])
+               emptyCheckSpec {
+                    csScript = "source lib; echo $1",
+                    csExcludedWarnings = [2148]
                 }
 
 return []

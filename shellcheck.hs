@@ -38,6 +38,7 @@ import Data.Maybe
 import Data.Monoid
 import Prelude hiding (catch)
 import System.Console.GetOpt
+import System.Directory
 import System.Environment
 import System.Exit
 import System.IO
@@ -56,6 +57,16 @@ instance Monoid Status where
     mempty = NoProblems
     mappend = max
 
+data Options = Options {
+    checkSpec :: CheckSpec,
+    externalSources :: Bool
+}
+
+defaultOptions = Options {
+    checkSpec = emptyCheckSpec,
+    externalSources = False
+}
+
 usageHeader = "Usage: shellcheck [OPTIONS...] FILES..."
 options = [
     Option "e" ["exclude"]
@@ -64,6 +75,8 @@ options = [
         (ReqArg (Flag "format") "FORMAT") "output format",
     Option "s" ["shell"]
         (ReqArg (Flag "shell") "SHELLNAME") "Specify dialect (bash,sh,ksh)",
+    Option "x" ["external-sources"]
+        (NoArg $ Flag "externals" "true") "Allow 'source' outside of FILES.",
     Option "V" ["version"]
         (NoArg $ Flag "version" "true") "Print version information"
     ]
@@ -81,9 +94,9 @@ parseArguments argv =
 formats :: Map.Map String (IO Formatter)
 formats = Map.fromList [
     ("checkstyle", ShellCheck.Formatter.CheckStyle.format),
-    ("gcc", ShellCheck.Formatter.GCC.format),
+    ("gcc",  ShellCheck.Formatter.GCC.format),
     ("json", ShellCheck.Formatter.JSON.format),
-    ("tty", ShellCheck.Formatter.TTY.format)
+    ("tty",  ShellCheck.Formatter.TTY.format)
     ]
 
 getOption [] _ = Nothing
@@ -128,7 +141,7 @@ statusToCode status =
 
 process :: [Flag] -> [FilePath] -> ExceptT Status IO Status
 process flags files = do
-    options <- foldM (flip parseOption) emptyCheckSpec flags
+    options <- foldM (flip parseOption) defaultOptions flags
     verifyFiles files
     let format = fromMaybe "tty" $ getOption flags "format"
     formatter <-
@@ -140,12 +153,12 @@ process flags files = do
                 throwError SupportFailure
               where write s = "  " ++ s
             Just f -> ExceptT $ fmap Right f
-    let sys = ioInterface (const False)
+    sys <- lift $ ioInterface options files
     lift $ runFormatter sys formatter options files
 
-runFormatter :: SystemInterface IO -> Formatter -> CheckSpec -> [FilePath]
+runFormatter :: SystemInterface IO -> Formatter -> Options -> [FilePath]
             -> IO Status
-runFormatter sys format spec files = do
+runFormatter sys format options files = do
     header format
     result <- foldM f NoProblems files
     footer format
@@ -163,7 +176,7 @@ runFormatter sys format spec files = do
     process :: FilePath -> IO Status
     process filename = do
         contents <- inputFile filename
-        let checkspec = spec {
+        let checkspec = (checkSpec options) {
             csFilename = filename,
             csScript = contents
         }
@@ -179,16 +192,29 @@ parseOption flag options =
         Flag "shell" str ->
             fromMaybe (die $ "Unknown shell: " ++ str) $ do
                 shell <- shellForExecutable str
-                return $ return options { csShellTypeOverride = Just shell }
+                return $ return options {
+                            checkSpec = (checkSpec options) {
+                                csShellTypeOverride = Just shell
+                            }
+                        }
 
         Flag "exclude" str -> do
             new <- mapM parseNum $ split ',' str
-            let old = csExcludedWarnings options
-            return options { csExcludedWarnings = new ++ old }
+            let old = csExcludedWarnings . checkSpec $ options
+            return options {
+                checkSpec = (checkSpec options) {
+                    csExcludedWarnings = new ++ old
+                }
+            }
 
         Flag "version" _ -> do
             liftIO printVersion
             throwError NoProblems
+
+        Flag "externals" _ -> do
+            return options {
+                externalSources = True
+            }
 
         _ -> return options
   where
@@ -202,18 +228,34 @@ parseOption flag options =
             throwError SyntaxFailure
         return (Prelude.read num :: Integer)
 
-ioInterface filter =
-    SystemInterface {
-        siReadFile = get
+ioInterface options files = do
+    inputs <- mapM normalize files
+    return SystemInterface {
+        siReadFile = get inputs
     }
   where
-    get file =
-        if filter file
+    get inputs file = do
+        ok <- allowable inputs file
+        if ok
           then (Right <$> inputFile file) `catch` handler
-          else return $ Left (file ++ " was not specified as input.")
+          else return $ Left (file ++ " was not specified as input (see shellcheck -x).")
 
-    handler :: IOException -> IO (Either ErrorMessage String)
-    handler ex = return . Left $ show ex
+      where
+        handler :: IOException -> IO (Either ErrorMessage String)
+        handler ex = return . Left $ show ex
+
+    allowable inputs x =
+        if externalSources options
+        then return True
+        else do
+            path <- normalize x
+            return $ path `elem` inputs
+
+    normalize x =
+        canonicalizePath x `catch` fallback x
+      where
+        fallback :: FilePath -> IOException -> IO FilePath
+        fallback path _ = return path
 
 inputFile file = do
     contents <-

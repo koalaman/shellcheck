@@ -224,6 +224,7 @@ filterByAnnotation token =
         any hasNum anns
       where
         hasNum (DisableComment ts) = num == ts
+    shouldIgnoreFor _ (T_Include {}) = True -- Ignore included files
     shouldIgnoreFor _ _ = False
     parents = getParentTree token
 

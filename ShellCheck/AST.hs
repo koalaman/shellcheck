@@ -125,6 +125,7 @@ data Token =
     | T_Pipe Id String
     | T_CoProc Id (Maybe String) Token
     | T_CoProcBody Id Token
+    | T_Include Id Token Token -- . & source: SimpleCommand T_Script
     deriving (Show)
 
 data Annotation = DisableComment Integer deriving (Show, Eq)
@@ -255,6 +256,7 @@ analyze f g i =
     delve (T_Annotation id anns t) = d1 t $ T_Annotation id anns
     delve (T_CoProc id var body) = d1 body $ T_CoProc id var
     delve (T_CoProcBody id t) = d1 t $ T_CoProcBody id
+    delve (T_Include id includer script) = d2 includer script $ T_Include id
     delve t = return t
 
 getId t = case t of
@@ -350,6 +352,7 @@ getId t = case t of
         T_Pipe id _ -> id
         T_CoProc id _ _ -> id
         T_CoProcBody id _ -> id
+        T_Include id _ _ -> id
 
 blank :: Monad m => Token -> m ()
 blank = const $ return ()

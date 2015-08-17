@@ -21,23 +21,28 @@
 module ShellCheck.Parser (parseScript, runTests) where
 
 import ShellCheck.AST
+import ShellCheck.ASTLib
 import ShellCheck.Data
 import ShellCheck.Interface
-import Text.Parsec hiding (runParser)
-import Debug.Trace
+
 import Control.Monad
 import Control.Monad.Identity
+import Control.Monad.Trans
 import Data.Char
 import Data.Functor
 import Data.List (isPrefixOf, isInfixOf, isSuffixOf, partition, sortBy, intercalate, nub)
-import qualified Data.Map as Map
-import qualified Control.Monad.State as Ms
-import qualified Control.Monad.Reader as Mr
 import Data.Maybe
+import Debug.Trace
+import GHC.Exts (sortWith)
 import Prelude hiding (readList)
 import System.IO
+import Text.Parsec hiding (runParser)
 import Text.Parsec.Error
-import GHC.Exts (sortWith)
+import Text.Parsec.Pos
+import qualified Control.Monad.Reader as Mr
+import qualified Control.Monad.State as Ms
+import qualified Data.Map as Map
+
 import Test.QuickCheck.All (quickCheckAll)
 
 type SCBase m = Mr.ReaderT (SystemInterface m) (Ms.StateT SystemState m)
@@ -125,7 +130,11 @@ almostSpace =
 --------- Message/position annotation on top of user state
 data Note = Note Id Severity Code String deriving (Show, Eq)
 data ParseNote = ParseNote SourcePos Severity Code String deriving (Show, Eq)
-data Context = ContextName SourcePos String | ContextAnnotation [Annotation] deriving (Show)
+data Context =
+        ContextName SourcePos String
+        | ContextAnnotation [Annotation]
+        | ContextSource String
+    deriving (Show)
 
 data UserState = UserState {
     lastId :: Id,
@@ -179,8 +188,26 @@ shouldIgnoreCode code = do
   where
     disabling (ContextAnnotation list) =
         any disabling' list
+    disabling (ContextSource _) = True -- Don't add messages for sourced files
     disabling _ = False
     disabling' (DisableComment n) = code == n
+
+shouldFollow file = do
+    context <- getCurrentContexts
+    if any isThisFile context
+      then return False
+      else
+        if length (filter isSource context) >= 100
+          then do
+            parseProblem ErrorC 1092 "Stopping at 100 'source' frames :O"
+            return False
+          else
+            return True
+  where
+    isSource (ContextSource _) = True
+    isSource _ = False
+    isThisFile (ContextSource name) | name == file = True
+    isThisFile _= False
 
 -- Store potential parse problems outside of parsec
 
@@ -900,6 +927,18 @@ subParse pos parser input = do
     setPosition lastPosition
     return result
 
+inSeparateContext parser = do
+    context <- Ms.get
+    success context <|> failure context
+  where
+    success c = do
+        res <- try parser
+        Ms.put c
+        return res
+    failure c = do
+        Ms.put c
+        fail ""
+
 prop_readDoubleQuoted = isOk readDoubleQuoted "\"Hello $FOO\""
 prop_readDoubleQuoted2 = isOk readDoubleQuoted "\"$'\""
 prop_readDoubleQuoted3 = isWarning readDoubleQuoted "\x201Chello\x201D"
@@ -1403,7 +1442,6 @@ makeSimpleCommand id1 id2 prefix cmd suffix =
     redirection (T_FdRedirect {}) = True
     redirection _ = False
 
-
 prop_readSimpleCommand = isOk readSimpleCommand "echo test > file"
 prop_readSimpleCommand2 = isOk readSimpleCommand "cmd &> file"
 prop_readSimpleCommand3 = isOk readSimpleCommand "export foo=(bar baz)"
@@ -1411,6 +1449,7 @@ prop_readSimpleCommand4 = isOk readSimpleCommand "typeset -a foo=(lol)"
 prop_readSimpleCommand5 = isOk readSimpleCommand "time if true; then echo foo; fi"
 prop_readSimpleCommand6 = isOk readSimpleCommand "time -p ( ls -l; )"
 readSimpleCommand = called "simple command" $ do
+    pos <- getPosition
     id1 <- getNextId
     id2 <- getNextId
     prefix <- option [] readCmdPrefix
@@ -1424,7 +1463,11 @@ readSimpleCommand = called "simple command" $ do
                         (["time"], readTimeSuffix),
                         (["let"], readLetSuffix)
                     ]
-            return $ makeSimpleCommand id1 id2 prefix [cmd] suffix
+
+            let result = makeSimpleCommand id1 id2 prefix [cmd] suffix
+            if isCommand ["source", "."] cmd
+                then readSource pos result
+                else return result
   where
     isCommand strings (T_NormalWord _ [T_Literal _ s]) = s `elem` strings
     isCommand _ _ = False
@@ -1433,6 +1476,51 @@ readSimpleCommand = called "simple command" $ do
         if isCommand list cmd
         then action
         else getParser def cmd rest
+
+
+readSource :: Monad m => SourcePos -> Token -> SCParser m Token
+readSource pos t@(T_Redirecting _ _ (T_SimpleCommand _ _ (cmd:file:_))) = do
+    let literalFile = getLiteralString file
+    case literalFile of
+        Nothing -> do
+            parseNoteAt pos InfoC 1090
+                "This source will be skipped since it's not constant."
+            return t
+        Just filename -> do
+            proceed <- shouldFollow filename
+            if not proceed
+              then do
+                parseNoteAt pos InfoC 1093
+                    "This file appears to be recursively sourced. Ignoring."
+                return t
+              else do
+                sys <- Mr.ask
+                input <- system $ siReadFile sys filename
+                case input of
+                    Left err -> do
+                        parseNoteAt pos InfoC 1091 $
+                            "Not following: " ++ err
+                        return t
+                    Right script -> do
+                        id <- getNextIdAt pos
+
+                        let included = do
+                            src <- subRead filename script
+                            return $ T_Include id t src
+
+                        let failed = do
+                            parseNoteAt pos WarningC 1094
+                                "Parsing of sourced file failed. Ignoring it."
+                            return t
+
+                        included <|> failed
+  where
+    subRead name script =
+        withContext (ContextSource name) $
+            inSeparateContext $
+                subParse (initialPos name) readScript script
+readSource _ t = return t
+
 
 prop_readPipeline = isOk readPipeline "! cat /etc/issue | grep -i ubuntu"
 prop_readPipeline2 = isWarning readPipeline "!cat /etc/issue | grep -i ubuntu"
@@ -2222,6 +2310,7 @@ runParser sys p filename contents =
             (runParserT p initialUserState filename contents)
             sys)
         initialSystemState
+system = lift . lift . lift
 
 parseShell sys name contents = do
     (result, state) <- runParser sys (parseWithNotes readScript) name contents
