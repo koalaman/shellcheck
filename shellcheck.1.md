@@ -58,7 +58,8 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 
 :   Follow 'source' statements even when the file is not specified as input.
     By default, `shellcheck` will only follow files specified on the command
-    line. This option allows following any file the script may `source`.
+    line (plus `/dev/null`). This option allows following any file the script
+    may `source`.
 
 # FORMATS
 
@@ -125,7 +126,12 @@ For example, to suppress SC2035 about using `./*.jpg`:
     # shellcheck disable=SC2035
     echo "Files: " *.jpg
 
-Here a shell brace group is used to suppress on multiple lines:
+To tell ShellCheck where to look for an otherwise dynamically determined file:
+
+    # shellcheck source=./lib.sh
+    source "$(find_install_dir)/lib.sh"
+
+Here a shell brace group is used to suppress a warning on multiple lines:
 
     # shellcheck disable=SC2016
     {
@@ -139,6 +145,11 @@ Valid keys are:
 :   Disables a comma separated list of error codes for the following command.
     The command can be a simple command like `echo foo`, or a compound command
     like a function definition, subshell block or loop.
+
+**source**
+:   Overrides the filename included by a `source`/`.` statement. This can be
+    used to tell shellcheck where to look for a file whose name is determined
+    at runtime, or to skip a source by telling it to use `/dev/null`.
 
 
 # AUTHOR

@@ -32,6 +32,7 @@ import Data.Char
 import Data.Functor
 import Data.List (isPrefixOf, isInfixOf, isSuffixOf, partition, sortBy, intercalate, nub)
 import Data.Maybe
+import Data.Monoid
 import Debug.Trace
 import GHC.Exts (sortWith)
 import Prelude hiding (readList)
@@ -191,6 +192,7 @@ shouldIgnoreCode code = do
     disabling (ContextSource _) = True -- Don't add messages for sourced files
     disabling _ = False
     disabling' (DisableComment n) = code == n
+    disabling' _ = False
 
 shouldFollow file = do
     context <- getCurrentContexts
@@ -208,6 +210,18 @@ shouldFollow file = do
     isSource _ = False
     isThisFile (ContextSource name) | name == file = True
     isThisFile _= False
+
+getSourceOverride = do
+    context <- getCurrentContexts
+    return . msum . map findFile $ takeWhile isSameFile context
+  where
+    isSameFile (ContextSource _) = False
+    isSameFile _ = True
+
+    findFile (ContextAnnotation list) = msum $ map getFile list
+    findFile _ = Nothing
+    getFile (SourceOverride str) = Just str
+    getFile _ = Nothing
 
 -- Store potential parse problems outside of parsec
 
@@ -722,10 +736,11 @@ readAnnotationPrefix = do
 
 prop_readAnnotation1 = isOk readAnnotation "# shellcheck disable=1234,5678\n"
 prop_readAnnotation2 = isOk readAnnotation "# shellcheck disable=SC1234 disable=SC5678\n"
+prop_readAnnotation3 = isOk readAnnotation "# shellcheck disable=SC1234 source=/dev/null disable=SC5678\n"
 readAnnotation = called "shellcheck annotation" $ do
     try readAnnotationPrefix
     many1 linewhitespace
-    values <- many1 readDisable
+    values <- many1 (readDisable <|> readSourceOverride)
     linefeed
     many linewhitespace
     return $ concat values
@@ -737,6 +752,11 @@ readAnnotation = called "shellcheck annotation" $ do
             optional $ string "SC"
             int <- many1 digit
             return $ DisableComment (read int)
+
+    readSourceOverride = forKey "source" $ do
+        filename <- many1 $ noneOf " \n"
+        return [SourceOverride filename]
+
     forKey s p = do
         try $ string s
         char '='
@@ -1480,11 +1500,12 @@ readSimpleCommand = called "simple command" $ do
 
 readSource :: Monad m => SourcePos -> Token -> SCParser m Token
 readSource pos t@(T_Redirecting _ _ (T_SimpleCommand _ _ (cmd:file:_))) = do
-    let literalFile = getLiteralString file
+    override <- getSourceOverride
+    let literalFile = override `mplus` getLiteralString file
     case literalFile of
         Nothing -> do
-            parseNoteAt pos InfoC 1090
-                "This source will be skipped since it's not constant."
+            parseNoteAt pos WarningC 1090
+                "Can't follow non-constant source. Use a directive to specify location."
             return t
         Just filename -> do
             proceed <- shouldFollow filename
@@ -1495,7 +1516,10 @@ readSource pos t@(T_Redirecting _ _ (T_SimpleCommand _ _ (cmd:file:_))) = do
                 return t
               else do
                 sys <- Mr.ask
-                input <- system $ siReadFile sys filename
+                input <-
+                    if filename == "/dev/null" -- always allow /dev/null
+                    then return (Right "")
+                    else system $ siReadFile sys filename
                 case input of
                     Left err -> do
                         parseNoteAt pos InfoC 1091 $

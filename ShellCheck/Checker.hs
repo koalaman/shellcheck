@@ -86,11 +86,13 @@ getErrors sys spec =
   where
     getCode (PositionedComment _ (Comment _ code _)) = code
 
-check str =
+check = checkWithIncludes []
+
+checkWithIncludes includes src =
     getErrors
-        (mockedSystemInterface [])
+        (mockedSystemInterface includes)
         emptyCheckSpec {
-            csScript = str,
+            csScript = src,
             csExcludedWarnings = [2148]
         }
 
@@ -124,45 +126,34 @@ prop_optionDisablesIssue2 =
                     csExcludedWarnings = [2148, 1037]
                 }
 
+prop_canParseDevNull =
+    [] == check "source /dev/null"
+
 prop_failsWhenNotSourcing =
-    [1091, 2154] == getErrors
-                (mockedSystemInterface [])
-                emptyCheckSpec {
-                    csScript = "source lob; echo \"$bar\"",
-                    csExcludedWarnings = [2148]
-                }
+    [1091, 2154] == check "source lol; echo \"$bar\""
 
 prop_worksWhenSourcing =
-    null $ getErrors
-                (mockedSystemInterface [("lib", "bar=1")])
-                emptyCheckSpec {
-                    csScript = "source lib; echo \"$bar\"",
-                    csExcludedWarnings = [2148]
-                }
+    null $ checkWithIncludes [("lib", "bar=1")] "source lib; echo \"$bar\""
 
 prop_worksWhenDotting =
-    null $ getErrors
-                (mockedSystemInterface [("lib", "bar=1")])
-                emptyCheckSpec {
-                    csScript = ". lib; echo \"$bar\"",
-                    csExcludedWarnings = [2148]
-                }
+    null $ checkWithIncludes [("lib", "bar=1")] ". lib; echo \"$bar\""
 
 prop_noInfiniteSourcing =
-    [] == getErrors
-                (mockedSystemInterface [("lib", "source lib")])
-                emptyCheckSpec {
-                    csScript = "source lib",
-                    csExcludedWarnings = [2148]
-                }
+    [] == checkWithIncludes  [("lib", "source lib")] "source lib"
 
 prop_canSourceBadSyntax =
-    [1094, 2086] == getErrors
-                (mockedSystemInterface [("lib", "for f; do")])
-               emptyCheckSpec {
-                    csScript = "source lib; echo $1",
-                    csExcludedWarnings = [2148]
-                }
+    [1094, 2086] == checkWithIncludes [("lib", "for f; do")] "source lib; echo $1"
+
+prop_cantSourceDynamic =
+    [1090] == checkWithIncludes [("lib", "")] ". \"$1\""
+
+prop_canSourceDynamicWhenRedirected =
+    null $ checkWithIncludes [("lib", "")] "#shellcheck source=lib\n. \"$1\""
+
+prop_sourceDirectiveDoesntFollowFile =
+    null $ checkWithIncludes
+                [("foo", "source bar"), ("bar", "baz=3")]
+                "#shellcheck source=foo\n. \"$1\"; echo \"$baz\""
 
 return []
 runTests = $quickCheckAll
