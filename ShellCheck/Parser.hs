@@ -1672,7 +1672,7 @@ readIfPart = do
     allspacing
     condition <- readTerm
 
-    ifNextToken (g_Fi <|> g_Elif) $
+    ifNextToken (g_Fi <|> g_Elif <|> g_Else) $
         parseProblemAt pos ErrorC 1049 "Did you forget the 'then' for this 'if'?"
 
     called "then clause" $ do
@@ -1695,7 +1695,7 @@ readElifPart = called "elif clause" $ do
     allspacing
     condition <- readTerm
 
-    ifNextToken (g_Fi <|> g_Elif) $
+    ifNextToken (g_Fi <|> g_Elif <|> g_Else) $
         parseProblemAt pos ErrorC 1049 "Did you forget the 'then' for this 'elif'?"
 
     g_Then
