@@ -2248,8 +2248,10 @@ prop_getBracedReference7 = getBracedReference "!foo#?" == "foo"
 prop_getBracedReference8 = getBracedReference "foo-bar" == "foo"
 prop_getBracedReference9 = getBracedReference "foo:-bar" == "foo"
 prop_getBracedReference10= getBracedReference "foo: -1" == "foo"
+prop_getBracedReference11= getBracedReference "!os*" == ""
+prop_getBracedReference12= getBracedReference "!os?bar**" == ""
 getBracedReference s = fromMaybe s $
-    takeName noPrefix `mplus` getSpecial noPrefix `mplus` getSpecial s
+    nameExpansion s `mplus` takeName noPrefix `mplus` getSpecial noPrefix `mplus` getSpecial s
   where
     noPrefix = dropPrefix s
     dropPrefix (c:rest) = if c `elem` "!#" then rest else c:rest
@@ -2261,6 +2263,14 @@ getBracedReference s = fromMaybe s $
     getSpecial (c:_) =
         if c `elem` "*@#?-$!" then return [c] else fail "not special"
     getSpecial _ = fail "empty"
+
+    nameExpansion ('!':rest) = do -- e.g. ${!foo*bar*}
+        let suffix = dropWhile isVariableChar rest
+        guard $ suffix /= rest -- e.g. ${!@}
+        first <- suffix !!! 0
+        guard $ first `elem` "*?"
+        return ""
+    nameExpansion _ = Nothing
 
 getIndexReferences s = fromMaybe [] $ do
     match <- matchRegex re s
@@ -2656,6 +2666,7 @@ prop_checkUnassignedReferences18= verifyNotTree checkUnassignedReferences "FOOBA
 prop_checkUnassignedReferences19= verifyNotTree checkUnassignedReferences "readonly foo=bar; echo $foo"
 prop_checkUnassignedReferences20= verifyNotTree checkUnassignedReferences "printf -v foo bar; echo $foo"
 prop_checkUnassignedReferences21= verifyTree checkUnassignedReferences "echo ${#foo}"
+prop_checkUnassignedReferences22= verifyNotTree checkUnassignedReferences "echo ${!os*}"
 checkUnassignedReferences params t = warnings
   where
     (readMap, writeMap) = execState (mapM tally $ variableFlow params) (Map.empty, Map.empty)
