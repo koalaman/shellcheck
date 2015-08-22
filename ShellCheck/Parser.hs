@@ -553,6 +553,8 @@ prop_a16= isOk readArithmeticContents "$foo$bar"
 prop_a17= isOk readArithmeticContents "i<(0+(1+1))"
 prop_a18= isOk readArithmeticContents "a?b:c"
 prop_a19= isOk readArithmeticContents "\\\n3 +\\\n  2"
+prop_a20= isOk readArithmeticContents "a ? b ? c : d : e"
+prop_a21= isOk readArithmeticContents "a ? b : c ? d : e"
 readArithmeticContents =
     readSequence
   where
@@ -618,16 +620,15 @@ readArithmeticContents =
 
     readAssignment = readTrinary `splitBy` ["=", "*=", "/=", "%=", "+=", "-=", "<<=", ">>=", "&=", "^=", "|="]
     readTrinary = do
-        let part = readLogicalOr
-        x <- part
+        x <- readLogicalOr
         do
             id <- getNextId
             string "?"
             spacing
-            y <- part
+            y <- readTrinary
             string ":"
             spacing
-            z <- part
+            z <- readTrinary
             return $ TA_Trinary id x y z
          <|>
           return x
