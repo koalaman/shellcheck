@@ -25,6 +25,7 @@ import ShellCheck.ASTLib
 import ShellCheck.Data
 import ShellCheck.Interface
 
+import Control.Applicative ((<*))
 import Control.Monad
 import Control.Monad.Identity
 import Control.Monad.Trans
@@ -37,7 +38,7 @@ import Debug.Trace
 import GHC.Exts (sortWith)
 import Prelude hiding (readList)
 import System.IO
-import Text.Parsec hiding (runParser)
+import Text.Parsec hiding (runParser, (<?>))
 import Text.Parsec.Error
 import Text.Parsec.Pos
 import qualified Control.Monad.Reader as Mr
@@ -382,7 +383,7 @@ readConditionContents single =
     readCondUnaryExp = do
       op <- readCondUnaryOp
       pos <- getPosition
-      (readCondWord >>= return . op) `orFail` do
+      liftM op readCondWord `orFail` do
           parseProblemAt pos ErrorC 1019 "Expected this to be an argument to the unary condition."
           return "Expected an argument for the unary operator"
 
@@ -722,7 +723,7 @@ readCondition = called "test expression" $ do
     condition <- readConditionContents single
 
     cpos <- getPosition
-    close <- try (string "]]") <|> string "]"
+    close <- try (string "]]") <|> string "]" <|> fail "Expected test to end here"
     when (open == "[[" && close /= "]]") $ parseProblemAt cpos ErrorC 1033 "Did you mean ]] ?"
     when (open == "[" && close /= "]" ) $ parseProblemAt opos ErrorC 1034 "Did you mean [[ ?"
     spacing
@@ -872,7 +873,7 @@ readSingleQuoted = called "single quoted string" $ do
     s <- readSingleQuotedPart `reluctantlyTill` singleQuote
     let string = concat s
     endPos <- getPosition
-    singleQuote <?> "end of single quoted string"
+    singleQuote <|> fail "Expected end of single quoted string"
 
     optional $ do
         c <- try . lookAhead $ suspectCharAfterQuotes <|> oneOf "'"
@@ -970,7 +971,7 @@ readDoubleQuoted = called "double quoted string" $ do
     doubleQuote
     x <- many doubleQuotedPart
     endPos <- getPosition
-    doubleQuote <?> "end of double quoted string"
+    doubleQuote <|> fail "Expected end of double quoted string"
     optional $ do
         try . lookAhead $ suspectCharAfterQuotes <|> oneOf "$\""
         when (any hasLineFeed x && not (startsWithLineFeed x)) $
@@ -1186,7 +1187,7 @@ readDollarDoubleQuote = do
     char '$'
     doubleQuote
     x <- many doubleQuotedPart
-    doubleQuote <?> "end of translated double quoted string"
+    doubleQuote <|> fail "Expected end of translated double quoted string"
     return $ T_DollarDoubleQuoted id x
 
 prop_readDollarArithmetic = isOk readDollarArithmetic "$(( 3 * 4 +5))"
@@ -1231,7 +1232,7 @@ readDollarExpansion = called "command expansion" $ do
     id <- getNextId
     try (string "$(")
     cmds <- readCompoundListOrEmpty
-    char ')' <?> "end of $(..) expression"
+    char ')' <|> fail "Expected end of $(..) expression"
     return $ T_DollarExpansion id cmds
 
 prop_readDollarVariable = isOk readDollarVariable "$@"
@@ -1474,7 +1475,7 @@ readSimpleCommand = called "simple command" $ do
     id2 <- getNextId
     prefix <- option [] readCmdPrefix
     cmd <- option Nothing $ do { f <- readCmdName; return $ Just f; }
-    when (null prefix && isNothing cmd) $ fail "No command"
+    when (null prefix && isNothing cmd) $ fail "Expected a command"
     case cmd of
       Nothing -> return $ makeSimpleCommand id1 id2 prefix [] []
       Just cmd -> do
@@ -1631,15 +1632,8 @@ readCommand = choice [
     readSimpleCommand
     ]
 
-readCmdName = do
-    f <- readNormalWord
-    spacing
-    return f
-
-readCmdWord = do
-    f <- readNormalWord
-    spacing
-    return f
+readCmdName = readCmdWord
+readCmdWord = readNormalWord <* spacing
 
 prop_readIfClause = isOk readIfClause "if false; then foo; elif true; then stuff; more stuff; else cows; fi"
 prop_readIfClause2 = isWarning readIfClause "if false; then; echo oo; fi"
@@ -1656,7 +1650,7 @@ readIfClause = called "if expression" $ do
     g_Fi `orFail` do
         parseProblemAt pos ErrorC 1046 "Couldn't find 'fi' for this 'if'."
         parseProblem ErrorC 1047 "Expected 'fi' matching previously mentioned 'if'."
-        return "Expected 'fi'."
+        return "Expected 'fi'"
 
     return $ T_IfExpression id ((condition, action):elifs) elses
 
@@ -1678,7 +1672,7 @@ readIfPart = do
     called "then clause" $ do
         g_Then `orFail` do
             parseProblem ErrorC 1050 "Expected 'then'."
-            return "Expected 'then'."
+            return "Expected 'then'"
 
         acceptButWarn g_Semi ErrorC 1051 "No semicolons directly after 'then'."
         allspacing
@@ -1728,7 +1722,7 @@ readSubshell = called "explicit subshell" $ do
     allspacing
     list <- readCompoundList
     allspacing
-    char ')'
+    char ')' <|> fail ") closing the subshell"
     return $ T_Subshell id list
 
 prop_readBraceGroup = isOk readBraceGroup "{ a; b | c | d; e; }"
@@ -1771,7 +1765,7 @@ readDoGroup loopPos = do
 
     g_Do `orFail` do
         parseProblem ErrorC 1058 "Expected 'do'."
-        return "Expected 'do'."
+        return "Expected 'do'"
 
     acceptButWarn g_Semi ErrorC 1059 "No semicolons directly after 'do'."
     allspacing
@@ -1784,7 +1778,7 @@ readDoGroup loopPos = do
     g_Done `orFail` do
             parseProblemAt pos ErrorC 1061 "Couldn't find 'done' for this 'do'."
             parseProblem ErrorC 1062 "Expected 'done' matching previously mentioned 'do'."
-            return "Expected 'done'."
+            return "Expected 'done'"
     return commands
 
 
@@ -1871,10 +1865,10 @@ readCaseClause = called "case expression" $ do
     g_Case
     word <- readNormalWord
     allspacing
-    g_In
+    g_In <|> fail "Expected 'in'"
     readLineBreak
     list <- readCaseList
-    g_Esac
+    g_Esac <|> fail "Expected 'esac' to close the case statement"
     return $ T_CaseExpression id word list
 
 readCaseList = many readCaseItem
@@ -1929,20 +1923,20 @@ readFunctionDefinition = called "function" $ do
                 whitespace
             spacing
             name <- readFunctionName
-            optional spacing
+            spacing
             hasParens <- wasIncluded readParens
             return $ T_Function id (FunctionKeyword True) (FunctionParentheses hasParens) name
 
         readWithoutFunction = try $ do
             id <- getNextId
             name <- readFunctionName
-            optional spacing
+            spacing
             readParens
             return $ T_Function id (FunctionKeyword False) (FunctionParentheses True) name
 
         readParens = do
             g_Lparen
-            optional spacing
+            spacing
             g_Rparen <|> do
                 parseProblem ErrorC 1065 "Trying to declare parameters? Don't. Use () and refer to params as $1, $2.."
                 many $ noneOf "\n){"
@@ -1981,7 +1975,7 @@ prop_readCompoundCommand = isOk readCompoundCommand "{ echo foo; }>/dev/null"
 readCompoundCommand = do
     id <- getNextId
     cmd <- choice [ readBraceGroup, readArithmeticExpression, readSubshell, readCondition, readWhileClause, readUntilClause, readIfClause, readForClause, readSelectClause, readCaseClause, readFunctionDefinition]
-    optional spacing
+    spacing
     redirs <- many readIoRedirect
     unless (null redirs) $ optional $ do
         lookAhead $ try (spacing >> needsSeparator)
@@ -2082,7 +2076,7 @@ readArray = called "array assignment" $ do
     char '('
     allspacing
     words <- readElement `reluctantlyTill` char ')'
-    char ')'
+    char ')' <|> fail "Expected ) to close array assignment"
     return $ T_Array id words
   where
     readElement = (readIndexed <|> readRegular) `thenSkip` allspacing
@@ -2126,7 +2120,7 @@ tryParseWordToken keyword t = try $ do
     return $ t id
 
 anycaseString str =
-    mapM anycaseChar str <?> str
+    mapM anycaseChar str
   where
     anycaseChar c = char (toLower c) <|> char (toUpper c)
 
@@ -2315,11 +2309,10 @@ getStringFromParsec errors =
     where
         f err =
             case err of
-                UnExpect s    ->  return $ unexpected s
-                SysUnExpect s ->  return $ unexpected s
-                Expect s      ->  return $ "Expected " ++ s ++ "."
+                UnExpect s    ->  Nothing -- Due to not knowing Parsec, none of these
+                SysUnExpect s ->  Nothing -- are actually helpful. <?> has been hidden
+                Expect s      ->  Nothing -- and we only show explicit fail statements.
                 Message s     ->  if null s then Nothing else return $ s ++ "."
-        unexpected s = "Unexpected " ++ (if null s then "eof" else s) ++ "."
 
 runParser :: Monad m =>
     SystemInterface m ->
