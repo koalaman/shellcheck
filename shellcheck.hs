@@ -20,6 +20,7 @@
 import ShellCheck.Data
 import ShellCheck.Checker
 import ShellCheck.Interface
+import ShellCheck.Regex
 
 import ShellCheck.Formatter.Format
 import qualified ShellCheck.Formatter.CheckStyle
@@ -123,8 +124,17 @@ getExclusions options =
 
 toStatus = liftM (either id id) . runExceptT
 
+getEnvArgs = do
+    opts <- getEnv "SHELLCHECK_OPTS" `catch` cantWaitForLookupEnv
+    return . filter (not . null) $ opts `splitOn` mkRegex " +"
+  where
+    cantWaitForLookupEnv :: IOException -> IO String
+    cantWaitForLookupEnv = const $ return ""
+
 main = do
-    args <- getArgs
+    params <- getArgs
+    envOpts  <- getEnvArgs
+    let args = envOpts ++ params
     status <- toStatus $ do
         (flags, files) <- parseArguments args
         process flags files

@@ -71,3 +71,10 @@ subRegex re input replacement = f input
         (before, match, after) <- matchM re str :: Maybe (String, String, String)
         when (null match) $ error ("Internal error: substituted empty in " ++ str)
         return $ before ++ replacement ++ f after
+
+-- Split a string based on a regex.
+splitOn :: String -> Regex -> [String]
+splitOn input re =
+    case matchM re input :: Maybe (String, String, String) of
+        Just (before, match, after) -> before : after `splitOn` re
+        Nothing -> [input]

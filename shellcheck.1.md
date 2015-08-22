@@ -151,6 +151,13 @@ Valid keys are:
     used to tell shellcheck where to look for a file whose name is determined
     at runtime, or to skip a source by telling it to use `/dev/null`.
 
+# ENVIRONMENT VARIABLES
+The environment variable `SHELLCHECK_OPTS` can be set with default flags:
+
+    export SHELLCHECK_OPTS='--shell=bash --exclude=SC2016'
+
+Its value will be split on spaces and prepended to the command line on each
+invocation.
 
 # AUTHOR
 ShellCheck is written and maintained by Vidar Holen.
