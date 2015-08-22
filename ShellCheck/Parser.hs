@@ -280,9 +280,9 @@ thenSkip main follow = do
     return r
 
 unexpecting s p = try $
-    (try p >> unexpected s) <|> return ()
+    (try p >> fail ("Unexpected " ++ s)) <|> return ()
 
-notFollowedBy2 = unexpecting "keyword/token"
+notFollowedBy2 = unexpecting ""
 
 disregard = void
 
@@ -2058,8 +2058,19 @@ readAssignmentWord = try $ do
         spacing
         return $ T_Assignment id op variable index value
   where
-    readAssignmentOp =
-        (string "+=" >> return Append) <|> (string "=" >> return Assign)
+    readAssignmentOp = do
+        pos <- getPosition
+        unexpecting "" $ string "==="
+        choice [
+            string "+=" >> return Append,
+            do
+                try (string "==")
+                parseProblemAt pos ErrorC 1097
+                    "Unexpected ==. For assignment, use =. For comparison, use [/[[."
+                return Assign,
+
+            string "=" >> return Assign
+            ]
     readEmptyLiteral = do
         id <- getNextId
         return $ T_Literal id ""
@@ -2119,8 +2130,8 @@ tryParseWordToken keyword t = try $ do
             "Scripts are case sensitive. Use '" ++ keyword ++ "', not '" ++ str ++ "'."
     return $ t id
 
-anycaseString str =
-    mapM anycaseChar str
+anycaseString =
+    mapM anycaseChar
   where
     anycaseChar c = char (toLower c) <|> char (toUpper c)
 
