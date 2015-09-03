@@ -1484,7 +1484,8 @@ readSimpleCommand = called "simple command" $ do
             suffix <- option [] $ getParser readCmdSuffix cmd [
                         (["declare", "export", "local", "readonly", "typeset"], readModifierSuffix),
                         (["time"], readTimeSuffix),
-                        (["let"], readLetSuffix)
+                        (["let"], readLetSuffix),
+                        (["eval"], readEvalSuffix)
                     ]
 
             let result = makeSimpleCommand id1 id2 prefix [cmd] suffix
@@ -2012,6 +2013,15 @@ readLetSuffix = many1 (readIoRedirect <|> try readLetExpression <|> readCmdWord)
         startPos <- getPosition
         expression <- readStringForParser readCmdWord
         subParse startPos readArithmeticContents expression
+
+-- bash allows a=(b), ksh allows $a=(b). dash allows neither. Let's warn.
+readEvalSuffix = many1 (readIoRedirect <|> readCmdWord <|> evalFallback)
+  where
+    evalFallback = do
+        pos <- getPosition
+        lookAhead $ char '('
+        parseProblemAt pos WarningC 1098 "Quote/escape special characters when using eval, e.g. eval \"a=(b)\"."
+        fail "Unexpected parentheses. Make sure to quote when eval'ing as shell parsers differ."
 
 -- Get whatever a parser would parse as a string
 readStringForParser parser = do
