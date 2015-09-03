@@ -555,6 +555,7 @@ prop_a18= isOk readArithmeticContents "a?b:c"
 prop_a19= isOk readArithmeticContents "\\\n3 +\\\n  2"
 prop_a20= isOk readArithmeticContents "a ? b ? c : d : e"
 prop_a21= isOk readArithmeticContents "a ? b : c ? d : e"
+prop_a22= isOk readArithmeticContents "!!a"
 readArithmeticContents =
     readSequence
   where
@@ -650,7 +651,7 @@ readArithmeticContents =
         id <- getNextId
         op <- oneOf "!~"
         spacing
-        x <- readAnySigned
+        x <- readAnyNegated
         return $ TA_Unary id [op] x
 
     readAnySigned = readSigned <|> readAnycremented
