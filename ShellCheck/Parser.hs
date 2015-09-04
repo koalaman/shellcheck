@@ -967,6 +967,8 @@ prop_readDoubleQuoted2 = isOk readDoubleQuoted "\"$'\""
 prop_readDoubleQuoted3 = isWarning readDoubleQuoted "\x201Chello\x201D"
 prop_readDoubleQuoted4 = isWarning readSimpleCommand "\"foo\nbar\"foo"
 prop_readDoubleQuoted5 = isOk readSimpleCommand "lol \"foo\nbar\" etc"
+prop_readDoubleQuoted6 = isOk readSimpleCommand "echo \"${ ls; }\""
+prop_readDoubleQuoted7 = isOk readSimpleCommand "echo \"${ ls;}bar\""
 readDoubleQuoted = called "double quoted string" $ do
     id <- getNextId
     startPos <- getPosition
@@ -1172,7 +1174,7 @@ readBraced = try braceExpansion
 
 readNormalDollar = readDollarExpression <|> readDollarDoubleQuote <|> readDollarSingleQuote <|> readDollarLonely
 readDoubleQuotedDollar = readDollarExpression <|> readDollarLonely
-readDollarExpression = readDollarArithmetic <|> readDollarBracket <|> readDollarBraced <|> readDollarExpansion <|> readDollarVariable
+readDollarExpression = readDollarArithmetic <|> readDollarBracket <|> readDollarBraceCommandExpansion <|> readDollarBraced <|> readDollarExpansion <|> readDollarVariable
 
 prop_readDollarSingleQuote = isOk readDollarSingleQuote "$'foo\\\'lol'"
 readDollarSingleQuote = called "$'..' expression" $ do
@@ -1215,6 +1217,18 @@ readArithmeticExpression = called "((..)) command" $ do
     c <- readArithmeticContents
     string "))"
     return (T_Arithmetic id c)
+
+prop_readDollarBraceCommandExpansion1 = isOk readDollarBraceCommandExpansion "${ ls; }"
+prop_readDollarBraceCommandExpansion2 = isOk readDollarBraceCommandExpansion "${\nls\n}"
+readDollarBraceCommandExpansion = called "ksh ${ ..; } command expansion" $ do
+    id <- getNextId
+    try $ do
+        string "${"
+        whitespace
+    allspacing
+    term <- readTerm
+    char '}' <|> fail "Expected } to end the ksh ${ ..; } command expansion"
+    return $ T_DollarBraceCommandExpansion id term
 
 prop_readDollarBraced1 = isOk readDollarBraced "${foo//bar/baz}"
 prop_readDollarBraced2 = isOk readDollarBraced "${foo/'{cow}'}"
@@ -2133,9 +2147,14 @@ tryWordToken s t = tryParseWordToken s t `thenSkip` spacing
 tryParseWordToken keyword t = try $ do
     id <- getNextId
     str <- anycaseString keyword
-    optional (do
+
+    optional $ do
         try . lookAhead $ char '['
-        parseProblem ErrorC 1069 "You need a space before the [.")
+        parseProblem ErrorC 1069 "You need a space before the [."
+    optional $ do
+        try . lookAhead $ char '#'
+        parseProblem ErrorC 1099 "You need a space before the #."
+
     try $ lookAhead keywordSeparator
     when (str /= keyword) $
         parseProblem ErrorC 1081 $
@@ -2174,7 +2193,10 @@ g_For = tryWordToken "for" T_For
 g_Select = tryWordToken "select" T_Select
 g_In = tryWordToken "in" T_In
 g_Lbrace = tryWordToken "{" T_Lbrace
-g_Rbrace = tryWordToken "}" T_Rbrace
+g_Rbrace = do -- handled specially due to ksh echo "${ foo; }bar"
+    id <- getNextId
+    char '}'
+    return $ T_Rbrace id
 
 g_Lparen = tryToken "(" T_Lparen
 g_Rparen = tryToken ")" T_Rparen

@@ -807,6 +807,7 @@ checkUnquotedExpansions params =
   where
     check t@(T_DollarExpansion _ _) = examine t
     check t@(T_Backticked _ _) = examine t
+    check t@(T_DollarBraceCommandExpansion _ _) = examine t
     check _ = return ()
     tree = parentMap params
     examine t =
@@ -2035,6 +2036,7 @@ prop_subshellAssignmentCheck13 = verifyTree subshellAssignmentCheck "#!/bin/bash
 prop_subshellAssignmentCheck14 = verifyNotTree subshellAssignmentCheck "#!/bin/ksh93\necho foo | read bar; echo $bar"
 prop_subshellAssignmentCheck15 = verifyNotTree subshellAssignmentCheck "#!/bin/ksh\ncat foo | while read bar; do a=$bar; done\necho \"$a\""
 prop_subshellAssignmentCheck16 = verifyNotTree subshellAssignmentCheck "(set -e); echo $@"
+prop_subshellAssignmentCheck17 = verifyNotTree subshellAssignmentCheck "foo=${ { bar=$(baz); } 2>&1; }; echo $foo $bar"
 subshellAssignmentCheck params t =
     let flow = variableFlow params
         check = findSubshelled flow [("oops",[])] Map.empty
@@ -3155,6 +3157,7 @@ checkTildeInPath _ _ = return ()
 
 prop_checkUnsupported3 = verify checkUnsupported "#!/bin/sh\ncase foo in bar) baz ;& esac"
 prop_checkUnsupported4 = verify checkUnsupported "#!/bin/ksh\ncase foo in bar) baz ;;& esac"
+prop_checkUnsupported5 = verify checkUnsupported "#!/bin/bash\necho \"${ ls; }\""
 checkUnsupported params t =
     when (not (null support) && (shellType params `notElem` support)) $
         report name
@@ -3168,6 +3171,7 @@ checkUnsupported params t =
 shellSupport t =
   case t of
     T_CaseExpression _ _ list -> forCase (map (\(a,_,_) -> a) list)
+    T_DollarBraceCommandExpansion {} -> ("${ ..; } command expansion", [Ksh])
     otherwise -> ("", [])
   where
     forCase seps | CaseContinue `elem` seps = ("cases with ;;&", [Bash])

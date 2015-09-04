@@ -72,6 +72,7 @@ data Token =
     | T_DollarDoubleQuoted Id [Token]
     | T_DollarExpansion Id [Token]
     | T_DollarSingleQuoted Id String
+    | T_DollarBraceCommandExpansion Id [Token]
     | T_Done Id
     | T_DoubleQuoted Id [Token]
     | T_EOF Id
@@ -174,6 +175,7 @@ analyze f g i =
     delve (T_DoubleQuoted id list) = dl list $ T_DoubleQuoted id
     delve (T_DollarDoubleQuoted id list) = dl list $ T_DollarDoubleQuoted id
     delve (T_DollarExpansion id list) = dl list $ T_DollarExpansion id
+    delve (T_DollarBraceCommandExpansion id list) = dl list $ T_DollarBraceCommandExpansion id
     delve (T_BraceExpansion id list) = dl list $ T_BraceExpansion id
     delve (T_Backticked id list) = dl list $ T_Backticked id
     delve (T_DollarArithmetic id c) = d1 c $ T_DollarArithmetic id
@@ -302,6 +304,7 @@ getId t = case t of
         T_DollarBraced id _  -> id
         T_DollarArithmetic id _  -> id
         T_BraceExpansion id _  -> id
+        T_DollarBraceCommandExpansion id _  -> id
         T_IoFile id _ _  -> id
         T_HereDoc id _ _ _ _ -> id
         T_HereString id _  -> id
