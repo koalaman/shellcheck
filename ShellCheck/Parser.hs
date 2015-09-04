@@ -1307,6 +1307,7 @@ prop_readHereDoc4 = isOk readHereDoc "<< foo\n`\nfoo"
 prop_readHereDoc5 = isOk readHereDoc "<<- !foo\nbar\n!foo"
 prop_readHereDoc6 = isOk readHereDoc "<< foo\\ bar\ncow\nfoo bar"
 prop_readHereDoc7 = isOk readHereDoc "<< foo\n\\$(f ())\nfoo"
+prop_readHereDoc8 = isOk readHereDoc "<<foo>>bar\netc\nfoo"
 readHereDoc = called "here document" $ do
     fid <- getNextId
     pos <- getPosition
@@ -1349,7 +1350,7 @@ readHereDoc = called "here document" $ do
         liftM concat $ many1 (escaped <|> quoted <|> normal)
       where
         quoted = liftM stripLiteral readDoubleQuotedLiteral <|> readSingleQuotedLiteral
-        normal = anyChar `reluctantlyTill1` (whitespace <|> oneOf ";&)'\"\\")
+        normal = anyChar `reluctantlyTill1` (whitespace <|> oneOf "<>;&)'\"\\")
         escaped = do -- surely the user must be doing something wrong at this point
             char '\\'
             c <- anyChar
