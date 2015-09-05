@@ -582,6 +582,7 @@ prop_checkBashisms24= verifyNot checkBashisms "trap mything int term"
 prop_checkBashisms25= verify checkBashisms "cat < /dev/tcp/host/123"
 prop_checkBashisms26= verify checkBashisms "trap mything ERR SIGTERM"
 prop_checkBashisms27= verify checkBashisms "echo *[^0-9]*"
+prop_checkBashisms28= verify checkBashisms "exec {n}>&2"
 checkBashisms _ = bashism
   where
     errMsg id s = err id 2040 $ "In sh, " ++ s ++ " not supported, even when sh is actually bash."
@@ -607,6 +608,7 @@ checkBashisms _ = bashism
             warnMsg id $ filter (/= '|') op ++ " is"
     bashism (TA_Binary id "**" _ _) = warnMsg id "exponentials are"
     bashism (T_FdRedirect id "&" (T_IoFile _ (T_Greater _) _)) = warnMsg id "&> is"
+    bashism (T_FdRedirect id ('{':_) _) = warnMsg id "named file descriptors are"
     bashism (T_IoFile id _ word) | isNetworked =
             warnMsg id "/dev/{tcp,udp} is"
         where
@@ -1459,6 +1461,7 @@ isQuoteFreeNode strict tree t =
     isQuoteFreeElement t =
         case t of
             T_Assignment {} -> return True
+            T_FdRedirect {} -> return True
             _ -> Nothing
 
     -- Are any subnodes inherently self-quoting?
@@ -2037,6 +2040,7 @@ prop_subshellAssignmentCheck14 = verifyNotTree subshellAssignmentCheck "#!/bin/k
 prop_subshellAssignmentCheck15 = verifyNotTree subshellAssignmentCheck "#!/bin/ksh\ncat foo | while read bar; do a=$bar; done\necho \"$a\""
 prop_subshellAssignmentCheck16 = verifyNotTree subshellAssignmentCheck "(set -e); echo $@"
 prop_subshellAssignmentCheck17 = verifyNotTree subshellAssignmentCheck "foo=${ { bar=$(baz); } 2>&1; }; echo $foo $bar"
+prop_subshellAssignmentCheck18 = verifyTree subshellAssignmentCheck "( exec {n}>&2; ); echo $n"
 subshellAssignmentCheck params t =
     let flow = variableFlow params
         check = findSubshelled flow [("oops",[])] Map.empty
@@ -2055,7 +2059,7 @@ data StackData =
 data DataType = DataString DataSource | DataArray DataSource
   deriving (Show)
 
-data DataSource = SourceFrom [Token] | SourceExternal | SourceDeclaration
+data DataSource = SourceFrom [Token] | SourceExternal | SourceDeclaration | SourceInteger
   deriving (Show)
 
 data VariableState = Dead Token String | Alive deriving (Show)
@@ -2095,6 +2099,12 @@ leadType shell parents t =
             Sh -> True
             Ksh -> False
 
+isClosingFileOp op =
+    case op of
+        T_IoFile _ (T_GREATAND _) (T_NormalWord _ [T_Literal _ "-"]) -> True
+        T_IoFile _ (T_LESSAND  _) (T_NormalWord _ [T_Literal _ "-"]) -> True
+        _ -> False
+
 getModifiedVariables t =
     case t of
         T_SimpleCommand _ vars [] ->
@@ -2117,8 +2127,11 @@ getModifiedVariables t =
             name <- getLiteralString lhs
             return (t, t, name, DataString $ SourceFrom [rhs])
 
+        t@(T_FdRedirect _ ('{':var) op) -> -- {foo}>&2 modifies foo
+            [(t, t, takeWhile (/= '}') var, DataString SourceInteger) | not $ isClosingFileOp op]
+
         t@(T_CoProc _ name _) ->
-            [(t, t, fromMaybe "COPROC" name, DataArray SourceExternal)]
+            [(t, t, fromMaybe "COPROC" name, DataArray SourceInteger)]
 
         --Points to 'for' rather than variable
         T_ForIn id str words _ -> [(t, t, str, DataString $ SourceFrom words)]
@@ -2292,6 +2305,9 @@ getReferencedVariables t =
 
         TC_Unary id _ "-v" token -> getIfReference t token
         TC_Unary id _ "-R" token -> getIfReference t token
+
+        t@(T_FdRedirect _ ('{':var) op) -> -- {foo}>&- references and closes foo
+            [(t, t, takeWhile (/= '}') var) | isClosingFileOp op]
         x -> getReferencedVariableCommand x
   where
     -- Try to reduce false positives for unused vars only referenced from evaluated vars
@@ -2426,6 +2442,9 @@ prop_checkSpacefulness24= verifyTree checkSpacefulness "a='a    b'; cat <<< $a"
 prop_checkSpacefulness25= verifyTree checkSpacefulness "a='s/[0-9]//g'; sed $a"
 prop_checkSpacefulness26= verifyTree checkSpacefulness "a='foo bar'; echo {1,2,$a}"
 prop_checkSpacefulness27= verifyNotTree checkSpacefulness "echo ${a:+'foo'}"
+prop_checkSpacefulness28= verifyNotTree checkSpacefulness "exec {n}>&1; echo $n"
+prop_checkSpacefulness29= verifyNotTree checkSpacefulness "n=$(stuff); exec {n}>&-;"
+prop_checkSpacefulness30= verifyTree checkSpacefulness "file='foo bar'; echo foo > $file;"
 
 checkSpacefulness params t =
     doVariableFlowAnalysis readF writeF (Map.fromList defaults) (variableFlow params)
@@ -2451,9 +2470,8 @@ checkSpacefulness params t =
       where
         warning = "Double quote to prevent globbing and word splitting."
 
-    writeF _ _ name (DataString SourceExternal) = do
-        setSpaces name True
-        return []
+    writeF _ _ name (DataString SourceExternal) = setSpaces name True >> return []
+    writeF _ _ name (DataString SourceInteger) = setSpaces name False >> return []
 
     writeF _ _ name (DataString (SourceFrom vals)) = do
         map <- get

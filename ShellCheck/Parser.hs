@@ -1401,6 +1401,13 @@ readIoFile = called "redirection" $ do
     file <- readFilename
     return $ T_FdRedirect id "" $ T_IoFile id op file
 
+readIoVariable = try $ do
+    char '{'
+    x <- readVariableName
+    char '}'
+    lookAhead readIoFileOp
+    return $ "{" ++ x ++ "}"
+
 readIoNumber = try $ do
     x <- many1 digit <|> string "&"
     lookAhead readIoFileOp
@@ -1410,9 +1417,11 @@ prop_readIoNumberRedirect = isOk readIoNumberRedirect "3>&2"
 prop_readIoNumberRedirect2 = isOk readIoNumberRedirect "2> lol"
 prop_readIoNumberRedirect3 = isOk readIoNumberRedirect "4>&-"
 prop_readIoNumberRedirect4 = isOk readIoNumberRedirect "&> lol"
+prop_readIoNumberRedirect5 = isOk readIoNumberRedirect "{foo}>&2"
+prop_readIoNumberRedirect6 = isOk readIoNumberRedirect "{foo}<&-"
 readIoNumberRedirect = do
     id <- getNextId
-    n <- readIoNumber
+    n <- readIoVariable <|> readIoNumber
     op <- readHereString <|> readHereDoc <|> readIoFile
     let actualOp = case op of T_FdRedirect _ "" x -> x
     spacing
@@ -2325,6 +2334,10 @@ readScript = do
 
 isWarning p s = parsesCleanly p s == Just False
 isOk p s =      parsesCleanly p s == Just True
+
+testParse string = runIdentity $ do
+    (res, _) <- runParser (mockedSystemInterface []) readScript "-" string
+    return res
 
 parsesCleanly parser string = runIdentity $ do
     (res, sys) <- runParser (mockedSystemInterface [])
