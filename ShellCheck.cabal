@@ -53,6 +53,10 @@ library
       ShellCheck.Checker
       ShellCheck.Data
       ShellCheck.Formatter.Format
+      ShellCheck.Formatter.CheckStyle
+      ShellCheck.Formatter.GCC
+      ShellCheck.Formatter.JSON
+      ShellCheck.Formatter.TTY
       ShellCheck.Interface
       ShellCheck.Parser
       ShellCheck.Regex
