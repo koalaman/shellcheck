@@ -37,6 +37,19 @@ On OS X with homebrew:
 
     brew install shellcheck
 
+On openSUSE:Tumbleweed:
+
+    zypper in ShellCheck
+
+On other openSUSE distributions:
+
+add OBS devel:languages:haskell repository from https://build.opensuse.org/project/repositories/devel:languages:haskell
+
+    zyper ar http://download.opensuse.org/repositories/devel:/languages:/haskell/openSUSE_$(version)/devel:languages:haskell.repo
+    zypper in ShellCheck
+
+or use OneClickInstall - https://software.opensuse.org/package/ShellCheck
+
 ShellCheck is also available as an online service:
 
     http://www.shellcheck.net
@@ -52,6 +65,10 @@ First, make sure cabal is installed. On Debian based distros:
 On Fedora:
 
     yum install cabal-install
+
+On openSUSE:Tumbleweed:
+
+    zypper in cabal-install
 
 On Mac OS X with homebrew (http://brew.sh/):
 
