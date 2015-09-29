@@ -3417,6 +3417,8 @@ prop_checkUncheckedCd3 = verifyNotTree checkUncheckedCd "set -e; cd ~/src; rm -r
 prop_checkUncheckedCd4 = verifyNotTree checkUncheckedCd "if cd foo; then rm foo; fi"
 prop_checkUncheckedCd5 = verifyTree checkUncheckedCd "if true; then cd foo; fi"
 prop_checkUncheckedCd6 = verifyNotTree checkUncheckedCd "cd .."
+prop_checkUncheckedCd7 = verifyNotTree checkUncheckedCd "#!/bin/bash -e\ncd foo\nrm bar"
+prop_checkUncheckedCd8 = verifyNotTree checkUncheckedCd "set -o errexit; cd foo; rm bar"
 checkUncheckedCd params root =
     if hasSetE then [] else execWriter $ doAnalysis checkElement root
   where
@@ -3430,9 +3432,12 @@ checkUncheckedCd params root =
     hasSetE = isNothing $ doAnalysis (guard . not . isSetE) root
     isSetE t =
         case t of
-            T_SimpleCommand {} ->
-                t `isUnqualifiedCommand` "set" && "e" `elem` map snd (getAllFlags t)
+            T_Script _ str _ -> str `matches` re
+            T_SimpleCommand {}  ->
+                t `isUnqualifiedCommand` "set" &&
+                    ("errexit" `elem` oversimplify t || "e" `elem` map snd (getAllFlags t))
             _ -> False
+    re = mkRegex "[[:space:]]-[^-]*e"
 
 prop_checkLoopVariableReassignment1 = verify checkLoopVariableReassignment "for i in *; do for i in *.bar; do true; done; done"
 prop_checkLoopVariableReassignment2 = verify checkLoopVariableReassignment "for i in *; do for((i=0; i<3; i++)); do true; done; done"
