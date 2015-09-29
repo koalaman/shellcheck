@@ -1249,13 +1249,13 @@ prop_checkLiteralBreakingTest5 = verify checkLiteralBreakingTest "[ -n \"$(true)
 prop_checkLiteralBreakingTest6 = verify checkLiteralBreakingTest "[ -z $(true)z ]"
 prop_checkLiteralBreakingTest7 = verifyNot checkLiteralBreakingTest "[ -z $(true) ]"
 prop_checkLiteralBreakingTest8 = verifyNot checkLiteralBreakingTest "[ $(true)$(true) ]"
+prop_checkLiteralBreakingTest10 = verify checkLiteralBreakingTest "[ -z foo ]"
 checkLiteralBreakingTest _ t = potentially $
         case t of
             (TC_Noary _ _ w@(T_NormalWord _ l)) -> do
-                guard . not $ isConstant w
+                guard . not $ isConstant w -- Covered by SC2078
                 comparisonWarning l `mplus` tautologyWarning w "Argument to implicit -n is always true due to literal strings."
-            (TC_Unary _ _ op w@(T_NormalWord _ l)) -> do
-                guard $ not $ isConstant w
+            (TC_Unary _ _ op w@(T_NormalWord _ l)) ->
                 case op of
                     "-n" -> tautologyWarning w "Argument to -n is always true due to literal strings."
                     "-z" -> tautologyWarning w "Argument to -z is always false due to literal strings."
