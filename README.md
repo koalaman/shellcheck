@@ -29,6 +29,10 @@ On Debian based distros:
 
     apt-get install shellcheck
 
+On Fedora based distros:
+
+    dnf install ShellCheck
+
 On OS X with homebrew:
 
     brew install shellcheck
