@@ -583,6 +583,7 @@ prop_checkBashisms25= verify checkBashisms "cat < /dev/tcp/host/123"
 prop_checkBashisms26= verify checkBashisms "trap mything ERR SIGTERM"
 prop_checkBashisms27= verify checkBashisms "echo *[^0-9]*"
 prop_checkBashisms28= verify checkBashisms "exec {n}>&2"
+prop_checkBashisms29= verify checkBashisms "echo ${!var}"
 checkBashisms _ = bashism
   where
     errMsg id s = err id 2040 $ "In sh, " ++ s ++ " not supported, even when sh is actually bash."
@@ -687,6 +688,7 @@ checkBashisms _ = bashism
 
     varChars="_0-9a-zA-Z"
     expansion = let re = mkRegex in [
+        (re $ "^![" ++ varChars ++ "]", "indirect expansion is"),
         (re $ "^[" ++ varChars ++ "]+\\[.*\\]$", "array references are"),
         (re $ "^![" ++ varChars ++ "]+\\[[*@]]$", "array key expansion is"),
         (re $ "^![" ++ varChars ++ "]+[*@]$", "name matching prefixes are"),
@@ -1729,7 +1731,7 @@ checkTestRedirects _ (T_Redirecting id redirs cmd) | cmd `isCommand` "test" =
   where
     check t =
         when (suspicious t) $
-            warn (getId t) 2065 "This is interpretted as a shell file redirection, not a comparison."
+            warn (getId t) 2065 "This is interpreted as a shell file redirection, not a comparison."
     suspicious t = -- Ignore redirections of stderr because these are valid for squashing e.g. int errors,
         case t of  -- and >> and similar redirections because these are probably not comparisons.
             T_FdRedirect _ fd (T_IoFile _ op _) -> fd /= "2" && isComparison op
