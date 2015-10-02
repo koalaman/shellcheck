@@ -1723,8 +1723,22 @@ checkTimeParameters _ = checkUnqualifiedCommand "time" f where
 prop_checkTestRedirects1 = verify checkTestRedirects "test 3 > 1"
 prop_checkTestRedirects2 = verifyNot checkTestRedirects "test 3 \\> 1"
 prop_checkTestRedirects3 = verify checkTestRedirects "/usr/bin/test $var > $foo"
-checkTestRedirects _ (T_Redirecting id redirs@(redir:_) cmd) | cmd `isCommand` "test" =
-    warn (getId redir) 2065 "This is interpretted as a shell file redirection, not a comparison."
+prop_checkTestRedirects4 = verifyNot checkTestRedirects "test 1 -eq 2 2> file"
+checkTestRedirects _ (T_Redirecting id redirs cmd) | cmd `isCommand` "test" =
+    mapM_ check redirs
+  where
+    check t =
+        when (suspicious t) $
+            warn (getId t) 2065 "This is interpretted as a shell file redirection, not a comparison."
+    suspicious t = -- Ignore redirections of stderr because these are valid for squashing e.g. int errors,
+        case t of  -- and >> and similar redirections because these are probably not comparisons.
+            T_FdRedirect _ fd (T_IoFile _ op _) -> fd /= "2" && isComparison op
+            otherwise -> False
+    isComparison t =
+        case t of
+            T_Greater _ -> True
+            T_Less _ -> True
+            otherwise -> False
 checkTestRedirects _ _ = return ()
 
 prop_checkSudoRedirect1 = verify checkSudoRedirect "sudo echo 3 > /proc/file"
