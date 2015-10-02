@@ -2541,6 +2541,7 @@ prop_checkQuotesInLiterals6 = verifyTree checkQuotesInLiterals "param='my\\ file
 prop_checkQuotesInLiterals6a= verifyNotTree checkQuotesInLiterals "param='my\\ file'; cmd=\"rm ${#param}\"; $cmd"
 prop_checkQuotesInLiterals7 = verifyTree checkQuotesInLiterals "param='my\\ file'; rm $param"
 prop_checkQuotesInLiterals8 = verifyTree checkQuotesInLiterals "param=\"/foo/'bar baz'/etc\"; rm $param"
+prop_checkQuotesInLiterals9 = verifyNotTree checkQuotesInLiterals "param=\"/foo/'bar baz'/etc\"; rm ${#param}"
 checkQuotesInLiterals params t =
     doVariableFlowAnalysis readF writeF Map.empty (variableFlow params)
   where
@@ -2572,12 +2573,18 @@ checkQuotesInLiterals params t =
         then return $ getId t
         else Nothing
 
+    squashesQuotes t =
+        case t of
+            T_DollarBraced id _ -> "#" `isPrefixOf` bracedString t
+            otherwise -> False
+
     readF _ expr name = do
         assignment <- getQuotes name
         return
           (if isJust assignment
               && not (isParamTo parents "eval" expr)
               && not (isQuoteFree parents expr)
+              && not (squashesQuotes expr)
               then [
                   makeComment WarningC (fromJust assignment) 2089
                       "Quotes/backslashes will be treated literally. Use an array.",
