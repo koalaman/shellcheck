@@ -1206,16 +1206,26 @@ checkConditionalAndOrs _ t =
 
         otherwise -> return ()
 
-prop_checkQuotedCondRegex1 = verify checkQuotedCondRegex "[[ $foo =~ \"bar\" ]]"
-prop_checkQuotedCondRegex2 = verify checkQuotedCondRegex "[[ $foo =~ 'cow' ]]"
+prop_checkQuotedCondRegex1 = verify checkQuotedCondRegex "[[ $foo =~ \"bar.*\" ]]"
+prop_checkQuotedCondRegex2 = verify checkQuotedCondRegex "[[ $foo =~ '(cow|bar)' ]]"
 prop_checkQuotedCondRegex3 = verifyNot checkQuotedCondRegex "[[ $foo =~ $foo ]]"
+prop_checkQuotedCondRegex4 = verifyNot checkQuotedCondRegex "[[ $foo =~ \"bar\" ]]"
+prop_checkQuotedCondRegex5 = verifyNot checkQuotedCondRegex "[[ $foo =~ 'cow bar' ]]"
 checkQuotedCondRegex _ (TC_Binary _ _ "=~" _ rhs) =
     case rhs of
-        T_NormalWord id [T_DoubleQuoted _ _] -> error id
-        T_NormalWord id [T_SingleQuoted _ _] -> error id
+        T_NormalWord id [T_DoubleQuoted _ _] -> error rhs
+        T_NormalWord id [T_SingleQuoted _ _] -> error rhs
         _ -> return ()
   where
-    error id = err id 2076 "Don't quote rhs of =~, it'll match literally rather than as a regex."
+    error t =
+        unless (isConstantNonRe t) $
+            err (getId t) 2076
+                "Don't quote rhs of =~, it'll match literally rather than as a regex."
+    re = mkRegex "[][*.+()]"
+    hasMetachars s = s `matches` re
+    isConstantNonRe t = fromMaybe False $ do
+        s <- getLiteralString t
+        return . not $ hasMetachars s
 checkQuotedCondRegex _ _ = return ()
 
 prop_checkGlobbedRegex1 = verify checkGlobbedRegex "[[ $foo =~ *foo* ]]"
