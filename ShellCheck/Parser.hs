@@ -1152,12 +1152,19 @@ prop_readBraced3 = isOk readBraced "{1,\\},2}"
 prop_readBraced4 = isOk readBraced "{1,{2,3}}"
 prop_readBraced5 = isOk readBraced "{JP{,E}G,jp{,e}g}"
 prop_readBraced6 = isOk readBraced "{foo,bar,$((${var}))}"
+prop_readBraced7 = isNotOk readBraced "{}"
+prop_readBraced8 = isNotOk readBraced "{foo}"
 readBraced = try braceExpansion
   where
     braceExpansion =
         T_BraceExpansion `withParser` do
             char '{'
             elements <- bracedElement `sepBy1` char ','
+            guard $
+                case elements of
+                    (_:_:_) -> True
+                    [t] -> ".." `isInfixOf` onlyLiteralString t
+                    [] -> False
             char '}'
             return elements
     bracedElement =
@@ -2334,6 +2341,7 @@ readScript = do
 
 isWarning p s = parsesCleanly p s == Just False
 isOk p s =      parsesCleanly p s == Just True
+isNotOk p s =   parsesCleanly p s == Nothing
 
 testParse string = runIdentity $ do
     (res, _) <- runParser (mockedSystemInterface []) readScript "-" string
