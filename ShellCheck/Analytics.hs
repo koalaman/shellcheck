@@ -82,6 +82,7 @@ checksFor Bash = [
     ,checkBraceExpansionVars
     ,checkEchoSed
     ,checkForDecimals
+    ,checkLocalScope
     ]
 
 runAnalytics :: AnalysisSpec -> AnalysisResult
@@ -683,7 +684,7 @@ checkBashisms _ = bashism
         bashCommands = [
             "let", "caller", "builtin", "complete", "compgen", "declare", "dirs", "disown",
             "enable", "mapfile", "readarray", "pushd", "popd", "shopt", "suspend", "type",
-            "typeset"
+            "typeset", "local"
             ]
         allowedFlags = Map.fromList [
             ("read", ["r"]),
@@ -2965,10 +2966,17 @@ checkLoopKeywordScope params t |
     subshellType t = case leadType (shellType params) (parentMap params) t of
         NoneScope -> Nothing
         SubshellScope str -> return str
-    isFunction t = case t of T_Function {} -> True; _ -> False
     relevant t = isLoop t || isFunction t || isJust (subshellType t)
 checkLoopKeywordScope _ _ = return ()
 
+
+prop_checkLocalScope1 = verify checkLocalScope "local foo=3"
+prop_checkLocalScope2 = verifyNot checkLocalScope "f() { local foo=3; }"
+checkLocalScope params t | t `isCommand` "local" && not (isInFunction t) =
+    err (getId t) 2168 "'local' is only valid in functions."
+  where
+    isInFunction t = any isFunction $ getPath (parentMap params) t
+checkLocalScope _ _ = return ()
 
 prop_checkFunctionDeclarations1 = verify checkFunctionDeclarations "#!/bin/ksh\nfunction foo() { command foo --lol \"$@\"; }"
 prop_checkFunctionDeclarations2 = verify checkFunctionDeclarations "#!/bin/dash\nfunction foo { lol; }"

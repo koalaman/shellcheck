@@ -224,6 +224,8 @@ isAssignment t =
         T_Annotation _ _ w -> isAssignment w
         otherwise -> False
 
+isFunction t = case t of T_Function {} -> True; _ -> False
+
 -- Get the list of commands from tokens that contain them, such as
 -- the body of while loops and if statements.
 getCommandSequences t =
