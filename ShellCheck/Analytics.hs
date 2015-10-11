@@ -3486,7 +3486,7 @@ checkLoopVariableReassignment params token =
         next <- listToMaybe $ filter (\x -> loopVariable x == Just str) path
         return $ do
             warn (getId token) 2165 "This nested loop overrides the index variable of its parent."
-            warn (getId next)  2165 "This parent loop has its index variable overridden."
+            warn (getId next)  2167 "This parent loop has its index variable overridden."
     path = drop 1 $ getPath (parentMap params) token
     loopVariable :: Token -> Maybe String
     loopVariable t =
