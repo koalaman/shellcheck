@@ -159,6 +159,16 @@ The environment variable `SHELLCHECK_OPTS` can be set with default flags:
 Its value will be split on spaces and prepended to the command line on each
 invocation.
 
+# RETURN VALUES
+
+ShellCheck uses the follow exit codes:
+
++ 0: All files successfully scanned with no issues.
++ 1: All files successfully scanned with some issues.
++ 2: Some files could not be processed (e.g. file not found).
++ 3: ShellCheck was invoked with bad syntax (e.g. unknown flag).
++ 4: ShellCheck was invoked with bad options (e.g. unknown formatter).
+
 # AUTHOR
 ShellCheck is written and maintained by Vidar Holen.
 

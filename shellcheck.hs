@@ -48,7 +48,6 @@ data Flag = Flag String String
 data Status =
     NoProblems
     | SomeProblems
-    | BadInput
     | SupportFailure
     | SyntaxFailure
     | RuntimeException
@@ -144,7 +143,6 @@ statusToCode status =
     case status of
         NoProblems -> ExitSuccess
         SomeProblems -> ExitFailure 1
-        BadInput -> ExitFailure 5
         SyntaxFailure -> ExitFailure 3
         SupportFailure -> ExitFailure 4
         RuntimeException -> ExitFailure 2
