@@ -584,6 +584,8 @@ prop_checkBashisms26= verify checkBashisms "trap mything ERR SIGTERM"
 prop_checkBashisms27= verify checkBashisms "echo *[^0-9]*"
 prop_checkBashisms28= verify checkBashisms "exec {n}>&2"
 prop_checkBashisms29= verify checkBashisms "echo ${!var}"
+prop_checkBashisms30= verify checkBashisms "printf -v '%s' \"$1\""
+prop_checkBashisms31= verify checkBashisms "printf '%q' \"$1\""
 checkBashisms _ = bashism
   where
     errMsg id s = err id 2040 $ "In sh, " ++ s ++ " not supported, even when sh is actually bash."
@@ -671,6 +673,12 @@ checkBashisms _ = bashism
                         return $ warnMsg (getId token) $ "trapping " ++ word ++ " is"
                 in
                     mapM_ check (reverse rest)
+
+            when (name == "printf") $ potentially $ do
+                format <- rest !!! 0  -- flags are covered by allowedFlags
+                let literal = onlyLiteralString format
+                guard $ "%q" `isInfixOf` literal
+                return $ warnMsg (getId format) "printf %q is"
       where
         bashCommands = [
             "let", "caller", "builtin", "complete", "compgen", "declare", "dirs", "disown",
@@ -681,6 +689,7 @@ checkBashisms _ = bashism
             ("read", ["r"]),
             ("ulimit", ["f"]),
             ("echo", []),
+            ("printf", []),
             ("exec", [])
             ]
 
