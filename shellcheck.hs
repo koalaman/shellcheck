@@ -74,7 +74,7 @@ options = [
     Option "f" ["format"]
         (ReqArg (Flag "format") "FORMAT") "output format",
     Option "s" ["shell"]
-        (ReqArg (Flag "shell") "SHELLNAME") "Specify dialect (bash,sh,ksh)",
+        (ReqArg (Flag "shell") "SHELLNAME") "Specify dialect (sh,bash,dash,ksh)",
     Option "x" ["external-sources"]
         (NoArg $ Flag "externals" "true") "Allow 'source' outside of FILES.",
     Option "V" ["version"]
@@ -219,7 +219,7 @@ parseOption flag options =
             liftIO printVersion
             throwError NoProblems
 
-        Flag "externals" _ -> do
+        Flag "externals" _ ->
             return options {
                 externalSources = True
             }

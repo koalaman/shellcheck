@@ -74,6 +74,11 @@ checksFor Sh = [
     ,checkTimeParameters
     ,checkForDecimals
     ]
+checksFor Dash = [
+    checkBashisms
+    ,checkForDecimals
+    ,checkLocalScope
+    ]
 checksFor Ksh = [
     checkEchoSed
     ]
@@ -587,11 +592,20 @@ prop_checkBashisms28= verify checkBashisms "exec {n}>&2"
 prop_checkBashisms29= verify checkBashisms "echo ${!var}"
 prop_checkBashisms30= verify checkBashisms "printf -v '%s' \"$1\""
 prop_checkBashisms31= verify checkBashisms "printf '%q' \"$1\""
-checkBashisms _ = bashism
+prop_checkBashisms32= verifyNot checkBashisms "#!/bin/dash\n[ foo -nt bar ]"
+prop_checkBashisms33= verify checkBashisms "#!/bin/sh\necho -n foo"
+prop_checkBashisms34= verifyNot checkBashisms "#!/bin/dash\necho -n foo"
+prop_checkBashisms35= verifyNot checkBashisms "#!/bin/dash\nlocal foo"
+prop_checkBashisms36= verifyNot checkBashisms "#!/bin/dash\nread -p foo -r bar"
+checkBashisms params = bashism
   where
-    errMsg id s = err id 2040 $ "In sh, " ++ s ++ " not supported, even when sh is actually bash."
-    warnMsg id s = warn id 2039 $ "In POSIX sh, " ++ s ++ " not supported."
-    bashism (T_ProcSub id _ _) = errMsg id "process substitution is"
+    isDash = shellType params == Dash
+    warnMsg id s =
+        if isDash
+        then warn id 2169 $ "In dash, " ++ s ++ " not supported."
+        else warn id 2039 $ "In POSIX sh, " ++ s ++ " undefined."
+
+    bashism (T_ProcSub id _ _) = warnMsg id "process substitution is"
     bashism (T_Extglob id _ _) = warnMsg id "extglob is"
     bashism (T_DollarSingleQuoted id _) = warnMsg id "$'..' is"
     bashism (T_DollarDoubleQuoted id _) = warnMsg id "$\"..\" is"
@@ -603,8 +617,10 @@ checkBashisms _ = bashism
     bashism (T_Condition id DoubleBracket _) = warnMsg id "[[ ]] is"
     bashism (T_HereString id _) = warnMsg id "here-strings are"
     bashism (TC_Binary id SingleBracket op _ _)
-        | op `elem` [ "-nt", "-ef", "\\<", "\\>", "==" ] =
-            warnMsg id $ op ++ " is"
+        | op `elem` [ "-nt", "-ef", "\\<", "\\>"] =
+            unless isDash $ warnMsg id $ op ++ " is"
+    bashism (TC_Binary id SingleBracket "==" _ _) =
+            warnMsg id "== in place of = is"
     bashism (TC_Unary id _ "-a" _) =
             warnMsg id "unary -a in place of -e is"
     bashism (TA_Unary id op _)
@@ -646,8 +662,13 @@ checkBashisms _ = bashism
 
     bashism t@(T_SimpleCommand _ _ (cmd:arg:_))
         | t `isCommand` "echo" && "-" `isPrefixOf` argString =
-            unless ("--" `isPrefixOf` argString) $ -- echo "-------"
-                warnMsg (getId arg) "echo flags are"
+            unless ("--" `isPrefixOf` argString) $ -- echo "-----"
+                if isDash
+                then
+                    when (argString /= "-n") $
+                        warnMsg (getId arg) "echo flags besides -n"
+                else
+                    warnMsg (getId arg) "echo flags are"
       where argString = concat $ oversimplify arg
     bashism t@(T_SimpleCommand _ _ (cmd:arg:_))
         | t `isCommand` "exec" && "-" `isPrefixOf` concat (oversimplify arg) =
@@ -659,7 +680,8 @@ checkBashisms _ = bashism
         let name = fromMaybe "" $ getCommandName t
             flags = getLeadingFlags t
         in do
-            when (name `elem` bashCommands) $ warnMsg id $ "'" ++ name ++ "' is"
+            when (name `elem` unsupportedCommands) $
+                warnMsg id $ "'" ++ name ++ "' is"
             potentially $ do
                 allowed <- Map.lookup name allowedFlags
                 (word, flag) <- listToMaybe $ filter (\x -> snd x `notElem` allowed) flags
@@ -681,15 +703,14 @@ checkBashisms _ = bashism
                 guard $ "%q" `isInfixOf` literal
                 return $ warnMsg (getId format) "printf %q is"
       where
-        bashCommands = [
+        unsupportedCommands = [
             "let", "caller", "builtin", "complete", "compgen", "declare", "dirs", "disown",
-            "enable", "mapfile", "readarray", "pushd", "popd", "shopt", "suspend", "type",
-            "typeset", "local"
-            ]
+            "enable", "mapfile", "readarray", "pushd", "popd", "shopt", "suspend",
+            "typeset"
+            ] ++ if not isDash then ["local", "type"] else []
         allowedFlags = Map.fromList [
-            ("read", ["r"]),
+            ("read", if isDash then ["r", "p"] else ["r"]),
             ("ulimit", ["f"]),
-            ("echo", []),
             ("printf", []),
             ("exec", [])
             ]
@@ -1124,9 +1145,8 @@ checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
       isLtGt = flip elem ["<", "\\<", ">", "\\>"]
       isLeGe = flip elem ["<=", "\\<=", ">=", "\\>="]
 
-      supportsDecimals = (shellType params) == Ksh
       checkDecimals hs =
-        when (isFraction hs && not supportsDecimals) $
+        when (isFraction hs && not (hasFloatingPoint params)) $
             err (getId hs) 2072 decimalError
       decimalError = "Decimals are not supported. " ++
         "Either use integers only, or use bc or awk to compare."
@@ -1334,7 +1354,8 @@ checkBraceExpansionVars _ (T_BraceExpansion id list) = mapM_ check list
 checkBraceExpansionVars _ _ = return ()
 
 prop_checkForDecimals = verify checkForDecimals "((3.14*c))"
-checkForDecimals _ t@(TA_Expansion id _) = potentially $ do
+checkForDecimals params t@(TA_Expansion id _) = potentially $ do
+    guard $ not (hasFloatingPoint params)
     str <- getLiteralString t
     first <- str !!! 0
     guard $ isDigit first && '.' `elem` str
@@ -2132,6 +2153,7 @@ leadType shell parents t =
     lastCreatesSubshell =
         case shell of
             Bash -> True
+            Dash -> True
             Sh -> True
             Ksh -> False
 
@@ -2988,7 +3010,11 @@ checkFunctionDeclarations params
         Ksh ->
             when (hasKeyword && hasParens) $
                 err id 2111 "ksh does not allow 'function' keyword and '()' at the same time."
-        Sh -> do
+        Dash -> forSh
+        Sh   -> forSh
+
+    where
+        forSh = do
             when (hasKeyword && hasParens) $
                 warn id 2112 "'function' keyword is non-standard. Delete it."
             when (hasKeyword && not hasParens) $

@@ -46,7 +46,7 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 
 **-s**\ *shell*,\ **--shell=***shell*
 
-:   Specify Bourne shell dialect. Valid values are *sh*, *bash* and *ksh*.
+:   Specify Bourne shell dialect. Valid values are *sh*, *bash*, *dash* and *ksh*.
     The default is to use the file's shebang, or *bash* if the target shell
     can't be determined.
 

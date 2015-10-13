@@ -73,7 +73,7 @@ data AnalysisResult = AnalysisResult {
 }
 
 -- Supporting data types
-data Shell = Ksh | Sh | Bash deriving (Show, Eq)
+data Shell = Ksh | Sh | Bash | Dash deriving (Show, Eq)
 data ExecutionMode = Executed | Sourced deriving (Show, Eq)
 
 type ErrorMessage = String

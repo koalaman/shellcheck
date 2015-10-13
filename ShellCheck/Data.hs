@@ -76,13 +76,12 @@ sampleWords = [
   ]
 
 shellForExecutable :: String -> Maybe Shell
-shellForExecutable "sh" = return Sh
-shellForExecutable "ash" = return Sh
-shellForExecutable "dash" = return Sh
-
-shellForExecutable "ksh" = return Ksh
-shellForExecutable "ksh88" = return Ksh
-shellForExecutable "ksh93" = return Ksh
-
-shellForExecutable "bash" = return Bash
-shellForExecutable _ = Nothing
+shellForExecutable name =
+    case name of
+        "sh"    -> return Sh
+        "bash"  -> return Bash
+        "dash"  -> return Dash
+        "ksh"   -> return Ksh
+        "ksh88" -> return Ksh
+        "ksh93" -> return Ksh
+        otherwise -> Nothing
