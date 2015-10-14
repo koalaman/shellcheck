@@ -597,6 +597,8 @@ prop_checkBashisms33= verify checkBashisms "#!/bin/sh\necho -n foo"
 prop_checkBashisms34= verifyNot checkBashisms "#!/bin/dash\necho -n foo"
 prop_checkBashisms35= verifyNot checkBashisms "#!/bin/dash\nlocal foo"
 prop_checkBashisms36= verifyNot checkBashisms "#!/bin/dash\nread -p foo -r bar"
+prop_checkBashisms37= verifyNot checkBashisms "HOSTNAME=foo; echo $HOSTNAME"
+prop_checkBashisms38= verify checkBashisms "RANDOM=9; echo $RANDOM"
 checkBashisms params = bashism
   where
     isDash = shellType params == Dash
@@ -641,10 +643,11 @@ checkBashisms params = bashism
         warnMsg id $ fromJust str ++ " is"
       where
         str = getLiteralString t
-        isBashism = isJust str && fromJust str `elem` bashVars
+        isBashism = isJust str && isBashVariable (fromJust str)
     bashism t@(T_DollarBraced id token) = do
         mapM_ check expansion
-        when (var `elem` bashVars) $ warnMsg id $ var ++ " is"
+        when (isBashVariable var) $
+                    warnMsg id $ var ++ " is"
       where
         str = bracedString t
         var = getBracedReference str
@@ -727,9 +730,19 @@ checkBashisms params = bashism
         (re $ "^[" ++ varChars ++ "]+(\\[.*\\])?/", "string replacement is")
         ]
     bashVars = [
-        "RANDOM", "LINENO", "OSTYPE", "MACHTYPE", "HOSTTYPE", "HOSTNAME",
-        "DIRSTACK", "EUID", "UID", "SECONDS", "SHLVL", "PIPESTATUS", "SHELLOPTS"
+        "LINENO", "OSTYPE", "MACHTYPE", "HOSTTYPE", "HOSTNAME",
+        "DIRSTACK", "EUID", "UID", "SHLVL", "PIPESTATUS", "SHELLOPTS"
         ]
+    bashDynamicVars = [ "RANDOM", "SECONDS" ]
+    isBashVariable var =
+        var `elem` bashDynamicVars
+        || var `elem` bashVars && not (isAssigned var)
+    isAssigned var = any f (variableFlow params)
+      where
+        f x = case x of
+                Assignment (_, _, name, _) -> name == var
+                _ -> False
+
 
 prop_checkForInQuoted = verify checkForInQuoted "for f in \"$(ls)\"; do echo foo; done"
 prop_checkForInQuoted2 = verifyNot checkForInQuoted "for f in \"$@\"; do echo foo; done"
