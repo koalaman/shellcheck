@@ -230,6 +230,7 @@ filterByAnnotation token =
         any hasNum anns
       where
         hasNum (DisableComment ts) = num == ts
+        hasNum _ = False
     shouldIgnoreFor _ (T_Include {}) = True -- Ignore included files
     shouldIgnoreFor _ _ = False
     parents = getParentTree token
@@ -1128,9 +1129,9 @@ prop_checkNumberComparisons4 = verify checkNumberComparisons "[[ $foo > 2.72 ]]"
 prop_checkNumberComparisons5 = verify checkNumberComparisons "[[ $foo -le 2.72 ]]"
 prop_checkNumberComparisons6 = verify checkNumberComparisons "[[ 3.14 -eq $foo ]]"
 prop_checkNumberComparisons7 = verifyNot checkNumberComparisons "[[ 3.14 == $foo ]]"
-prop_checkNumberComparisons8 = verify checkNumberComparisons "[[ foo <= bar ]]"
+prop_checkNumberComparisons8 = verify checkNumberComparisons "[ foo <= bar ]"
 prop_checkNumberComparisons9 = verify checkNumberComparisons "[ foo \\>= bar ]"
-prop_checkNumberComparisons11= verify checkNumberComparisons "[[ $foo -eq 'N' ]]"
+prop_checkNumberComparisons11= verify checkNumberComparisons "[ $foo -eq 'N' ]"
 prop_checkNumberComparisons12= verify checkNumberComparisons "[ x$foo -gt x${N} ]"
 checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
     if isNum lhs && not (isNonNum rhs)
@@ -1152,7 +1153,8 @@ checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
 
     when (op `elem` ["-lt", "-gt", "-le", "-ge", "-eq"]) $ do
         mapM_ checkDecimals [lhs, rhs]
-        checkStrings [lhs, rhs]
+        when (typ == SingleBracket) $
+            checkStrings [lhs, rhs]
 
   where
       isLtGt = flip elem ["<", "\\<", ">", "\\>"]
@@ -1172,8 +1174,8 @@ checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
         return . not . all numChar $ s
       numChar x = isDigit x || x `elem` "+-. "
 
-      stringError t = err (getId t) 2130 $
-        op ++ " is for integer comparisons. Use " ++ seqv op ++ " instead."
+      stringError t = err (getId t) 2170 $
+          "Numerical " ++ op ++ " does not dereference in [..]. Expand or use string operator."
 
       isNum t =
         case oversimplify t of
@@ -1284,16 +1286,20 @@ checkGlobbedRegex _ _ = return ()
 
 
 prop_checkConstantIfs1 = verify checkConstantIfs "[[ foo != bar ]]"
-prop_checkConstantIfs2 = verify checkConstantIfs "[[ n -le 4 ]]"
-prop_checkConstantIfs3 = verify checkConstantIfs "[[ $n -le 4 && n -ge 2 ]]"
+prop_checkConstantIfs2a= verify checkConstantIfs "[ n -le 4 ]"
+prop_checkConstantIfs2b= verifyNot checkConstantIfs "[[ n -le 4 ]]"
+prop_checkConstantIfs3 = verify checkConstantIfs "[[ $n -le 4 && n != 2 ]]"
 prop_checkConstantIfs4 = verifyNot checkConstantIfs "[[ $n -le 3 ]]"
 prop_checkConstantIfs5 = verifyNot checkConstantIfs "[[ $n -le $n ]]"
-checkConstantIfs _ (TC_Binary id typ op lhs rhs)
-    | op `elem` [ "==", "!=", "<=", ">=", "-eq", "-ne", "-lt", "-le", "-gt", "-ge", "=~", ">", "<", "="] =
-        when (isJust lLit && isJust rLit) $ warn id 2050 "This expression is constant. Did you forget the $ on a variable?"
-    where
-        lLit = getLiteralString lhs
-        rLit = getLiteralString rhs
+checkConstantIfs _ (TC_Binary id typ op lhs rhs) | isStatic =
+    when (isJust lLit && isJust rLit) $
+        warn id 2050 "This expression is constant. Did you forget the $ on a variable?"
+  where
+    lLit = getLiteralString lhs
+    rLit = getLiteralString rhs
+    isStatic =
+        typ == SingleBracket ||
+            op `elem` [ "=", "==", "!=", "<=", ">=",  "=~", ">", "<" ]
 checkConstantIfs _ _ = return ()
 
 prop_checkLiteralBreakingTest = verify checkLiteralBreakingTest "[[ a==$foo ]]"
@@ -2376,6 +2382,10 @@ getReferencedVariables t =
 
         TC_Unary id _ "-v" token -> getIfReference t token
         TC_Unary id _ "-R" token -> getIfReference t token
+        TC_Binary id DoubleBracket op lhs rhs ->
+            if isDereferencing op
+            then concatMap (getIfReference t) [lhs, rhs]
+            else []
 
         t@(T_FdRedirect _ ('{':var) op) -> -- {foo}>&- references and closes foo
             [(t, t, takeWhile (/= '}') var) | isClosingFileOp op]
@@ -2400,6 +2410,8 @@ getReferencedVariables t =
             guard . not $ null str
             when (isDigit $ head str) $ fail "is a number"
             return (context, token, getBracedReference str)
+
+    isDereferencing = (`elem` ["-eq", "-ne", "-lt", "-le", "-gt", "-ge"])
 
 -- Try to get referenced variables from a literal string like "$foo"
 -- Ignores tons of cases like arithmetic evaluation and array indices.
@@ -2721,6 +2733,8 @@ prop_checkUnused23= verifyNotTree checkUnusedAssignments "a=1; [ -R a ]"
 prop_checkUnused24= verifyNotTree checkUnusedAssignments "mapfile -C a b; echo ${b[@]}"
 prop_checkUnused25= verifyNotTree checkUnusedAssignments "readarray foo; echo ${foo[@]}"
 prop_checkUnused26= verifyNotTree checkUnusedAssignments "declare -F foo"
+prop_checkUnused27= verifyTree checkUnusedAssignments "var=3; [ var -eq 3 ]"
+prop_checkUnused28= verifyNotTree checkUnusedAssignments "var=3; [[ var -eq 3 ]]"
 checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
     flow = variableFlow params
