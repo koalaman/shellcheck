@@ -41,6 +41,12 @@ variablesWithoutSpaces = [
     "COLUMNS", "HISTFILESIZE", "HISTSIZE", "LINES"
   ]
 
+arrayVariables = [
+    "BASH_ALIASES", "BASH_ARGC", "BASH_ARGV", "BASH_CMDS", "BASH_LINENO",
+    "BASH_REMATCH", "BASH_SOURCE", "BASH_VERSINFO", "COMP_WORDS", "COPROC",
+    "DIRSTACK", "FUNCNAME", "GROUPS", "MAPFILE", "PIPESTATUS", "COMPREPLY"
+  ]
+
 commonCommands = [
     "admin", "alias", "ar", "asa", "at", "awk", "basename", "batch",
     "bc", "bg", "break", "c99", "cal", "cat", "cd", "cflow", "chgrp",

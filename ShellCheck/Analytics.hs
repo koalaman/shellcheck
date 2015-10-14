@@ -991,24 +991,26 @@ prop_checkArrayWithoutIndex2 = verifyNotTree checkArrayWithoutIndex "foo='bar ba
 prop_checkArrayWithoutIndex3 = verifyTree checkArrayWithoutIndex "coproc foo while true; do echo cow; done; echo $foo"
 prop_checkArrayWithoutIndex4 = verifyTree checkArrayWithoutIndex "coproc tail -f log; echo $COPROC"
 prop_checkArrayWithoutIndex5 = verifyTree checkArrayWithoutIndex "a[0]=foo; echo $a"
+prop_checkArrayWithoutIndex6 = verifyTree checkArrayWithoutIndex "echo $PIPESTATUS"
 checkArrayWithoutIndex params _ =
-    concat $ doVariableFlowAnalysis readF writeF Map.empty (variableFlow params)
+    concat $ doVariableFlowAnalysis readF writeF defaultMap (variableFlow params)
   where
+    defaultMap = Map.fromList $ map (\x -> (x,())) arrayVariables
     readF _ (T_DollarBraced id token) _ = do
         map <- get
         return . maybeToList $ do
             name <- getLiteralString token
-            assignment <- Map.lookup name map
+            assigned <- Map.lookup name map
             return [makeComment WarningC id 2128
                     "Expanding an array without an index only gives the first element."]
     readF _ _ _ = return []
 
     writeF _ t name (DataArray _) = do
-        modify (Map.insert name t)
+        modify (Map.insert name ())
         return []
     writeF _ expr name _ = do
         if isIndexed expr
-          then modify (Map.insert name expr)
+          then modify (Map.insert name ())
           else modify (Map.delete name)
         return []
 
