@@ -216,6 +216,7 @@ nodeChecks = [
     ,checkReadWithoutR
     ,checkExportedExpansions
     ,checkLoopVariableReassignment
+    ,checkTrailingBracket
     ]
 
 
@@ -3573,6 +3574,33 @@ checkLoopVariableReassignment params token =
                         (TA_Expansion _ [T_Literal _ var]) _])
                             _ _ _ -> return var
             _ -> fail "not loop"
+
+prop_checkTrailingBracket1 = verify checkTrailingBracket "if -z n ]]; then true; fi "
+prop_checkTrailingBracket2 = verifyNot checkTrailingBracket "if [[ -z n ]]; then true; fi "
+prop_checkTrailingBracket3 = verify checkTrailingBracket "a || b ] && thing"
+prop_checkTrailingBracket4 = verifyNot checkTrailingBracket "run [ foo ]"
+prop_checkTrailingBracket5 = verifyNot checkTrailingBracket "run bar ']'"
+checkTrailingBracket _ token =
+    case token of
+        T_SimpleCommand _ _ tokens@(_:_) -> check (last tokens) token
+        otherwise -> return ()
+  where
+    check t command =
+        case t of
+            T_NormalWord id [T_Literal _ str] -> potentially $ do
+                guard $ str `elem` [ "]]", "]" ]
+                let opposite = invert str
+                    parameters = oversimplify command
+                guard $ opposite `notElem` parameters
+                return $ warn id 2171 $
+                    "Found trailing " ++ str ++ " outside test. Missing " ++ opposite ++ "?"
+            otherwise -> return ()
+    invert s =
+        case s of
+            "]]" -> "[["
+            "]" -> "["
+            x -> x
+
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
