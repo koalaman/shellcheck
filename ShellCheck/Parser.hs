@@ -1536,7 +1536,11 @@ readSimpleCommand = called "simple command" $ do
 readSource :: Monad m => SourcePos -> Token -> SCParser m Token
 readSource pos t@(T_Redirecting _ _ (T_SimpleCommand _ _ (cmd:file:_))) = do
     override <- getSourceOverride
-    let literalFile = override `mplus` getLiteralString file
+    let literalFile = do
+        name <- override `mplus` getLiteralString file
+        -- Hack to avoid 'source ~/foo' trying to read from literal tilde
+        guard . not $ "~/" `isPrefixOf` name
+        return name
     case literalFile of
         Nothing -> do
             parseNoteAt pos WarningC 1090

@@ -147,6 +147,9 @@ prop_canSourceBadSyntax =
 prop_cantSourceDynamic =
     [1090] == checkWithIncludes [("lib", "")] ". \"$1\""
 
+prop_cantSourceDynamic2 =
+    [1090] == checkWithIncludes [("lib", "")] "source ~/foo"
+
 prop_canSourceDynamicWhenRedirected =
     null $ checkWithIncludes [("lib", "")] "#shellcheck source=lib\n. \"$1\""
 
