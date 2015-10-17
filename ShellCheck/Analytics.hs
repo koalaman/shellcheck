@@ -1293,15 +1293,18 @@ prop_checkConstantIfs2b= verifyNot checkConstantIfs "[[ n -le 4 ]]"
 prop_checkConstantIfs3 = verify checkConstantIfs "[[ $n -le 4 && n != 2 ]]"
 prop_checkConstantIfs4 = verifyNot checkConstantIfs "[[ $n -le 3 ]]"
 prop_checkConstantIfs5 = verifyNot checkConstantIfs "[[ $n -le $n ]]"
-checkConstantIfs _ (TC_Binary id typ op lhs rhs) | isStatic =
+prop_checkConstantIfs6 = verifyNot checkConstantIfs "[[ a -ot b ]]"
+prop_checkConstantIfs7 = verifyNot checkConstantIfs "[ a -nt b ]"
+checkConstantIfs _ (TC_Binary id typ op lhs rhs) | not isDynamic =
     when (isJust lLit && isJust rLit) $
         warn id 2050 "This expression is constant. Did you forget the $ on a variable?"
   where
     lLit = getLiteralString lhs
     rLit = getLiteralString rhs
-    isStatic =
-        typ == SingleBracket ||
-            op `elem` [ "=", "==", "!=", "<=", ">=",  "=~", ">", "<" ]
+    isDynamic =
+        op `elem` [ "-lt", "-gt", "-le", "-ge", "-eq", "-ne" ]
+            && typ == DoubleBracket
+        || op `elem` [ "-nt", "-ot", "-ef"]
 checkConstantIfs _ _ = return ()
 
 prop_checkLiteralBreakingTest = verify checkLiteralBreakingTest "[[ a==$foo ]]"
