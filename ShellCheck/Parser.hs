@@ -359,19 +359,36 @@ readConditionContents single =
     readCondBinaryOp = try $ do
         optional guardArithmetic
         id <- getNextId
-        op <- choice (map tryOp ["==", "!=", "<=", ">=", "=~", ">", "<", "=", "\\<=", "\\>=", "\\<", "\\>"]) <|> otherOp
+        op <- getOp
         spacingOrLf
         return op
       where
-        tryOp s = try $ do
+        flaglessOps = [ "==", "!=", "<=", ">=", "=~", ">", "<", "=" ]
+
+        getOp = do
             id <- getNextId
-            string s
-            return $ TC_Binary id typ s
-        otherOp = try $ do
-            id <- getNextId
+            op <- anyQuotedOp <|> anyEscapedOp <|> anyOp
+            return $ TC_Binary id typ op
+
+        -- hacks to read quoted operators without having to read a shell word
+        anyEscapedOp = try $ do
+            char '\\'
+            escaped <$> anyOp
+        anyQuotedOp = try $ do
+            c <- oneOf "'\""
+            s <- anyOp
+            char c
+            return s
+
+        anyOp = flagOp <|> flaglessOp <|> fail
+                    "Expected comparison operator (don't wrap commands in []/[[]])"
+        flagOp = try $ do
             s <- readOp
             when (s == "-a" || s == "-o") $ fail "Unexpected operator"
-            return $ TC_Binary id typ s
+            return s
+        flaglessOp =
+            choice $ map (try . string) flaglessOps
+        escaped s = if any (`elem` s) "<>" then '\\':s else s
 
     guardArithmetic = do
         try . lookAhead $ disregard (oneOf "+*/%") <|> disregard (string "- ")
@@ -394,9 +411,16 @@ readConditionContents single =
         return $ TC_Unary id typ s
 
     readOp = try $ do
-        char '-'
-        s <- many1 letter
+        char '-' <|> weirdDash
+        s <- many1 letter <|> fail "Expected a test operator"
         return ('-':s)
+
+    weirdDash = do
+        pos <- getPosition
+        oneOf "\x058A\x05BE\x2010\x2011\x2012\x2013\x2014\x2015\xFE63\xFF0D"
+        parseProblemAt pos ErrorC 1100
+            "This is a unicode dash. Delete and retype as ASCII minus."
+        return '-'
 
     readCondWord = do
         notFollowedBy2 (try (spacing >> string "]"))
@@ -429,6 +453,7 @@ readConditionContents single =
         return $ TC_Or id typ x
 
     readAndOrOp op requiresSpacing = do
+        optional $ lookAhead weirdDash
         x <- string op
         condSpacing requiresSpacing
         return x
@@ -706,6 +731,9 @@ prop_readCondition10b= isOk readCondition "[[ a == b\n||\nc == d ]]"
 prop_readCondition11= isOk readCondition "[[ a == b ||\n c == d ]]"
 prop_readCondition12= isWarning readCondition "[ a == b \n -o c == d ]"
 prop_readCondition13= isOk readCondition "[[ foo =~ ^fo{1,3}$ ]]"
+prop_readCondition14= isOk readCondition "[ foo '>' bar ]"
+prop_readCondition15= isOk readCondition "[ foo \">=\" bar ]"
+prop_readCondition16= isOk readCondition "[ foo \\< bar ]"
 readCondition = called "test expression" $ do
     opos <- getPosition
     id <- getNextId
@@ -725,7 +753,7 @@ readCondition = called "test expression" $ do
     condition <- readConditionContents single
 
     cpos <- getPosition
-    close <- try (string "]]") <|> string "]" <|> fail "Expected test to end here"
+    close <- try (string "]]") <|> string "]" <|> fail "Expected test to end here (don't wrap commands in []/[[]])"
     when (open == "[[" && close /= "]]") $ parseProblemAt cpos ErrorC 1033 "Did you mean ]] ?"
     when (open == "[" && close /= "]" ) $ parseProblemAt opos ErrorC 1034 "Did you mean [[ ?"
     spacing
