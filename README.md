@@ -45,7 +45,7 @@ On other openSUSE distributions:
 
 add OBS devel:languages:haskell repository from https://build.opensuse.org/project/repositories/devel:languages:haskell
 
-    zyper ar http://download.opensuse.org/repositories/devel:/languages:/haskell/openSUSE_$(version)/devel:languages:haskell.repo
+    zypper ar http://download.opensuse.org/repositories/devel:/languages:/haskell/openSUSE_$(version)/devel:languages:haskell.repo
     zypper in ShellCheck
 
 or use OneClickInstall - https://software.opensuse.org/package/ShellCheck
