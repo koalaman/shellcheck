@@ -689,7 +689,8 @@ checkBashisms params = bashism
                 warnMsg id $ "'" ++ name ++ "' is"
             potentially $ do
                 allowed <- Map.lookup name allowedFlags
-                (word, flag) <- listToMaybe $ filter (\x -> snd x `notElem` allowed) flags
+                (word, flag) <- listToMaybe $
+                    filter (\x -> (not . null . snd $ x) && snd x `notElem` allowed) flags
                 return . warnMsg (getId word) $ name ++ " -" ++ flag ++ " is"
 
             when (name == "source") $ warnMsg id "'source' in place of '.' is"

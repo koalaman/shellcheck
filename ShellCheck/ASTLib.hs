@@ -93,14 +93,17 @@ oversimplify token =
 
 
 -- Turn a SimpleCommand foo -avz --bar=baz into args "a", "v", "z", "bar",
--- each in a tuple of (token, stringFlag).
+-- each in a tuple of (token, stringFlag). Non-flag arguments are added with
+-- stringFlag == "".
 getFlagsUntil stopCondition (T_SimpleCommand _ _ (_:args)) =
-    let textArgs = takeWhile (not . stopCondition . snd) $ map (\x -> (x, concat $ oversimplify x)) args in
-        concatMap flag textArgs
+    let tokenAndText = map (\x -> (x, concat $ oversimplify x)) args
+        (flagArgs, rest) = break (stopCondition . snd) tokenAndText
+    in
+        concatMap flag flagArgs ++ map (\(t, _) -> (t, "")) rest
   where
     flag (x, '-':'-':arg) = [ (x, takeWhile (/= '=') arg) ]
     flag (x, '-':args) = map (\v -> (x, [v])) args
-    flag _ = []
+    flag (x, _) = [ (x, "") ]
 getFlagsUntil _ _ = error "Internal shellcheck error, please report! (getFlags on non-command)"
 
 -- Get all flags in a GNU way, up until --
