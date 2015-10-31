@@ -601,6 +601,7 @@ prop_checkBashisms35= verifyNot checkBashisms "#!/bin/dash\nlocal foo"
 prop_checkBashisms36= verifyNot checkBashisms "#!/bin/dash\nread -p foo -r bar"
 prop_checkBashisms37= verifyNot checkBashisms "HOSTNAME=foo; echo $HOSTNAME"
 prop_checkBashisms38= verify checkBashisms "RANDOM=9; echo $RANDOM"
+prop_checkBashisms39= verify checkBashisms "foo-bar() { true; }"
 checkBashisms params = bashism
   where
     isDash = shellType params == Dash
@@ -664,6 +665,9 @@ checkBashisms params = bashism
         warnMsg id "redirecting to/from globs is"
     bashism (T_CoProc id _ _) =
         warnMsg id "coproc is"
+
+    bashism (T_Function id _ _ str _) | not (isVariableName str) =
+        warnMsg id "naming functions outside [a-zA-Z_][a-zA-Z0-9_]* is"
 
     bashism t@(T_SimpleCommand _ _ (cmd:arg:_))
         | t `isCommand` "echo" && "-" `isPrefixOf` argString =
