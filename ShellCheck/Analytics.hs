@@ -2232,7 +2232,7 @@ getReferencedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Litera
         "export" -> if "f" `elem` flags
             then []
             else concatMap getReference rest
-        "declare" -> if "x" `elem` flags
+        "declare" -> if any (`elem` flags) ["x", "p"]
             then concatMap getReference rest
             else []
         "readonly" -> concatMap getReference rest
@@ -2746,6 +2746,7 @@ prop_checkUnused25= verifyNotTree checkUnusedAssignments "readarray foo; echo ${
 prop_checkUnused26= verifyNotTree checkUnusedAssignments "declare -F foo"
 prop_checkUnused27= verifyTree checkUnusedAssignments "var=3; [ var -eq 3 ]"
 prop_checkUnused28= verifyNotTree checkUnusedAssignments "var=3; [[ var -eq 3 ]]"
+prop_checkUnused29= verifyNotTree checkUnusedAssignments "var=(a b); declare -p var"
 checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
     flow = variableFlow params
