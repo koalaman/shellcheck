@@ -602,6 +602,8 @@ prop_checkBashisms36= verifyNot checkBashisms "#!/bin/dash\nread -p foo -r bar"
 prop_checkBashisms37= verifyNot checkBashisms "HOSTNAME=foo; echo $HOSTNAME"
 prop_checkBashisms38= verify checkBashisms "RANDOM=9; echo $RANDOM"
 prop_checkBashisms39= verify checkBashisms "foo-bar() { true; }"
+prop_checkBashisms40= verify checkBashisms "echo $(<file)"
+prop_checkBashisms41= verify checkBashisms "echo `<file`"
 checkBashisms params = bashism
   where
     isDash = shellType params == Dash
@@ -668,6 +670,11 @@ checkBashisms params = bashism
 
     bashism (T_Function id _ _ str _) | not (isVariableName str) =
         warnMsg id "naming functions outside [a-zA-Z_][a-zA-Z0-9_]* is"
+
+    bashism (T_DollarExpansion id [x]) | isOnlyRedirection x =
+        warnMsg id "$(<file) to read files is"
+    bashism (T_Backticked id [x]) | isOnlyRedirection x =
+        warnMsg id "`<file` to read files is"
 
     bashism t@(T_SimpleCommand _ _ (cmd:arg:_))
         | t `isCommand` "echo" && "-" `isPrefixOf` argString =
@@ -1635,17 +1642,21 @@ checkPrintfVar _ = checkUnqualifiedCommand "printf" (const f) where
 
 -- Check whether a word is entirely output from a single command
 tokenIsJustCommandOutput t = case t of
-    T_NormalWord id [T_DollarExpansion _ _] -> True
-    T_NormalWord id [T_DoubleQuoted _ [T_DollarExpansion _ _]] -> True
-    T_NormalWord id [T_Backticked _ _] -> True
-    T_NormalWord id [T_DoubleQuoted _ [T_Backticked _ _]] -> True
+    T_NormalWord id [T_DollarExpansion _ cmds] -> check cmds
+    T_NormalWord id [T_DoubleQuoted _ [T_DollarExpansion _ cmds]] -> check cmds
+    T_NormalWord id [T_Backticked _ cmds] -> check cmds
+    T_NormalWord id [T_DoubleQuoted _ [T_Backticked _ cmds]] -> check cmds
     _ -> False
+  where
+    check [x] = not $ isOnlyRedirection x
+    check _ = False
 
 prop_checkUuoeCmd1 = verify checkUuoeCmd "echo $(date)"
 prop_checkUuoeCmd2 = verify checkUuoeCmd "echo `date`"
 prop_checkUuoeCmd3 = verify checkUuoeCmd "echo \"$(date)\""
 prop_checkUuoeCmd4 = verify checkUuoeCmd "echo \"`date`\""
 prop_checkUuoeCmd5 = verifyNot checkUuoeCmd "echo \"The time is $(date)\""
+prop_checkUuoeCmd6 = verifyNot checkUuoeCmd "echo \"$(<file)\""
 checkUuoeCmd _ = checkUnqualifiedCommand "echo" (const f) where
     msg id = style id 2005 "Useless echo? Instead of 'echo $(cmd)', just use 'cmd'."
     f [token] = when (tokenIsJustCommandOutput token) $ msg (getId token)
@@ -1659,6 +1670,7 @@ prop_checkUuoeVar5 = verify checkUuoeVar "foo \"$(echo \"$(date) value:\" $value
 prop_checkUuoeVar6 = verifyNot checkUuoeVar "foo \"$(echo files: *.png)\""
 prop_checkUuoeVar7 = verifyNot checkUuoeVar "foo $(echo $(bar))" -- covered by 2005
 prop_checkUuoeVar8 = verifyNot checkUuoeVar "#!/bin/sh\nz=$(echo)"
+prop_checkUuoeVar9 = verify checkUuoeVar "foo $(echo $(<file))"
 checkUuoeVar _ p =
     case p of
         T_Backticked id [cmd] -> check id cmd

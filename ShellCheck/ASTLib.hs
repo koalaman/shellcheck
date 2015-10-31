@@ -227,6 +227,14 @@ isAssignment t =
         T_Annotation _ _ w -> isAssignment w
         otherwise -> False
 
+isOnlyRedirection t =
+    case t of
+        T_Pipeline _ _ [x] -> isOnlyRedirection x
+        T_Annotation _ _ w -> isOnlyRedirection w
+        T_Redirecting _ (_:_) c -> isOnlyRedirection c
+        T_SimpleCommand _ [] [] -> True
+        otherwise -> False
+
 isFunction t = case t of T_Function {} -> True; _ -> False
 
 -- Get the list of commands from tokens that contain them, such as
