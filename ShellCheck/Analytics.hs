@@ -217,6 +217,7 @@ nodeChecks = [
     ,checkExportedExpansions
     ,checkLoopVariableReassignment
     ,checkTrailingBracket
+    ,checkNonportableSignals
     ]
 
 
@@ -585,8 +586,8 @@ prop_checkBashisms19= verify checkBashisms "foo > file*.txt"
 prop_checkBashisms20= verify checkBashisms "read -ra foo"
 prop_checkBashisms21= verify checkBashisms "[ -a foo ]"
 prop_checkBashisms22= verifyNot checkBashisms "[ foo -a bar ]"
-prop_checkBashisms23= verify checkBashisms "trap mything err int"
-prop_checkBashisms24= verifyNot checkBashisms "trap mything int term"
+prop_checkBashisms23= verify checkBashisms "trap mything ERR INT"
+prop_checkBashisms24= verifyNot checkBashisms "trap mything INT TERM"
 prop_checkBashisms25= verify checkBashisms "cat < /dev/tcp/host/123"
 prop_checkBashisms26= verify checkBashisms "trap mything ERR SIGTERM"
 prop_checkBashisms27= verify checkBashisms "echo *[^0-9]*"
@@ -604,6 +605,11 @@ prop_checkBashisms38= verify checkBashisms "RANDOM=9; echo $RANDOM"
 prop_checkBashisms39= verify checkBashisms "foo-bar() { true; }"
 prop_checkBashisms40= verify checkBashisms "echo $(<file)"
 prop_checkBashisms41= verify checkBashisms "echo `<file`"
+prop_checkBashisms42= verify checkBashisms "trap foo int"
+prop_checkBashisms43= verify checkBashisms "trap foo sigint"
+prop_checkBashisms44= verifyNot checkBashisms "#!/bin/dash\ntrap foo int"
+prop_checkBashisms45= verifyNot checkBashisms "#!/bin/dash\ntrap foo INT"
+prop_checkBashisms46= verify checkBashisms "#!/bin/dash\ntrap foo SIGINT"
 checkBashisms params = bashism
   where
     isDash = shellType params == Dash
@@ -708,11 +714,19 @@ checkBashisms params = bashism
             when (name == "trap") $
                 let
                     check token = potentially $ do
-                        word <- liftM (map toLower) $ getLiteralString token
-                        guard $ word `elem` ["err", "debug", "return"]
-                        return $ warnMsg (getId token) $ "trapping " ++ word ++ " is"
+                        str <- getLiteralString token
+                        let upper = map toUpper str
+                        return $ do
+                            when (upper `elem` ["ERR", "DEBUG", "RETURN"]) $
+                                warnMsg (getId token) $ "trapping " ++ str ++ " is"
+                            when ("SIG" `isPrefixOf` upper) $
+                                warnMsg (getId token)
+                                    "prefixing signal names with 'SIG' is"
+                            when (not isDash && upper /= str) $
+                                warnMsg (getId token)
+                                    "using lower/mixed case for signal names is"
                 in
-                    mapM_ check (reverse rest)
+                    mapM_ check (drop 1 rest)
 
             when (name == "printf") $ potentially $ do
                 format <- rest !!! 0  -- flags are covered by allowedFlags
@@ -961,7 +975,7 @@ checkUnquotedDollarAt p word@(T_NormalWord _ parts) | not $ isStrictlyQuoteFree 
             err (getId x) 2068
                 "Double quote array expansions to avoid re-splitting elements."
   where
-    -- Fixme: should detect whether the alterantive is quoted
+    -- Fixme: should detect whether the alternative is quoted
     isAlternative b@(T_DollarBraced _ t) = ":+" `isInfixOf` bracedString b
     isAlternative _ = False
 checkUnquotedDollarAt _ _ = return ()
@@ -3618,6 +3632,36 @@ checkTrailingBracket _ token =
             "]]" -> "[["
             "]" -> "["
             x -> x
+
+prop_checkNonportableSignals1 = verify checkNonportableSignals "trap f 8"
+prop_checkNonportableSignals2 = verifyNot checkNonportableSignals "trap f 0"
+prop_checkNonportableSignals3 = verifyNot checkNonportableSignals "trap f 14"
+prop_checkNonportableSignals4 = verify checkNonportableSignals "trap f SIGKILL"
+prop_checkNonportableSignals5 = verify checkNonportableSignals "trap f 9"
+prop_checkNonportableSignals6 = verify checkNonportableSignals "trap f stop"
+checkNonportableSignals _ = checkUnqualifiedCommand "trap" (const f)
+  where
+    f = mapM_ check
+    check param = potentially $ do
+        str <- getLiteralString param
+        let id = getId param
+        return $ sequence_ $ mapMaybe (\f -> f id str) [
+            checkNumeric,
+            checkUntrappable
+            ]
+
+    checkNumeric id str = do
+        guard $ not (null str)
+        guard $ all isDigit str
+        guard $ str /= "0" -- POSIX exit trap
+        guard $ str `notElem` ["1", "2", "3", "6", "9", "14", "15" ] -- XSI
+        return $ warn id 2172
+            "Trapping signals by number is not well defined. Prefer signal names."
+
+    checkUntrappable id str = do
+        guard $ map toLower str `elem` ["kill", "9", "sigkill", "stop", "sigstop"]
+        return $ err id 2173
+            "SIGKILL/SIGSTOP can not be trapped."
 
 
 return []
