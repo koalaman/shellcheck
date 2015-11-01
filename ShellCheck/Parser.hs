@@ -623,7 +623,7 @@ readArithmeticContents =
             readDoubleQuoted,
             readNormalDollar,
             readBraced,
-            readBackTicked,
+            readUnquotedBackTicked,
             readNormalLiteral "+-*/=%^,]?:"
             ]
         spacing
@@ -833,7 +833,7 @@ readNormalWordPart end = do
         readGlob,
         readNormalDollar,
         readBraced,
-        readBackTicked,
+        readUnquotedBackTicked,
         readProcSub,
         readNormalLiteral end,
         readLiteralCurlyBraces
@@ -869,7 +869,7 @@ readDollarBracedWord = do
     list <- many readDollarBracedPart
     return $ T_NormalWord id list
 
-readDollarBracedPart = readSingleQuoted <|> readDoubleQuoted <|> readExtglob <|> readNormalDollar <|> readBackTicked <|> readDollarBracedLiteral
+readDollarBracedPart = readSingleQuoted <|> readDoubleQuoted <|> readExtglob <|> readNormalDollar <|> readUnquotedBackTicked <|> readDollarBracedLiteral
 
 readDollarBracedLiteral = do
     id <- getNextId
@@ -927,15 +927,18 @@ readSingleQuotedPart =
     readSingleEscaped
     <|> many1 (noneOf "'\\\x2018\x2019")
 
-prop_readBackTicked = isOk readBackTicked "`ls *.mp3`"
-prop_readBackTicked2 = isOk readBackTicked "`grep \"\\\"\"`"
-prop_readBackTicked3 = isWarning readBackTicked "´grep \"\\\"\"´"
-prop_readBackTicked4 = isOk readBackTicked "`echo foo\necho bar`"
+
+prop_readBackTicked = isOk (readBackTicked False) "`ls *.mp3`"
+prop_readBackTicked2 = isOk (readBackTicked False) "`grep \"\\\"\"`"
+prop_readBackTicked3 = isWarning (readBackTicked False) "´grep \"\\\"\"´"
+prop_readBackTicked4 = isOk readSimpleCommand "`echo foo\necho bar`"
 prop_readBackTicked5 = isOk readSimpleCommand "echo `foo`bar"
 prop_readBackTicked6 = isWarning readSimpleCommand "echo `foo\necho `bar"
 prop_readBackTicked7 = isOk readSimpleCommand "`#inline comment`"
 prop_readBackTicked8 = isOk readSimpleCommand "echo `#comment` \\\nbar baz"
-readBackTicked = called "backtick expansion" $ do
+readQuotedBackTicked = readBackTicked True
+readUnquotedBackTicked = readBackTicked False
+readBackTicked quoted = called "backtick expansion" $ do
     id <- getNextId
     startPos <- getPosition
     backtick
@@ -954,6 +957,7 @@ readBackTicked = called "backtick expansion" $ do
     return $ T_Backticked id result
   where
     unEscape [] = []
+    unEscape ('\\':'"':rest) | quoted = '"' : unEscape rest
     unEscape ('\\':x:rest) | x `elem` "$`\\" = x : unEscape rest
     unEscape ('\\':'\n':rest) = unEscape rest
     unEscape (c:rest) = c : unEscape rest
@@ -1021,7 +1025,7 @@ suggestForgotClosingQuote startPos endPos name = do
     parseProblemAt endPos InfoC 1079
         "This is actually an end quote, but due to next char it looks suspect."
 
-doubleQuotedPart = readDoubleLiteral <|> readDoubleQuotedDollar <|> readBackTicked
+doubleQuotedPart = readDoubleLiteral <|> readDoubleQuotedDollar <|> readQuotedBackTicked
 
 readDoubleQuotedLiteral = do
     doubleQuote
