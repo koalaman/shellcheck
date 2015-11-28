@@ -61,7 +61,7 @@ Use ShellCheck's exit code, or it's [CheckStyle compatible XML output](blob/mast
 
 The easiest way to install ShellCheck locally is through your package manager.
 
-On systems with Cabal:
+On systems with Cabal (installs to `~/.cabal/bin`):
 
     cabal update
     cabal install shellcheck
