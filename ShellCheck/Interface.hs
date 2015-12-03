@@ -34,20 +34,29 @@ data CheckSpec = CheckSpec {
     csFilename :: String,
     csScript :: String,
     csExcludedWarnings :: [Integer],
+    csColorOption :: ColorOptions,
     csShellTypeOverride :: Maybe Shell
 } deriving (Show, Eq)
 
 data CheckResult = CheckResult {
     crFilename :: String,
-    crComments :: [PositionedComment]
+    crComments :: [PositionedComment],
+    crColorOption :: ColorOptions
 } deriving (Show, Eq)
 
 emptyCheckSpec = CheckSpec {
     csFilename = "",
     csScript = "",
     csExcludedWarnings = [],
-    csShellTypeOverride = Nothing
+    csShellTypeOverride = Nothing,
+    csColorOption = ColorAuto
 }
+
+data ColorOptions =
+    ColorAuto
+    | ColorAlways
+    | ColorNever
+  deriving (Ord, Eq, Show)
 
 -- Parser input and output
 data ParseSpec = ParseSpec {
