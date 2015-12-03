@@ -35,7 +35,7 @@ format = return Formatter {
     onResult = outputResult
 }
 
-colorForLevel level = 
+colorForLevel level =
     case level of
         "error"   -> 31 -- red
         "warning" -> 33 -- yellow
@@ -44,7 +44,7 @@ colorForLevel level =
         "message" -> 1 -- bold
         "source"  -> 0 -- none
         otherwise -> 0 -- none
-    
+
 outputError file error = do
     color <- getColorFunc
     hPutStrLn stderr $ color "error" $ file ++ ": " ++ error
