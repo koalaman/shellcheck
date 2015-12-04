@@ -76,7 +76,7 @@ options = [
         (ReqArg (Flag "format") "FORMAT") "output format",
     Option "C" ["color"]
         (OptArg (maybe (Flag "color" "always") (Flag "color")) "WHEN")
-        "Set use of color (auto, always, never)",
+        "Use color (auto, always, never)",
     Option "s" ["shell"]
         (ReqArg (Flag "shell") "SHELLNAME") "Specify dialect (sh,bash,dash,ksh)",
     Option "x" ["external-sources"]
