@@ -65,7 +65,8 @@ data Options = Options {
 
 defaultOptions = Options {
     checkSpec = emptyCheckSpec,
-    externalSources = False
+    externalSources = False,
+    color = ColorAuto
 }
 
 usageHeader = "Usage: shellcheck [OPTIONS...] FILES..."
