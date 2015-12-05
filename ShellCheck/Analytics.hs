@@ -2885,7 +2885,7 @@ checkUnassignedReferences params t = warnings
     isGuarded _ = False
 
     match var candidate =
-        if var /= candidate && (map toLower var) == (map toLower candidate)
+        if var /= candidate && map toLower var == map toLower candidate
         then 1
         else dist var candidate
 
@@ -2897,9 +2897,7 @@ checkGlobsAsOptions _ (T_SimpleCommand _ _ args) =
     mapM_ check $ takeWhile (not . isEndOfArgs) args
   where
     check v@(T_NormalWord _ (T_Glob id s:_)) | s == "*" || s == "?" =
-        info id 2035 $
-            "Use ./" ++ concat (oversimplify v)
-                ++ " so names with dashes won't become options."
+        info id 2035 "Use ./*glob* or -- *glob* so names with dashes won't become options."
     check _ = return ()
 
     isEndOfArgs t =
