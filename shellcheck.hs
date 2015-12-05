@@ -59,7 +59,8 @@ instance Monoid Status where
 
 data Options = Options {
     checkSpec :: CheckSpec,
-    externalSources :: Bool
+    externalSources :: Bool,
+    color :: ColorOptions
 }
 
 defaultOptions = Options {
@@ -73,6 +74,9 @@ options = [
         (ReqArg (Flag "exclude") "CODE1,CODE2..") "exclude types of warnings",
     Option "f" ["format"]
         (ReqArg (Flag "format") "FORMAT") "output format",
+    Option "C" ["color"]
+        (OptArg (maybe (Flag "color" "always") (Flag "color")) "WHEN")
+        "Use color (auto, always, never)",
     Option "s" ["shell"]
         (ReqArg (Flag "shell") "SHELLNAME") "Specify dialect (sh,bash,dash,ksh)",
     Option "x" ["external-sources"]
@@ -195,6 +199,13 @@ runFormatter sys format options files = do
             then NoProblems
             else SomeProblems
 
+parseColorOption colorOption =
+    case colorOption of
+        "auto" -> ColorAuto
+        "always" -> ColorAlways
+        "never" -> ColorNever
+        _ -> error $ "Bad value for --color `" ++ colorOption ++ "'"
+
 parseOption flag options =
     case flag of
         Flag "shell" str ->
@@ -222,6 +233,13 @@ parseOption flag options =
         Flag "externals" _ ->
             return options {
                 externalSources = True
+            }
+
+        Flag "color" color ->
+            return options {
+                checkSpec = (checkSpec options) {
+                    csColorOption = parseColorOption color
+                }
             }
 
         _ -> return options
