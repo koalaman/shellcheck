@@ -1921,7 +1921,8 @@ checkPS1Assignments _ _ = return ()
 
 prop_checkBackticks1 = verify checkBackticks "echo `foo`"
 prop_checkBackticks2 = verifyNot checkBackticks "echo $(foo)"
-checkBackticks _ (T_Backticked id _) =
+prop_checkBackticks3 = verifyNot checkBackticks "echo `#inlined comment` foo"
+checkBackticks _ (T_Backticked id list) | not (null list) =
     style id 2006 "Use $(..) instead of legacy `..`."
 checkBackticks _ _ = return ()
 
