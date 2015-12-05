@@ -16,7 +16,7 @@ errors and pitfalls where the shell just gives a cryptic error message or
 strange behavior, but it also reports on a few more advanced issues where
 corner cases can cause delayed failures.
 
-ShellCheck gives shell specific advice. Consider the line:
+ShellCheck gives shell specific advice. Consider this line:
 
     (( area = 3.14*r*r ))
 
@@ -31,6 +31,12 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 
 
 # OPTIONS
+
+**-C**\ [*WHEN*],\ **--color**[=*WHEN*]
+
+:   For TTY outut, enable colors *always*, *never* or *auto*. The default
+    is *auto*. **--color** without an argument is equivalent to
+    **--color=always**.
 
 **-e**\ *CODE1*[,*CODE2*...],\ **--exclude=***CODE1*[,*CODE2*...]
 
@@ -54,7 +60,7 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 
 :   Print version information and exit.
 
-**-x**,\ **-external-sources**
+**-x**,\ **--external-sources**
 
 :   Follow 'source' statements even when the file is not specified as input.
     By default, `shellcheck` will only follow files specified on the command
