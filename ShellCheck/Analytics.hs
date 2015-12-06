@@ -896,6 +896,8 @@ prop_checkRedirectToSame2 = verify checkRedirectToSame "cat lol | sed -e 's/a/b/
 prop_checkRedirectToSame3 = verifyNot checkRedirectToSame "cat lol | sed -e 's/a/b/g' > foo.bar && mv foo.bar lol"
 prop_checkRedirectToSame4 = verifyNot checkRedirectToSame "foo /dev/null > /dev/null"
 prop_checkRedirectToSame5 = verifyNot checkRedirectToSame "foo > bar 2> bar"
+prop_checkRedirectToSame6 = verifyNot checkRedirectToSame "echo foo > foo"
+prop_checkRedirectToSame7 = verifyNot checkRedirectToSame "sed 's/foo/bar/g' file | sponge file"
 checkRedirectToSame params s@(T_Pipeline _ _ list) =
     mapM_ (\l -> (mapM_ (\x -> doAnalysis (checkOccurrences x) l) (getAllRedirs list))) list
   where
@@ -905,7 +907,8 @@ checkRedirectToSame params s@(T_Pipeline _ _ list) =
         when (exceptId /= newId
                 && x == y
                 && not (isOutput t && isOutput u)
-                && not (special t)) $ do
+                && not (special t)
+                && not (any isHarmlessCommand [t,u])) $ do
             addComment $ note newId
             addComment $ note exceptId
     checkOccurrences _ _ = return ()
@@ -928,6 +931,11 @@ checkRedirectToSame params s@(T_Pipeline _ _ list) =
                     T_DGREAT _ -> True
                     _ -> False
             _ -> False
+    isHarmlessCommand arg = fromMaybe False $ do
+        cmd <- getClosestCommand (parentMap params) arg
+        name <- getCommandBasename cmd
+        return $ name `elem` ["echo", "printf", "sponge"]
+
 checkRedirectToSame _ _ = return ()
 
 
@@ -1104,9 +1112,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
     commandName = fromMaybe "" $ do
         cmd <- getClosestCommand parents t
         name <- getCommandBasename cmd
-        if name == "find"
-            then return $ getFindCommand cmd
-            else return name
+        return $ if name == "find" then getFindCommand cmd else name
 
     isProbablyOk =
             any isOkAssignment (take 3 $ getPath parents t)
