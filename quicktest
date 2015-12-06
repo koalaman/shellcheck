@@ -1,0 +1,15 @@
+#!/bin/bash
+# quicktest runs the ShellCheck unit tests in an interpreted mode.
+# This allows running tests without compiling, which can be faster.
+# 'cabal test' remains the source of truth.
+
+(
+ var=$(echo 'liftM and $ sequence [ShellCheck.Analytics.runTests, ShellCheck.Parser.runTests, ShellCheck.Checker.runTests]' | cabal repl | tee /dev/stderr)
+if [[ $var == *$'\nTrue'* ]]
+then
+  exit 0
+else
+  grep -C 3 "Fail" <<< "$var"
+  exit 1
+fi
+) 2>&1
