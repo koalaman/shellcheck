@@ -32,7 +32,7 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 
 # OPTIONS
 
-**-C**\ [*WHEN*],\ **--color**[=*WHEN*]
+**-C**[*WHEN*],\ **--color**[=*WHEN*]
 
 :   For TTY outut, enable colors *always*, *never* or *auto*. The default
     is *auto*. **--color** without an argument is equivalent to

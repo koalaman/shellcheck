@@ -48,7 +48,6 @@ checkScript sys spec = do
     results <- checkScript (csScript spec)
     return CheckResult {
         crFilename = csFilename spec,
-        crColorOption = csColorOption spec,
         crComments = results
     }
   where

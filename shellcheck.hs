@@ -60,13 +60,15 @@ instance Monoid Status where
 data Options = Options {
     checkSpec :: CheckSpec,
     externalSources :: Bool,
-    color :: ColorOptions
+    formatterOptions :: FormatterOptions
 }
 
 defaultOptions = Options {
     checkSpec = emptyCheckSpec,
     externalSources = False,
-    color = ColorAuto
+    formatterOptions = FormatterOptions {
+        foColorOption = ColorAuto
+    }
 }
 
 usageHeader = "Usage: shellcheck [OPTIONS...] FILES..."
@@ -96,12 +98,12 @@ parseArguments argv =
             printErr $ concat errors ++ "\n" ++ usageInfo usageHeader options
             throwError SyntaxFailure
 
-formats :: Map.Map String (IO Formatter)
-formats = Map.fromList [
+formats :: FormatterOptions -> Map.Map String (IO Formatter)
+formats options = Map.fromList [
     ("checkstyle", ShellCheck.Formatter.CheckStyle.format),
     ("gcc",  ShellCheck.Formatter.GCC.format),
     ("json", ShellCheck.Formatter.JSON.format),
-    ("tty",  ShellCheck.Formatter.TTY.format)
+    ("tty",  ShellCheck.Formatter.TTY.format options)
     ]
 
 getOption [] _ = Nothing
@@ -157,12 +159,13 @@ process flags files = do
     options <- foldM (flip parseOption) defaultOptions flags
     verifyFiles files
     let format = fromMaybe "tty" $ getOption flags "format"
+    let formatters = formats $ formatterOptions options
     formatter <-
-        case Map.lookup format formats of
+        case Map.lookup format formatters of
             Nothing -> do
                 printErr $ "Unknown format " ++ format
                 printErr "Supported formats:"
-                mapM_ (printErr . write) $ Map.keys formats
+                mapM_ (printErr . write) $ Map.keys formatters
                 throwError SupportFailure
               where write s = "  " ++ s
             Just f -> ExceptT $ fmap Right f
@@ -238,8 +241,8 @@ parseOption flag options =
 
         Flag "color" color ->
             return options {
-                checkSpec = (checkSpec options) {
-                    csColorOption = parseColorOption color
+                formatterOptions = (formatterOptions options) {
+                    foColorOption = parseColorOption color
                 }
             }
 

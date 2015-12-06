@@ -27,12 +27,12 @@ import GHC.Exts
 import System.Info
 import System.IO
 
-format :: IO Formatter
-format = return Formatter {
+format :: FormatterOptions -> IO Formatter
+format options = return Formatter {
     header = return (),
     footer = return (),
-    onFailure = outputError,
-    onResult = outputResult
+    onFailure = outputError options,
+    onResult = outputResult options
 }
 
 colorForLevel level =
@@ -45,12 +45,12 @@ colorForLevel level =
         "source"  -> 0 -- none
         otherwise -> 0 -- none
 
-outputError file error = do
-    color <- getColorFunc $ ColorAuto -- FIXME: should respect --color
-    hPutStrLn stderr $ color "error ZZZ" $ file ++ ": " ++ error
+outputError options file error = do
+    color <- getColorFunc $ foColorOption options
+    hPutStrLn stderr $ color "error" $ file ++ ": " ++ error
 
-outputResult result contents = do
-    color <- getColorFunc $ crColorOption result
+outputResult options result contents = do
+    color <- getColorFunc $ foColorOption options
     let comments = crComments result
     let fileLines = lines contents
     let lineCount = fromIntegral $ length fileLines

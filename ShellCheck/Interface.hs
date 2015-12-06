@@ -34,29 +34,20 @@ data CheckSpec = CheckSpec {
     csFilename :: String,
     csScript :: String,
     csExcludedWarnings :: [Integer],
-    csColorOption :: ColorOptions,
     csShellTypeOverride :: Maybe Shell
 } deriving (Show, Eq)
 
 data CheckResult = CheckResult {
     crFilename :: String,
-    crComments :: [PositionedComment],
-    crColorOption :: ColorOptions
+    crComments :: [PositionedComment]
 } deriving (Show, Eq)
 
 emptyCheckSpec = CheckSpec {
     csFilename = "",
     csScript = "",
     csExcludedWarnings = [],
-    csShellTypeOverride = Nothing,
-    csColorOption = ColorAuto
+    csShellTypeOverride = Nothing
 }
-
-data ColorOptions =
-    ColorAuto
-    | ColorAlways
-    | ColorNever
-  deriving (Ord, Eq, Show)
 
 -- Parser input and output
 data ParseSpec = ParseSpec {
@@ -81,6 +72,13 @@ data AnalysisResult = AnalysisResult {
     arComments :: [TokenComment]
 }
 
+
+-- Formatter options
+data FormatterOptions = FormatterOptions {
+    foColorOption :: ColorOption
+}
+
+
 -- Supporting data types
 data Shell = Ksh | Sh | Bash | Dash deriving (Show, Eq)
 data ExecutionMode = Executed | Sourced deriving (Show, Eq)
@@ -98,6 +96,12 @@ data Position = Position {
 data Comment = Comment Severity Code String deriving (Show, Eq)
 data PositionedComment = PositionedComment Position Comment deriving (Show, Eq)
 data TokenComment = TokenComment Id Comment deriving (Show, Eq)
+
+data ColorOption =
+    ColorAuto
+    | ColorAlways
+    | ColorNever
+  deriving (Ord, Eq, Show)
 
 -- For testing
 mockedSystemInterface :: [(String, String)] -> SystemInterface Identity
