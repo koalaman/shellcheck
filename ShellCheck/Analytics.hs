@@ -1153,8 +1153,9 @@ checkSingleQuotedVariables _ _ = return ()
 prop_checkUnquotedN = verify checkUnquotedN "if [ -n $foo ]; then echo cow; fi"
 prop_checkUnquotedN2 = verify checkUnquotedN "[ -n $cow ]"
 prop_checkUnquotedN3 = verifyNot checkUnquotedN "[[ -n $foo ]] && echo cow"
-checkUnquotedN _ (T_Condition _ SingleBracket (TC_Unary _ SingleBracket "-n" (T_NormalWord id [t]))) | willSplit t =
-       err id 2070 "Always true because you failed to quote. Use [[ ]] instead."
+prop_checkUnquotedN4 = verify checkUnquotedN "[ -n $cow -o -t 1 ]"
+checkUnquotedN _ (TC_Unary _ SingleBracket "-n" (T_NormalWord id [t])) | willSplit t =
+       err id 2070 "-n doesn't work with unquoted arguments. Quote or use [[ ]]."
 checkUnquotedN _ _ = return ()
 
 prop_checkNumberComparisons1 = verify checkNumberComparisons "[[ $foo < 3 ]]"
