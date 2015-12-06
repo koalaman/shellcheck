@@ -1976,6 +1976,9 @@ prop_readFunctionDefinition5 = isOk readFunctionDefinition ":(){ :|:;}"
 prop_readFunctionDefinition6 = isOk readFunctionDefinition "?(){ foo; }"
 prop_readFunctionDefinition7 = isOk readFunctionDefinition "..(){ cd ..; }"
 prop_readFunctionDefinition8 = isOk readFunctionDefinition "foo() (ls)"
+prop_readFunctionDefinition9 = isOk readFunctionDefinition "function foo { true; }"
+prop_readFunctionDefinition10= isOk readFunctionDefinition "function foo () { true; }"
+prop_readFunctionDefinition11= isWarning readFunctionDefinition "function foo{\ntrue\n}"
 readFunctionDefinition = called "function" $ do
     functionSignature <- try readFunctionSignature
     allspacing
@@ -1993,8 +1996,11 @@ readFunctionDefinition = called "function" $ do
                 whitespace
             spacing
             name <- readFunctionName
-            spacing
+            spaces <- spacing
             hasParens <- wasIncluded readParens
+            when (not hasParens && null spaces) $
+                acceptButWarn (lookAhead (oneOf "{("))
+                    ErrorC 1095 "You need a space or linefeed between the function name and body."
             return $ T_Function id (FunctionKeyword True) (FunctionParentheses hasParens) name
 
         readWithoutFunction = try $ do
