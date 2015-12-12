@@ -2574,6 +2574,7 @@ prop_checkSpacefulness28= verifyNotTree checkSpacefulness "exec {n}>&1; echo $n"
 prop_checkSpacefulness29= verifyNotTree checkSpacefulness "n=$(stuff); exec {n}>&-;"
 prop_checkSpacefulness30= verifyTree checkSpacefulness "file='foo bar'; echo foo > $file;"
 prop_checkSpacefulness31= verifyNotTree checkSpacefulness "echo \"`echo \\\"$1\\\"`\""
+prop_checkSpacefulness32= verifyNotTree checkSpacefulness "var=$1; [ -v var ]"
 
 checkSpacefulness params t =
     doVariableFlowAnalysis readF writeF (Map.fromList defaults) (variableFlow params)
@@ -2590,7 +2591,7 @@ checkSpacefulness params t =
     readF _ token name = do
         spaced <- hasSpaces name
         return [makeComment InfoC (getId token) 2086 warning |
-                  spaced
+                  isExpansion token && spaced
                   && not (isArrayExpansion token) -- There's another warning for this
                   && not (isCounting token)
                   && not (isQuoteFree parents token)
@@ -2611,6 +2612,11 @@ checkSpacefulness params t =
     writeF _ _ _ _ = return []
 
     parents = parentMap params
+
+    isExpansion t =
+        case t of
+            (T_DollarBraced _ _ ) -> True
+            _ -> False
 
     isCounting (T_DollarBraced id token) =
         case concat $ oversimplify token of
