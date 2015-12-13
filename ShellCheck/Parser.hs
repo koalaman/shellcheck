@@ -734,6 +734,7 @@ prop_readCondition13= isOk readCondition "[[ foo =~ ^fo{1,3}$ ]]"
 prop_readCondition14= isOk readCondition "[ foo '>' bar ]"
 prop_readCondition15= isOk readCondition "[ foo \">=\" bar ]"
 prop_readCondition16= isOk readCondition "[ foo \\< bar ]"
+prop_readCondition17= isOk readCondition "[[ ${file::1} = [-.\\|/\\\\] ]]"
 readCondition = called "test expression" $ do
     opos <- getPosition
     id <- getNextId
@@ -1052,6 +1053,9 @@ prop_readGlob2 = isOk readGlob "[^0-9]"
 prop_readGlob3 = isOk readGlob "[a[:alpha:]]"
 prop_readGlob4 = isOk readGlob "[[:alnum:]]"
 prop_readGlob5 = isOk readGlob "[^[:alpha:]1-9]"
+prop_readGlob6 = isOk readGlob "[\\|]"
+prop_readGlob7 = isOk readGlob "[^[]"
+prop_readGlob8 = isOk readGlob "[*?]"
 readGlob = readExtglob <|> readSimple <|> readClass <|> readGlobbyLiteral
     where
         readSimple = do
@@ -1062,11 +1066,11 @@ readGlob = readExtglob <|> readSimple <|> readClass <|> readGlobbyLiteral
         readClass = try $ do
             id <- getNextId
             char '['
-            s <- many1 (predefined <|> liftM return (letter <|> digit <|> oneOf globchars))
+            s <- many1 (predefined <|> readNormalLiteralPart "]" <|> globchars)
             char ']'
             return $ T_Glob id $ "[" ++ concat s ++ "]"
           where
-           globchars = "^-_:?*.,!~@#$%=+{}/~"
+           globchars = liftM return . oneOf $ "!$[" ++ extglobStartChars
            predefined = do
               try $ string "[:"
               s <- many1 letter
