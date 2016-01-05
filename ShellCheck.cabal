@@ -7,7 +7,7 @@ Category:         Static Analysis
 Author:           Vidar Holen
 Maintainer:       vidar@vidarholen.net
 Homepage:         http://www.shellcheck.net/
-Build-Type:       Simple
+Build-Type:       Custom
 Cabal-Version:    >= 1.8
 Bug-reports:      https://github.com/koalaman/shellcheck/issues
 Description:
