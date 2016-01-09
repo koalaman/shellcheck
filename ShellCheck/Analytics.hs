@@ -218,8 +218,8 @@ nodeChecks = [
     ,checkLoopVariableReassignment
     ,checkTrailingBracket
     ,checkNonportableSignals
+    ,checkMkdirDashPM
     ]
-
 
 filterByAnnotation token =
     filter (not . shouldIgnore)
@@ -3676,6 +3676,29 @@ checkNonportableSignals _ = checkUnqualifiedCommand "trap" (const f)
         return $ err id 2173
             "SIGKILL/SIGSTOP can not be trapped."
 
+prop_checkMkdirDashPM0 = verify checkMkdirDashPM "mkdir -p -m 0755 dir"
+prop_checkMkdirDashPM1 = verify checkMkdirDashPM "mkdir -pm 0755 dir"
+prop_checkMkdirDashPM2 = verify checkMkdirDashPM "mkdir -vpm 0755 dir"
+prop_checkMkdirDashPM3 = verify checkMkdirDashPM "mkdir -pm 0755 -v dir"
+prop_checkMkdirDashPM4 = verify checkMkdirDashPM "mkdir --parents --mode=0755 dir"
+prop_checkMkdirDashPM5 = verify checkMkdirDashPM "mkdir --parents --mode 0755 dir"
+prop_checkMkdirDashPM6 = verify checkMkdirDashPM "mkdir -p --mode=0755 dir"
+prop_checkMkdirDashPM7 = verify checkMkdirDashPM "mkdir --parents -m 0755 dir"
+prop_checkMkdirDashPM8 = verifyNot checkMkdirDashPM "mkdir -p dir"
+prop_checkMkdirDashPM9 = verifyNot checkMkdirDashPM "mkdir -m 0755 dir"
+prop_checkMkdirDashPM10 = verifyNot checkMkdirDashPM "mkdir dir"
+prop_checkMkdirDashPM11 = verifyNot checkMkdirDashPM "mkdir --parents dir"
+prop_checkMkdirDashPM12 = verifyNot checkMkdirDashPM "mkdir --mode=0755 dir"
+prop_checkMkdirDashPM13 = verifyNot checkMkdirDashPM "mkdir_func -pm 0755 dir"
+checkMkdirDashPM _ t@(T_SimpleCommand _ _ _) = potentially $ do
+    name <- getCommandName t
+    guard $ name == "mkdir"
+    dashP <- find ((\f -> f == "p" || f == "parents") . snd) flags
+    dashM <- find ((\f -> f == "m" || f == "mode") . snd) flags
+    return $ warn (getId $ fst dashM) 2174 "-m will be ignored"
+      where
+        flags = getAllFlags t
+checkMkdirDashPM _ _ = return ()
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
