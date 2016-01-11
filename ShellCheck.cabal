@@ -87,6 +87,7 @@ test-suite test-shellcheck
       mtl >= 2.2.1,
       parsec,
       regex-tdfa,
-      QuickCheck >= 2.7.4
+      QuickCheck >= 2.7.4,
+      process >= 1.2.0.0
     main-is: test/shellcheck.hs
 
