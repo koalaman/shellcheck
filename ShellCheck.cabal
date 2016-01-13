@@ -44,7 +44,9 @@ library
       mtl >= 2.2.1,
       parsec,
       regex-tdfa,
-      QuickCheck >= 2.7.4
+      QuickCheck >= 2.7.4,
+      -- When cabal supports it, move this to setup-depends:
+      process
     exposed-modules:
       ShellCheck.AST
       ShellCheck.ASTLib
@@ -87,7 +89,6 @@ test-suite test-shellcheck
       mtl >= 2.2.1,
       parsec,
       regex-tdfa,
-      QuickCheck >= 2.7.4,
-      process >= 1.2.0.0
+      QuickCheck >= 2.7.4
     main-is: test/shellcheck.hs
 

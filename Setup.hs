@@ -8,20 +8,12 @@ import Distribution.Simple (
   simpleUserHooks )
 import Distribution.Simple.Setup ( SDistFlags )
 
--- | This requires the process package from,
---
---   https://hackage.haskell.org/package/process
---
-import System.Process ( callCommand )
+import System.Process ( system )
 
 
--- | This will use almost the default implementation, except we switch
---   out the default pre-sdist hook with our own, 'myPreSDist'.
---
 main = defaultMainWithHooks myHooks
   where
     myHooks = simpleUserHooks { preSDist = myPreSDist }
-
 
 -- | This hook will be executed before e.g. @cabal sdist@. It runs
 --   pandoc to create the man page from shellcheck.1.md. If the pandoc
@@ -35,9 +27,10 @@ main = defaultMainWithHooks myHooks
 --
 myPreSDist :: Args -> SDistFlags -> IO HookedBuildInfo
 myPreSDist _ _ = do
-  putStrLn "Building the man page..."
+  putStrLn "Building the man page (shellcheck.1) with pandoc..."
   putStrLn pandoc_cmd
-  callCommand pandoc_cmd
+  result <- system pandoc_cmd
+  putStrLn $ "pandoc exited with " ++ show result
   return emptyHookedBuildInfo
   where
     pandoc_cmd = "pandoc -s -t man shellcheck.1.md -o shellcheck.1"
