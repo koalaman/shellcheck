@@ -279,7 +279,7 @@ ShellCheck recognizes a menagerie of other issues:
     #!/bin/bash -x -e                 # Common shebang errors
     echo $((n/180*100))               # Unnecessary loss of precision
     ls *[:digit:].txt                 # Bad character class globs
-    sed 's/foo/bar/ file > file       # Redirecting to input
+    sed 's/foo/bar/' file > file       # Redirecting to input
 
 
 ## Testimonials
