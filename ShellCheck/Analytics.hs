@@ -1397,11 +1397,14 @@ checkConstantNoary _ _ = return ()
 
 prop_checkBraceExpansionVars1 = verify checkBraceExpansionVars "echo {1..$n}"
 prop_checkBraceExpansionVars2 = verifyNot checkBraceExpansionVars "echo {1,3,$n}"
-checkBraceExpansionVars _ (T_BraceExpansion id list) = mapM_ check list
+prop_checkBraceExpansionVars3 = verify checkBraceExpansionVars "eval echo DSC{0001..$n}.jpg"
+checkBraceExpansionVars params t@(T_BraceExpansion id list) = mapM_ check list
   where
     check element =
         when ("..$" `isInfixOf` toString element) $
-            warn id 2051 "Bash doesn't support variables in brace range expansions."
+            if isEvaled
+            then style id 2175 "Quote this invalid brace expansion since it should be passed literally to eval."
+            else warn id 2051 "Bash doesn't support variables in brace range expansions."
     literalExt t =
         case t of
             T_DollarBraced {} -> return "$"
@@ -1409,6 +1412,8 @@ checkBraceExpansionVars _ (T_BraceExpansion id list) = mapM_ check list
             T_DollarArithmetic {} -> return "$"
             otherwise -> return "-"
     toString t = fromJust $ getLiteralStringExt literalExt t
+    isEvaled = fromMaybe False $
+        (`isUnqualifiedCommand` "eval") <$> getClosestCommand (parentMap params) t
 checkBraceExpansionVars _ _ = return ()
 
 prop_checkForDecimals = verify checkForDecimals "((3.14*c))"
