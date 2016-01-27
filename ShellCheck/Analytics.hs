@@ -1100,6 +1100,8 @@ prop_checkSingleQuotedVariables7 = verifyNot checkSingleQuotedVariables "PS1='$P
 prop_checkSingleQuotedVariables8 = verify checkSingleQuotedVariables "find . -exec echo '$1' {} +"
 prop_checkSingleQuotedVariables9 = verifyNot checkSingleQuotedVariables "find . -exec awk '{print $1}' {} \\;"
 prop_checkSingleQuotedVariables10= verify checkSingleQuotedVariables "echo '`pwd`'"
+prop_checkSingleQuotedVariables11= verifyNot checkSingleQuotedVariables "sed '${/lol/d}'"
+prop_checkSingleQuotedVariables12= verifyNot checkSingleQuotedVariables "eval 'echo $1'"
 checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
     when (s `matches` re) $
         if "sed" == commandName
@@ -1123,8 +1125,11 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
                 ,"ksh"
                 ,"zsh"
                 ,"ssh"
+                ,"eval"
                 ,"xprop"
                 ,"alias"
+                ,"sudo" -- covering "sudo sh" and such
+                ,"dpkg-query"
                 ]
             || "awk" `isSuffixOf` commandName
             || "perl" `isPrefixOf` commandName
@@ -1136,7 +1141,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
             otherwise -> False
 
     re = mkRegex "\\$[{(0-9a-zA-Z_]|`.*`"
-    sedContra = mkRegex "\\$[dpsaic]($|[^a-zA-Z])"
+    sedContra = mkRegex "\\$[{dpsaic]($|[^a-zA-Z])"
 
     getFindCommand (T_SimpleCommand _ _ words) =
         let list = map getLiteralString words
