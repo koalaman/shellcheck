@@ -1512,10 +1512,12 @@ prop_checkOrNeq1 = verify checkOrNeq "if [[ $lol -ne cow || $lol -ne foo ]]; the
 prop_checkOrNeq2 = verify checkOrNeq "(( a!=lol || a!=foo ))"
 prop_checkOrNeq3 = verify checkOrNeq "[ \"$a\" != lol || \"$a\" != foo ]"
 prop_checkOrNeq4 = verifyNot checkOrNeq "[ a != $cow || b != $foo ]"
+prop_checkOrNeq5 = verifyNot checkOrNeq "[[ $a != /home || $a != */public_html/* ]]"
 -- This only catches the most idiomatic cases. Fixme?
-checkOrNeq _ (TC_Or id typ op (TC_Binary _ _ op1 word1 _) (TC_Binary _ _ op2 word2 _))
-    | word1 == word2 && (op1 == op2 && (op1 == "-ne" || op1 == "!=")) =
+checkOrNeq _ (TC_Or id typ op (TC_Binary _ _ op1 lhs1 rhs1 ) (TC_Binary _ _ op2 lhs2 rhs2))
+    | lhs1 == lhs2 && (op1 == op2 && (op1 == "-ne" || op1 == "!=")) && not (any isGlob [rhs1,rhs2]) =
         warn id 2055 $ "You probably wanted " ++ (if typ == SingleBracket then "-a" else "&&") ++ " here."
+
 checkOrNeq _ (TA_Binary id "||" (TA_Binary _ "!=" word1 _) (TA_Binary _ "!=" word2 _))
     | word1 == word2 =
         warn id 2056 "You probably wanted && here."
