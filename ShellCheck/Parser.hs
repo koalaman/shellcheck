@@ -811,6 +811,9 @@ prop_readNormalWord3 = isOk readNormalWord "foo#"
 prop_readNormalWord4 = isOk readNormalWord "$\"foo\"$'foo\nbar'"
 prop_readNormalWord5 = isWarning readNormalWord "${foo}}"
 prop_readNormalWord6 = isOk readNormalWord "foo/{}"
+prop_readNormalWord7 = isOk readNormalWord "foo\\\nbar"
+prop_readNormalWord8 = isWarning readSubshell "(foo\\ \nbar)"
+prop_readNormalWord9 = isOk readSubshell "(foo\\ ;\nbar)"
 readNormalWord = readNormalishWord ""
 
 readNormalishWord end = do
@@ -1090,6 +1093,7 @@ readNormalEscaped = called "escaped char" $ do
     backslash
     do
         next <- quotable <|> oneOf "?*@!+[]{}.,~#"
+        when (next == ' ') $ checkTrailingSpaces pos <|> return ()
         return $ if next == '\n' then "" else [next]
       <|>
         do
@@ -1105,6 +1109,11 @@ readNormalEscaped = called "escaped char" $ do
     escapedChar 't' = Just "tab"
     escapedChar 'r' = Just "carriage return"
     escapedChar _ = Nothing
+
+    checkTrailingSpaces pos = lookAhead . try $ do
+        many linewhitespace
+        void linefeed <|> eof
+        parseProblemAt pos ErrorC 1101 "Delete trailing spaces after \\ to break line (or use quotes for literal space)."
 
 
 prop_readExtglob1 = isOk readExtglob "!(*.mp3)"
