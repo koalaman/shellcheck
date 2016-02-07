@@ -1226,7 +1226,10 @@ readBraced = try braceExpansion
 
 readNormalDollar = readDollarExpression <|> readDollarDoubleQuote <|> readDollarSingleQuote <|> readDollarLonely
 readDoubleQuotedDollar = readDollarExpression <|> readDollarLonely
-readDollarExpression = readDollarArithmetic <|> readDollarBracket <|> readDollarBraceCommandExpansion <|> readDollarBraced <|> readDollarExpansion <|> readDollarVariable
+
+prop_readDollarExpression1 = isOk readDollarExpression "$(((1) && 3))"
+prop_readDollarExpression2 = isWarning readDollarExpression "$(((1)) && 3)"
+readDollarExpression = readTripleParenthesis "$" readDollarArithmetic readDollarExpansion <|> readDollarArithmetic <|> readDollarBracket <|> readDollarBraceCommandExpansion <|> readDollarBraced <|> readDollarExpansion <|> readDollarVariable
 
 prop_readDollarSingleQuote = isOk readDollarSingleQuote "$'foo\\\'lol'"
 readDollarSingleQuote = called "$'..' expression" $ do
@@ -1269,6 +1272,25 @@ readArithmeticExpression = called "((..)) command" $ do
     c <- readArithmeticContents
     string "))"
     return (T_Arithmetic id c)
+
+-- Check if maybe ((( was intended as ( (( rather than (( (
+readTripleParenthesis prefix expected alternative = do
+    pos <- try . lookAhead $ do
+        string prefix
+        p <- getPosition
+        string "(((" -- should optimally be "((" but it's noisy and rarely helpful
+        return p
+
+    -- If the expected parser fails, try the alt.
+    -- If the alt fails, run the expected one again for the errors.
+    try expected <|> tryAlt pos <|> expected
+  where
+    tryAlt pos = do
+        t <- try alternative
+        parseNoteAt pos WarningC 1102 $
+            "Shells differ in parsing ambiguous " ++ prefix ++ "(((. Use spaces: " ++ prefix ++ "( (( ."
+        return t
+
 
 prop_readDollarBraceCommandExpansion1 = isOk readDollarBraceCommandExpansion "${ ls; }"
 prop_readDollarBraceCommandExpansion2 = isOk readDollarBraceCommandExpansion "${\nls\n}"
@@ -2063,7 +2085,20 @@ readPattern = (readNormalWord `thenSkip` spacing) `sepBy1` (char '|' `thenSkip` 
 prop_readCompoundCommand = isOk readCompoundCommand "{ echo foo; }>/dev/null"
 readCompoundCommand = do
     id <- getNextId
-    cmd <- choice [ readBraceGroup, readArithmeticExpression, readSubshell, readCondition, readWhileClause, readUntilClause, readIfClause, readForClause, readSelectClause, readCaseClause, readFunctionDefinition]
+    cmd <- choice [
+        readBraceGroup,
+        readTripleParenthesis "" readArithmeticExpression readSubshell,
+        readArithmeticExpression,
+        readSubshell,
+        readCondition,
+        readWhileClause,
+        readUntilClause,
+        readIfClause,
+        readForClause,
+        readSelectClause,
+        readCaseClause,
+        readFunctionDefinition
+        ]
     spacing
     redirs <- many readIoRedirect
     unless (null redirs) $ optional $ do
