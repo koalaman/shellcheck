@@ -1255,7 +1255,9 @@ readDollarArithmetic = called "$((..)) expression" $ do
     id <- getNextId
     try (string "$((")
     c <- readArithmeticContents
-    string "))"
+    pos <- getPosition
+    char ')'
+    char ')' <|> fail "Expected a double )) to end the $((..))"
     return (T_DollarArithmetic id c)
 
 readDollarBracket = called "$[..] expression" $ do
