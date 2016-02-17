@@ -14,7 +14,7 @@ The goals of ShellCheck are
 
   - To point out subtle caveats, corner cases and pitfalls that may cause an
     advanced user's otherwise working script to fail under future circumstances.
-    
+
 See [the gallery of bad code](README.md#user-content-gallery-of-bad-code) for examples of what ShellCheck can help you identify!
 
 
@@ -48,13 +48,13 @@ You can see ShellCheck suggestions directly in a variety of editors.
 
 * Atom, through [Linter](https://github.com/AtomLinter/linter-shellcheck).
 
-* Most other editors, through [GCC error compatibility](blob/master/shellcheck.1.md#user-content-formats).
+* Most other editors, through [GCC error compatibility](shellcheck.1.md#user-content-formats).
 
 
 #### In your build or test suites
 While ShellCheck is mostly intended for interactive use, it can easily be added to builds or test suites.
 
-Use ShellCheck's exit code, or it's [CheckStyle compatible XML output](blob/master/shellcheck.1.md#user-content-formats). There's also a simple JSON output format for easy integration.
+Use ShellCheck's exit code, or it's [CheckStyle compatible XML output](shellcheck.1.md#user-content-formats). There's also a simple JSON output format for easy integration.
 
 
 ## Installing
@@ -174,7 +174,7 @@ ShellCheck can recognize many types of incorrect test statements.
     [[ -e *.mpg ]]                    # Existence checks of globs
     [[ $foo==0 ]]                     # Always true due to missing spaces
     [[ -n "$foo " ]]                  # Always true due to literals
-    [[ $foo =~ "fo+" ]]               # Quoted regex in =~ 
+    [[ $foo =~ "fo+" ]]               # Quoted regex in =~
     [ foo =~ re ]                     # Unsupported [ ] operators
     [ $1 -eq "shellcheck" ]           # Numerical comparison of strings
     [ $n && $m ]                      # && in [ .. ]
@@ -219,7 +219,7 @@ ShellCheck can make suggestions to improve style:
     [[ -z $(find /tmp | grep mpg) ]]  # Use grep -q instead
     a >> log; b >> log; c >> log      # Use a redirection block instead
     echo "The time is `date`"         # Use $() instead
-    cd dir; process *; cd ..;         # Use subshells instead 
+    cd dir; process *; cd ..;         # Use subshells instead
     echo $[1+2]                       # Use standard $((..)) instead of old $[]
     echo $(($RANDOM % 6))             # Don't use $ on variables in $((..))
     echo "$(date)"                    # Useless use of echo
@@ -265,7 +265,7 @@ ShellCheck will warn when using features not supported by the shebang. For examp
     foo-bar() { ..; }                # Undefined/unsupported function name
     [ $UID = 0 ]                     # Variable undefined in dash/sh
     local var=value                  # local is undefined in sh
-    
+
 
 #### Miscellaneous
 
