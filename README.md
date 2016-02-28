@@ -117,6 +117,10 @@ Verify that `cabal` is installed and update its dependency list with
 
     $ cabal install
 
+Or if you intend to run the tests:
+
+    $ cabal install --enable-tests
+
 This will compile ShellCheck and install it to your `~/.cabal/bin` directory.
 
 Add this directory to your `PATH` (for bash, add this to your `~/.bashrc`):
