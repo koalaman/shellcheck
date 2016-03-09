@@ -610,6 +610,7 @@ prop_checkBashisms43= verify checkBashisms "trap foo sigint"
 prop_checkBashisms44= verifyNot checkBashisms "#!/bin/dash\ntrap foo int"
 prop_checkBashisms45= verifyNot checkBashisms "#!/bin/dash\ntrap foo INT"
 prop_checkBashisms46= verify checkBashisms "#!/bin/dash\ntrap foo SIGINT"
+prop_checkBashisms47= verify checkBashisms "#!/bin/dash\necho foo 42>/dev/null"
 checkBashisms params = bashism
   where
     isDash = shellType params == Dash
@@ -642,6 +643,8 @@ checkBashisms params = bashism
     bashism (TA_Binary id "**" _ _) = warnMsg id "exponentials are"
     bashism (T_FdRedirect id "&" (T_IoFile _ (T_Greater _) _)) = warnMsg id "&> is"
     bashism (T_FdRedirect id ('{':_) _) = warnMsg id "named file descriptors are"
+    bashism (T_FdRedirect id num _)
+        | all isDigit num && length num > 1 = warnMsg id "FDs outside 0-9 are"
     bashism (T_IoFile id _ word) | isNetworked =
             warnMsg id "/dev/{tcp,udp} is"
         where
