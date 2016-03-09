@@ -772,7 +772,7 @@ prop_readAnnotation3 = isOk readAnnotation "# shellcheck disable=SC1234 source=/
 readAnnotation = called "shellcheck annotation" $ do
     try readAnnotationPrefix
     many1 linewhitespace
-    values <- many1 (readDisable <|> readSourceOverride)
+    values <- many1 (readDisable <|> readSourceOverride <|> readShellOverride)
     linefeed
     many linewhitespace
     return $ concat values
@@ -788,6 +788,14 @@ readAnnotation = called "shellcheck annotation" $ do
     readSourceOverride = forKey "source" $ do
         filename <- many1 $ noneOf " \n"
         return [SourceOverride filename]
+
+    readShellOverride = forKey "shell" $ do
+        pos <- getPosition
+        shell <- many1 $ noneOf " \n"
+        when (isNothing $ shellForExecutable shell) $
+            parseNoteAt pos ErrorC 1103
+                "This shell type is unknown. Use e.g. sh or bash."
+        return [ShellOverride shell]
 
     forKey s p = do
         try $ string s
@@ -2334,6 +2342,7 @@ ifParse p t f =
 
 prop_readShebang1 = isOk readShebang "#!/bin/sh\n"
 prop_readShebang2 = isWarning readShebang "!# /bin/sh\n"
+prop_readShebang3 = isNotOk readShebang "#shellcheck shell=/bin/sh\n"
 readShebang = do
     try readCorrect <|> try readSwapped
     str <- many $ noneOf "\r\n"
@@ -2378,9 +2387,11 @@ readScript = do
     verifyShell pos (getShell sb)
     if isValidShell (getShell sb) /= Just False
       then do
-            commands <- readCompoundListOrEmpty
+            annotationId <- getNextId
+            annotations <- readAnnotations
+            commands <- withAnnotations annotations readCompoundListOrEmpty
             verifyEof
-            return $ T_Script id sb commands
+            return $ T_Annotation annotationId annotations $  T_Script id sb commands
         else do
             many anyChar
             return $ T_Script id sb []

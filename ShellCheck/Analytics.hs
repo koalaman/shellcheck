@@ -115,14 +115,32 @@ checkList l t = concatMap (\f -> f t) l
 
 getCode (TokenComment _ (Comment _ c _)) = c
 
-prop_determineShell0 = determineShell (T_Script (Id 0) "#!/bin/sh" []) == Sh
-prop_determineShell1 = determineShell (T_Script (Id 0) "#!/usr/bin/env ksh" []) == Ksh
-prop_determineShell2 = determineShell (T_Script (Id 0) "" []) == Bash
-prop_determineShell3 = determineShell (T_Script (Id 0) "#!/bin/sh -e" []) == Sh
-determineShell (T_Script _ shebang _) = fromMaybe Bash . shellForExecutable $ shellFor shebang
-    where shellFor s | "/env " `isInfixOf` s = head (drop 1 (words s)++[""])
-          shellFor s | ' ' `elem` s = shellFor $ takeWhile (/= ' ') s
-          shellFor s = reverse . takeWhile (/= '/') . reverse $ s
+prop_determineShell0 = determineShell (fromJust $ pScript "#!/bin/sh") == Sh
+prop_determineShell1 = determineShell (fromJust $ pScript "#!/usr/bin/env ksh") == Ksh
+prop_determineShell2 = determineShell (fromJust $ pScript "") == Bash
+prop_determineShell3 = determineShell (fromJust $ pScript "#!/bin/sh -e") == Sh
+prop_determineShell4 = determineShell (fromJust $ pScript
+    "#!/bin/ksh\n#shellcheck shell=sh\nfoo") == Sh
+prop_determineShell5 = determineShell (fromJust $ pScript
+    "#shellcheck shell=sh\nfoo") == Sh
+determineShell t = fromMaybe Bash $ do
+    shellString <- foldl mplus Nothing $ getCandidates t
+    shellForExecutable shellString
+  where
+    forAnnotation t =
+        case t of
+            (ShellOverride s) -> return s
+            _ -> fail ""
+    getCandidates :: Token -> [Maybe String]
+    getCandidates t@(T_Script {}) = [Just $ fromShebang t]
+    getCandidates (T_Annotation _ annotations s) =
+        map forAnnotation annotations ++
+           [Just $ fromShebang s]
+    fromShebang (T_Script _ s t) = shellFor s
+
+    shellFor s | "/env " `isInfixOf` s = head (drop 1 (words s)++[""])
+    shellFor s | ' ' `elem` s = shellFor $ takeWhile (/= ' ') s
+    shellFor s = reverse . takeWhile (/= '/') . reverse $ s
 
 -- Checks that are run on each node in the AST
 runNodeAnalysis f p t = execWriter (doAnalysis (f p) t)
@@ -310,14 +328,16 @@ defaultSpec root = AnalysisSpec {
 checkNode f = producesComments (runNodeAnalysis f)
 producesComments :: (Parameters -> Token -> [TokenComment]) -> String -> Maybe Bool
 producesComments f s = do
-        root <- prRoot pResult
+        root <- pScript s
         return . not . null $ runList (defaultSpec root) [f]
-  where
+
+pScript s =
+  let
     pSpec = ParseSpec {
         psFilename = "script",
         psScript = s
     }
-    pResult = runIdentity $ parseScript (mockedSystemInterface []) pSpec
+  in prRoot . runIdentity $ parseScript (mockedSystemInterface []) pSpec
 
 -- Copied from https://wiki.haskell.org/Edit_distance
 dist :: Eq a => [a] -> [a] -> Int
@@ -554,12 +574,14 @@ indexOfSublists sub = f 0
 
 prop_checkShebangParameters1 = verifyTree checkShebangParameters "#!/usr/bin/env bash -x\necho cow"
 prop_checkShebangParameters2 = verifyNotTree checkShebangParameters "#! /bin/sh  -l "
+checkShebangParameters p (T_Annotation _ _ t) = checkShebangParameters p t
 checkShebangParameters _ (T_Script id sb _) =
     [makeComment ErrorC id 2096 "On most OS, shebangs can only specify a single parameter." | length (words sb) > 2]
 
 prop_checkShebang1 = verifyNotTree checkShebang "#!/usr/bin/env bash -x\necho cow"
 prop_checkShebang2 = verifyNotTree checkShebang "#! /bin/sh  -l "
 prop_checkShebang3 = verifyTree checkShebang "ls -l"
+checkShebang params (T_Annotation _ _ t) = checkShebang params t
 checkShebang params (T_Script id sb _) =
     [makeComment ErrorC id 2148 "Tips depend on target shell and yours is unknown. Add a shebang."
         | not (shellTypeSpecified params) && sb == "" ]

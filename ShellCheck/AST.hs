@@ -129,7 +129,11 @@ data Token =
     | T_Include Id Token Token -- . & source: SimpleCommand T_Script
     deriving (Show)
 
-data Annotation = DisableComment Integer | SourceOverride String deriving (Show, Eq)
+data Annotation =
+    DisableComment Integer
+    | SourceOverride String
+    | ShellOverride String
+    deriving (Show, Eq)
 data ConditionType = DoubleBracket | SingleBracket deriving (Show, Eq)
 
 -- This is an abomination.
