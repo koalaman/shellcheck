@@ -7,10 +7,10 @@ ShellCheck is a GPLv3 tool that gives warnings and suggestions for bash/sh shell
 The goals of ShellCheck are
 
   - To point out and clarify typical beginner's syntax issues
-    that causes a shell to give cryptic error messages.
+    that cause a shell to give cryptic error messages.
 
   - To point out and clarify typical intermediate level semantic problems
-    that causes a shell to behave strangely and counter-intuitively.
+    that cause a shell to behave strangely and counter-intuitively.
 
   - To point out subtle caveats, corner cases and pitfalls that may cause an
     advanced user's otherwise working script to fail under future circumstances.
@@ -54,7 +54,7 @@ You can see ShellCheck suggestions directly in a variety of editors.
 #### In your build or test suites
 While ShellCheck is mostly intended for interactive use, it can easily be added to builds or test suites.
 
-Use ShellCheck's exit code, or it's [CheckStyle compatible XML output](shellcheck.1.md#user-content-formats). There's also a simple JSON output format for easy integration.
+Use ShellCheck's exit code, or its [CheckStyle compatible XML output](shellcheck.1.md#user-content-formats). There's also a simple JSON output format for easy integration.
 
 
 ## Installing
@@ -98,7 +98,7 @@ or use OneClickInstall - https://software.opensuse.org/package/ShellCheck
 
 ## Compiling from source
 
-This sections describes how to build ShellCheck from a source directory. ShellCheck is written in Haskell and requires 2GB of RAM to compile.
+This section describes how to build ShellCheck from a source directory. ShellCheck is written in Haskell and requires 2GB of RAM to compile.
 
 
 #### Installing Cabal
@@ -292,14 +292,14 @@ Alexander Tarasikov,
 
 ## Reporting bugs
 
-Please use the Github issue tracker for any bugs or feature suggestions:
+Please use the GitHub issue tracker for any bugs or feature suggestions:
 
 https://github.com/koalaman/shellcheck/issues
 
 
 ## Contributing
 
-Please submit patches to code or documentation as Github pull requests!
+Please submit patches to code or documentation as GitHub pull requests!
 
 Contributions must be licensed under the GNU GPLv3.
 The contributor retains the copyright.
