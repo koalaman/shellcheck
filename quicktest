@@ -4,12 +4,12 @@
 # 'cabal test' remains the source of truth.
 
 (
- var=$(echo 'liftM and $ sequence [ShellCheck.Analytics.runTests, ShellCheck.Parser.runTests, ShellCheck.Checker.runTests]' | cabal repl | tee /dev/stderr)
+ var=$(echo 'liftM and $ sequence [ShellCheck.Analytics.runTests, ShellCheck.Parser.runTests, ShellCheck.Checker.runTests]' | cabal repl 2>&1 | tee /dev/stderr)
 if [[ $var == *$'\nTrue'* ]]
 then
   exit 0
 else
-  grep -C 3 "Fail" <<< "$var"
+  grep -C 3 -e "Fail" -e "Tracing" <<< "$var"
   exit 1
 fi
 ) 2>&1

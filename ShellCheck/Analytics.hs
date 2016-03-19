@@ -73,11 +73,13 @@ checksFor Sh = [
     checkBashisms
     ,checkTimeParameters
     ,checkForDecimals
+    ,checkTimedCommand
     ]
 checksFor Dash = [
     checkBashisms
     ,checkForDecimals
     ,checkLocalScope
+    ,checkTimedCommand
     ]
 checksFor Ksh = [
     checkEchoSed
@@ -1107,8 +1109,8 @@ checkStderrRedirect params redir@(T_Redirecting _ [
 
 checkStderrRedirect _ _ = return ()
 
-lt x = trace ("FAILURE " ++ show x) x
-ltt t = trace ("FAILURE " ++ show t)
+lt x = trace ("Tracing " ++ show x) x
+ltt t = trace ("Tracing " ++ show t)
 
 
 prop_checkSingleQuotedVariables  = verify checkSingleQuotedVariables "echo '$foo'"
@@ -1862,6 +1864,32 @@ checkTimeParameters _ = checkUnqualifiedCommand "time" f where
                 when ("-" `isPrefixOf` s && s /= "-p") $
                     info (getId cmd) 2023 "The shell may override 'time' as seen in man time(1). Use 'command time ..' for that one."
     f _ _ = return ()
+
+prop_checkTimedCommand1 = verify checkTimedCommand "time -p foo | bar"
+prop_checkTimedCommand2 = verify checkTimedCommand "time ( foo; bar; )"
+prop_checkTimedCommand3 = verifyNot checkTimedCommand "time sleep 1"
+checkTimedCommand _ = checkUnqualifiedCommand "time" f where
+    f c args@(_:_) = do
+        let cmd = last args
+        when (isPiped cmd) $
+            warn (getId c) 2176 "'time' is undefined for pipelines. time single stage or sh -c instead."
+        when (isSimple cmd == Just False) $
+            warn (getId cmd) 2177 "'time' is undefined for compound commands, time sh -c instead."
+    f _ _ = return ()
+    isPiped cmd =
+        case cmd of
+            T_Pipeline _ _ (_:_:_) -> True
+            _ -> False
+    getCommand cmd =
+        case cmd of
+            T_Pipeline _ _ ((T_Redirecting _ _ a):_) -> return a
+            _ -> fail ""
+    isSimple cmd = do
+        innerCommand <- getCommand cmd
+        case innerCommand of
+            T_SimpleCommand {} -> return True
+            _ -> return False
+
 
 prop_checkTestRedirects1 = verify checkTestRedirects "test 3 > 1"
 prop_checkTestRedirects2 = verifyNot checkTestRedirects "test 3 \\> 1"
