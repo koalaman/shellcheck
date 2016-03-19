@@ -1872,7 +1872,7 @@ checkTimedCommand _ = checkUnqualifiedCommand "time" f where
     f c args@(_:_) = do
         let cmd = last args
         when (isPiped cmd) $
-            warn (getId c) 2176 "'time' is undefined for pipelines. time single stage or sh -c instead."
+            warn (getId c) 2176 "'time' is undefined for pipelines. time single stage or bash -c instead."
         when (isSimple cmd == Just False) $
             warn (getId cmd) 2177 "'time' is undefined for compound commands, time sh -c instead."
     f _ _ = return ()
