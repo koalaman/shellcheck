@@ -1698,6 +1698,7 @@ readTermOrNone = do
         eof
         return []
 
+prop_readTerm = isOk readTerm "time ( foo; bar; )"
 readTerm = do
     allspacing
     m <- readAndOr
@@ -2051,6 +2052,7 @@ readFunctionDefinition = called "function" $ do
         readWithoutFunction = try $ do
             id <- getNextId
             name <- readFunctionName
+            guard $ name /= "time"  -- Interfers with time ( foo )
             spacing
             readParens
             return $ T_Function id (FunctionKeyword False) (FunctionParentheses True) name
