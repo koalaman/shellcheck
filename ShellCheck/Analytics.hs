@@ -635,6 +635,8 @@ prop_checkBashisms44= verifyNot checkBashisms "#!/bin/dash\ntrap foo int"
 prop_checkBashisms45= verifyNot checkBashisms "#!/bin/dash\ntrap foo INT"
 prop_checkBashisms46= verify checkBashisms "#!/bin/dash\ntrap foo SIGINT"
 prop_checkBashisms47= verify checkBashisms "#!/bin/dash\necho foo 42>/dev/null"
+prop_checkBashisms48= verifyNot checkBashisms "#!/bin/dash\necho $LINENO"
+prop_checkBashisms49= verify checkBashisms "#!/bin/dash\necho $MACHTYPE"
 checkBashisms params = bashism
   where
     isDash = shellType params == Dash
@@ -789,9 +791,11 @@ checkBashisms params = bashism
         "DIRSTACK", "EUID", "UID", "SHLVL", "PIPESTATUS", "SHELLOPTS"
         ]
     bashDynamicVars = [ "RANDOM", "SECONDS" ]
+    dashVars = [ "LINENO" ]
     isBashVariable var =
-        var `elem` bashDynamicVars
-        || var `elem` bashVars && not (isAssigned var)
+        (var `elem` bashDynamicVars
+            || var `elem` bashVars && not (isAssigned var))
+        && not (isDash && var `elem` dashVars)
     isAssigned var = any f (variableFlow params)
       where
         f x = case x of
