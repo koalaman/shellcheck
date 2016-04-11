@@ -5,11 +5,13 @@ import System.Exit
 import qualified ShellCheck.Checker
 import qualified ShellCheck.Analytics
 import qualified ShellCheck.Parser
+import qualified ShellCheck.Checks.Commands
 
 main = do
     putStrLn "Running ShellCheck tests..."
     results <- sequence [
         ShellCheck.Checker.runTests,
+        ShellCheck.Checks.Commands.runTests,
         ShellCheck.Analytics.runTests,
         ShellCheck.Parser.runTests
       ]

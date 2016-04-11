@@ -52,7 +52,9 @@ library
       ShellCheck.ASTLib
       ShellCheck.Analytics
       ShellCheck.Analyzer
+      ShellCheck.AnalyzerLib
       ShellCheck.Checker
+      ShellCheck.Checks.Commands
       ShellCheck.Data
       ShellCheck.Formatter.Format
       ShellCheck.Formatter.CheckStyle

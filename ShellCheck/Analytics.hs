@@ -22,6 +22,7 @@ module ShellCheck.Analytics (runAnalytics, ShellCheck.Analytics.runTests) where
 
 import ShellCheck.AST
 import ShellCheck.ASTLib
+import ShellCheck.AnalyzerLib
 import ShellCheck.Data
 import ShellCheck.Parser
 import ShellCheck.Interface
@@ -32,6 +33,7 @@ import Control.Monad
 import Control.Monad.Identity
 import Control.Monad.State
 import Control.Monad.Writer
+import Control.Monad.Reader
 import Data.Char
 import Data.Functor
 import Data.Function (on)
@@ -42,13 +44,6 @@ import Debug.Trace
 import qualified Data.Map as Map
 import Test.QuickCheck.All (forAllProperties)
 import Test.QuickCheck.Test (quickCheckWithResult, stdArgs, maxSuccess)
-
-data Parameters = Parameters {
-    variableFlow :: [StackData],
-    parentMap :: Map.Map Id Token,
-    shellType :: Shell,
-    shellTypeSpecified :: Bool
-    }
 
 -- Checks that are run on the AST root
 treeChecks :: [Parameters -> Token -> [TokenComment]]
@@ -92,57 +87,21 @@ checksFor Bash = [
     ,checkLocalScope
     ]
 
-runAnalytics :: AnalysisSpec -> AnalysisResult
-runAnalytics options = AnalysisResult {
-        arComments =
-            nub . filterByAnnotation (asScript options) $
-                runList options treeChecks
-    }
+runAnalytics :: AnalysisSpec -> [TokenComment]
+runAnalytics options =
+        runList options treeChecks
 
 runList :: AnalysisSpec -> [Parameters -> Token -> [TokenComment]]
     -> [TokenComment]
 runList spec list = notes
     where
         root = asScript spec
-        params = Parameters {
-                shellType = fromMaybe (determineShell root) $ asShellType spec,
-                shellTypeSpecified = isJust $ asShellType spec,
-                parentMap = getParentTree root,
-                variableFlow =
-                    getVariableFlow (shellType params) (parentMap params) root
-        }
+        params = makeParameters spec
         notes = concatMap (\f -> f params root) list
+
 
 checkList l t = concatMap (\f -> f t) l
 
-getCode (TokenComment _ (Comment _ c _)) = c
-
-prop_determineShell0 = determineShell (fromJust $ pScript "#!/bin/sh") == Sh
-prop_determineShell1 = determineShell (fromJust $ pScript "#!/usr/bin/env ksh") == Ksh
-prop_determineShell2 = determineShell (fromJust $ pScript "") == Bash
-prop_determineShell3 = determineShell (fromJust $ pScript "#!/bin/sh -e") == Sh
-prop_determineShell4 = determineShell (fromJust $ pScript
-    "#!/bin/ksh\n#shellcheck shell=sh\nfoo") == Sh
-prop_determineShell5 = determineShell (fromJust $ pScript
-    "#shellcheck shell=sh\nfoo") == Sh
-determineShell t = fromMaybe Bash $ do
-    shellString <- foldl mplus Nothing $ getCandidates t
-    shellForExecutable shellString
-  where
-    forAnnotation t =
-        case t of
-            (ShellOverride s) -> return s
-            _ -> fail ""
-    getCandidates :: Token -> [Maybe String]
-    getCandidates t@(T_Script {}) = [Just $ fromShebang t]
-    getCandidates (T_Annotation _ annotations s) =
-        map forAnnotation annotations ++
-           [Just $ fromShebang s]
-    fromShebang (T_Script _ s t) = shellFor s
-
-    shellFor s | "/env " `isInfixOf` s = head (drop 1 (words s)++[""])
-    shellFor s | ' ' `elem` s = shellFor $ takeWhile (/= ' ') s
-    shellFor s = reverse . takeWhile (/= '/') . reverse $ s
 
 -- Checks that are run on each node in the AST
 runNodeAnalysis f p t = execWriter (doAnalysis (f p) t)
@@ -167,25 +126,18 @@ nodeChecks = [
     ,checkArithmeticDeref
     ,checkArithmeticBadOctal
     ,checkComparisonAgainstGlob
-    ,checkPrintfVar
     ,checkCommarrays
     ,checkOrNeq
     ,checkEchoWc
     ,checkConstantIfs
-    ,checkTr
     ,checkPipedAssignment
     ,checkAssignAteCommand
-    ,checkUuoeCmd
     ,checkUuoeVar
-    ,checkFindNameGlob
-    ,checkGrepRe
-    ,checkNeedlessCommands
     ,checkQuotedCondRegex
     ,checkForInCat
     ,checkFindExec
     ,checkValidCondOps
     ,checkGlobbedRegex
-    ,checkTrapQuotes
     ,checkTestRedirects
     ,checkIndirectExpansion
     ,checkSudoRedirect
@@ -196,10 +148,8 @@ nodeChecks = [
     ,checkLonelyDotDash
     ,checkSpuriousExec
     ,checkSpuriousExpansion
-    ,checkUnusedEchoEscapes
     ,checkDollarBrackets
     ,checkSshHereDoc
-    ,checkSshCommandString
     ,checkGlobsAsOptions
     ,checkWhileReadPitfalls
     ,checkArithmeticOpCommand
@@ -214,99 +164,24 @@ nodeChecks = [
     ,checkConditionalAndOrs
     ,checkFunctionDeclarations
     ,checkCatastrophicRm
-    ,checkInteractiveSu
     ,checkStderrPipe
-    ,checkSetAssignment
     ,checkOverridingPath
     ,checkArrayAsString
     ,checkUnsupported
     ,checkMultipleAppends
-    ,checkAliasesExpandEarly
     ,checkSuspiciousIFS
-    ,checkAliasesUsesArgs
     ,checkShouldUseGrepQ
     ,checkTestGlobs
     ,checkConcatenatedDollarAt
-    ,checkFindActionPrecedence
     ,checkTildeInPath
-    ,checkFindExecWithSingleArgument
-    ,checkReturn
     ,checkMaskedReturns
-    ,checkInjectableFindSh
     ,checkReadWithoutR
-    ,checkExportedExpansions
     ,checkLoopVariableReassignment
     ,checkTrailingBracket
-    ,checkNonportableSignals
-    ,checkMkdirDashPM
     ]
 
-filterByAnnotation token =
-    filter (not . shouldIgnore)
-  where
-    idFor (TokenComment id _) = id
-    shouldIgnore note =
-        any (shouldIgnoreFor (getCode note)) $
-            getPath parents (T_Bang $ idFor note)
-    shouldIgnoreFor num (T_Annotation _ anns _) =
-        any hasNum anns
-      where
-        hasNum (DisableComment ts) = num == ts
-        hasNum _ = False
-    shouldIgnoreFor _ (T_Include {}) = True -- Ignore included files
-    shouldIgnoreFor _ _ = False
-    parents = getParentTree token
-
-makeComment :: Severity -> Id -> Code -> String -> TokenComment
-makeComment severity id code note =
-    TokenComment id $ Comment severity code note
-
-addComment note = tell [note]
-
-warn :: MonadWriter [TokenComment] m => Id -> Code -> String -> m ()
-warn  id code str = addComment $ makeComment WarningC id code str
-err   id code str = addComment $ makeComment ErrorC id code str
-info  id code str = addComment $ makeComment InfoC id code str
-style id code str = addComment $ makeComment StyleC id code str
-
-isVariableStartChar x = x == '_' || isAsciiLower x || isAsciiUpper x
-isVariableChar x = isVariableStartChar x || isDigit x
-variableNameRegex = mkRegex "[_a-zA-Z][_a-zA-Z0-9]*"
-
-prop_isVariableName1 = isVariableName "_fo123"
-prop_isVariableName2 = not $ isVariableName "4"
-prop_isVariableName3 = not $ isVariableName "test: "
-isVariableName (x:r) = isVariableStartChar x && all isVariableChar r
-isVariableName _ = False
-
-potentially = fromMaybe (return ())
 
 wouldHaveBeenGlob s = '*' `elem` s
-
-isConfusedGlobRegex ('*':_) = True
-isConfusedGlobRegex [x,'*'] | x /= '\\' = True
-isConfusedGlobRegex _ = False
-
-getSuspiciousRegexWildcard str =
-    if not $ str `matches` contra
-    then do
-        match <- matchRegex suspicious str
-        str <- match !!! 0
-        str !!! 0
-    else
-        fail "looks good"
-  where
-    suspicious = mkRegex "([A-Za-z1-9])\\*"
-    contra = mkRegex "[^a-zA-Z1-9]\\*|[][^$+\\\\]"
-
-headOrDefault _ (a:_) = a
-headOrDefault def _ = def
-
-
-(!!!) list i =
-    case drop i list of
-        [] -> Nothing
-        (r:_) -> Just r
 
 verify :: (Parameters -> Token -> Writer [TokenComment] ()) -> String -> Bool
 verify f s = checkNode f s == Just True
@@ -320,26 +195,20 @@ verifyTree f s = producesComments f s == Just True
 verifyNotTree :: (Parameters -> Token -> [TokenComment]) -> String -> Bool
 verifyNotTree f s = producesComments f s == Just False
 
+checkCommand str f t@(T_SimpleCommand id _ (cmd:rest)) =
+    when (t `isCommand` str) $ f cmd rest
+checkCommand _ _ _ = return ()
 
-defaultSpec root = AnalysisSpec {
-    asScript = root,
-    asShellType = Nothing,
-    asExecutionMode = Executed
-}
+checkUnqualifiedCommand str f t@(T_SimpleCommand id _ (cmd:rest)) =
+    when (t `isUnqualifiedCommand` str) $ f cmd rest
+checkUnqualifiedCommand _ _ _ = return ()
+
 
 checkNode f = producesComments (runNodeAnalysis f)
 producesComments :: (Parameters -> Token -> [TokenComment]) -> String -> Maybe Bool
 producesComments f s = do
         root <- pScript s
         return . not . null $ runList (defaultSpec root) [f]
-
-pScript s =
-  let
-    pSpec = ParseSpec {
-        psFilename = "script",
-        psScript = s
-    }
-  in prRoot . runIdentity $ parseScript (mockedSystemInterface []) pSpec
 
 -- Copied from https://wiki.haskell.org/Edit_distance
 dist :: Eq a => [a] -> [a] -> Int
@@ -494,19 +363,6 @@ checkUuoc _ (T_Pipeline _ _ (T_Redirecting _ _ cmd:_:_)) =
     f _ = return ()
     isOption word = "-" `isPrefixOf` onlyLiteralString word
 checkUuoc _ _ = return ()
-
-prop_checkNeedlessCommands = verify checkNeedlessCommands "foo=$(expr 3 + 2)"
-prop_checkNeedlessCommands2 = verify checkNeedlessCommands "foo=`echo \\`expr 3 + 2\\``"
-prop_checkNeedlessCommands3 = verifyNot checkNeedlessCommands "foo=$(expr foo : regex)"
-prop_checkNeedlessCommands4 = verifyNot checkNeedlessCommands "foo=$(expr foo \\< regex)"
-checkNeedlessCommands _ cmd@(T_SimpleCommand id _ args) |
-        cmd `isCommand` "expr" && not (any (`elem` words) exceptions) =
-    style id 2003 "expr is antiquated. Consider rewriting this using $((..)), ${} or [[ ]]."
-  where
-    -- These operators are hard to replicate in POSIX
-    exceptions = [ ":", "<", ">", "<=", ">=" ]
-    words = mapMaybe getLiteralString args
-checkNeedlessCommands _ _ = return ()
 
 prop_checkPipePitfalls3 = verify checkPipePitfalls "ls | grep -v mp3"
 prop_checkPipePitfalls4 = verifyNot checkPipePitfalls "find . -print0 | xargs -0 foo"
@@ -1573,159 +1429,6 @@ checkValidCondOps _ (TC_Unary id _ s _)
         warn id 2058 "Unknown unary operator."
 checkValidCondOps _ _ = return ()
 
---- Context seeking
-
-getParentTree t =
-    snd . snd $ runState (doStackAnalysis pre post t) ([], Map.empty)
-  where
-    pre t = modify (first ((:) t))
-    post t = do
-        (_:rest, map) <- get
-        case rest of [] -> put (rest, map)
-                     (x:_) -> put (rest, Map.insert (getId t) x map)
-
-getTokenMap t =
-    execState (doAnalysis f t) Map.empty
-  where
-    f t = modify (Map.insert (getId t) t)
-
-
--- Is this node self quoting for a regular element?
-isQuoteFree = isQuoteFreeNode False
-
--- Is this node striclty self quoting, for array expansions
-isStrictlyQuoteFree = isQuoteFreeNode True
-
-
-isQuoteFreeNode strict tree t =
-    (isQuoteFreeElement t == Just True) ||
-        head (mapMaybe isQuoteFreeContext (drop 1 $ getPath tree t) ++ [False])
-  where
-    -- Is this node self-quoting in itself?
-    isQuoteFreeElement t =
-        case t of
-            T_Assignment {} -> return True
-            T_FdRedirect {} -> return True
-            _ -> Nothing
-
-    -- Are any subnodes inherently self-quoting?
-    isQuoteFreeContext t =
-        case t of
-            TC_Noary _ DoubleBracket _ -> return True
-            TC_Unary _ DoubleBracket _ _ -> return True
-            TC_Binary _ DoubleBracket _ _ _ -> return True
-            TA_Sequence {} -> return True
-            T_Arithmetic {} -> return True
-            T_Assignment {} -> return True
-            T_Redirecting {} -> return $
-                if strict then False else
-                    -- Not true, just a hack to prevent warning about non-expansion refs
-                    any (isCommand t) ["local", "declare", "typeset", "export", "trap", "readonly"]
-            T_DoubleQuoted _ _ -> return True
-            T_DollarDoubleQuoted _ _ -> return True
-            T_CaseExpression {} -> return True
-            T_HereDoc {} -> return True
-            T_DollarBraced {} -> return True
-            -- When non-strict, pragmatically assume it's desirable to split here
-            T_ForIn {} -> return (not strict)
-            T_SelectIn {} -> return (not strict)
-            _ -> Nothing
-
-isParamTo tree cmd =
-    go
-  where
-    go x = case Map.lookup (getId x) tree of
-                Nothing -> False
-                Just parent -> check parent
-    check t =
-        case t of
-            T_SingleQuoted _ _ -> go t
-            T_DoubleQuoted _ _ -> go t
-            T_NormalWord _ _ -> go t
-            T_SimpleCommand {} -> isCommand t cmd
-            T_Redirecting {} -> isCommand t cmd
-            _ -> False
-
-getClosestCommand tree t =
-    msum . map getCommand $ getPath tree t
-  where
-    getCommand t@(T_Redirecting {}) = return t
-    getCommand _ = Nothing
-
-usedAsCommandName tree token = go (getId token) (tail $ getPath tree token)
-  where
-    go currentId (T_NormalWord id [word]:rest)
-        | currentId == getId word = go id rest
-    go currentId (T_DoubleQuoted id [word]:rest)
-        | currentId == getId word = go id rest
-    go currentId (T_SimpleCommand _ _ (word:_):_)
-        | currentId == getId word = True
-    go _ _ = False
-
--- A list of the element and all its parents
-getPath tree t = t :
-    case Map.lookup (getId t) tree of
-        Nothing -> []
-        Just parent -> getPath tree parent
-
-isParentOf tree parent child =
-    elem (getId parent) . map getId $ getPath tree child
-
-parents params = getPath (parentMap params)
-
---- Command specific checks
-
-checkCommand str f t@(T_SimpleCommand id _ (cmd:rest)) =
-    when (t `isCommand` str) $ f cmd rest
-checkCommand _ _ _ = return ()
-
-checkUnqualifiedCommand str f t@(T_SimpleCommand id _ (cmd:rest)) =
-    when (t `isUnqualifiedCommand` str) $ f cmd rest
-checkUnqualifiedCommand _ _ _ = return ()
-
-isCommand token str = isCommandMatch token (\cmd -> cmd  == str || ('/' : str) `isSuffixOf` cmd)
-isUnqualifiedCommand token str = isCommandMatch token (== str)
-
-isCommandMatch token matcher = fromMaybe False $ do
-    cmd <- getCommandName token
-    return $ matcher cmd
-
-prop_checkPrintfVar1 = verify checkPrintfVar "printf \"Lol: $s\""
-prop_checkPrintfVar2 = verifyNot checkPrintfVar "printf 'Lol: $s'"
-prop_checkPrintfVar3 = verify checkPrintfVar "printf -v cow $(cmd)"
-prop_checkPrintfVar4 = verifyNot checkPrintfVar "printf \"%${count}s\" var"
-checkPrintfVar _ = checkUnqualifiedCommand "printf" (const f) where
-    f (dashv:var:rest) | getLiteralString dashv == Just "-v" = f rest
-    f (format:params) = check format
-    f _ = return ()
-    check format =
-        unless ('%' `elem` concat (oversimplify format) || isLiteral format) $
-          warn (getId format) 2059
-              "Don't use variables in the printf format string. Use printf \"..%s..\" \"$foo\"."
-
-
--- Check whether a word is entirely output from a single command
-tokenIsJustCommandOutput t = case t of
-    T_NormalWord id [T_DollarExpansion _ cmds] -> check cmds
-    T_NormalWord id [T_DoubleQuoted _ [T_DollarExpansion _ cmds]] -> check cmds
-    T_NormalWord id [T_Backticked _ cmds] -> check cmds
-    T_NormalWord id [T_DoubleQuoted _ [T_Backticked _ cmds]] -> check cmds
-    _ -> False
-  where
-    check [x] = not $ isOnlyRedirection x
-    check _ = False
-
-prop_checkUuoeCmd1 = verify checkUuoeCmd "echo $(date)"
-prop_checkUuoeCmd2 = verify checkUuoeCmd "echo `date`"
-prop_checkUuoeCmd3 = verify checkUuoeCmd "echo \"$(date)\""
-prop_checkUuoeCmd4 = verify checkUuoeCmd "echo \"`date`\""
-prop_checkUuoeCmd5 = verifyNot checkUuoeCmd "echo \"The time is $(date)\""
-prop_checkUuoeCmd6 = verifyNot checkUuoeCmd "echo \"$(<file)\""
-checkUuoeCmd _ = checkUnqualifiedCommand "echo" (const f) where
-    msg id = style id 2005 "Useless echo? Instead of 'echo $(cmd)', just use 'cmd'."
-    f [token] = when (tokenIsJustCommandOutput token) $ msg (getId token)
-    f _ = return ()
-
 prop_checkUuoeVar1 = verify checkUuoeVar "for f in $(echo $tmp); do echo lol; done"
 prop_checkUuoeVar2 = verify checkUuoeVar "date +`echo \"$format\"`"
 prop_checkUuoeVar3 = verifyNot checkUuoeVar "foo \"$(echo -e '\r')\""
@@ -1759,106 +1462,6 @@ checkUuoeVar _ p =
                 when (all couldBeOptimized vars) $ style id 2116
                     "Useless echo? Instead of 'cmd $(echo foo)', just use 'cmd foo'."
           otherwise -> return ()
-
-prop_checkTr1 = verify checkTr "tr [a-f] [A-F]"
-prop_checkTr2 = verify checkTr "tr 'a-z' 'A-Z'"
-prop_checkTr2a= verify checkTr "tr '[a-z]' '[A-Z]'"
-prop_checkTr3 = verifyNot checkTr "tr -d '[:lower:]'"
-prop_checkTr3a= verifyNot checkTr "tr -d '[:upper:]'"
-prop_checkTr3b= verifyNot checkTr "tr -d '|/_[:upper:]'"
-prop_checkTr4 = verifyNot checkTr "ls [a-z]"
-prop_checkTr5 = verify checkTr "tr foo bar"
-prop_checkTr6 = verify checkTr "tr 'hello' 'world'"
-prop_checkTr8 = verifyNot checkTr "tr aeiou _____"
-prop_checkTr9 = verifyNot checkTr "a-z n-za-m"
-prop_checkTr10= verifyNot checkTr "tr --squeeze-repeats rl lr"
-prop_checkTr11= verifyNot checkTr "tr abc '[d*]'"
-checkTr _ = checkCommand "tr" (const $ mapM_ f)
-  where
-    f w | isGlob w = -- The user will go [ab] -> '[ab]' -> 'ab'. Fixme?
-        warn (getId w) 2060 "Quote parameters to tr to prevent glob expansion."
-    f word =
-      case getLiteralString word of
-        Just "a-z" -> info (getId word) 2018 "Use '[:lower:]' to support accents and foreign alphabets."
-        Just "A-Z" -> info (getId word) 2019 "Use '[:upper:]' to support accents and foreign alphabets."
-        Just s -> do  -- Eliminate false positives by only looking for dupes in SET2?
-          when (not ("-" `isPrefixOf` s || "[:" `isInfixOf` s) && duplicated s) $
-            info (getId word) 2020 "tr replaces sets of chars, not words (mentioned due to duplicates)."
-          unless ("[:" `isPrefixOf` s) $
-            when ("[" `isPrefixOf` s && "]" `isSuffixOf` s && (length s > 2) && ('*' `notElem` s)) $
-              info (getId word) 2021 "Don't use [] around ranges in tr, it replaces literal square brackets."
-        Nothing -> return ()
-
-    duplicated s =
-        let relevant = filter isAlpha s
-        in relevant /= nub relevant
-
-
-prop_checkFindNameGlob1 = verify checkFindNameGlob "find / -name *.php"
-prop_checkFindNameGlob2 = verify checkFindNameGlob "find / -type f -ipath *(foo)"
-prop_checkFindNameGlob3 = verifyNot checkFindNameGlob "find * -name '*.php'"
-checkFindNameGlob _ = checkCommand "find" (const f) where
-    acceptsGlob (Just s) = s `elem` [ "-ilname", "-iname", "-ipath", "-iregex", "-iwholename", "-lname", "-name", "-path", "-regex", "-wholename" ]
-    acceptsGlob _ = False
-    f [] = return ()
-    f [x] = return ()
-    f (a:b:r) = do
-        when (acceptsGlob (getLiteralString a) && isGlob b) $ do
-            let (Just s) = getLiteralString a
-            warn (getId b) 2061 $ "Quote the parameter to " ++ s ++ " so the shell won't interpret it."
-        f (b:r)
-
-
-prop_checkGrepRe1 = verify checkGrepRe "cat foo | grep *.mp3"
-prop_checkGrepRe2 = verify checkGrepRe "grep -Ev cow*test *.mp3"
-prop_checkGrepRe3 = verify checkGrepRe "grep --regex=*.mp3 file"
-prop_checkGrepRe4 = verifyNot checkGrepRe "grep foo *.mp3"
-prop_checkGrepRe5 = verifyNot checkGrepRe "grep-v  --regex=moo *"
-prop_checkGrepRe6 = verifyNot checkGrepRe "grep foo \\*.mp3"
-prop_checkGrepRe7 = verify checkGrepRe "grep *foo* file"
-prop_checkGrepRe8 = verify checkGrepRe "ls | grep foo*.jpg"
-prop_checkGrepRe9 = verifyNot checkGrepRe "grep '[0-9]*' file"
-prop_checkGrepRe10= verifyNot checkGrepRe "grep '^aa*' file"
-prop_checkGrepRe11= verifyNot checkGrepRe "grep --include=*.png foo"
-
-checkGrepRe _ = checkCommand "grep" (const f) where
-    -- --regex=*(extglob) doesn't work. Fixme?
-    skippable (Just s) = not ("--regex=" `isPrefixOf` s) && "-" `isPrefixOf` s
-    skippable _ = False
-    f [] = return ()
-    f (x:r) | skippable (getLiteralStringExt (const $ return "_") x) = f r
-    f (re:_) = do
-        when (isGlob re) $
-            warn (getId re) 2062 "Quote the grep pattern so the shell won't interpret it."
-        let string = concat $ oversimplify re
-        if isConfusedGlobRegex string then
-            warn (getId re) 2063 "Grep uses regex, but this looks like a glob."
-          else potentially $ do
-            char <- getSuspiciousRegexWildcard string
-            return $ info (getId re) 2022 $
-                "Note that unlike globs, " ++ [char] ++ "* here matches '" ++ [char, char, char] ++ "' but not '" ++ wordStartingWith char ++ "'."
-
-wordStartingWith c =
-    head . filter ([c] `isPrefixOf`) $ candidates
-  where
-    candidates =
-        sampleWords ++ map (\(x:r) -> toUpper x : r) sampleWords ++ [c:"test"]
-
-prop_checkTrapQuotes1 = verify checkTrapQuotes "trap \"echo $num\" INT"
-prop_checkTrapQuotes1a= verify checkTrapQuotes "trap \"echo `ls`\" INT"
-prop_checkTrapQuotes2 = verifyNot checkTrapQuotes "trap 'echo $num' INT"
-prop_checkTrapQuotes3 = verify checkTrapQuotes "trap \"echo $((1+num))\" EXIT DEBUG"
-checkTrapQuotes _ = checkCommand "trap" (const f) where
-    f (x:_) = checkTrap x
-    f _ = return ()
-    checkTrap (T_NormalWord _ [T_DoubleQuoted _ rs]) = mapM_ checkExpansions rs
-    checkTrap _ = return ()
-    warning id = warn id 2064 "Use single quotes, otherwise this expands now rather than when signalled."
-    checkExpansions (T_DollarExpansion id _) = warning id
-    checkExpansions (T_Backticked id _) = warning id
-    checkExpansions (T_DollarBraced id _) = warning id
-    checkExpansions (T_DollarArithmetic id _) = warning id
-    checkExpansions _ = return ()
 
 prop_checkTimeParameters1 = verify checkTimeParameters "time -f lol sleep 10"
 prop_checkTimeParameters2 = verifyNot checkTimeParameters "time sleep 10"
@@ -1942,35 +1545,6 @@ checkSudoRedirect _ (T_Redirecting _ redirs cmd) | cmd `isCommand` "sudo" =
     warnAbout _ = return ()
     special file = concat (oversimplify file) == "/dev/null"
 checkSudoRedirect _ _ = return ()
-
-prop_checkReturn1 = verifyNot checkReturn "return"
-prop_checkReturn2 = verifyNot checkReturn "return 1"
-prop_checkReturn3 = verifyNot checkReturn "return $var"
-prop_checkReturn4 = verifyNot checkReturn "return $((a|b))"
-prop_checkReturn5 = verify checkReturn "return -1"
-prop_checkReturn6 = verify checkReturn "return 1000"
-prop_checkReturn7 = verify checkReturn "return 'hello world'"
-checkReturn _ = checkCommand "return" (const f)
-  where
-    f (first:second:_) =
-        err (getId second) 2151
-            "Only one integer 0-255 can be returned. Use stdout for other data."
-    f [value] =
-        when (isInvalid $ literal value) $
-            err (getId value) 2152
-                "Can only return 0-255. Other data should be written to stdout."
-    f _ = return ()
-
-    isInvalid s = s == "" || any (not . isDigit) s || length s > 5
-        || let value = (read s :: Integer) in value > 255
-
-    literal token = fromJust $ getLiteralStringExt lit token
-    lit (T_DollarBraced {}) = return "0"
-    lit (T_DollarArithmetic {}) = return "0"
-    lit (T_DollarExpansion {}) = return "0"
-    lit (T_Backticked {}) = return "0"
-    lit _ = return "WTF"
-
 
 prop_checkPS11 = verify checkPS1Assignments "PS1='\\033[1;35m\\$ '"
 prop_checkPS11a= verify checkPS1Assignments "export PS1='\\033[1;35m\\$ '"
@@ -2145,33 +1719,6 @@ checkSpuriousExpansion _ (T_SimpleCommand _ _ [T_NormalWord _ [word]]) = check w
 checkSpuriousExpansion _ _ = return ()
 
 
-prop_checkUnusedEchoEscapes1 = verify checkUnusedEchoEscapes "echo 'foo\\nbar\\n'"
-prop_checkUnusedEchoEscapes2 = verifyNot checkUnusedEchoEscapes "echo -e 'foi\\nbar'"
-prop_checkUnusedEchoEscapes3 = verify checkUnusedEchoEscapes "echo \"n:\\t42\""
-prop_checkUnusedEchoEscapes4 = verifyNot checkUnusedEchoEscapes "echo lol"
-prop_checkUnusedEchoEscapes5 = verifyNot checkUnusedEchoEscapes "echo -n -e '\n'"
-checkUnusedEchoEscapes _ = checkCommand "echo" (const f)
-  where
-    isDashE = mkRegex "^-.*e"
-    hasEscapes = mkRegex "\\\\[rnt]"
-    f args | concat (concatMap oversimplify allButLast) `matches` isDashE =
-        return ()
-      where allButLast = reverse . drop 1 . reverse $ args
-    f args = mapM_ checkEscapes args
-
-    checkEscapes (T_NormalWord _ args) =
-        mapM_ checkEscapes args
-    checkEscapes (T_DoubleQuoted id args) =
-        mapM_ checkEscapes args
-    checkEscapes (T_Literal id str) = examine id str
-    checkEscapes (T_SingleQuoted id str) = examine id str
-    checkEscapes _ = return ()
-
-    examine id str =
-        when (str `matches` hasEscapes) $
-            info id 2028 "echo won't expand escape sequences. Consider printf."
-
-
 prop_checkDollarBrackets1 = verify checkDollarBrackets "echo $[1+2]"
 prop_checkDollarBrackets2 = verifyNot checkDollarBrackets "echo $((1+2))"
 checkDollarBrackets _ (T_DollarBracket id _) =
@@ -2190,26 +1737,6 @@ checkSshHereDoc _ (T_Redirecting _ redirs cmd)
         warn id 2087 $ "Quote '" ++ token ++ "' to make here document expansions happen on the server side rather than on the client."
     checkHereDoc _ = return ()
 checkSshHereDoc _ _ = return ()
-
--- This is hard to get right without properly parsing ssh args
-prop_checkSshCmdStr1 = verify checkSshCommandString "ssh host \"echo $PS1\""
-prop_checkSshCmdStr2 = verifyNot checkSshCommandString "ssh host \"ls foo\""
-prop_checkSshCmdStr3 = verifyNot checkSshCommandString "ssh \"$host\""
-checkSshCommandString _ = checkCommand "ssh" (const f)
-  where
-    nonOptions =
-        filter (\x -> not $ "-" `isPrefixOf` concat (oversimplify x))
-    f args =
-        case nonOptions args of
-            (hostport:r@(_:_)) -> checkArg $ last r
-            _ -> return ()
-    checkArg (T_NormalWord _ [T_DoubleQuoted id parts]) =
-        case filter (not . isConstant) parts of
-            [] -> return ()
-            (x:_) -> info (getId x) 2029
-                "Note that, unescaped, this expands on the client side."
-    checkArg _ = return ()
-
 
 --- Subshell detection
 prop_subshellAssignmentCheck = verifyTree     subshellAssignmentCheck "cat foo | while read bar; do a=$bar; done; echo \"$a\""
@@ -2236,337 +1763,6 @@ subshellAssignmentCheck params t =
         check = findSubshelled flow [("oops",[])] Map.empty
     in snd $ runWriter check
 
-
-data Scope = SubshellScope String | NoneScope deriving (Show, Eq)
-data StackData =
-    StackScope Scope
-    | StackScopeEnd
-    -- (Base expression, specific position, var name, assigned values)
-    | Assignment (Token, Token, String, DataType)
-    | Reference (Token, Token, String)
-  deriving (Show)
-
-data DataType = DataString DataSource | DataArray DataSource
-  deriving (Show)
-
-data DataSource = SourceFrom [Token] | SourceExternal | SourceDeclaration | SourceInteger
-  deriving (Show)
-
-data VariableState = Dead Token String | Alive deriving (Show)
-
-dataTypeFrom defaultType v = (case v of T_Array {} -> DataArray; _ -> defaultType) $ SourceFrom [v]
-
-leadType shell parents t =
-    case t of
-        T_DollarExpansion _ _  -> SubshellScope "$(..) expansion"
-        T_Backticked _ _  -> SubshellScope "`..` expansion"
-        T_Backgrounded _ _  -> SubshellScope "backgrounding &"
-        T_Subshell _ _  -> SubshellScope "(..) group"
-        T_CoProcBody _ _  -> SubshellScope "coproc"
-        T_Redirecting {}  ->
-            if fromMaybe False causesSubshell
-            then SubshellScope "pipeline"
-            else NoneScope
-        _ -> NoneScope
-  where
-    parentPipeline = do
-        parent <- Map.lookup (getId t) parents
-        case parent of
-            T_Pipeline {} -> return parent
-            _ -> Nothing
-
-    causesSubshell = do
-        (T_Pipeline _ _ list) <- parentPipeline
-        if length list <= 1
-            then return False
-            else if lastCreatesSubshell
-                then return True
-                else return . not $ (getId . head $ reverse list) == getId t
-
-    lastCreatesSubshell =
-        case shell of
-            Bash -> True
-            Dash -> True
-            Sh -> True
-            Ksh -> False
-
-isClosingFileOp op =
-    case op of
-        T_IoFile _ (T_GREATAND _) (T_NormalWord _ [T_Literal _ "-"]) -> True
-        T_IoFile _ (T_LESSAND  _) (T_NormalWord _ [T_Literal _ "-"]) -> True
-        _ -> False
-
-getModifiedVariables t =
-    case t of
-        T_SimpleCommand _ vars [] ->
-            concatMap (\x -> case x of
-                                T_Assignment id _ name _ w  ->
-                                    [(x, x, name, dataTypeFrom DataString w)]
-                                _ -> []
-                      ) vars
-        c@(T_SimpleCommand {}) ->
-            getModifiedVariableCommand c
-
-        TA_Unary _ "++|" var -> maybeToList $ do
-            name <- getLiteralString var
-            return (t, t, name, DataString $ SourceFrom [t])
-        TA_Unary _ "|++" var -> maybeToList $ do
-            name <- getLiteralString var
-            return (t, t, name, DataString $ SourceFrom [t])
-        TA_Binary _ op lhs rhs -> maybeToList $ do
-            guard $ op `elem` ["=", "*=", "/=", "%=", "+=", "-=", "<<=", ">>=", "&=", "^=", "|="]
-            name <- getLiteralString lhs
-            return (t, t, name, DataString $ SourceFrom [rhs])
-
-        t@(T_FdRedirect _ ('{':var) op) -> -- {foo}>&2 modifies foo
-            [(t, t, takeWhile (/= '}') var, DataString SourceInteger) | not $ isClosingFileOp op]
-
-        t@(T_CoProc _ name _) ->
-            [(t, t, fromMaybe "COPROC" name, DataArray SourceInteger)]
-
-        --Points to 'for' rather than variable
-        T_ForIn id str words _ -> [(t, t, str, DataString $ SourceFrom words)]
-        T_SelectIn id str words _ -> [(t, t, str, DataString $ SourceFrom words)]
-        _ -> []
-
--- Consider 'export/declare -x' a reference, since it makes the var available
-getReferencedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal _ x:_):rest)) =
-    case x of
-        "export" -> if "f" `elem` flags
-            then []
-            else concatMap getReference rest
-        "declare" -> if any (`elem` flags) ["x", "p"]
-            then concatMap getReference rest
-            else []
-        "readonly" -> concatMap getReference rest
-        "trap" ->
-            case rest of
-                head:_ -> map (\x -> (head, head, x)) $ getVariablesFromLiteralToken head
-                _ -> []
-        _ -> []
-  where
-    getReference t@(T_Assignment _ _ name _ value) = [(t, t, name)]
-    getReference t@(T_NormalWord _ [T_Literal _ name]) | not ("-" `isPrefixOf` name) = [(t, t, name)]
-    getReference _ = []
-    flags = map snd $ getAllFlags base
-
-getReferencedVariableCommand _ = []
-
-getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal _ x:_):rest)) =
-   filter (\(_,_,s,_) -> not ("-" `isPrefixOf` s)) $
-    case x of
-        "read" ->
-            let params = map getLiteral rest in
-                catMaybes . takeWhile isJust . reverse $ params
-        "getopts" ->
-            case rest of
-                opts:var:_ -> maybeToList $ getLiteral var
-                _ -> []
-
-        "let" -> concatMap letParamToLiteral rest
-
-        "export" ->
-            if "f" `elem` flags then [] else concatMap getModifierParamString rest
-
-        "declare" -> if any (`elem` flags) ["F", "f", "p"] then [] else declaredVars
-        "typeset" -> declaredVars
-
-        "local" -> concatMap getModifierParamString rest
-        "readonly" -> concatMap getModifierParamString rest
-        "set" -> maybeToList $ do
-            params <- getSetParams rest
-            return (base, base, "@", DataString $ SourceFrom params)
-
-        "printf" -> maybeToList $ getPrintfVariable rest
-
-        "mapfile" -> maybeToList $ getMapfileArray base rest
-        "readarray" -> maybeToList $ getMapfileArray base rest
-
-        _ -> []
-  where
-    flags = map snd $ getAllFlags base
-    stripEquals s = let rest = dropWhile (/= '=') s in
-        if rest == "" then "" else tail rest
-    stripEqualsFrom (T_NormalWord id1 (T_Literal id2 s:rs)) =
-        T_NormalWord id1 (T_Literal id2 (stripEquals s):rs)
-    stripEqualsFrom (T_NormalWord id1 [T_DoubleQuoted id2 [T_Literal id3 s]]) =
-        T_NormalWord id1 [T_DoubleQuoted id2 [T_Literal id3 (stripEquals s)]]
-    stripEqualsFrom t = t
-
-    declaredVars = concatMap (getModifierParam defaultType) rest
-      where
-        defaultType = if any (`elem` flags) ["a", "A"] then DataArray else DataString
-
-    getLiteral t = do
-        s <- getLiteralString t
-        when ("-" `isPrefixOf` s) $ fail "argument"
-        return (base, t, s, DataString SourceExternal)
-
-    getModifierParamString = getModifierParam DataString
-
-    getModifierParam def t@(T_Assignment _ _ name _ value) =
-        [(base, t, name, dataTypeFrom def value)]
-    getModifierParam def t@(T_NormalWord {}) = maybeToList $ do
-        name <- getLiteralString t
-        guard $ isVariableName name
-        return (base, t, name, def SourceDeclaration)
-    getModifierParam _ _ = []
-
-    letParamToLiteral token =
-          if var == ""
-            then []
-            else [(base, token, var, DataString $ SourceFrom [stripEqualsFrom token])]
-        where var = takeWhile isVariableChar $ dropWhile (`elem` "+-") $ concat $ oversimplify token
-
-    getSetParams (t:_:rest) | getLiteralString t == Just "-o" = getSetParams rest
-    getSetParams (t:rest) =
-        let s = getLiteralString t in
-            case s of
-                Just "--" -> return rest
-                Just ('-':_) -> getSetParams rest
-                _ -> return (t:fromMaybe [] (getSetParams rest))
-    getSetParams [] = Nothing
-
-    getPrintfVariable list = f $ map (\x -> (x, getLiteralString x)) list
-      where
-        f ((_, Just "-v") : (t, Just var) : _) = return (base, t, var, DataString $ SourceFrom list)
-        f (_:rest) = f rest
-        f [] = fail "not found"
-
-    -- mapfile has some curious syntax allowing flags plus 0..n variable names
-    -- where only the first non-option one is used if any. Here we cheat and
-    -- just get the last one, if it's a variable name.
-    getMapfileArray base arguments = do
-        lastArg <- listToMaybe (reverse arguments)
-        name <- getLiteralString lastArg
-        guard $ isVariableName name
-        return (base, lastArg, name, DataArray SourceExternal)
-
-getModifiedVariableCommand _ = []
-
-prop_getBracedReference1 = getBracedReference "foo" == "foo"
-prop_getBracedReference2 = getBracedReference "#foo" == "foo"
-prop_getBracedReference3 = getBracedReference "#" == "#"
-prop_getBracedReference4 = getBracedReference "##" == "#"
-prop_getBracedReference5 = getBracedReference "#!" == "!"
-prop_getBracedReference6 = getBracedReference "!#" == "#"
-prop_getBracedReference7 = getBracedReference "!foo#?" == "foo"
-prop_getBracedReference8 = getBracedReference "foo-bar" == "foo"
-prop_getBracedReference9 = getBracedReference "foo:-bar" == "foo"
-prop_getBracedReference10= getBracedReference "foo: -1" == "foo"
-prop_getBracedReference11= getBracedReference "!os*" == ""
-prop_getBracedReference12= getBracedReference "!os?bar**" == ""
-getBracedReference s = fromMaybe s $
-    nameExpansion s `mplus` takeName noPrefix `mplus` getSpecial noPrefix `mplus` getSpecial s
-  where
-    noPrefix = dropPrefix s
-    dropPrefix (c:rest) = if c `elem` "!#" then rest else c:rest
-    dropPrefix "" = ""
-    takeName s = do
-        let name = takeWhile isVariableChar s
-        guard . not $ null name
-        return name
-    getSpecial (c:_) =
-        if c `elem` "*@#?-$!" then return [c] else fail "not special"
-    getSpecial _ = fail "empty"
-
-    nameExpansion ('!':rest) = do -- e.g. ${!foo*bar*}
-        let suffix = dropWhile isVariableChar rest
-        guard $ suffix /= rest -- e.g. ${!@}
-        first <- suffix !!! 0
-        guard $ first `elem` "*?"
-        return ""
-    nameExpansion _ = Nothing
-
-getIndexReferences s = fromMaybe [] $ do
-    match <- matchRegex re s
-    index <- match !!! 0
-    return $ matchAllStrings variableNameRegex index
-  where
-    re = mkRegex "(\\[.*\\])"
-
-getReferencedVariables t =
-    case t of
-        T_DollarBraced id l -> let str = bracedString t in
-            (t, t, getBracedReference str) :
-                map (\x -> (l, l, x)) (getIndexReferences str)
-        TA_Expansion id _ -> getIfReference t t
-        T_Assignment id mode str _ word ->
-            [(t, t, str) | mode == Append] ++ specialReferences str t word
-
-        TC_Unary id _ "-v" token -> getIfReference t token
-        TC_Unary id _ "-R" token -> getIfReference t token
-        TC_Binary id DoubleBracket op lhs rhs ->
-            if isDereferencing op
-            then concatMap (getIfReference t) [lhs, rhs]
-            else []
-
-        t@(T_FdRedirect _ ('{':var) op) -> -- {foo}>&- references and closes foo
-            [(t, t, takeWhile (/= '}') var) | isClosingFileOp op]
-        x -> getReferencedVariableCommand x
-  where
-    -- Try to reduce false positives for unused vars only referenced from evaluated vars
-    specialReferences name base word =
-        if name `elem` [
-            "PS1", "PS2", "PS3", "PS4",
-            "PROMPT_COMMAND"
-          ]
-        then
-            map (\x -> (base, base, x)) $
-                getVariablesFromLiteralToken word
-        else []
-
-    literalizer (TA_Index {}) = return ""  -- x[0] becomes a reference of x
-    literalizer _ = Nothing
-
-    getIfReference context token = maybeToList $ do
-            str <- getLiteralStringExt literalizer token
-            guard . not $ null str
-            when (isDigit $ head str) $ fail "is a number"
-            return (context, token, getBracedReference str)
-
-    isDereferencing = (`elem` ["-eq", "-ne", "-lt", "-le", "-gt", "-ge"])
-
--- Try to get referenced variables from a literal string like "$foo"
--- Ignores tons of cases like arithmetic evaluation and array indices.
-prop_getVariablesFromLiteral1 =
-    getVariablesFromLiteral "$foo${bar//a/b}$BAZ" == ["foo", "bar", "BAZ"]
-getVariablesFromLiteral string =
-    map (!! 0) $ matchAllSubgroups variableRegex string
-  where
-    variableRegex = mkRegex "\\$\\{?([A-Za-z0-9_]+)"
-
-getVariablesFromLiteralToken token =
-    getVariablesFromLiteral (fromJust $ getLiteralStringExt (const $ return " ") token)
-
-getVariableFlow shell parents t =
-    let (_, stack) = runState (doStackAnalysis startScope endScope t) []
-    in reverse stack
-  where
-    startScope t =
-        let scopeType = leadType shell parents t
-        in do
-            when (scopeType /= NoneScope) $ modify (StackScope scopeType:)
-            when (assignFirst t) $ setWritten t
-
-    endScope t =
-        let scopeType = leadType shell parents t
-        in do
-            setRead t
-            unless (assignFirst t) $ setWritten t
-            when (scopeType /= NoneScope) $ modify (StackScopeEnd:)
-
-    assignFirst (T_ForIn {}) = True
-    assignFirst (T_SelectIn {}) = True
-    assignFirst _ = False
-
-    setRead t =
-        let read    = getReferencedVariables t
-        in mapM_ (\v -> modify (Reference v:)) read
-
-    setWritten t =
-        let written = getModifiedVariables t
-        in mapM_ (\v -> modify (Assignment v:)) written
 
 findSubshelled [] _ _ = return ()
 findSubshelled (Assignment x@(_, _, str, _):rest) ((reason,scope):lol) deadVars =
@@ -3236,23 +2432,6 @@ checkCatastrophicRm params t@(T_SimpleCommand id _ tokens) | t `isCommand` "rm" 
 checkCatastrophicRm _ _ = return ()
 
 
-prop_checkInteractiveSu1 = verify checkInteractiveSu "su; rm file; su $USER"
-prop_checkInteractiveSu2 = verify checkInteractiveSu "su foo; something; exit"
-prop_checkInteractiveSu3 = verifyNot checkInteractiveSu "echo rm | su foo"
-prop_checkInteractiveSu4 = verifyNot checkInteractiveSu "su root < script"
-checkInteractiveSu params = checkCommand "su" f
-  where
-    f cmd l = when (length l <= 1) $
-        when (all undirected $ getPath (parentMap params) cmd) $
-            info (getId cmd) 2117
-                "To run commands as another user, use su -c or sudo."
-
-    undirected (T_Pipeline _ _ l) = length l <= 1
-    -- This should really just be modifications to stdin, but meh
-    undirected (T_Redirecting _ list _) = null list
-    undirected _ = True
-
-
 prop_checkStderrPipe1 = verify checkStderrPipe "#!/bin/ksh\nfoo |& bar"
 prop_checkStderrPipe2 = verifyNot checkStderrPipe "#!/bin/bash\nfoo |& bar"
 checkStderrPipe params =
@@ -3332,31 +2511,6 @@ checkUnpassedInFunctions params root =
     warnForDeclaration ((name, _, _):_) =
         warn (getId . fromJust $ Map.lookup name functionMap) 2120 $
             name ++ " references arguments, but none are ever passed."
-
-
-prop_checkSetAssignment1 = verify checkSetAssignment "set foo 42"
-prop_checkSetAssignment2 = verify checkSetAssignment "set foo = 42"
-prop_checkSetAssignment3 = verify checkSetAssignment "set foo=42"
-prop_checkSetAssignment4 = verifyNot checkSetAssignment "set -- if=/dev/null"
-prop_checkSetAssignment5 = verifyNot checkSetAssignment "set 'a=5'"
-prop_checkSetAssignment6 = verifyNot checkSetAssignment "set"
-checkSetAssignment params = checkUnqualifiedCommand "set" f
-  where
-    f cmd (var:value:rest) =
-        let str = literal var in
-            when (isVariableName str || isAssignment str) $
-                msg (getId var)
-    f cmd (var:_) =
-        when (isAssignment $ literal var) $
-            msg (getId var)
-    f _ _ = return ()
-
-    msg id = warn id 2121 "To assign a variable, use just 'var=value', no 'set ..'."
-
-    isAssignment str = '=' `elem` str
-    literal (T_NormalWord _ l) = concatMap literal l
-    literal (T_Literal _ str) = str
-    literal _ = "*"
 
 
 prop_checkOverridingPath1 = verify checkOverridingPath "PATH=\"$var/$foo\""
@@ -3444,18 +2598,6 @@ checkMultipleAppends params t =
     getAppend _ = Nothing
 
 
-prop_checkAliasesExpandEarly1 = verify checkAliasesExpandEarly "alias foo=\"echo $PWD\""
-prop_checkAliasesExpandEarly2 = verifyNot checkAliasesExpandEarly "alias -p"
-prop_checkAliasesExpandEarly3 = verifyNot checkAliasesExpandEarly "alias foo='echo {1..10}'"
-checkAliasesExpandEarly params =
-    checkUnqualifiedCommand "alias" (const f)
-  where
-    f = mapM_ checkArg
-    checkArg arg | '=' `elem` concat (oversimplify arg) =
-        forM_ (take 1 $ filter (not . isLiteral) $ getWordParts arg) $
-            \x -> warn (getId x) 2139 "This expands when defined, not when used. Consider escaping."
-    checkArg _ = return ()
-
 prop_checkSuspiciousIFS1 = verify checkSuspiciousIFS "IFS=\"\\n\""
 prop_checkSuspiciousIFS2 = verifyNot checkSuspiciousIFS "IFS=$'\\t'"
 checkSuspiciousIFS params (T_Assignment id Assign "IFS" Nothing value) =
@@ -3475,19 +2617,6 @@ checkSuspiciousIFS params (T_Assignment id Assign "IFS" Nothing value) =
     suggest r = warn id 2141 $ "Did you mean IFS=" ++ r ++ " ?"
 checkSuspiciousIFS _ _ = return ()
 
-prop_checkAliasesUsesArgs1 = verify checkAliasesUsesArgs "alias a='cp $1 /a'"
-prop_checkAliasesUsesArgs2 = verifyNot checkAliasesUsesArgs "alias $1='foo'"
-prop_checkAliasesUsesArgs3 = verify checkAliasesUsesArgs "alias a=\"echo \\${@}\""
-checkAliasesUsesArgs params =
-    checkUnqualifiedCommand "alias" (const f)
-  where
-    re = mkRegex "\\$\\{?[0-9*@]"
-    f = mapM_ checkArg
-    checkArg arg =
-        let string = fromJust $ getLiteralStringExt (const $ return "_") arg in
-            when ('=' `elem` string && string `matches` re) $
-                err (getId arg) 2142
-                    "Aliases can't use positional parameters. Use a function."
 
 prop_checkGrepQ1= verify checkShouldUseGrepQ "[[ $(foo | grep bar) ]]"
 prop_checkGrepQ2= verify checkShouldUseGrepQ "[ -z $(fgrep lol) ]"
@@ -3532,42 +2661,6 @@ checkTestGlobs params (TC_Unary _ _ op token) | isGlob token =
        op ++ " doesn't work with globs. Use a for loop."
 checkTestGlobs _ _ = return ()
 
-prop_checkFindActionPrecedence1 = verify checkFindActionPrecedence "find . -name '*.wav' -o -name '*.au' -exec rm {} +"
-prop_checkFindActionPrecedence2 = verifyNot checkFindActionPrecedence "find . -name '*.wav' -o \\( -name '*.au' -exec rm {} + \\)"
-prop_checkFindActionPrecedence3 = verifyNot checkFindActionPrecedence "find . -name '*.wav' -o -name '*.au'"
-checkFindActionPrecedence params = checkCommand "find" (const f)
-  where
-    pattern = [isMatch, const True, isParam ["-o", "-or"], isMatch, const True, isAction]
-    f list | length list < length pattern = return ()
-    f list@(_:rest) =
-        if and (zipWith ($) pattern list)
-        then warnFor (list !! (length pattern - 1))
-        else f rest
-    isMatch = isParam [ "-name", "-regex", "-iname", "-iregex", "-wholename", "-iwholename" ]
-    isAction = isParam [ "-exec", "-execdir", "-delete", "-print", "-print0" ]
-    isParam strs t = fromMaybe False $ do
-        param <- getLiteralString t
-        return $ param `elem` strs
-    warnFor t = warn (getId t) 2146 "This action ignores everything before the -o. Use \\( \\) to group."
-
-
-prop_checkFindExecWithSingleArgument1 = verify checkFindExecWithSingleArgument "find . -exec 'cat {} | wc -l' \\;"
-prop_checkFindExecWithSingleArgument2 = verify checkFindExecWithSingleArgument "find . -execdir 'cat {} | wc -l' +"
-prop_checkFindExecWithSingleArgument3 = verifyNot checkFindExecWithSingleArgument "find . -exec wc -l {} \\;"
-checkFindExecWithSingleArgument _ = checkCommand "find" (const f)
-  where
-    f = void . sequence . mapMaybe check . tails
-    check (exec:arg:term:_) = do
-        execS <- getLiteralString exec
-        termS <- getLiteralString term
-        cmdS <- getLiteralStringExt (const $ return " ") arg
-
-        guard $ execS `elem` ["-exec", "-execdir"] && termS `elem` [";", "+"]
-        guard $ cmdS `matches` commandRegex
-        return $ warn (getId exec) 2150 "-exec does not invoke a shell. Rewrite or use -exec sh -c .. ."
-    check _ = Nothing
-    commandRegex = mkRegex "[ |;]"
-
 
 prop_checkMaskedReturns1 = verify checkMaskedReturns "f() { local a=$(false); }"
 prop_checkMaskedReturns2 = verify checkMaskedReturns "declare a=$(false)"
@@ -3590,29 +2683,6 @@ checkMaskedReturns _ t@(T_SimpleCommand id _ (cmd:rest)) = potentially $ do
         _ -> False
 checkMaskedReturns _ _ = return ()
 
-prop_checkInjectableFindSh1 = verify checkInjectableFindSh "find . -exec sh -c 'echo {}' \\;"
-prop_checkInjectableFindSh2 = verify checkInjectableFindSh "find . -execdir bash -c 'rm \"{}\"' ';'"
-prop_checkInjectableFindSh3 = verifyNot checkInjectableFindSh "find . -exec sh -c 'rm \"$@\"' _ {} \\;"
-checkInjectableFindSh _ = checkCommand "find" (const check)
-  where
-    check args = do
-        let idStrings = map (\x -> (getId x, onlyLiteralString x)) args
-        match pattern idStrings
-
-    match _ [] = return ()
-    match [] (next:_) = action next
-    match (p:tests) ((id, arg):args) = do
-        when (p arg) $ match tests args
-        match (p:tests) args
-
-    pattern = [
-        (`elem` ["-exec", "-execdir"]),
-        (`elem` ["sh", "bash", "ksh"]),
-        (== "-c")
-        ]
-    action (id, arg) =
-        when ("{}" `isInfixOf` arg) $
-            warn id 2156 "Injecting filenames is fragile and insecure. Use parameters."
 
 prop_checkReadWithoutR1 = verify checkReadWithoutR "read -a foo"
 prop_checkReadWithoutR2 = verifyNot checkReadWithoutR "read -ar foo"
@@ -3620,19 +2690,6 @@ checkReadWithoutR _ t@(T_SimpleCommand {}) | t `isUnqualifiedCommand` "read" =
     unless ("r" `elem` map snd (getAllFlags t)) $
         info (getId t) 2162 "read without -r will mangle backslashes."
 checkReadWithoutR _ _ = return ()
-
-prop_checkExportedExpansions1 = verify checkExportedExpansions "export $foo"
-prop_checkExportedExpansions2 = verify checkExportedExpansions "export \"$foo\""
-prop_checkExportedExpansions3 = verifyNot checkExportedExpansions "export foo"
-checkExportedExpansions _ = checkUnqualifiedCommand "export" (const check)
-  where
-    check = mapM_ checkForVariables
-    checkForVariables f =
-        case getWordParts f of
-            [t@(T_DollarBraced {})] ->
-                warn (getId t) 2163 "Exporting an expansion rather than a variable."
-            _ -> return ()
-
 
 prop_checkUncheckedCd1 = verifyTree checkUncheckedCd "cd ~/src; rm -r foo"
 prop_checkUncheckedCd2 = verifyNotTree checkUncheckedCd "cd ~/src || exit; rm -r foo"
@@ -3714,65 +2771,6 @@ checkTrailingBracket _ token =
             "]]" -> "[["
             "]" -> "["
             x -> x
-
-prop_checkNonportableSignals1 = verify checkNonportableSignals "trap f 8"
-prop_checkNonportableSignals2 = verifyNot checkNonportableSignals "trap f 0"
-prop_checkNonportableSignals3 = verifyNot checkNonportableSignals "trap f 14"
-prop_checkNonportableSignals4 = verify checkNonportableSignals "trap f SIGKILL"
-prop_checkNonportableSignals5 = verify checkNonportableSignals "trap f 9"
-prop_checkNonportableSignals6 = verify checkNonportableSignals "trap f stop"
-checkNonportableSignals _ = checkUnqualifiedCommand "trap" (const f)
-  where
-    f = mapM_ check
-    check param = potentially $ do
-        str <- getLiteralString param
-        let id = getId param
-        return $ sequence_ $ mapMaybe (\f -> f id str) [
-            checkNumeric,
-            checkUntrappable
-            ]
-
-    checkNumeric id str = do
-        guard $ not (null str)
-        guard $ all isDigit str
-        guard $ str /= "0" -- POSIX exit trap
-        guard $ str `notElem` ["1", "2", "3", "6", "9", "14", "15" ] -- XSI
-        return $ warn id 2172
-            "Trapping signals by number is not well defined. Prefer signal names."
-
-    checkUntrappable id str = do
-        guard $ map toLower str `elem` ["kill", "9", "sigkill", "stop", "sigstop"]
-        return $ err id 2173
-            "SIGKILL/SIGSTOP can not be trapped."
-
-prop_checkMkdirDashPM0 = verify checkMkdirDashPM "mkdir -p -m 0755 a/b"
-prop_checkMkdirDashPM1 = verify checkMkdirDashPM "mkdir -pm 0755 $dir"
-prop_checkMkdirDashPM2 = verify checkMkdirDashPM "mkdir -vpm 0755 a/b"
-prop_checkMkdirDashPM3 = verify checkMkdirDashPM "mkdir -pm 0755 -v a/b"
-prop_checkMkdirDashPM4 = verify checkMkdirDashPM "mkdir --parents --mode=0755 a/b"
-prop_checkMkdirDashPM5 = verify checkMkdirDashPM "mkdir --parents --mode 0755 a/b"
-prop_checkMkdirDashPM6 = verify checkMkdirDashPM "mkdir -p --mode=0755 a/b"
-prop_checkMkdirDashPM7 = verify checkMkdirDashPM "mkdir --parents -m 0755 a/b"
-prop_checkMkdirDashPM8 = verifyNot checkMkdirDashPM "mkdir -p a/b"
-prop_checkMkdirDashPM9 = verifyNot checkMkdirDashPM "mkdir -m 0755 a/b"
-prop_checkMkdirDashPM10 = verifyNot checkMkdirDashPM "mkdir a/b"
-prop_checkMkdirDashPM11 = verifyNot checkMkdirDashPM "mkdir --parents a/b"
-prop_checkMkdirDashPM12 = verifyNot checkMkdirDashPM "mkdir --mode=0755 a/b"
-prop_checkMkdirDashPM13 = verifyNot checkMkdirDashPM "mkdir_func -pm 0755 a/b"
-prop_checkMkdirDashPM14 = verifyNot checkMkdirDashPM "mkdir -p -m 0755 singlelevel"
-checkMkdirDashPM _ t@(T_SimpleCommand _ _ args) = potentially $ do
-    name <- getCommandName t
-    guard $ name == "mkdir"
-    dashP <- find ((\f -> f == "p" || f == "parents") . snd) flags
-    dashM <- find ((\f -> f == "m" || f == "mode") . snd) flags
-    guard $ any couldHaveSubdirs (drop 1 args) -- mkdir -pm 0700 dir  is fine, but dir/subdir is not.
-    return $ warn (getId $ fst dashM) 2174 "When used with -p, -m only applies to the deepest directory."
-  where
-    flags = getAllFlags t
-    couldHaveSubdirs t = fromMaybe True $ do
-        name <- getLiteralString t
-        return $ '/' `elem` name
-checkMkdirDashPM _ _ = return ()
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

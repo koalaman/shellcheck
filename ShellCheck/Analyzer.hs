@@ -19,9 +19,18 @@
 -}
 module ShellCheck.Analyzer (analyzeScript) where
 
-import ShellCheck.Interface
 import ShellCheck.Analytics
+import ShellCheck.AnalyzerLib
+import ShellCheck.Interface
+import Data.List
+import qualified ShellCheck.Checks.Commands
+
 
 -- TODO: Clean up the cruft this is layered on
 analyzeScript :: AnalysisSpec -> AnalysisResult
-analyzeScript = runAnalytics
+analyzeScript spec = AnalysisResult {
+    arComments =
+        filterByAnnotation (asScript spec) . nub $
+            runAnalytics spec
+            ++ ShellCheck.Checks.Commands.runChecks spec
+}
