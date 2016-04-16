@@ -13,6 +13,7 @@ main = do
         ShellCheck.Checker.runTests,
         ShellCheck.Checks.Commands.runTests,
         ShellCheck.Analytics.runTests,
+        ShellCheck.AnalyzerLib.runTests,
         ShellCheck.Parser.runTests
       ]
     if and results

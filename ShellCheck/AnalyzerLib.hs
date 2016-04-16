@@ -17,7 +17,7 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -}
-{-# LANGUAGE TemplateHaskell #-} -- prop_testing
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleContexts #-}
 module ShellCheck.AnalyzerLib where
 import ShellCheck.AST
@@ -37,8 +37,10 @@ import Data.List
 import Data.Maybe
 import qualified Data.Map as Map
 
-import Test.QuickCheck.All (forAllProperties) -- prop_testing
-import Test.QuickCheck.Test (quickCheckWithResult, stdArgs, maxSuccess) --prop_testing
+import Test.QuickCheck.All (forAllProperties)
+import Test.QuickCheck.Test (quickCheckWithResult, stdArgs, maxSuccess)
+
+import Debug.Trace
 
 type Analysis = ReaderT Parameters (Writer [TokenComment]) ()
 
@@ -111,6 +113,7 @@ prop_determineShell4 = determineShell (fromJust $ pScript
     "#!/bin/ksh\n#shellcheck shell=sh\nfoo") == Sh
 prop_determineShell5 = determineShell (fromJust $ pScript
     "#shellcheck shell=sh\nfoo") == Sh
+prop_determineShell6 = determineShell (fromJust $ pScript "#! /bin/sh") == Sh
 determineShell t = fromMaybe Bash $ do
     shellString <- foldl mplus Nothing $ getCandidates t
     shellForExecutable shellString
@@ -621,4 +624,4 @@ filterByAnnotation token =
 
 
 return [] 
-runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |]) -- prop_testing
+runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
