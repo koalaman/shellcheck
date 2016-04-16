@@ -4,6 +4,7 @@ import Control.Monad
 import System.Exit
 import qualified ShellCheck.Checker
 import qualified ShellCheck.Analytics
+import qualified ShellCheck.AnalyzerLib
 import qualified ShellCheck.Parser
 import qualified ShellCheck.Checks.Commands
 
