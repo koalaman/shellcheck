@@ -166,7 +166,7 @@ analyze f g i =
     dll l m v = do
         x <- roundAll l
         y <- roundAll m
-        return $ v x m
+        return $ v x y
     d1 t v = do
         x <- round t
         return $ v x

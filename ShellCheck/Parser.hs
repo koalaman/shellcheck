@@ -52,20 +52,24 @@ type SCParser m v = ParsecT String UserState (SCBase m) v
 
 backslash :: Monad m => SCParser m Char
 backslash = char '\\'
-linefeed = optional carriageReturn >> char '\n'
+linefeed :: Monad m => SCParser m Char
+linefeed = do
+    optional carriageReturn
+    c <- char '\n'
+    readPendingHereDocs
+    return c
 singleQuote = char '\'' <|> unicodeSingleQuote
 doubleQuote = char '"' <|> unicodeDoubleQuote
 variableStart = upper <|> lower <|> oneOf "_"
 variableChars = upper <|> lower <|> digit <|> oneOf "_"
 functionChars = variableChars <|> oneOf ":+-.?"
 specialVariable = oneOf "@*#?-$!"
-tokenDelimiter = oneOf "&|;<> \t\n\r" <|> almostSpace
 quotableChars = "|&;<>()\\ '\t\n\r\xA0" ++ doubleQuotableChars
 quotable = almostSpace <|> unicodeDoubleQuote <|> oneOf quotableChars
 bracedQuotable = oneOf "}\"$`'"
 doubleQuotableChars = "\"$`" ++ unicodeDoubleQuoteChars
 doubleQuotable = unicodeDoubleQuote <|> oneOf doubleQuotableChars
-whitespace = oneOf " \t\n" <|> carriageReturn <|> almostSpace
+whitespace = oneOf " \t" <|> carriageReturn <|> almostSpace <|> linefeed
 linewhitespace = oneOf " \t" <|> almostSpace
 
 suspectCharAfterQuotes = variableChars <|> char '%'
@@ -138,15 +142,24 @@ data Context =
         | ContextSource String
     deriving (Show)
 
+data HereDocContext =
+        HereDocPending Token -- on linefeed, read this T_HereDoc
+        | HereDocBoundary -- but don't consider heredocs before this
+    deriving (Show)
+
 data UserState = UserState {
     lastId :: Id,
     positionMap :: Map.Map Id SourcePos,
-    parseNotes :: [ParseNote]
+    parseNotes :: [ParseNote],
+    hereDocMap :: Map.Map Id [Token],
+    pendingHereDocs :: [HereDocContext]
 }
 initialUserState = UserState {
     lastId = Id $ -1,
     positionMap = Map.empty,
-    parseNotes = []
+    parseNotes = [],
+    hereDocMap = Map.empty,
+    pendingHereDocs = []
 }
 
 codeForParseNote (ParseNote _ _ code _) = code
@@ -154,7 +167,6 @@ noteToParseNote map (Note id severity code message) =
         ParseNote pos severity code message
     where
         pos = fromJust $ Map.lookup id map
-
 
 getLastId = lastId <$> getState
 
@@ -172,6 +184,58 @@ getNextIdAt sourcepos = do
 getNextId = do
     pos <- getPosition
     getNextIdAt pos
+
+addToHereDocMap id list = do
+    state <- getState
+    let map = hereDocMap state
+    putState $ state {
+        hereDocMap = Map.insert id list map
+    }
+
+withHereDocBoundary p = do
+    pushBoundary
+    do
+        v <- p
+        popBoundary
+        return v
+     <|> do
+        popBoundary
+        fail ""
+  where
+    pushBoundary = do
+        state <- getState
+        let docs = pendingHereDocs state
+        putState $ state {
+            pendingHereDocs = HereDocBoundary : docs
+        }
+    popBoundary = do
+        state <- getState
+        let docs = tail $ dropWhile (not . isHereDocBoundary) $
+                    pendingHereDocs state
+        putState $ state {
+            pendingHereDocs = docs
+        }
+
+addPendingHereDoc t = do
+    state <- getState
+    let docs = pendingHereDocs state
+    putState $ state {
+        pendingHereDocs = HereDocPending t : docs
+    }
+
+popPendingHereDocs = do
+    state <- getState
+    let (pending, boundary) = break isHereDocBoundary $ pendingHereDocs state
+    putState $ state {
+        pendingHereDocs = boundary
+    }
+    return . map extract . reverse $ pendingHereDocs state
+  where
+    extract (HereDocPending t) = t
+
+isHereDocBoundary x = case x of
+    HereDocBoundary -> True
+    otherwise -> False
 
 getMap = positionMap <$> getState
 getParseNotes = parseNotes <$> getState
@@ -1384,14 +1448,17 @@ readDollarLonely = do
     n <- lookAhead (anyChar <|> (eof >> return '_'))
     return $ T_Literal id "$"
 
-prop_readHereDoc = isOk readHereDoc "<< foo\nlol\ncow\nfoo"
-prop_readHereDoc2 = isWarning readHereDoc "<<- EOF\n  cow\n  EOF"
-prop_readHereDoc3 = isOk readHereDoc "<< foo\n$\"\nfoo"
-prop_readHereDoc4 = isOk readHereDoc "<< foo\n`\nfoo"
-prop_readHereDoc5 = isOk readHereDoc "<<- !foo\nbar\n!foo"
-prop_readHereDoc6 = isOk readHereDoc "<< foo\\ bar\ncow\nfoo bar"
-prop_readHereDoc7 = isOk readHereDoc "<< foo\n\\$(f ())\nfoo"
-prop_readHereDoc8 = isOk readHereDoc "<<foo>>bar\netc\nfoo"
+prop_readHereDoc = isOk readScript "cat << foo\nlol\ncow\nfoo"
+prop_readHereDoc2 = isWarning readScript "cat <<- EOF\n  cow\n  EOF"
+prop_readHereDoc3 = isOk readScript "cat << foo\n$\"\nfoo"
+prop_readHereDoc4 = isOk readScript "cat << foo\n`\nfoo"
+prop_readHereDoc5 = isOk readScript "cat <<- !foo\nbar\n!foo"
+prop_readHereDoc6 = isOk readScript "cat << foo\\ bar\ncow\nfoo bar"
+prop_readHereDoc7 = isOk readScript "cat << foo\n\\$(f ())\nfoo"
+prop_readHereDoc8 = isOk readScript "cat <<foo>>bar\netc\nfoo"
+prop_readHereDoc9 = isOk readScript "if true; then cat << foo; fi\nbar\nfoo\n"
+prop_readHereDoc10= isOk readScript "if true; then cat << foo << bar; fi\nfoo\nbar\n"
+prop_readHereDoc11= isOk readScript "cat << foo $(\nfoo\n)lol\nfoo\n"
 readHereDoc = called "here document" $ do
     fid <- getNextId
     pos <- getPosition
@@ -1408,24 +1475,11 @@ readHereDoc = called "here document" $ do
             liftM (\ x -> (Quoted, stripLiteral x)) readDoubleQuotedLiteral
             <|> liftM (\ x -> (Quoted, x)) readSingleQuotedLiteral
             <|> (readToken >>= (\x -> return (Unquoted, x)))
-    spacing
 
-    startPos <- getPosition
-    hereData <- anyChar `reluctantlyTill` do
-                    linefeed
-                    spacing
-                    string endToken
-                    disregard linefeed  <|> eof
-
-    do
-        linefeed
-        spaces <- spacing
-        verifyHereDoc dashed quoted spaces hereData
-        string endToken
-        parsedData <- parseHereData quoted startPos hereData
-        return $ T_FdRedirect fid "" $ T_HereDoc hid dashed quoted endToken parsedData
-     `attempting` (eof >> debugHereDoc tokenPosition endToken hereData)
-
+    -- add empty tokens for now, read the rest in readPendingHereDocs
+    let doc = T_HereDoc hid dashed quoted endToken []
+    addPendingHereDoc doc
+    return $ T_FdRedirect fid "" doc
   where
     stripLiteral (T_Literal _ x) = x
     stripLiteral (T_SingleQuoted _ x) = x
@@ -1439,6 +1493,27 @@ readHereDoc = called "here document" $ do
             char '\\'
             c <- anyChar
             return [c]
+
+
+readPendingHereDocs = do
+    docs <- popPendingHereDocs
+    mapM_ readDoc docs
+  where
+    readDoc (T_HereDoc id dashed quoted endToken _) = do
+        pos <- getPosition
+        hereData <- anyChar `reluctantlyTill` do
+                        spacing
+                        string endToken
+                        disregard (char '\n') <|> eof
+        do
+            spaces <- spacing
+            verifyHereDoc dashed quoted spaces hereData
+            string endToken
+            parsedData <- parseHereData quoted pos hereData
+            list <- parseHereData quoted pos hereData
+            addToHereDocMap id list
+
+         `attempting` (eof >> debugHereDoc pos endToken hereData)
 
     parseHereData Quoted startPos hereData = do
         id <- getNextIdAt startPos
@@ -1524,7 +1599,7 @@ readHereString = called "here string" $ do
     word <- readNormalWord
     return $ T_FdRedirect id "" $ T_HereString id2 word
 
-readNewlineList = many1 ((newline <|> carriageReturn) `thenSkip` spacing)
+readNewlineList = many1 ((linefeed <|> carriageReturn) `thenSkip` spacing)
 readLineBreak = optional readNewlineList
 
 prop_readSeparator1 = isWarning readScript "a &; b"
@@ -2475,9 +2550,8 @@ parsesCleanly parser string = runIdentity $ do
 
 parseWithNotes parser = do
     item <- parser
-    map <- getMap
-    parseNotes <- getParseNotes
-    return (item, map, nub . sortNotes $ parseNotes)
+    state <- getState
+    return (item, state)
 
 compareNotes (ParseNote pos1 level1 _ s1) (ParseNote pos2 level2 _ s2) = compare (pos1, level1) (pos2, level2)
 sortNotes = sortBy compareNotes
@@ -2517,11 +2591,12 @@ system = lift . lift . lift
 parseShell sys name contents = do
     (result, state) <- runParser sys (parseWithNotes readScript) name contents
     case result of
-        Right (script, tokenMap, notes) ->
+        Right (script, userstate) ->
             return ParseResult {
-                prComments = map toPositionedComment $ nub $ notes ++ parseProblems state,
-                prTokenPositions = Map.map posToPos tokenMap,
-                prRoot = Just script
+                prComments = map toPositionedComment $ nub $ parseNotes userstate ++ parseProblems state,
+                prTokenPositions = Map.map posToPos (positionMap userstate),
+                prRoot = Just $
+                    reattachHereDocs script (hereDocMap userstate)
             }
         Left err ->
             return ParseResult {
@@ -2542,6 +2617,13 @@ parseShell sys name contents = do
     second (ContextName pos str) = ParseNote pos InfoC 1009 $
         "The mentioned parser error was in this " ++ str ++ "."
 
+reattachHereDocs root map =
+    doTransform f root
+  where
+    f t@(T_HereDoc id dash quote string []) = fromMaybe t $ do
+        list <- Map.lookup id map
+        return $ T_HereDoc id dash quote string list
+    f t = t
 
 toPositionedComment :: ParseNote -> PositionedComment
 toPositionedComment (ParseNote pos severity code message) =
