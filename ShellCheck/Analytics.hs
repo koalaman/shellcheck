@@ -1290,10 +1290,11 @@ checkConstantNoary _ _ = return ()
 prop_checkBraceExpansionVars1 = verify checkBraceExpansionVars "echo {1..$n}"
 prop_checkBraceExpansionVars2 = verifyNot checkBraceExpansionVars "echo {1,3,$n}"
 prop_checkBraceExpansionVars3 = verify checkBraceExpansionVars "eval echo DSC{0001..$n}.jpg"
+prop_checkBraceExpansionVars4 = verify checkBraceExpansionVars "echo {$i..100}"
 checkBraceExpansionVars params t@(T_BraceExpansion id list) = mapM_ check list
   where
     check element =
-        when ("..$" `isInfixOf` toString element) $
+        when (any (`isInfixOf` toString element) ["$..", "..$"]) $
             if isEvaled
             then style id 2175 "Quote this invalid brace expansion since it should be passed literally to eval."
             else warn id 2051 "Bash doesn't support variables in brace range expansions."
