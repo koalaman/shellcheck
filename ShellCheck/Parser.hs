@@ -708,7 +708,9 @@ readArithmeticContents =
         l <- readAssignment `sepBy` (char ',' >> spacing)
         return $ TA_Sequence id l
 
-    readAssignment = readTrinary `splitBy` ["=", "*=", "/=", "%=", "+=", "-=", "<<=", ">>=", "&=", "^=", "|="]
+    readAssignment = chainr1 readTrinary readAssignmentOp
+    readAssignmentOp = readComboOp ["=", "*=", "/=", "%=", "+=", "-=", "<<=", ">>=", "&=", "^=", "|="] TA_Assignment
+
     readTrinary = do
         x <- readLogicalOr
         do
@@ -2214,13 +2216,29 @@ readTimeSuffix = do
         lookAhead $ char '-'
         readCmdWord
 
--- Fixme: this is a hack that doesn't handle let '++c' or let a\>b
+-- Fixme: this is a hack that doesn't handle let c='4'"5" or let a\>b
+readLetSuffix :: Monad m => SCParser m [Token]
 readLetSuffix = many1 (readIoRedirect <|> try readLetExpression <|> readCmdWord)
   where
+    readLetExpression :: Monad m => SCParser m Token
     readLetExpression = do
         startPos <- getPosition
         expression <- readStringForParser readCmdWord
-        subParse startPos readArithmeticContents expression
+        let (unQuoted, newPos) = kludgeAwayQuotes expression startPos
+        subParse newPos readArithmeticContents unQuoted
+
+    kludgeAwayQuotes :: String -> SourcePos -> (String, SourcePos)
+    kludgeAwayQuotes s p =
+        case s of
+            first:rest@(_:_) ->
+                let (last:backwards) = reverse rest
+                    middle = reverse backwards
+                in
+                    if first `elem` "'\"" && first == last
+                    then (middle, updatePosChar p first)
+                    else (s, p)
+            x -> (s, p)
+
 
 -- bash allows a=(b), ksh allows $a=(b). dash allows neither. Let's warn.
 readEvalSuffix = many1 (readIoRedirect <|> readCmdWord <|> evalFallback)

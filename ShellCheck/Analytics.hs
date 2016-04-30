@@ -2054,6 +2054,9 @@ prop_checkUnused26= verifyNotTree checkUnusedAssignments "declare -F foo"
 prop_checkUnused27= verifyTree checkUnusedAssignments "var=3; [ var -eq 3 ]"
 prop_checkUnused28= verifyNotTree checkUnusedAssignments "var=3; [[ var -eq 3 ]]"
 prop_checkUnused29= verifyNotTree checkUnusedAssignments "var=(a b); declare -p var"
+prop_checkUnused30= verifyTree checkUnusedAssignments "let a=1"
+prop_checkUnused31= verifyTree checkUnusedAssignments "let 'a=1'"
+prop_checkUnused32= verifyTree checkUnusedAssignments "let a=b=c; echo $a"
 checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
     flow = variableFlow params
@@ -2742,7 +2745,7 @@ checkLoopVariableReassignment params token =
             T_ForIn _ s _ _ -> return s
             T_ForArithmetic _
                 (TA_Sequence _
-                    [TA_Binary _ "="
+                    [TA_Assignment _ "="
                         (TA_Expansion _ [T_Literal _ var]) _])
                             _ _ _ -> return var
             _ -> fail "not loop"

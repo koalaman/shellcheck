@@ -34,6 +34,7 @@ data CaseType = CaseBreak | CaseFallThrough | CaseContinue deriving (Show, Eq)
 
 data Token =
     TA_Binary Id String Token Token
+    | TA_Assignment Id String Token Token
     | TA_Expansion Id [Token]
     | TA_Index Id Token
     | TA_Sequence Id [Token]
@@ -250,6 +251,7 @@ analyze f g i =
     delve (TC_Noary id typ token) = d1 token $ TC_Noary id typ
 
     delve (TA_Binary id op t1 t2) = d2 t1 t2 $ TA_Binary id op
+    delve (TA_Assignment id op t1 t2) = d2 t1 t2 $ TA_Assignment id op
     delve (TA_Unary id op t1) = d1 t1 $ TA_Unary id op
     delve (TA_Sequence id l) = dl l $ TA_Sequence id
     delve (TA_Trinary id t1 t2 t3) = do
@@ -344,6 +346,7 @@ getId t = case t of
         TC_Unary id _ _ _  -> id
         TC_Noary id _ _  -> id
         TA_Binary id _ _ _  -> id
+        TA_Assignment id _ _ _  -> id
         TA_Unary id _ _  -> id
         TA_Sequence id _  -> id
         TA_Trinary id _ _ _  -> id

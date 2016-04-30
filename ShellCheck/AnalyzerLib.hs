@@ -40,8 +40,6 @@ import qualified Data.Map as Map
 import Test.QuickCheck.All (forAllProperties)
 import Test.QuickCheck.Test (quickCheckWithResult, stdArgs, maxSuccess)
 
-import Debug.Trace
-
 type Analysis = ReaderT Parameters (Writer [TokenComment]) ()
 
 
@@ -272,7 +270,7 @@ getVariableFlow shell parents t =
     assignFirst _ = False
 
     setRead t =
-        let read    = getReferencedVariables t
+        let read    = getReferencedVariables parents t
         in mapM_ (\v -> modify (Reference v:)) read
 
     setWritten t =
@@ -331,7 +329,7 @@ getModifiedVariables t =
         TA_Unary _ "|++" var -> maybeToList $ do
             name <- getLiteralString var
             return (t, t, name, DataString $ SourceFrom [t])
-        TA_Binary _ op lhs rhs -> maybeToList $ do
+        TA_Assignment _ op lhs rhs -> maybeToList $ do
             guard $ op `elem` ["=", "*=", "/=", "%=", "+=", "-=", "<<=", ">>=", "&=", "^=", "|="]
             name <- getLiteralString lhs
             return (t, t, name, DataString $ SourceFrom [rhs])
@@ -476,12 +474,15 @@ getIndexReferences s = fromMaybe [] $ do
   where
     re = mkRegex "(\\[.*\\])"
 
-getReferencedVariables t =
+getReferencedVariables parents t =
     case t of
         T_DollarBraced id l -> let str = bracedString t in
             (t, t, getBracedReference str) :
                 map (\x -> (l, l, x)) (getIndexReferences str)
-        TA_Expansion id _ -> getIfReference t t
+        TA_Expansion id _ ->
+            if isArithmeticAssignment t
+            then []
+            else getIfReference t t
         T_Assignment id mode str _ word ->
             [(t, t, str) | mode == Append] ++ specialReferences str t word
 
@@ -517,6 +518,10 @@ getReferencedVariables t =
             return (context, token, getBracedReference str)
 
     isDereferencing = (`elem` ["-eq", "-ne", "-lt", "-le", "-gt", "-ge"])
+
+    isArithmeticAssignment t = case getPath parents t of
+        this: TA_Assignment _ "=" _ _ :_ -> True
+        _ -> False
 
 dataTypeFrom defaultType v = (case v of T_Array {} -> DataArray; _ -> defaultType) $ SourceFrom [v]
 
