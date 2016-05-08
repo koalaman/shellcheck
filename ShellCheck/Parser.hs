@@ -586,8 +586,8 @@ readConditionContents single =
       where
         readGlobLiteral = do
             id <- getNextId
-            s <- many1 (extglobStart <|> oneOf "{}[]$")
-            return $ T_Literal id s
+            s <- extglobStart <|> oneOf "{}[]$"
+            return $ T_Literal id [s]
         readGroup = called "regex grouping" $ do
             id <- getNextId
             char '('
