@@ -914,8 +914,10 @@ prop_checkArrayWithoutIndex3 = verifyTree checkArrayWithoutIndex "coproc foo whi
 prop_checkArrayWithoutIndex4 = verifyTree checkArrayWithoutIndex "coproc tail -f log; echo $COPROC"
 prop_checkArrayWithoutIndex5 = verifyTree checkArrayWithoutIndex "a[0]=foo; echo $a"
 prop_checkArrayWithoutIndex6 = verifyTree checkArrayWithoutIndex "echo $PIPESTATUS"
+prop_checkArrayWithoutIndex7 = verifyTree checkArrayWithoutIndex "a=(a b); a+=c"
+prop_checkArrayWithoutIndex8 = verifyTree checkArrayWithoutIndex "declare -a foo; foo=bar;"
 checkArrayWithoutIndex params _ =
-    concat $ doVariableFlowAnalysis readF writeF defaultMap (variableFlow params)
+    doVariableFlowAnalysis readF writeF defaultMap (variableFlow params)
   where
     defaultMap = Map.fromList $ map (\x -> (x,())) arrayVariables
     readF _ (T_DollarBraced id token) _ = do
@@ -923,9 +925,16 @@ checkArrayWithoutIndex params _ =
         return . maybeToList $ do
             name <- getLiteralString token
             assigned <- Map.lookup name map
-            return [makeComment WarningC id 2128
-                    "Expanding an array without an index only gives the first element."]
+            return $ makeComment WarningC id 2128
+                    "Expanding an array without an index only gives the first element."
     readF _ _ _ = return []
+
+    writeF _ (T_Assignment id mode name Nothing _) _ (DataString _) = do
+        isArray <- gets (isJust . Map.lookup name)
+        return $ if not isArray then [] else
+            case mode of
+                Assign -> [makeComment WarningC id 2178 "Variable was used as an array but is now assigned a string."]
+                Append -> [makeComment WarningC id 2179 "Use array+=(\"item\") to append items to an array."]
 
     writeF _ t name (DataArray _) = do
         modify (Map.insert name ())
