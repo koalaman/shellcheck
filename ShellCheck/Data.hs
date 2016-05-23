@@ -87,6 +87,7 @@ shellForExecutable name =
     case name of
         "sh"    -> return Sh
         "bash"  -> return Bash
+        "bats"  -> return Bash
         "dash"  -> return Dash
         "ksh"   -> return Ksh
         "ksh88" -> return Ksh

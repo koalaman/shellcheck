@@ -128,6 +128,7 @@ data Token =
     | T_CoProc Id (Maybe String) Token
     | T_CoProcBody Id Token
     | T_Include Id Token Token -- . & source: SimpleCommand T_Script
+    | T_BatsTest Id Token Token
     deriving (Show)
 
 data Annotation =
@@ -265,6 +266,7 @@ analyze f g i =
     delve (T_CoProc id var body) = d1 body $ T_CoProc id var
     delve (T_CoProcBody id t) = d1 t $ T_CoProcBody id
     delve (T_Include id includer script) = d2 includer script $ T_Include id
+    delve (T_BatsTest id name t) = d2 name t $ T_BatsTest id
     delve t = return t
 
 getId t = case t of
@@ -363,6 +365,7 @@ getId t = case t of
         T_CoProc id _ _ -> id
         T_CoProcBody id _ -> id
         T_Include id _ _ -> id
+        T_BatsTest id _ _ -> id
 
 blank :: Monad m => Token -> m ()
 blank = const $ return ()
