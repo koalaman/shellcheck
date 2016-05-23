@@ -109,6 +109,7 @@ shellForExecutable name =
     case name of
         "sh"    -> return Sh
         "bash"  -> return Bash
+        "bats"  -> return Bash
         "dash"  -> return Dash
         "ash"   -> return Dash -- There's also a warning for this.
         "ksh"   -> return Ksh

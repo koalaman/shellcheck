@@ -423,6 +423,7 @@ getVariableFlow params t =
 
     assignFirst T_ForIn {}    = True
     assignFirst T_SelectIn {} = True
+    assignFirst (T_BatsTest {}) = True
     assignFirst _             = False
 
     setRead t =
@@ -440,6 +441,7 @@ leadType params t =
         T_Backticked _ _  -> SubshellScope "`..` expansion"
         T_Backgrounded _ _  -> SubshellScope "backgrounding &"
         T_Subshell _ _  -> SubshellScope "(..) group"
+        T_BatsTest {} -> SubshellScope "@bats test"
         T_CoProcBody _ _  -> SubshellScope "coproc"
         T_Redirecting {}  ->
             if fromMaybe False causesSubshell
@@ -479,6 +481,12 @@ getModifiedVariables t =
         TA_Assignment _ op (TA_Variable _ name _) rhs -> maybeToList $ do
             guard $ op `elem` ["=", "*=", "/=", "%=", "+=", "-=", "<<=", ">>=", "&=", "^=", "|="]
             return (t, t, name, DataString $ SourceFrom [rhs])
+
+        T_BatsTest {} -> [
+            (t, t, "lines", DataArray SourceExternal),
+            (t, t, "status", DataString SourceInteger),
+            (t, t, "output", DataString SourceExternal)
+            ]
 
         -- Count [[ -v foo ]] as an "assignment".
         -- This is to prevent [ -v foo ] being unassigned or unused.
@@ -698,6 +706,12 @@ getReferencedVariables parents t =
             if isDereferencing op
             then concatMap (getIfReference t) [lhs, rhs]
             else []
+
+        T_BatsTest {} -> [ -- pretend @test references vars to avoid warnings
+            (t, t, "lines"),
+            (t, t, "status"),
+            (t, t, "output")
+            ]
 
         t@(T_FdRedirect _ ('{':var) op) -> -- {foo}>&- references and closes foo
             [(t, t, takeWhile (/= '}') var) | isClosingFileOp op]

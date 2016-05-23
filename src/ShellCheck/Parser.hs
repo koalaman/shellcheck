@@ -2331,6 +2331,17 @@ readBraceGroup = called "brace group" $ do
     id <- endSpan start
     return $ T_BraceGroup id list
 
+prop_readBatsTest = isOk readBatsTest "@test 'can parse' {\n  true\n}"
+readBatsTest = called "bats @test" $ do
+    start <- startSpan
+    try $ string "@test"
+    spacing
+    name <- readNormalWord
+    spacing
+    test <- readBraceGroup
+    id <- endSpan start
+    return $ T_BatsTest id name test
+
 prop_readWhileClause = isOk readWhileClause "while [[ -e foo ]]; do sleep 1; done"
 readWhileClause = called "while loop" $ do
     start <- startSpan
@@ -2590,6 +2601,7 @@ readCompoundCommand = do
         readForClause,
         readSelectClause,
         readCaseClause,
+        readBatsTest,
         readFunctionDefinition
         ]
     spacing
@@ -3037,6 +3049,7 @@ readScriptFile = do
         "ash",
         "dash",
         "bash",
+        "bats",
         "ksh"
         ]
     badShells = [
