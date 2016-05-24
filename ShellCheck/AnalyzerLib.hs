@@ -520,7 +520,7 @@ getReferencedVariables parents t =
     isDereferencing = (`elem` ["-eq", "-ne", "-lt", "-le", "-gt", "-ge"])
 
     isArithmeticAssignment t = case getPath parents t of
-        this: TA_Assignment _ "=" _ _ :_ -> True
+        this: TA_Assignment _ "=" lhs _ :_ -> lhs == t
         _ -> False
 
 dataTypeFrom defaultType v = (case v of T_Array {} -> DataArray; _ -> defaultType) $ SourceFrom [v]
