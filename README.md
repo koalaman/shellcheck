@@ -70,6 +70,10 @@ On Debian based distros:
 
     apt-get install shellcheck
 
+On Gentoo based distros:
+
+    emerge --ask shellcheck
+
 On Fedora based distros:
 
     dnf install ShellCheck
