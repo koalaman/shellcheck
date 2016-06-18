@@ -135,7 +135,7 @@ almostSpace =
 
 --------- Message/position annotation on top of user state
 data Note = Note Id Severity Code String deriving (Show, Eq)
-data ParseNote = ParseNote SourcePos Severity Code String deriving (Show, Eq)
+data ParseNote = ParseNote SourcePos SourcePos Severity Code String deriving (Show, Eq)
 data Context =
         ContextName SourcePos String
         | ContextAnnotation [Annotation]
@@ -162,9 +162,9 @@ initialUserState = UserState {
     pendingHereDocs = []
 }
 
-codeForParseNote (ParseNote _ _ code _) = code
+codeForParseNote (ParseNote _ _ _ code _) = code
 noteToParseNote map (Note id severity code message) =
-        ParseNote pos severity code message
+        ParseNote pos pos severity code message
     where
         pos = fromJust $ Map.lookup id map
 
@@ -320,14 +320,16 @@ pushContext c = do
     v <- getCurrentContexts
     setCurrentContexts (c:v)
 
-parseProblemAt pos level code msg = do
+parseProblemAtWithEnd start end level code msg = do
     irrelevant <- shouldIgnoreCode code
     unless irrelevant $
         Ms.modify (\state -> state {
             parseProblems = note:parseProblems state
         })
   where
-    note = ParseNote pos level code msg
+    note = ParseNote start end level code msg
+
+parseProblemAt pos = parseProblemAtWithEnd pos pos
 
 -- Store non-parse problems inside
 
@@ -335,7 +337,9 @@ parseNote c l a = do
     pos <- getPosition
     parseNoteAt pos c l a
 
-parseNoteAt pos c l a = addParseNote $ ParseNote pos c l a
+parseNoteAt pos c l a = addParseNote $ ParseNote pos pos c l a
+
+parseNoteAtWithEnd start end c l a = addParseNote $ ParseNote start end c l a
 
 --------- Convenient combinators
 thenSkip main follow = do
@@ -2571,13 +2575,15 @@ parseWithNotes parser = do
     state <- getState
     return (item, state)
 
-compareNotes (ParseNote pos1 level1 _ s1) (ParseNote pos2 level2 _ s2) = compare (pos1, level1) (pos2, level2)
+compareNotes (ParseNote pos1 pos1' level1 _ s1) (ParseNote pos2 pos2' level2 _ s2) = compare (pos1, pos1', level1) (pos2, pos2', level2)
 sortNotes = sortBy compareNotes
 
 
 makeErrorFor parsecError =
-    ParseNote (errorPos parsecError) ErrorC 1072 $
+    ParseNote pos pos ErrorC 1072 $
         getStringFromParsec $ errorMessages parsecError
+    where
+      pos = errorPos parsecError
 
 getStringFromParsec errors =
         case map f errors of
@@ -2630,9 +2636,9 @@ parseShell sys name contents = do
     isName (ContextName _ _) = True
     isName _ = False
     notesForContext list = zipWith ($) [first, second] $ filter isName list
-    first (ContextName pos str) = ParseNote pos ErrorC 1073 $
+    first (ContextName pos str) = ParseNote pos pos ErrorC 1073 $
         "Couldn't parse this " ++ str ++ "."
-    second (ContextName pos str) = ParseNote pos InfoC 1009 $
+    second (ContextName pos str) = ParseNote pos pos InfoC 1009 $
         "The mentioned parser error was in this " ++ str ++ "."
 
 reattachHereDocs root map =
@@ -2644,8 +2650,8 @@ reattachHereDocs root map =
     f t = t
 
 toPositionedComment :: ParseNote -> PositionedComment
-toPositionedComment (ParseNote pos severity code message) =
-    PositionedComment (posToPos pos) $ Comment severity code message
+toPositionedComment (ParseNote start end severity code message) =
+    PositionedComment (posToPos start) (posToPos end) $ Comment severity code message
 
 posToPos :: SourcePos -> Position
 posToPos sp = Position {

@@ -39,7 +39,7 @@ import Test.QuickCheck.All
 
 tokenToPosition map (TokenComment id c) = fromMaybe fail $ do
     position <- Map.lookup id map
-    return $ PositionedComment position c
+    return $ PositionedComment position position c
   where
     fail = error "Internal shellcheck error: id doesn't exist. Please report!"
 
@@ -65,13 +65,13 @@ checkScript sys spec = do
         return . nub . sortMessages . filter shouldInclude $
             (parseMessages ++ map translator analysisMessages)
 
-    shouldInclude (PositionedComment _ (Comment _ code _)) =
+    shouldInclude (PositionedComment _ _ (Comment _ code _)) =
         code `notElem` csExcludedWarnings spec
 
     sortMessages = sortBy (comparing order)
-    order (PositionedComment pos (Comment severity code message)) =
+    order (PositionedComment pos _ (Comment severity code message)) =
         (posFile pos, posLine pos, posColumn pos, severity, code, message)
-    getPosition (PositionedComment pos _) = pos
+    getPosition (PositionedComment pos _ _) = pos
 
     analysisSpec root =
         AnalysisSpec {
@@ -84,7 +84,7 @@ getErrors sys spec =
     sort . map getCode . crComments $
         runIdentity (checkScript sys spec)
   where
-    getCode (PositionedComment _ (Comment _ code _)) = code
+    getCode (PositionedComment _ _ (Comment _ code _)) = code
 
 check = checkWithIncludes []
 
