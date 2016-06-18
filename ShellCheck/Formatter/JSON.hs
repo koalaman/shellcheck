@@ -40,6 +40,7 @@ instance JSON (PositionedComment) where
   showJSON comment@(PositionedComment start end (Comment level code string)) = makeObj [
       ("file", showJSON $ posFile start),
       ("line", showJSON $ posLine start),
+      ("endLine", showJSON $ posLine end),
       ("column", showJSON $ posColumn start),
       ("endColumn", showJSON $ posColumn end),
       ("level", showJSON $ severityText comment),
