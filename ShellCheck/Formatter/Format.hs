@@ -30,13 +30,15 @@ data Formatter = Formatter {
     footer :: IO ()
 }
 
-lineNo (PositionedComment pos _) = posLine pos
-colNo  (PositionedComment pos _) = posColumn pos
-codeNo (PositionedComment _ (Comment _ code _)) = code
-messageText (PositionedComment _ (Comment _ _ t)) = t
+lineNo (PositionedComment pos _ _) = posLine pos
+endLineNo (PositionedComment _ end _) = posLine end
+colNo  (PositionedComment pos _ _) = posColumn pos
+endColNo  (PositionedComment _ end _) = posColumn end
+codeNo (PositionedComment _ _ (Comment _ code _)) = code
+messageText (PositionedComment _ _ (Comment _ _ t)) = t
 
 severityText :: PositionedComment -> String
-severityText (PositionedComment _ (Comment c _ _)) =
+severityText (PositionedComment _ _ (Comment c _ _)) =
     case c of
         ErrorC   -> "error"
         WarningC -> "warning"
@@ -48,12 +50,15 @@ makeNonVirtual comments contents =
     map fix comments
   where
     ls = lines contents
-    fix c@(PositionedComment pos comment) = PositionedComment pos {
-        posColumn =
-            if lineNo c > 0 && lineNo c <= fromIntegral (length ls)
-            then real (ls !! fromIntegral (lineNo c - 1)) 0 0 (colNo c)
-            else colNo c
+    fix c@(PositionedComment start end comment) = PositionedComment start {
+        posColumn = realignColumn lineNo colNo c
+    } end {
+        posColumn = realignColumn endLineNo endColNo c
     } comment
+    realignColumn lineNo colNo c =
+      if lineNo c > 0 && lineNo c <= fromIntegral (length ls)
+      then real (ls !! fromIntegral (lineNo c - 1)) 0 0 (colNo c)
+      else colNo c
     real _ r v target | target <= v = r
     real [] r v _ = r -- should never happen
     real ('\t':rest) r v target =
