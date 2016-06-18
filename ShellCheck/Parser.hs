@@ -814,7 +814,7 @@ readCondition = called "test expression" $ do
     pos <- getPosition
     space <- allspacing
     when (null space) $
-        parseProblemAt pos ErrorC 1035 $ "You need a space after the " ++
+        parseProblemAtWithEnd opos pos ErrorC 1035 $ "You need a space after the " ++
             if single
                 then "[ and before the ]."
                 else "[[ and before the ]]."
