@@ -136,6 +136,38 @@ almostSpace =
         char c
         return ' '
 
+withNextId :: Monad m => ParsecT s UserState (SCBase m) (Id -> b) -> ParsecT s UserState (SCBase m) b
+withNextId p = do
+    start <- getPosition
+    id <- createId
+    setStartPos id start
+    fn <- p
+    let t = fn id
+    end <- getPosition
+    setEndPos id end
+    return t
+  where
+    createId = do
+        state <- getState
+        let id = incId (lastId state)
+        putState $ state {
+            lastId = id
+        }
+        return id
+      where incId (Id n) = Id $ n+1
+    setStartPos id sourcepos = do
+      state <- getState
+      let newMap = Map.insert id sourcepos (positionMap state)
+      putState $ state {
+          positionMap = newMap
+      }
+    setEndPos id sourcepos = do
+      state <- getState
+      let newMap = Map.insert id sourcepos (positionEndMap state)
+      putState $ state {
+          positionEndMap = newMap
+      }
+
 --------- Message/position annotation on top of user state
 data Note = Note Id Severity Code String deriving (Show, Eq)
 data ParseNote = ParseNote SourcePos SourcePos Severity Code String deriving (Show, Eq)
@@ -152,6 +184,7 @@ data HereDocContext =
 data UserState = UserState {
     lastId :: Id,
     positionMap :: Map.Map Id SourcePos,
+    positionEndMap :: Map.Map Id SourcePos,
     parseNotes :: [ParseNote],
     hereDocMap :: Map.Map Id [Token],
     pendingHereDocs :: [HereDocContext]
@@ -159,6 +192,7 @@ data UserState = UserState {
 initialUserState = UserState {
     lastId = Id $ -1,
     positionMap = Map.empty,
+    positionEndMap = Map.empty,
     parseNotes = [],
     hereDocMap = Map.empty,
     pendingHereDocs = []
@@ -172,6 +206,7 @@ noteToParseNote map (Note id severity code message) =
 
 getLastId = lastId <$> getState
 
+-- Deprecated by withNextId
 getNextIdAt sourcepos = do
     state <- getState
     let newId = incId (lastId state)
@@ -183,6 +218,7 @@ getNextIdAt sourcepos = do
     return newId
   where incId (Id n) = Id $ n+1
 
+-- Deprecated by withNextId
 getNextId :: Monad m => SCParser m Id
 getNextId = do
     pos <- getPosition
@@ -1190,8 +1226,7 @@ prop_readDoubleQuoted7 = isOk readSimpleCommand "echo \"${ ls;}bar\""
 prop_readDoubleQuoted8 = isWarning readDoubleQuoted "\"\x201Chello\x201D\""
 prop_readDoubleQuoted9 = isWarning readDoubleQuoted "\"foo\\n\""
 prop_readDoubleQuoted10 = isOk readDoubleQuoted "\"foo\\\\n\""
-readDoubleQuoted = called "double quoted string" $ do
-    id <- getNextId
+readDoubleQuoted = called "double quoted string" $ withNextId $ do
     startPos <- getPosition
     doubleQuote
     x <- many doubleQuotedPart
@@ -1201,7 +1236,7 @@ readDoubleQuoted = called "double quoted string" $ do
         try . lookAhead $ suspectCharAfterQuotes <|> oneOf "$\""
         when (any hasLineFeed x && not (startsWithLineFeed x)) $
             suggestForgotClosingQuote startPos endPos "double quoted string"
-    return $ T_DoubleQuoted id x
+    return $ \id -> T_DoubleQuoted id x
   where
     startsWithLineFeed (T_Literal _ ('\n':_):_) = True
     startsWithLineFeed _ = False
@@ -1544,16 +1579,18 @@ prop_readDollarVariable3 = isWarning (readDollarVariable >> anyChar) "$10"
 prop_readDollarVariable4 = isWarning (readDollarVariable >> string "[@]") "$arr[@]"
 prop_readDollarVariable5 = isWarning (readDollarVariable >> string "[f") "$arr[f"
 
-readDollarVariable = do
-    id <- getNextId
+readDollarVariable :: Monad m => ParsecT String UserState (SCBase m) Token
+readDollarVariable = withNextId $ do
     pos <- getPosition
 
-    let singleCharred p = do
+    let
+      singleCharred p = do
         n <- p
         value <- wrap [n]
-        return (T_DollarBraced id value)
+        return $ \id -> (T_DollarBraced id value)
 
-    let positional = do
+    let
+      positional = do
         value <- singleCharred digit
         return value `attempting` do
             lookAhead digit
@@ -1564,17 +1601,15 @@ readDollarVariable = do
     let regular = do
         name <- readVariableName
         value <- wrap name
-        return (T_DollarBraced id value) `attempting` do
+        return (\id -> (T_DollarBraced id value)) `attempting` do
             lookAhead $ char '['
             parseNoteAt pos ErrorC 1087 "Use braces when expanding arrays, e.g. ${array[idx]} (or ${var}[.. to quiet)."
 
     try $ char '$' >> (positional <|> special <|> regular)
 
   where
-    wrap s = do
-        x <- getNextId
-        y <- getNextId
-        return $ T_NormalWord x [T_Literal y s]
+    wrap s = withNextId $ withNextId $ do
+        return $ \x y -> T_NormalWord x [T_Literal y s]
 
 readVariableName = do
     f <- variableStart
@@ -3002,6 +3037,7 @@ parseShell env name contents = do
             return ParseResult {
                 prComments = map toPositionedComment $ nub $ parseNotes userstate ++ parseProblems state,
                 prTokenPositions = Map.map posToPos (positionMap userstate),
+                prTokenEndPositions = Map.map posToPos (positionEndMap userstate),
                 prRoot = Just $
                     reattachHereDocs script (hereDocMap userstate)
             }
@@ -3013,6 +3049,7 @@ parseShell env name contents = do
                         ++ [makeErrorFor err]
                         ++ parseProblems state,
                 prTokenPositions = Map.empty,
+                prTokenEndPositions = Map.empty,
                 prRoot = Nothing
             }
 
