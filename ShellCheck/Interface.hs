@@ -94,7 +94,7 @@ data Position = Position {
 } deriving (Show, Eq)
 
 data Comment = Comment Severity Code String deriving (Show, Eq)
-data PositionedComment = PositionedComment Position Comment deriving (Show, Eq)
+data PositionedComment = PositionedComment Position Position Comment deriving (Show, Eq)
 data TokenComment = TokenComment Id Comment deriving (Show, Eq)
 
 data ColorOption =
