@@ -262,6 +262,11 @@ getAssociativeArrays t =
         let flags = getAllFlags t
         guard $ elem "A" $ map snd flags
         let args = map fst . filter ((==) "" . snd) $ flags
-        let names = mapMaybe getLiteralString args
+        let names = mapMaybe (getLiteralStringExt nameAssignments) args
         return $ tell names
     f _ = return ()
+
+    nameAssignments t =
+        case t of
+            T_Assignment _ _ name _ _ -> return name
+            otherwise -> Nothing

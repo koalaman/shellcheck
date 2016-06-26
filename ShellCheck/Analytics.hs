@@ -2120,6 +2120,7 @@ prop_checkUnassignedReferences21= verifyTree checkUnassignedReferences "echo ${#
 prop_checkUnassignedReferences22= verifyNotTree checkUnassignedReferences "echo ${!os*}"
 prop_checkUnassignedReferences23= verifyTree checkUnassignedReferences "declare -a foo; foo[bar]=42;"
 prop_checkUnassignedReferences24= verifyNotTree checkUnassignedReferences "declare -A foo; foo[bar]=42;"
+prop_checkUnassignedReferences25= verifyNotTree checkUnassignedReferences "declare -A foo=(); foo[bar]=42;"
 checkUnassignedReferences params t = warnings
   where
     (readMap, writeMap) = execState (mapM tally $ variableFlow params) (Map.empty, Map.empty)
