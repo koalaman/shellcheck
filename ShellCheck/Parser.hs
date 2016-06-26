@@ -897,6 +897,20 @@ readNormalishWord end = do
     checkPossibleTermination pos x
     return $ T_NormalWord id x
 
+readIndexSpan = do
+    id <- getNextId
+    x <- many (readNormalWordPart "]" <|> someSpace <|> otherLiteral)
+    return $ T_NormalWord id x
+  where
+    someSpace = do
+        id <- getNextId
+        str <- spacing1
+        return $ T_Literal id str
+    otherLiteral = do
+        id <- getNextId
+        str <- many1 $ oneOf quotableChars
+        return $ T_Literal id str
+
 checkPossibleTermination pos [T_Literal _ x] =
     when (x `elem` ["do", "done", "then", "fi", "esac"]) $
         parseProblemAt pos WarningC 1010 $ "Use semicolon or linefeed before '" ++ x ++ "' (or quote to make it literal)."
@@ -2251,7 +2265,9 @@ readEvalSuffix = many1 (readIoRedirect <|> readCmdWord <|> evalFallback)
 
 -- Get whatever a parser would parse as a string
 readStringForParser parser = do
+    state <- Ms.get
     pos <- lookAhead (parser >> getPosition)
+    Ms.put state
     readUntil pos
   where
     readUntil endPos = anyChar `reluctantlyTill` (getPosition >>= guard . (== endPos))
@@ -2316,11 +2332,12 @@ readAssignmentWord = try $ do
         return $ T_Literal id ""
 
 readArrayIndex = do
+    id <- getNextId
     char '['
-    optional space
-    x <- readArithmeticContents
+    pos <- getPosition
+    str <- readStringForParser readIndexSpan
     char ']'
-    return x
+    return $ T_UnparsedIndex id pos str
 
 readArray = called "array assignment" $ do
     id <- getNextId
@@ -2477,12 +2494,12 @@ verifyEof = eof <|> choice [
         try (lookAhead p)
         action
 
-prop_readScript1 = isOk readScript "#!/bin/bash\necho hello world\n"
-prop_readScript2 = isWarning readScript "#!/bin/bash\r\necho hello world\n"
-prop_readScript3 = isWarning readScript "#!/bin/bash\necho hello\xA0world"
-prop_readScript4 = isWarning readScript "#!/usr/bin/perl\nfoo=("
-prop_readScript5 = isOk readScript "#!/bin/bash\n#This is an empty script\n\n"
-readScript = do
+prop_readScript1 = isOk readScriptFile "#!/bin/bash\necho hello world\n"
+prop_readScript2 = isWarning readScriptFile "#!/bin/bash\r\necho hello world\n"
+prop_readScript3 = isWarning readScriptFile "#!/bin/bash\necho hello\xA0world"
+prop_readScript4 = isWarning readScriptFile "#!/usr/bin/perl\nfoo=("
+prop_readScript5 = isOk readScriptFile "#!/bin/bash\n#This is an empty script\n\n"
+readScriptFile = do
     id <- getNextId
     pos <- getPosition
     optional $ do
@@ -2497,7 +2514,8 @@ readScript = do
             annotations <- readAnnotations
             commands <- withAnnotations annotations readCompoundListOrEmpty
             verifyEof
-            return $ T_Annotation annotationId annotations $  T_Script id sb commands
+            let script = T_Annotation annotationId annotations $  T_Script id sb commands
+            reparseIndices script
         else do
             many anyChar
             return $ T_Script id sb []
@@ -2549,6 +2567,9 @@ readScript = do
 
     readUtf8Bom = called "Byte Order Mark" $ string "\xFEFF"
 
+readScript = do
+    script <- readScriptFile
+    reparseIndices script
 
 isWarning p s = parsesCleanly p s == Just False
 isOk p s =      parsesCleanly p s == Just True
@@ -2634,6 +2655,33 @@ parseShell sys name contents = do
         "Couldn't parse this " ++ str ++ "."
     second (ContextName pos str) = ParseNote pos InfoC 1009 $
         "The mentioned parser error was in this " ++ str ++ "."
+
+-- Go over all T_UnparsedIndex and reparse them as either arithmetic or text
+-- depending on declare -A statements.
+reparseIndices root =
+   analyze blank blank f root
+  where
+    associative = getAssociativeArrays root
+    isAssociative s = s `elem` associative
+    f (T_Assignment id mode name (Just (T_UnparsedIndex _ pos src)) value) = do
+        new <- parsed name pos src
+        return $ T_Assignment id mode name (Just new) value
+    f (T_Assignment id mode name Nothing (T_Array id2 words)) = do
+        newwords <- mapM (fix name) words
+        return $ T_Assignment id mode name Nothing (T_Array id2 newwords)
+    f t = return t
+
+    fix name word =
+        case word of
+            T_IndexedElement id (T_UnparsedIndex _ pos src) value -> do
+                new <- parsed name pos src
+                return $ T_IndexedElement id new value
+            otherwise -> return word
+
+    parsed name pos src =
+        if isAssociative name
+        then subParse pos readIndexSpan src
+        else subParse pos (optional space >> readArithmeticContents) src
 
 reattachHereDocs root map =
     doTransform f root

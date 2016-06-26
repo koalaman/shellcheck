@@ -21,6 +21,7 @@ module ShellCheck.AST where
 
 import Control.Monad
 import Control.Monad.Identity
+import Text.Parsec
 import qualified ShellCheck.Regex as Re
 
 data Id = Id Int deriving (Show, Eq, Ord)
@@ -51,6 +52,8 @@ data Token =
     | T_Arithmetic Id Token
     | T_Array Id [Token]
     | T_IndexedElement Id Token Token
+    -- Store the index as string, and parse as arithmetic or string later
+    | T_UnparsedIndex Id SourcePos String
     | T_Assignment Id AssignmentMode String (Maybe Token) Token
     | T_Backgrounded Id Token
     | T_Backticked Id [Token]
@@ -145,7 +148,7 @@ tokenEquals a b = kludge a == kludge b
 instance Eq Token where
     (==) = tokenEquals
 
-analyze :: Monad m => (Token -> m ()) -> (Token -> m ()) -> (Token -> Token) -> Token -> m Token
+analyze :: Monad m => (Token -> m ()) -> (Token -> m ()) -> (Token -> m Token) -> Token -> m Token
 analyze f g i =
     round
   where
@@ -153,7 +156,7 @@ analyze f g i =
         f t
         newT <- delve t
         g t
-        return . i $ newT
+        i newT
     roundAll = mapM round
 
     roundMaybe Nothing = return Nothing
@@ -363,10 +366,11 @@ getId t = case t of
         T_CoProc id _ _ -> id
         T_CoProcBody id _ -> id
         T_Include id _ _ -> id
+        T_UnparsedIndex id _ _ -> id
 
 blank :: Monad m => Token -> m ()
 blank = const $ return ()
-doAnalysis f = analyze f blank id
-doStackAnalysis startToken endToken = analyze startToken endToken id
-doTransform i = runIdentity . analyze blank blank i
+doAnalysis f = analyze f blank (return . id)
+doStackAnalysis startToken endToken = analyze startToken endToken (return . id)
+doTransform i = runIdentity . analyze blank blank (return . i)
 

@@ -1322,7 +1322,9 @@ checkBraceExpansionVars params t@(T_BraceExpansion id list) = mapM_ check list
         (`isUnqualifiedCommand` "eval") <$> getClosestCommand (parentMap params) t
 checkBraceExpansionVars _ _ = return ()
 
-prop_checkForDecimals = verify checkForDecimals "((3.14*c))"
+prop_checkForDecimals1 = verify checkForDecimals "((3.14*c))"
+prop_checkForDecimals2 = verify checkForDecimals "foo[1.2]=bar"
+prop_checkForDecimals3 = verifyNot checkForDecimals "declare -A foo; foo[1.2]=bar"
 checkForDecimals params t@(TA_Expansion id _) = potentially $ do
     guard $ not (hasFloatingPoint params)
     str <- getLiteralString t
@@ -2116,6 +2118,8 @@ prop_checkUnassignedReferences19= verifyNotTree checkUnassignedReferences "reado
 prop_checkUnassignedReferences20= verifyNotTree checkUnassignedReferences "printf -v foo bar; echo $foo"
 prop_checkUnassignedReferences21= verifyTree checkUnassignedReferences "echo ${#foo}"
 prop_checkUnassignedReferences22= verifyNotTree checkUnassignedReferences "echo ${!os*}"
+prop_checkUnassignedReferences23= verifyTree checkUnassignedReferences "declare -a foo; foo[bar]=42;"
+prop_checkUnassignedReferences24= verifyNotTree checkUnassignedReferences "declare -A foo; foo[bar]=42;"
 checkUnassignedReferences params t = warnings
   where
     (readMap, writeMap) = execState (mapM tally $ variableFlow params) (Map.empty, Map.empty)

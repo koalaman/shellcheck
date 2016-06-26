@@ -21,6 +21,7 @@ module ShellCheck.ASTLib where
 
 import ShellCheck.AST
 
+import Control.Monad.Writer
 import Control.Monad
 import Data.List
 import Data.Maybe
@@ -251,3 +252,16 @@ getCommandSequences t =
         T_IfExpression _ thens elses -> map snd thens ++ [elses]
         otherwise -> []
 
+getAssociativeArrays t =
+    nub . execWriter $ doAnalysis f t
+  where
+    f :: Token -> Writer [String] ()
+    f t@(T_SimpleCommand {}) = fromMaybe (return ()) $ do
+        name <- getCommandName t
+        guard $ name == "declare"
+        let flags = getAllFlags t
+        guard $ elem "A" $ map snd flags
+        let args = map fst . filter ((==) "" . snd) $ flags
+        let names = mapMaybe getLiteralString args
+        return $ tell names
+    f _ = return ()
