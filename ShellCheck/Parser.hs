@@ -1078,13 +1078,18 @@ subParse pos parser input = do
     setPosition lastPosition
     return result
 
-inSeparateContext parser = do
+-- Parse something, but forget all parseProblems
+inSeparateContext = parseForgettingContext True
+-- Parse something, but forget all parseProblems on failure
+forgetOnFailure = parseForgettingContext False
+
+parseForgettingContext alsoOnSuccess parser = do
     context <- Ms.get
     success context <|> failure context
   where
     success c = do
         res <- try parser
-        Ms.put c
+        when alsoOnSuccess $ Ms.put c
         return res
     failure c = do
         Ms.put c
@@ -1321,7 +1326,12 @@ readDoubleQuotedDollar = readDollarExpression <|> readDollarLonely
 
 prop_readDollarExpression1 = isOk readDollarExpression "$(((1) && 3))"
 prop_readDollarExpression2 = isWarning readDollarExpression "$(((1)) && 3)"
-readDollarExpression = readTripleParenthesis "$" readDollarArithmetic readDollarExpansion <|> readDollarArithmetic <|> readDollarBracket <|> readDollarBraceCommandExpansion <|> readDollarBraced <|> readDollarExpansion <|> readDollarVariable
+prop_readDollarExpression3 = isWarning readDollarExpression "$((\"$@\" &); foo;)"
+readDollarExpression :: Monad m => SCParser m Token
+readDollarExpression = arithmetic <|> readDollarExpansion <|> readDollarBracket <|> readDollarBraceCommandExpansion <|> readDollarBraced <|> readDollarVariable
+  where
+    arithmetic = readAmbiguous "$((" readDollarArithmetic readDollarExpansion (\pos ->
+        parseNoteAt pos WarningC 1102 "Shells disambiguate $(( differently or not at all. If the first $( should start command substitution, add a space after it.")
 
 prop_readDollarSingleQuote = isOk readDollarSingleQuote "$'foo\\\'lol'"
 readDollarSingleQuote = called "$'..' expression" $ do
@@ -1367,24 +1377,19 @@ readArithmeticExpression = called "((..)) command" $ do
     string "))"
     return (T_Arithmetic id c)
 
--- Check if maybe ((( was intended as ( (( rather than (( (
-readTripleParenthesis prefix expected alternative = do
-    pos <- try . lookAhead $ do
-        string prefix
-        p <- getPosition
-        string "(((" -- should optimally be "((" but it's noisy and rarely helpful
-        return p
-
+-- If the next characters match prefix, try two different parsers and warn if the alternate parser had to be used
+readAmbiguous :: Monad m => String -> SCParser m p -> SCParser m p -> (SourcePos -> SCParser m ()) -> SCParser m p
+readAmbiguous prefix expected alternative warner = do
+    pos <- getPosition
+    try . lookAhead $ string prefix
     -- If the expected parser fails, try the alt.
     -- If the alt fails, run the expected one again for the errors.
-    try expected <|> tryAlt pos <|> expected
+    try (forgetOnFailure expected) <|> try (withAlt pos) <|> expected
   where
-    tryAlt pos = do
-        t <- try alternative
-        parseNoteAt pos WarningC 1102 $
-            "Shells differ in parsing ambiguous " ++ prefix ++ "(((. Use spaces: " ++ prefix ++ "( (( ."
+    withAlt pos = do
+        t <- forgetOnFailure alternative
+        warner pos
         return t
-
 
 prop_readDollarBraceCommandExpansion1 = isOk readDollarBraceCommandExpansion "${ ls; }"
 prop_readDollarBraceCommandExpansion2 = isOk readDollarBraceCommandExpansion "${\nls\n}"
@@ -2194,8 +2199,9 @@ readCompoundCommand = do
     id <- getNextId
     cmd <- choice [
         readBraceGroup,
-        readTripleParenthesis "" readArithmeticExpression readSubshell,
-        readArithmeticExpression,
+        readAmbiguous "((" readArithmeticExpression readSubshell (\pos ->
+            parseNoteAt pos WarningC 1105 "Shells disambiguate (( differently or not at all. If the first ( should start a subshell, add a space after it."),
+        --readArithmeticExpression,
         readSubshell,
         readCondition,
         readWhileClause,
@@ -2269,9 +2275,7 @@ readEvalSuffix = many1 (readIoRedirect <|> readCmdWord <|> evalFallback)
 
 -- Get whatever a parser would parse as a string
 readStringForParser parser = do
-    state <- Ms.get
-    pos <- lookAhead (parser >> getPosition)
-    Ms.put state
+    pos <- inSeparateContext $ lookAhead (parser >> getPosition)
     readUntil pos
   where
     readUntil endPos = anyChar `reluctantlyTill` (getPosition >>= guard . (== endPos))
