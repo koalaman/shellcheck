@@ -1935,7 +1935,7 @@ readElifPart = called "elif clause" $ do
     pos <- getPosition
     correctElif <- elif
     unless correctElif $
-        parseProblemAt pos ErrorC 1075 "Use 'elif' instead of 'else if'."
+        parseProblemAt pos ErrorC 1075 "Use 'elif' instead of 'else if' (or put 'if' on new line if nesting)."
     allspacing
     condition <- readTerm
 
