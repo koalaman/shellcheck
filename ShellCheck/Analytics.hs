@@ -765,6 +765,7 @@ prop_checkUnquotedExpansions4 = verifyNot checkUnquotedExpansions "[[ $(foo) == 
 prop_checkUnquotedExpansions5 = verifyNot checkUnquotedExpansions "for f in $(cmd); do echo $f; done"
 prop_checkUnquotedExpansions6 = verifyNot checkUnquotedExpansions "$(cmd)"
 prop_checkUnquotedExpansions7 = verifyNot checkUnquotedExpansions "cat << foo\n$(ls)\nfoo"
+prop_checkUnquotedExpansions8 = verifyNot checkUnquotedExpansions "set -- $(seq 1 4)"
 checkUnquotedExpansions params =
     check
   where
@@ -774,8 +775,11 @@ checkUnquotedExpansions params =
     check _ = return ()
     tree = parentMap params
     examine t =
-        unless (isQuoteFree tree t || usedAsCommandName tree t) $
+        unless (shouldBeSplit t || isQuoteFree tree t || usedAsCommandName tree t) $
             warn (getId t) 2046 "Quote this to prevent word splitting."
+
+    shouldBeSplit t =
+        getCommandNameFromExpansion t == Just "seq"
 
 
 prop_checkRedirectToSame = verify checkRedirectToSame "cat foo > foo"
@@ -1030,6 +1034,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
                 ,"alias"
                 ,"sudo" -- covering "sudo sh" and such
                 ,"dpkg-query"
+                ,"jq"  -- could also check that user provides --arg
                 ]
             || "awk" `isSuffixOf` commandName
             || "perl" `isPrefixOf` commandName

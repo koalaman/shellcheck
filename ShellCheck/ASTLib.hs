@@ -215,6 +215,19 @@ getCommandName t =
         T_Annotation _ _ t -> getCommandName t
         otherwise -> Nothing
 
+-- If a command substitution is a single command, get its name.
+--  $(date +%s) = Just "date"
+getCommandNameFromExpansion :: Token -> Maybe String
+getCommandNameFromExpansion t =
+    case t of
+        T_DollarExpansion _ [c] -> extract c
+        T_Backticked _ [c] -> extract c
+        T_DollarBraceCommandExpansion _ [c] -> extract c
+        otherwise -> Nothing
+  where
+    extract (T_Pipeline _ _ [cmd]) = getCommandName cmd
+    extract _ = Nothing
+
 -- Get the basename of a token representing a command
 getCommandBasename = liftM basename . getCommandName
   where
@@ -238,8 +251,8 @@ isOnlyRedirection t =
 
 isFunction t = case t of T_Function {} -> True; _ -> False
 
--- Get the list of commands from tokens that contain them, such as
--- the body of while loops and if statements.
+-- Get the lists of commands from tokens that contain them, such as
+-- the body of while loops or branches of if statements.
 getCommandSequences t =
     case t of
         T_Script _ _ cmds -> [cmds]
@@ -252,6 +265,7 @@ getCommandSequences t =
         T_IfExpression _ thens elses -> map snd thens ++ [elses]
         otherwise -> []
 
+-- Get a list of names of associative arrays
 getAssociativeArrays t =
     nub . execWriter $ doAnalysis f t
   where
