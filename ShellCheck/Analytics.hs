@@ -439,10 +439,16 @@ checkShebangParameters _ (T_Script id sb _) =
 prop_checkShebang1 = verifyNotTree checkShebang "#!/usr/bin/env bash -x\necho cow"
 prop_checkShebang2 = verifyNotTree checkShebang "#! /bin/sh  -l "
 prop_checkShebang3 = verifyTree checkShebang "ls -l"
-checkShebang params (T_Annotation _ _ t) = checkShebang params t
+prop_checkShebang4 = verifyNotTree checkShebang "#shellcheck shell=sh\nfoo"
+checkShebang params (T_Annotation _ list t) =
+    if any isOverride list then [] else checkShebang params t
+  where
+    isOverride (ShellOverride _) = True
+    isOverride _ = False
 checkShebang params (T_Script id sb _) =
-    [makeComment ErrorC id 2148 "Tips depend on target shell and yours is unknown. Add a shebang."
-        | not (shellTypeSpecified params) && sb == "" ]
+    [makeComment ErrorC id 2148
+        "Tips depend on target shell and yours is unknown. Add a shebang."
+      | not (shellTypeSpecified params) && sb == "" ]
 
 prop_checkBashisms = verify checkBashisms "while read a; do :; done < <(a)"
 prop_checkBashisms2 = verify checkBashisms "[ foo -nt bar ]"
