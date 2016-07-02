@@ -649,6 +649,7 @@ prop_a19= isOk readArithmeticContents "\\\n3 +\\\n  2"
 prop_a20= isOk readArithmeticContents "a ? b ? c : d : e"
 prop_a21= isOk readArithmeticContents "a ? b : c ? d : e"
 prop_a22= isOk readArithmeticContents "!!a"
+readArithmeticContents :: Monad m => SCParser m Token
 readArithmeticContents =
     readSequence
   where
@@ -662,11 +663,39 @@ readArithmeticContents =
         id <- getNextId
         op <- choice (map (\x -> try $ do
                                         s <- string x
-                                        notFollowedBy2 $ oneOf "&|<>="
+                                        failIfIncompleteOp
                                         return s
                             ) op)
         spacing
         return $ token id op
+
+    failIfIncompleteOp = notFollowedBy2 $ oneOf "&|<>="
+
+    -- Read binary minus, but also check for -lt, -gt and friends:
+    readMinusOp = do
+        id <- getNextId
+        pos <- getPosition
+        try $ do
+            char '-'
+            failIfIncompleteOp
+        optional $ do
+            (str, alt) <- lookAhead . choice $ map tryOp [
+                ("lt", "<"),
+                ("gt", ">"),
+                ("le", "<="),
+                ("ge", ">="),
+                ("eq", "=="),
+                ("ne", "!=")
+              ]
+            parseProblemAt pos ErrorC 1106 $ "In arithmetic contexts, use " ++ alt ++ " instead of -" ++ str
+        spacing
+        return $ TA_Binary id "-"
+      where
+        tryOp (str, alt) = try $ do
+            string str
+            spacing1
+            return (str, alt)
+
 
     readArrayIndex = do
         id <- getNextId
@@ -737,7 +766,7 @@ readArithmeticContents =
     readEquated = readCompared `splitBy` ["==", "!="]
     readCompared = readShift `splitBy` ["<=", ">=", "<", ">"]
     readShift = readAddition `splitBy` ["<<", ">>"]
-    readAddition = readMultiplication `splitBy` ["+", "-"]
+    readAddition = chainl1 readMultiplication (readBinary ["+"] <|> readMinusOp)
     readMultiplication = readExponential `splitBy` ["*", "/", "%"]
     readExponential = readAnyNegated `splitBy` ["**"]
 
@@ -1336,7 +1365,7 @@ readDollarExpression = do
     arithmetic <|> readDollarExpansion <|> readDollarBracket <|> readDollarBraceCommandExpansion <|> readDollarBraced <|> readDollarVariable
   where
     arithmetic = readAmbiguous "$((" readDollarArithmetic readDollarExpansion (\pos ->
-        parseNoteAt pos WarningC 1102 "Shells disambiguate $(( differently or not at all. If the first $( should start command substitution, add a space after it.")
+        parseNoteAt pos WarningC 1102 "Shells disambiguate $(( differently or not at all. For $(command substition), add space after $( . For $((arithmetics)), fix parsing errors.")
 
 prop_readDollarSingleQuote = isOk readDollarSingleQuote "$'foo\\\'lol'"
 readDollarSingleQuote = called "$'..' expression" $ do
@@ -1389,7 +1418,7 @@ readAmbiguous prefix expected alternative warner = do
     try . lookAhead $ string prefix
     -- If the expected parser fails, try the alt.
     -- If the alt fails, run the expected one again for the errors.
-    try (forgetOnFailure expected) <|> try (withAlt pos) <|> expected
+    try expected <|> try (withAlt pos) <|> expected
   where
     withAlt pos = do
         t <- forgetOnFailure alternative
@@ -2205,8 +2234,7 @@ readCompoundCommand = do
     cmd <- choice [
         readBraceGroup,
         readAmbiguous "((" readArithmeticExpression readSubshell (\pos ->
-            parseNoteAt pos WarningC 1105 "Shells disambiguate (( differently or not at all. If the first ( should start a subshell, add a space after it."),
-        --readArithmeticExpression,
+            parseNoteAt pos WarningC 1105 "Shells disambiguate (( differently or not at all. For subshell, add spaces around ( . For ((, fix parsing errors."),
         readSubshell,
         readCondition,
         readWhileClause,
