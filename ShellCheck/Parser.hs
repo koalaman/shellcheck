@@ -2723,8 +2723,8 @@ reparseIndices root =
 
     parsed name pos src =
         if isAssociative name
-        then subParse pos readIndexSpan src
-        else subParse pos (optional space >> readArithmeticContents) src
+        then subParse pos (called "associative array index" $ readIndexSpan) src
+        else subParse pos (called "arithmetic array index expression" $ optional space >> readArithmeticContents) src
 
 reattachHereDocs root map =
     doTransform f root
