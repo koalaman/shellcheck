@@ -150,7 +150,7 @@ checkTr = CommandCheck (Basename "tr") (mapM_ f . arguments)
             info (getId word) 2020 "tr replaces sets of chars, not words (mentioned due to duplicates)."
           unless ("[:" `isPrefixOf` s) $
             when ("[" `isPrefixOf` s && "]" `isSuffixOf` s && (length s > 2) && ('*' `notElem` s)) $
-              info (getId word) 2021 "Don't use [] around ranges in tr, it replaces literal square brackets."
+              info (getId word) 2021 "Don't use [] around classes in tr, it replaces literal square brackets."
         Nothing -> return ()
 
     duplicated s =
