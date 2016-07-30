@@ -1369,7 +1369,7 @@ checkArithmeticDeref params t@(TA_Expansion _ [b@(T_DollarBraced id _)]) =
     unless (isException $ bracedString b) getWarning
   where
     isException [] = True
-    isException s = any (`elem` "/.:#%?*@$") s || isDigit (head s)
+    isException s = any (`elem` "/.:#%?*@$-") s || isDigit (head s)
     getWarning = fromMaybe noWarning . msum . map warningFor $ parents params t
     warningFor t =
         case t of
