@@ -1,12 +1,14 @@
 FROM ubuntu:16.04
 MAINTAINER koalaman <koalaman@gmail.com>
 
-RUN apt-get update -qqy
+RUN apt-get update -qy
 
-RUN apt-get -qqy install haskell-platform
+RUN apt-get -qy install git cabal-install
 
-RUN cabal update
-RUN cabal install shellcheck
+RUN cd $HOME && git clone https://github.com/koalaman/shellcheck.git
+RUN cd $HOME/shellcheck && cabal update
+RUN cd $HOME/shellcheck && cabal install
+
 
 # Clean apt cache
 RUN apt-get clean && \
