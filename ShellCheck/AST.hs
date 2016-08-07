@@ -51,10 +51,10 @@ data Token =
     | T_AndIf Id (Token) (Token)
     | T_Arithmetic Id Token
     | T_Array Id [Token]
-    | T_IndexedElement Id Token Token
+    | T_IndexedElement Id [Token] Token
     -- Store the index as string, and parse as arithmetic or string later
     | T_UnparsedIndex Id SourcePos String
-    | T_Assignment Id AssignmentMode String (Maybe Token) Token
+    | T_Assignment Id AssignmentMode String [Token] Token
     | T_Backgrounded Id Token
     | T_Backticked Id [Token]
     | T_Bang Id
@@ -191,12 +191,15 @@ analyze f g i =
     delve (T_IoFile id op file) = d2 op file $ T_IoFile id
     delve (T_HereString id word) = d1 word $ T_HereString id
     delve (T_FdRedirect id v t) = d1 t $ T_FdRedirect id v
-    delve (T_Assignment id mode var index value) = do
-        a <- roundMaybe index
+    delve (T_Assignment id mode var indices value) = do
+        a <- roundAll indices
         b <- round value
         return $ T_Assignment id mode var a b
     delve (T_Array id t) = dl t $ T_Array id
-    delve (T_IndexedElement id t1 t2) = d2 t1 t2 $ T_IndexedElement id
+    delve (T_IndexedElement id indices t) = do
+        a <- roundAll indices
+        b <- round t
+        return $ T_IndexedElement id a b
     delve (T_Redirecting id redirs cmd) = do
         a <- roundAll redirs
         b <- round cmd

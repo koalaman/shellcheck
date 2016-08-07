@@ -181,6 +181,7 @@ getNextIdAt sourcepos = do
     return newId
   where incId (Id n) = Id $ n+1
 
+getNextId :: Monad m => SCParser m Id
 getNextId = do
     pos <- getPosition
     getNextIdAt pos
@@ -2335,7 +2336,7 @@ readAssignmentWord = try $ do
     variable <- readVariableName
     optional (readNormalDollar >> parseNoteAt pos ErrorC
                                 1067 "For indirection, use (associative) arrays or 'read \"var$n\" <<< \"value\"'")
-    index <- optionMaybe readArrayIndex
+    indices <- many readArrayIndex
     hasLeftSpace <- liftM (not . null) spacing
     pos <- getPosition
     op <- readAssignmentOp
@@ -2347,13 +2348,13 @@ readAssignmentWord = try $ do
             parseNoteAt pos WarningC 1007
                 "Remove space after = if trying to assign a value (for empty string, use var='' ... )."
         value <- readEmptyLiteral
-        return $ T_Assignment id op variable index value
+        return $ T_Assignment id op variable indices value
       else do
         when (hasLeftSpace || hasRightSpace) $
             parseNoteAt pos ErrorC 1068 "Don't put spaces around the = in assignments."
         value <- readArray <|> readNormalWord
         spacing
-        return $ T_Assignment id op variable index value
+        return $ T_Assignment id op variable indices value
   where
     readAssignmentOp = do
         pos <- getPosition
@@ -2380,6 +2381,7 @@ readArrayIndex = do
     char ']'
     return $ T_UnparsedIndex id pos str
 
+readArray :: Monad m => SCParser m Token
 readArray = called "array assignment" $ do
     id <- getNextId
     char '('
@@ -2392,7 +2394,7 @@ readArray = called "array assignment" $ do
     readIndexed = do
         id <- getNextId
         index <- try $ do
-            x <- readArrayIndex
+            x <- many1 readArrayIndex
             char '='
             return x
         value <- readNormalWord <|> nothing
@@ -2706,19 +2708,27 @@ reparseIndices root =
   where
     associative = getAssociativeArrays root
     isAssociative s = s `elem` associative
-    f (T_Assignment id mode name (Just (T_UnparsedIndex _ pos src)) value) = do
-        new <- parsed name pos src
-        return $ T_Assignment id mode name (Just new) value
-    f (T_Assignment id mode name Nothing (T_Array id2 words)) = do
-        newwords <- mapM (fix name) words
-        return $ T_Assignment id mode name Nothing (T_Array id2 newwords)
+    f (T_Assignment id mode name indices value) = do
+        newIndices <- mapM (fixAssignmentIndex name) indices
+        newValue <- case value of
+            (T_Array id2 words) -> do
+                newWords <- mapM (fixIndexElement name) words
+                return $ T_Array id2 newWords
+            x -> return x
+        return $ T_Assignment id mode name newIndices newValue
     f t = return t
 
-    fix name word =
+    fixIndexElement name word =
         case word of
-            T_IndexedElement id (T_UnparsedIndex _ pos src) value -> do
-                new <- parsed name pos src
+            T_IndexedElement id indices value -> do
+                new <- mapM (fixAssignmentIndex name) indices
                 return $ T_IndexedElement id new value
+            otherwise -> return word
+
+    fixAssignmentIndex name word =
+        case word of
+            T_UnparsedIndex id pos src -> do
+                parsed name pos src
             otherwise -> return word
 
     parsed name pos src =

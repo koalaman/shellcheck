@@ -85,6 +85,7 @@ checksFor Bash = [
     ,checkEchoSed
     ,checkForDecimals
     ,checkLocalScope
+    ,checkMultiDimensionalArrays
     ]
 
 runAnalytics :: AnalysisSpec -> [TokenComment]
@@ -943,7 +944,7 @@ checkArrayWithoutIndex params _ =
                     "Expanding an array without an index only gives the first element."
     readF _ _ _ = return []
 
-    writeF _ (T_Assignment id mode name Nothing _) _ (DataString _) = do
+    writeF _ (T_Assignment id mode name [] _) _ (DataString _) = do
         isArray <- gets (isJust . Map.lookup name)
         return $ if not isArray then [] else
             case mode of
@@ -961,7 +962,7 @@ checkArrayWithoutIndex params _ =
 
     isIndexed expr =
         case expr of
-            T_Assignment _ _ _ (Just _) _ -> True
+            T_Assignment _ _ _ (_:_) _ -> True
             _ -> False
 
 prop_checkStderrRedirect = verify checkStderrRedirect "test 2>&1 > cow"
@@ -2279,7 +2280,7 @@ checkPrefixAssignmentReference params t@(T_DollarBraced id value) =
         case t of
             T_SimpleCommand _ vars (_:_) -> mapM_ checkVar vars
             otherwise -> check rest
-    checkVar (T_Assignment aId mode aName Nothing value) |
+    checkVar (T_Assignment aId mode aName [] value) |
             aName == name && (aId `notElem` idPath) = do
         warn aId 2097 "This assignment is only seen by the forked process."
         warn id 2098 "This expansion will not see the mentioned assignment."
@@ -2559,7 +2560,7 @@ prop_checkOverridingPath8 = verifyNot checkOverridingPath "PATH=$PATH:/stuff"
 checkOverridingPath _ (T_SimpleCommand _ vars []) =
     mapM_ checkVar vars
   where
-    checkVar (T_Assignment id Assign "PATH" Nothing word) =
+    checkVar (T_Assignment id Assign "PATH" [] word) =
         let string = concat $ oversimplify word
         in unless (any (`isInfixOf` string) ["/bin", "/sbin" ]) $ do
             when ('/' `elem` string && ':' `notElem` string) $ notify id
@@ -2574,7 +2575,7 @@ prop_checkTildeInPath3 = verifyNot checkTildeInPath "PATH=~/bin"
 checkTildeInPath _ (T_SimpleCommand _ vars _) =
     mapM_ checkVar vars
   where
-    checkVar (T_Assignment id Assign "PATH" Nothing (T_NormalWord _ parts)) =
+    checkVar (T_Assignment id Assign "PATH" [] (T_NormalWord _ parts)) =
         when (any (\x -> isQuoted x && hasTilde x) parts) $
             warn id 2147 "Literal tilde in PATH works poorly across programs."
     checkVar _ = return ()
@@ -2635,7 +2636,7 @@ checkMultipleAppends params t =
 
 prop_checkSuspiciousIFS1 = verify checkSuspiciousIFS "IFS=\"\\n\""
 prop_checkSuspiciousIFS2 = verifyNot checkSuspiciousIFS "IFS=$'\\t'"
-checkSuspiciousIFS params (T_Assignment id Assign "IFS" Nothing value) =
+checkSuspiciousIFS params (T_Assignment id Assign "IFS" [] value) =
     potentially $ do
         str <- getLiteralString value
         return $ check str
@@ -2806,6 +2807,25 @@ checkTrailingBracket _ token =
             "]]" -> "[["
             "]" -> "["
             x -> x
+
+prop_checkMultiDimensionalArrays1 = verify checkMultiDimensionalArrays "foo[a][b]=3"
+prop_checkMultiDimensionalArrays2 = verifyNot checkMultiDimensionalArrays "foo[a]=3"
+prop_checkMultiDimensionalArrays3 = verify checkMultiDimensionalArrays "foo=( [a][b]=c )"
+prop_checkMultiDimensionalArrays4 = verifyNot checkMultiDimensionalArrays "foo=( [a]=c )"
+prop_checkMultiDimensionalArrays5 = verify checkMultiDimensionalArrays "echo ${foo[bar][baz]}"
+prop_checkMultiDimensionalArrays6 = verifyNot checkMultiDimensionalArrays "echo ${foo[bar]}"
+checkMultiDimensionalArrays _ token =
+    case token of
+        T_Assignment _ _ name (first:second:_) _ -> about second
+        T_IndexedElement _ (first:second:_) _ -> about second
+        T_DollarBraced {} ->
+            when (isMultiDim token) $ about token
+        _ -> return ()
+  where
+    about t = warn (getId t) 2180 "Bash does not support multidimensional arrays. Use 1D or associative arrays."
+
+    re = mkRegex "^\\[.*\\]\\[.*\\]"  -- Fixme, this matches ${foo:- [][]} and such as well
+    isMultiDim t = getBracedModifier (bracedString t) `matches` re
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

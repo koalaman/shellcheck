@@ -573,6 +573,7 @@ prop_getBracedReference9 = getBracedReference "foo:-bar" == "foo"
 prop_getBracedReference10= getBracedReference "foo: -1" == "foo"
 prop_getBracedReference11= getBracedReference "!os*" == ""
 prop_getBracedReference12= getBracedReference "!os?bar**" == ""
+prop_getBracedReference13= getBracedReference "foo[bar]" == "foo"
 getBracedReference s = fromMaybe s $
     nameExpansion s `mplus` takeName noPrefix `mplus` getSpecial noPrefix `mplus` getSpecial s
   where
@@ -595,6 +596,20 @@ getBracedReference s = fromMaybe s $
         return ""
     nameExpansion _ = Nothing
 
+prop_getBracedModifier1 = getBracedModifier "foo:bar:baz" == ":bar:baz"
+prop_getBracedModifier2 = getBracedModifier "!var:-foo" == ":-foo"
+prop_getBracedModifier3 = getBracedModifier "foo[bar]" == "[bar]"
+getBracedModifier s = fromMaybe "" . listToMaybe $ do
+    let var = getBracedReference s
+    a <- dropModifier s
+    dropPrefix var a
+  where
+    dropPrefix [] t = return t
+    dropPrefix (a:b) (c:d) | a == c = dropPrefix b d
+    dropPrefix _ _ = []
+
+    dropModifier (c:rest) | c `elem` "#!" = [rest, c:rest]
+    dropModifier x = [x]
 
 -- Useful generic functions
 potentially :: Monad m => Maybe (m ()) -> m ()
@@ -628,5 +643,5 @@ filterByAnnotation token =
     getCode (TokenComment _ (Comment _ c _)) = c
 
 
-return [] 
+return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
