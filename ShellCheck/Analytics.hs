@@ -179,6 +179,7 @@ nodeChecks = [
     ,checkReadWithoutR
     ,checkLoopVariableReassignment
     ,checkTrailingBracket
+    ,checkReturnAgainstZero
     ]
 
 
@@ -2826,6 +2827,36 @@ checkMultiDimensionalArrays _ token =
 
     re = mkRegex "^\\[.*\\]\\[.*\\]"  -- Fixme, this matches ${foo:- [][]} and such as well
     isMultiDim t = getBracedModifier (bracedString t) `matches` re
+
+prop_checkReturnAgainstZero1 = verify checkReturnAgainstZero "[ $? -eq 0 ]"
+prop_checkReturnAgainstZero2 = verify checkReturnAgainstZero "[[ \"$?\" -gt 0 ]]"
+prop_checkReturnAgainstZero3 = verify checkReturnAgainstZero "[[ 0 -ne $? ]]"
+prop_checkReturnAgainstZero4 = verifyNot checkReturnAgainstZero "[[ $? -eq 4 ]]"
+prop_checkReturnAgainstZero5 = verify checkReturnAgainstZero "[[ 0 -eq $? ]]"
+prop_checkReturnAgainstZero6 = verifyNot checkReturnAgainstZero "[[ $R -eq 0 ]]"
+prop_checkReturnAgainstZero7 = verify checkReturnAgainstZero "(( $? == 0 ))"
+prop_checkReturnAgainstZero8 = verify checkReturnAgainstZero "(( $? ))"
+prop_checkReturnAgainstZero9 = verify checkReturnAgainstZero "(( ! $? ))"
+checkReturnAgainstZero _ token =
+    case token of
+        TC_Binary id _ _ lhs rhs -> check lhs rhs
+        TA_Binary id _ lhs rhs -> check lhs rhs
+        TA_Unary id _ exp ->
+            when (isExitCode exp) $ message (getId exp)
+        TA_Sequence _ [exp] ->
+            when (isExitCode exp) $ message (getId exp)
+        otherwise -> return ()
+  where
+    check lhs rhs =
+        if isZero rhs && isExitCode lhs
+        then message (getId lhs)
+        else when (isZero lhs && isExitCode rhs) $ message (getId rhs)
+    isZero t = getLiteralString t == Just "0"
+    isExitCode t =
+        case getWordParts t of
+            [exp@(T_DollarBraced {})] -> bracedString exp == "?"
+            otherwise -> False
+    message id = style id 2181 "Check exit code directly with e.g. 'if mycmd;', not indirectly with $?."
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

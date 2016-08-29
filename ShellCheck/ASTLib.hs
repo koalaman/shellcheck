@@ -195,6 +195,8 @@ isLiteral t = isJust $ getLiteralString t
 -- Turn a NormalWord like foo="bar $baz" into a series of constituent elements like [foo=,bar ,$baz]
 getWordParts (T_NormalWord _ l)   = concatMap getWordParts l
 getWordParts (T_DoubleQuoted _ l) = l
+-- TA_Expansion is basically T_NormalWord for arithmetic expressions
+getWordParts (TA_Expansion _ l)   = concatMap getWordParts l
 getWordParts other                = [other]
 
 -- Return a list of NormalWords that would result from brace expansion
