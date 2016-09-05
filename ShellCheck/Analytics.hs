@@ -774,16 +774,17 @@ prop_checkUnquotedExpansions5 = verifyNot checkUnquotedExpansions "for f in $(cm
 prop_checkUnquotedExpansions6 = verifyNot checkUnquotedExpansions "$(cmd)"
 prop_checkUnquotedExpansions7 = verifyNot checkUnquotedExpansions "cat << foo\n$(ls)\nfoo"
 prop_checkUnquotedExpansions8 = verifyNot checkUnquotedExpansions "set -- $(seq 1 4)"
+prop_checkUnquotedExpansions9 = verifyNot checkUnquotedExpansions "echo foo `# inline comment`"
 checkUnquotedExpansions params =
     check
   where
-    check t@(T_DollarExpansion _ _) = examine t
-    check t@(T_Backticked _ _) = examine t
-    check t@(T_DollarBraceCommandExpansion _ _) = examine t
+    check t@(T_DollarExpansion _ c) = examine t c
+    check t@(T_Backticked _ c) = examine t c
+    check t@(T_DollarBraceCommandExpansion _ c) = examine t c
     check _ = return ()
     tree = parentMap params
-    examine t =
-        unless (shouldBeSplit t || isQuoteFree tree t || usedAsCommandName tree t) $
+    examine t contents =
+        unless (null contents || shouldBeSplit t || isQuoteFree tree t || usedAsCommandName tree t) $
             warn (getId t) 2046 "Quote this to prevent word splitting."
 
     shouldBeSplit t =
