@@ -2088,6 +2088,7 @@ prop_checkUnused31= verifyTree checkUnusedAssignments "let 'a=1'"
 prop_checkUnused32= verifyTree checkUnusedAssignments "let a=b=c; echo $a"
 prop_checkUnused33= verifyNotTree checkUnusedAssignments "a=foo; [[ foo =~ ^{$a}$ ]]"
 prop_checkUnused34= verifyNotTree checkUnusedAssignments "foo=1; (( t = foo )); echo $t"
+prop_checkUnused35= verifyNotTree checkUnusedAssignments "a=foo; b=2; echo ${a:b}"
 checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
     flow = variableFlow params

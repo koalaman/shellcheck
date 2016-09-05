@@ -474,11 +474,20 @@ getIndexReferences s = fromMaybe [] $ do
   where
     re = mkRegex "(\\[.*\\])"
 
+getOffsetReferences mods = fromMaybe [] $ do
+    match <- matchRegex re mods
+    offsets <- match !!! 0
+    return $ matchAllStrings variableNameRegex offsets
+  where
+    re = mkRegex "^ *:(.*)"
+
 getReferencedVariables parents t =
     case t of
         T_DollarBraced id l -> let str = bracedString t in
             (t, t, getBracedReference str) :
-                map (\x -> (l, l, x)) (getIndexReferences str)
+                map (\x -> (l, l, x)) (
+                    getIndexReferences str
+                    ++ getOffsetReferences (getBracedModifier str))
         TA_Expansion id _ ->
             if isArithmeticAssignment t
             then []
