@@ -470,14 +470,47 @@ prop_checkPrintfVar1 = verify checkPrintfVar "printf \"Lol: $s\""
 prop_checkPrintfVar2 = verifyNot checkPrintfVar "printf 'Lol: $s'"
 prop_checkPrintfVar3 = verify checkPrintfVar "printf -v cow $(cmd)"
 prop_checkPrintfVar4 = verifyNot checkPrintfVar "printf \"%${count}s\" var"
+prop_checkPrintfVar5 = verify checkPrintfVar "printf '%s %s %s' foo bar"
+prop_checkPrintfVar6 = verify checkPrintfVar "printf foo bar baz"
+prop_checkPrintfVar7 = verify checkPrintfVar "printf -- foo bar baz"
+prop_checkPrintfVar8 = verifyNot checkPrintfVar "printf '%s %s %s' \"${var[@]}\""
+prop_checkPrintfVar9 = verifyNot checkPrintfVar "printf '%s %s %s\\n' *.png"
+prop_checkPrintfVar10= verifyNot checkPrintfVar "printf '%s %s %s' foo bar baz"
 checkPrintfVar = CommandCheck (Exactly "printf") (f . arguments) where
+    f (doubledash:rest) | getLiteralString doubledash == Just "--" = f rest
     f (dashv:var:rest) | getLiteralString dashv == Just "-v" = f rest
-    f (format:params) = check format
+    f (format:params) = check format params
     f _ = return ()
-    check format =
+
+    countFormats string =
+        case string of
+            '%':'%':rest -> countFormats rest
+            '%':rest -> 1 + countFormats rest
+            _:rest -> countFormats rest
+            [] -> 0
+
+    check format more = do
+        fromMaybe (return ()) $ do
+            string <- getLiteralString format
+            let vars = countFormats string
+
+            return $ do
+                when (vars == 0 && more /= []) $
+                    err (getId format) 2182
+                        "This printf format string has no variables. Other arguments are ignored."
+
+                when (vars > 0
+                        && length more < vars
+                        && all (not . mayBecomeMultipleArgs) more) $
+                    warn (getId format) 2183 $
+                        "This format string has " ++ show vars ++ " variables, but is passed " ++ show (length more) ++ " arguments."
+
+
         unless ('%' `elem` concat (oversimplify format) || isLiteral format) $
-          warn (getId format) 2059
+          info (getId format) 2059
               "Don't use variables in the printf format string. Use printf \"..%s..\" \"$foo\"."
+
+
 
 
 prop_checkUuoeCmd1 = verify checkUuoeCmd "echo $(date)"
