@@ -7,7 +7,8 @@ services:
 
 before_install:
   - export DOCKER_REPO=nlknguyen/shellcheck
-  - export TAG=$([ "$TRAVIS_BRANCH" == "master" ] && echo "latest" || echo $TRAVIS_BRANCH) 
+  - |-
+    export TAG=$([ "$TRAVIS_BRANCH" == "master" ] && echo "latest" || echo $TRAVIS_BRANCH)
 
 script:
   - docker build -t builder -f Dockerfile_builder .
@@ -16,6 +17,5 @@ script:
 
 after_success:
   - docker login -e="$DOCKER_EMAIL" -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
-  - if [ "$TRAVIS_BRANCH" == "master" ]; then \
-      docker push $DOCKER_REPO:$TAG           \
-    fi
+  - |-
+    [ "$TRAVIS_BRANCH" == "master" ] && docker push $DOCKER_REPO:$TAG
