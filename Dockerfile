@@ -1,22 +1,11 @@
-FROM ubuntu:xenial
-MAINTAINER https://github.com/koalaman/shellcheck
+FROM alpine:latest
 
-RUN apt-get update && apt-get install --no-install-recommends -y \
-    cabal-install \
-    ghc \
- && rm -rf /var/lib/apt/lists/*
+MAINTAINER Nikyle Nguyen <NLKNguyen@MSN.com>
 
-COPY ShellCheck.cabal /src/ShellCheck.cabal
+COPY package/bin/shellcheck /usr/local/bin/
+COPY package/lib/           /usr/local/lib/
 
-WORKDIR /src
+RUN ldconfig /usr/local/lib
 
-ENV PATH="/root/.cabal/bin:$PATH"
-
-RUN cabal update \
- && cabal install --only-dependencies
-
-COPY . /src
-
-RUN cabal install /src
-
-CMD ["shellcheck", "-"]
+WORKDIR /mnt
+ENTRYPOINT ["shellcheck"]
