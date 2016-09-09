@@ -6,7 +6,7 @@ services:
   - docker
 
 before_install:
-  - export DOCKER_REPO=nlknguyen/shellcheck
+  - export DOCKER_REPO=koalaman/shellcheck
   - |-
     export TAG=$([ "$TRAVIS_BRANCH" == "master" ] && echo "latest" || echo $TRAVIS_BRANCH)
 

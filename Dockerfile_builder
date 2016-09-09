@@ -24,7 +24,8 @@ COPY . .
 # Build
 RUN cabal install
 
-# TODO: run tests
+# Test
+RUN cabal test
 
 # # ------------------------------------------------------------
 # # Set PATH
