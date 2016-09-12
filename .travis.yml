@@ -1,0 +1,21 @@
+sudo: required
+
+language: sh
+
+services:
+  - docker
+
+before_install:
+  - export DOCKER_REPO=koalaman/shellcheck
+  - |-
+    export TAG=$([ "$TRAVIS_BRANCH" == "master" ] && echo "latest" || echo $TRAVIS_BRANCH)
+
+script:
+  - docker build -t builder -f Dockerfile_builder .
+  - docker run --rm -it -v $(pwd):/mnt builder
+  - docker build -t $DOCKER_REPO:$TAG .
+
+after_success:
+  - docker login -e="$DOCKER_EMAIL" -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
+  - |-
+    [ "$TRAVIS_BRANCH" == "master" ] && docker push $DOCKER_REPO:$TAG
