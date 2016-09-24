@@ -361,7 +361,10 @@ getReferencedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Litera
         "declare" -> if any (`elem` flags) ["x", "p"]
             then concatMap getReference rest
             else []
-        "readonly" -> concatMap getReference rest
+        "readonly" ->
+            if any (`elem` flags) ["f", "p"]
+            then []
+            else concatMap getReference rest
         "trap" ->
             case rest of
                 head:_ -> map (\x -> (head, head, x)) $ getVariablesFromLiteralToken head
@@ -395,7 +398,10 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal 
         "typeset" -> declaredVars
 
         "local" -> concatMap getModifierParamString rest
-        "readonly" -> concatMap getModifierParamString rest
+        "readonly" ->
+            if any (`elem` flags) ["f", "p"]
+            then []
+            else concatMap getModifierParamString rest
         "set" -> maybeToList $ do
             params <- getSetParams rest
             return (base, base, "@", DataString $ SourceFrom params)
