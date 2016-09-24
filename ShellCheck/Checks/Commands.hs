@@ -90,6 +90,7 @@ commandChecks = [
     ,checkExportedExpansions
     ,checkAliasesUsesArgs
     ,checkAliasesExpandEarly
+    ,checkUnsetGlobs
     ]
 
 buildCommandMap :: [CommandCheck] -> Map.Map CommandName (Token -> Analysis)
@@ -587,6 +588,15 @@ checkAliasesExpandEarly = CommandCheck (Exactly "alias") (f . arguments)
         forM_ (take 1 $ filter (not . isLiteral) $ getWordParts arg) $
             \x -> warn (getId x) 2139 "This expands when defined, not when used. Consider escaping."
     checkArg _ = return ()
+
+
+prop_checkUnsetGlobs1 = verify checkUnsetGlobs "unset foo[1]"
+prop_checkUnsetGlobs2 = verifyNot checkUnsetGlobs "unset foo"
+checkUnsetGlobs = CommandCheck (Exactly "unset") (mapM_ check . arguments)
+  where
+    check arg =
+        when (isGlob arg) $
+            warn (getId arg) 2184 "Quote arguments to unset so they're not glob expanded."
 
 
 return []
