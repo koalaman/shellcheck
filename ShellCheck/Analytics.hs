@@ -502,6 +502,7 @@ prop_checkBashisms47= verify checkBashisms "#!/bin/dash\necho foo 42>/dev/null"
 prop_checkBashisms48= verifyNot checkBashisms "#!/bin/dash\necho $LINENO"
 prop_checkBashisms49= verify checkBashisms "#!/bin/dash\necho $MACHTYPE"
 prop_checkBashisms50= verify checkBashisms "#!/bin/sh\ncmd >& file"
+prop_checkBashisms51= verifyNot checkBashisms "#!/bin/sh\ncmd 2>&1"
 checkBashisms params = bashism
   where
     isDash = shellType params == Dash
@@ -533,7 +534,7 @@ checkBashisms params = bashism
             warnMsg id $ filter (/= '|') op ++ " is"
     bashism (TA_Binary id "**" _ _) = warnMsg id "exponentials are"
     bashism (T_FdRedirect id "&" (T_IoFile _ (T_Greater _) _)) = warnMsg id "&> is"
-    bashism (T_FdRedirect id _ (T_IoFile _ (T_GREATAND _) _)) = warnMsg id ">& is"
+    bashism (T_FdRedirect id "" (T_IoFile _ (T_GREATAND _) _)) = warnMsg id ">& is"
     bashism (T_FdRedirect id ('{':_) _) = warnMsg id "named file descriptors are"
     bashism (T_FdRedirect id num _)
         | all isDigit num && length num > 1 = warnMsg id "FDs outside 0-9 are"
