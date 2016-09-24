@@ -55,6 +55,8 @@ isGlob _ = False
 -- Is this shell word a constant?
 isConstant token =
     case token of
+        -- This ignores some cases like ~"foo":
+        T_NormalWord _ (T_Literal _ ('~':_) : _)  -> False
         T_NormalWord _ l   -> all isConstant l
         T_DoubleQuoted _ l -> all isConstant l
         T_SingleQuoted _ _ -> True
