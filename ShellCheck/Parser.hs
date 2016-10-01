@@ -447,7 +447,7 @@ readConditionContents single =
             c <- oneOf "'\""
             s <- anyOp
             char c
-            return s
+            return $ escaped s
 
         anyOp = flagOp <|> flaglessOp <|> fail
                     "Expected comparison operator (don't wrap commands in []/[[]])"

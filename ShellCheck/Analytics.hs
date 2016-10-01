@@ -1177,6 +1177,7 @@ prop_checkSingleBracketOperators1 = verify checkSingleBracketOperators "[ test =
 prop_checkSingleBracketOperators2 = verify checkSingleBracketOperators "[ $foo > $bar ]"
 prop_checkSingleBracketOperators3 = verifyNot checkSingleBracketOperators "[[ foo < bar ]]"
 prop_checkSingleBracketOperators5 = verify checkSingleBracketOperators "until [ $n <= $z ]; do echo foo; done"
+prop_checkSingleBracketOperators6 = verifyNot checkSingleBracketOperators "[ $foo '>' $bar ]"
 checkSingleBracketOperators _ (TC_Binary id typ op lhs rhs)
     | typ == SingleBracket && op `elem` ["<", ">", "<=", ">="] =
         err id 2073 $ "Can't use " ++ op ++" in [ ]. Escape it or use [[..]]."
