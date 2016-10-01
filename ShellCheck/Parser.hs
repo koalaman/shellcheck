@@ -411,7 +411,7 @@ readConditionContents single =
                                 pos <- getPosition
                                 s <- many1 letter
                                 when (s `elem` commonCommands) $
-                                    parseProblemAt pos WarningC 1009 "Use 'if cmd; then ..' to check exit code, or 'if [[ $(cmd) == .. ]]' to check output.")
+                                    parseProblemAt pos WarningC 1014 "Use 'if cmd; then ..' to check exit code, or 'if [[ $(cmd) == .. ]]' to check output.")
 
   where
     spacingOrLf = condSpacing True
