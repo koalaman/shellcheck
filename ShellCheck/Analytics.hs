@@ -371,6 +371,8 @@ prop_checkPipePitfalls4 = verifyNot checkPipePitfalls "find . -print0 | xargs -0
 prop_checkPipePitfalls5 = verifyNot checkPipePitfalls "ls -N | foo"
 prop_checkPipePitfalls6 = verify checkPipePitfalls "find . | xargs foo"
 prop_checkPipePitfalls7 = verifyNot checkPipePitfalls "find . -printf '%s\\n' | xargs foo"
+prop_checkPipePitfalls8 = verify checkPipePitfalls "foo | grep bar | wc -l"
+prop_checkPipePitfalls9 = verifyNot checkPipePitfalls "foo | grep -o bar | wc -l"
 checkPipePitfalls _ (T_Pipeline id _ commands) = do
     for ["find", "xargs"] $
         \(find:xargs:_) ->
@@ -390,8 +392,12 @@ checkPipePitfalls _ (T_Pipeline id _ commands) = do
     for' ["ps", "grep"] $
         \x -> info x 2009 "Consider using pgrep instead of grepping ps output."
 
-    for' ["grep", "wc"] $
-        \x -> style x 2126 "Consider using grep -c instead of grep|wc."
+    for ["grep", "wc"] $
+        \(grep:wc:_) ->
+            let flags = fromMaybe [] $ map snd <$> getAllFlags <$> getCommand grep
+            in
+                unless (any (`elem` ["o", "only-matching"]) flags) $
+                    style (getId grep) 2126 "Consider using grep -c instead of grep|wc."
 
     didLs <- liftM or . sequence $ [
         for' ["ls", "grep"] $

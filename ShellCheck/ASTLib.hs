@@ -211,13 +211,18 @@ braceExpand (T_NormalWord id list) = take 1000 $ do
         braceExpand item
     part x = return x
 
--- Maybe get the command name of a token representing a command
-getCommandName t =
+-- Maybe get a SimpleCommand from immediate wrappers like T_Redirections
+getCommand t =
     case t of
-        T_Redirecting _ _ w -> getCommandName w
-        T_SimpleCommand _ _ (w:_) -> getLiteralString w
-        T_Annotation _ _ t -> getCommandName t
+        T_Redirecting _ _ w -> getCommand w
+        T_SimpleCommand _ _ (w:_) -> return t
+        T_Annotation _ _ t -> getCommand t
         otherwise -> Nothing
+
+-- Maybe get the command name of a token representing a command
+getCommandName t = do
+    (T_SimpleCommand _ _ (w:_)) <- getCommand t
+    getLiteralString w
 
 -- If a command substitution is a single command, get its name.
 --  $(date +%s) = Just "date"
