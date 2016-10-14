@@ -869,10 +869,11 @@ readAnnotationPrefix = do
 prop_readAnnotation1 = isOk readAnnotation "# shellcheck disable=1234,5678\n"
 prop_readAnnotation2 = isOk readAnnotation "# shellcheck disable=SC1234 disable=SC5678\n"
 prop_readAnnotation3 = isOk readAnnotation "# shellcheck disable=SC1234 source=/dev/null disable=SC5678\n"
+prop_readAnnotation4 = isWarning readAnnotation "# shellcheck cats=dogs disable=SC1234\n"
 readAnnotation = called "shellcheck annotation" $ do
     try readAnnotationPrefix
     many1 linewhitespace
-    values <- many1 (readDisable <|> readSourceOverride <|> readShellOverride)
+    values <- many1 (readDisable <|> readSourceOverride <|> readShellOverride <|> anyKey)
     linefeed
     many linewhitespace
     return $ concat values
@@ -903,6 +904,13 @@ readAnnotation = called "shellcheck annotation" $ do
         value <- p
         many linewhitespace
         return value
+
+    anyKey = do
+        pos <- getPosition
+        anyChar `reluctantlyTill1` whitespace
+        many linewhitespace
+        parseNoteAt pos WarningC 1107 "This directive is unknown. It will be ignored."
+        return []
 
 readAnnotations = do
     annotations <- many (readAnnotation `thenSkip` allspacing)
