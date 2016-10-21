@@ -1547,7 +1547,7 @@ readHereDoc = called "here document" $ do
     -- add empty tokens for now, read the rest in readPendingHereDocs
     let doc = T_HereDoc hid dashed quoted endToken []
     addPendingHereDoc doc
-    return $ T_FdRedirect fid "" doc
+    return doc
   where
     stripLiteral (T_Literal _ x) = x
     stripLiteral (T_SingleQuoted _ x) = x
@@ -1618,7 +1618,13 @@ readPendingHereDocs = do
 
 
 readFilename = readNormalWord
-readIoFileOp = choice [g_LESSAND, g_GREATAND, g_DGREAT, g_LESSGREAT, g_CLOBBER, redirToken '<' T_Less, redirToken '>' T_Greater ]
+readIoFileOp = choice [g_DGREAT, g_LESSGREAT, g_GREATAND, g_LESSAND, g_CLOBBER, redirToken '<' T_Less, redirToken '>' T_Greater ]
+
+readIoDuplicate = try $ do
+    id <- getNextId
+    op <- g_GREATAND <|> g_LESSAND
+    target <- readIoVariable <|> many1 digit <|> string "-"
+    return $ T_IoDuplicate id op target
 
 prop_readIoFile = isOk readIoFile ">> \"$(date +%YYmmDD)\""
 readIoFile = called "redirection" $ do
@@ -1626,35 +1632,31 @@ readIoFile = called "redirection" $ do
     op <- readIoFileOp
     spacing
     file <- readFilename
-    return $ T_FdRedirect id "" $ T_IoFile id op file
+    return $ T_IoFile id op file
 
 readIoVariable = try $ do
     char '{'
     x <- readVariableName
     char '}'
-    lookAhead readIoFileOp
     return $ "{" ++ x ++ "}"
 
-readIoNumber = try $ do
-    x <- many1 digit <|> string "&"
-    lookAhead readIoFileOp
+readIoSource = try $ do
+    x <- string "&" <|> readIoVariable <|> many digit
+    lookAhead $ void readIoFileOp <|> void (string "<<")
     return x
 
-prop_readIoNumberRedirect = isOk readIoNumberRedirect "3>&2"
-prop_readIoNumberRedirect2 = isOk readIoNumberRedirect "2> lol"
-prop_readIoNumberRedirect3 = isOk readIoNumberRedirect "4>&-"
-prop_readIoNumberRedirect4 = isOk readIoNumberRedirect "&> lol"
-prop_readIoNumberRedirect5 = isOk readIoNumberRedirect "{foo}>&2"
-prop_readIoNumberRedirect6 = isOk readIoNumberRedirect "{foo}<&-"
-readIoNumberRedirect = do
+prop_readIoRedirect = isOk readIoRedirect "3>&2"
+prop_readIoRedirect2 = isOk readIoRedirect "2> lol"
+prop_readIoRedirect3 = isOk readIoRedirect "4>&-"
+prop_readIoRedirect4 = isOk readIoRedirect "&> lol"
+prop_readIoRedirect5 = isOk readIoRedirect "{foo}>&2"
+prop_readIoRedirect6 = isOk readIoRedirect "{foo}<&-"
+readIoRedirect = do
     id <- getNextId
-    n <- readIoVariable <|> readIoNumber
-    op <- readHereString <|> readHereDoc <|> readIoFile
-    let actualOp = case op of T_FdRedirect _ "" x -> x
+    n <- readIoSource
+    redir <- readHereString <|> readHereDoc <|> readIoDuplicate <|> readIoFile
     spacing
-    return $ T_FdRedirect id n actualOp
-
-readIoRedirect = choice [ readIoNumberRedirect, readHereString, readHereDoc, readIoFile ] `thenSkip` spacing
+    return $ T_FdRedirect id n redir
 
 readRedirectList = many1 readIoRedirect
 
@@ -1665,7 +1667,7 @@ readHereString = called "here string" $ do
     spacing
     id2 <- getNextId
     word <- readNormalWord
-    return $ T_FdRedirect id "" $ T_HereString id2 word
+    return $ T_HereString id2 word
 
 readNewlineList = many1 ((linefeed <|> carriageReturn) `thenSkip` spacing)
 readLineBreak = optional readNewlineList

@@ -509,6 +509,7 @@ prop_checkBashisms48= verifyNot checkBashisms "#!/bin/dash\necho $LINENO"
 prop_checkBashisms49= verify checkBashisms "#!/bin/dash\necho $MACHTYPE"
 prop_checkBashisms50= verify checkBashisms "#!/bin/sh\ncmd >& file"
 prop_checkBashisms51= verifyNot checkBashisms "#!/bin/sh\ncmd 2>&1"
+prop_checkBashisms52= verifyNot checkBashisms "#!/bin/sh\ncmd >&2"
 checkBashisms params = bashism
   where
     isDash = shellType params == Dash
@@ -983,7 +984,7 @@ prop_checkStderrRedirect4 = verifyNot checkStderrRedirect "errors=$(test 2>&1 > 
 prop_checkStderrRedirect5 = verifyNot checkStderrRedirect "read < <(test 2>&1 > file)"
 prop_checkStderrRedirect6 = verify checkStderrRedirect "foo | bar 2>&1 > /dev/null"
 checkStderrRedirect params redir@(T_Redirecting _ [
-    T_FdRedirect id "2" (T_IoFile _ (T_GREATAND _) (T_NormalWord _ [T_Literal _ "1"])),
+    T_FdRedirect id "2" (T_IoDuplicate _ (T_GREATAND _) "1"),
     T_FdRedirect _ _ (T_IoFile _ op _)
     ] _) = case op of
             T_Greater _ -> error

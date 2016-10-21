@@ -99,6 +99,7 @@ data Token =
     | T_IfExpression Id [([Token],[Token])] [Token]
     | T_In  Id
     | T_IoFile Id Token Token
+    | T_IoDuplicate Id Token String
     | T_LESSAND Id
     | T_LESSGREAT Id
     | T_Lbrace Id
@@ -189,6 +190,7 @@ analyze f g i =
     delve (T_DollarArithmetic id c) = d1 c $ T_DollarArithmetic id
     delve (T_DollarBracket id c) = d1 c $ T_DollarBracket id
     delve (T_IoFile id op file) = d2 op file $ T_IoFile id
+    delve (T_IoDuplicate id op num) = d1 op $ \x -> T_IoDuplicate id x num
     delve (T_HereString id word) = d1 word $ T_HereString id
     delve (T_FdRedirect id v t) = d1 t $ T_FdRedirect id v
     delve (T_Assignment id mode var indices value) = do
@@ -318,6 +320,7 @@ getId t = case t of
         T_BraceExpansion id _  -> id
         T_DollarBraceCommandExpansion id _  -> id
         T_IoFile id _ _  -> id
+        T_IoDuplicate id _ _  -> id
         T_HereDoc id _ _ _ _ -> id
         T_HereString id _  -> id
         T_FdRedirect id _ _  -> id
