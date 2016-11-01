@@ -1,35 +1,27 @@
-#### Requirements
+#### For bugs
+- Rule Id (if any, e.g. SC1000): 
+- My shellcheck version (`shellcheck --version` or "online"): 
+- [ ] I tried on shellcheck.net and verified that this is still a problem on the latest commit
+- [ ] It's not reproducible on shellcheck.net, but I think that's because it's an OS, configuration or encoding issue
 
-These items you must provide answers to. 
+#### For new checks and feature suggestions
+- [ ] shellcheck.net (i.e. the latest commit) currently gives no useful warnings about this
+- [ ] I searched through https://github.com/koalaman/shellcheck/issues and didn't find anything related
 
-Make sure to add **all the information needed to understand the bug** so that someone can help:
 
-* Provide the rule id if refering to a specific rule. e.g., `SC1000`
-* Provide **screenshots** where appropriate
-* Sample shell script (wrapped in fenced code)
+#### Here's a snippet or screenshot that shows the problem:
 
-Please acknowledge that you understand by marking off the following list items below with an 'x'
-
-_--- ✂ snip ✂ --- Delete this line and all of the ^above^ after reading and before submitting your issue please --- ✂ snip ✂ ---_
-
-#### Issue Title
-
-ISSUE TITLE HERE
-
-#### Required Info
-
-- [ ] I have searched the [issues](https://github.com/koalaman/shellcheck/issues) for my issue and found nothing related and/or helpful
-- [ ] I have read or at least glanced at the [Wiki](https://github.com/koalaman/shellcheck/wiki)
-- [ ] What **version** of shellcheck are you using?
-  - hint: `shellcheck --version`
-- [ ] What is your environment/OS ?
-
-#### Optional Info
-
-- [ ] Rule id: [RULE_GOES_HERE](https://github.com/koalaman/shellcheck/wiki/RULE_GOES_HERE)
-- [ ] Screenshot
-- [ ] Sample script
 ```sh
-#!/bin/bash
-#...
+
+#!/your/interpreter
+your script here
+
 ```
+
+#### Here's what shellcheck currently says:
+
+
+
+#### Here's what I wanted or expected to see:
+
+
