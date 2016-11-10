@@ -64,7 +64,7 @@ The easiest way to install ShellCheck locally is through your package manager.
 On systems with Cabal (installs to `~/.cabal/bin`):
 
     cabal update
-    cabal install shellcheck
+    cabal install ShellCheck
 
 On Debian based distros:
 
