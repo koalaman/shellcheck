@@ -18,4 +18,4 @@ script:
 after_success:
   - docker login -e="$DOCKER_EMAIL" -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
   - |-
-    [ "$TRAVIS_BRANCH" == "master" ] && docker push $DOCKER_REPO:$TAG
+    [ "$TRAVIS_BRANCH" == "master" ] || (! [ -z "$TRAVIS_TAG" ] && [ "$TRAVIS_TAG" == "$TAG" ]) && docker push $DOCKER_REPO:$TAG
