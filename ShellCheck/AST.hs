@@ -33,6 +33,7 @@ data FunctionKeyword = FunctionKeyword Bool deriving (Show, Eq)
 data FunctionParentheses = FunctionParentheses Bool deriving (Show, Eq)
 data CaseType = CaseBreak | CaseFallThrough | CaseContinue deriving (Show, Eq)
 
+data Root = Root Token
 data Token =
     TA_Binary Id String Token Token
     | TA_Assignment Id String Token Token
@@ -376,7 +377,7 @@ getId t = case t of
 
 blank :: Monad m => Token -> m ()
 blank = const $ return ()
-doAnalysis f = analyze f blank (return . id)
-doStackAnalysis startToken endToken = analyze startToken endToken (return . id)
+doAnalysis f = analyze f blank return
+doStackAnalysis startToken endToken = analyze startToken endToken return
 doTransform i = runIdentity . analyze blank blank (return . i)
 

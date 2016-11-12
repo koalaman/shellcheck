@@ -24,6 +24,7 @@ import ShellCheck.AnalyzerLib
 import ShellCheck.Interface
 import Data.List
 import qualified ShellCheck.Checks.Commands
+import qualified ShellCheck.Checks.ShellSupport
 
 
 -- TODO: Clean up the cruft this is layered on
@@ -32,5 +33,12 @@ analyzeScript spec = AnalysisResult {
     arComments =
         filterByAnnotation (asScript spec) . nub $
             runAnalytics spec
-            ++ ShellCheck.Checks.Commands.runChecks spec
+            ++ runChecker params (checkers params)
 }
+  where
+    params = makeParameters spec
+
+checkers params = mconcat $ map ($ params) [
+    ShellCheck.Checks.Commands.checker,
+    ShellCheck.Checks.ShellSupport.checker
+    ]

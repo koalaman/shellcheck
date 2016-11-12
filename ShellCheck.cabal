@@ -55,6 +55,7 @@ library
       ShellCheck.AnalyzerLib
       ShellCheck.Checker
       ShellCheck.Checks.Commands
+      ShellCheck.Checks.ShellSupport
       ShellCheck.Data
       ShellCheck.Formatter.Format
       ShellCheck.Formatter.CheckStyle

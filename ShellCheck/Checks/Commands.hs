@@ -21,7 +21,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 -- This module contains checks that examine specific commands by name.
-module ShellCheck.Checks.Commands (runChecks
+module ShellCheck.Checks.Commands (checker
     , ShellCheck.Checks.Commands.runTests
 ) where
 
@@ -34,8 +34,7 @@ import ShellCheck.Parser
 import ShellCheck.Regex
 
 import Control.Monad
-import Control.Monad.Reader
-import Control.Monad.Writer
+import Control.Monad.RWS
 import Data.Char
 import Data.List
 import Data.Maybe
@@ -49,22 +48,10 @@ data CommandName = Exactly String | Basename String
 data CommandCheck =
     CommandCheck CommandName (Token -> Analysis)
 
-nullCheck :: Token -> Analysis
-nullCheck _ = return ()
-
 
 verify :: CommandCheck -> String -> Bool
-verify f s = producesComments f s == Just True
-verifyNot f s = producesComments f s == Just False
-
-producesComments :: CommandCheck -> String -> Maybe Bool
-producesComments f s = do
-        root <- pScript s
-        return . not . null $ runList (defaultSpec root) [f]
-
-composeChecks f g t = do
-    f t
-    g t
+verify f s = producesComments (getChecker [f]) s == Just True
+verifyNot f s = producesComments (getChecker [f]) s == Just False
 
 arguments (T_SimpleCommand _ _ (cmd:args)) = args
 
@@ -92,13 +79,16 @@ commandChecks = [
     ,checkAliasesExpandEarly
     ,checkUnsetGlobs
     ,checkFindWithoutPath
+    ,checkTimeParameters
+    ,checkTimedCommand
+    ,checkLocalScope
     ]
 
 buildCommandMap :: [CommandCheck] -> Map.Map CommandName (Token -> Analysis)
 buildCommandMap = foldl' addCheck Map.empty
   where
     addCheck map (CommandCheck name function) =
-        Map.insertWith' composeChecks name function map
+        Map.insertWith' composeAnalyzers name function map
 
 
 checkCommand :: Map.Map CommandName (Token -> Analysis) -> Token -> Analysis
@@ -116,15 +106,17 @@ checkCommand map t@(T_SimpleCommand id _ (cmd:rest)) = fromMaybe (return ()) $ d
     basename = reverse . takeWhile (/= '/') . reverse
 checkCommand _ _ = return ()
 
-runList spec list = notes
-    where
-        root = asScript spec
-        params = makeParameters spec
-        notes = execWriter $ runReaderT (doAnalysis (checkCommand map) root) params
-        map = buildCommandMap list
+getChecker :: [CommandCheck] -> Checker
+getChecker list = Checker {
+    perScript = const $ return (),
+    perToken = checkCommand map
+    }
+  where
+    map = buildCommandMap list
 
-runChecks spec = runList spec commandChecks
 
+checker :: Parameters -> Checker
+checker params = getChecker commandChecks
 
 prop_checkTr1 = verify checkTr "tr [a-f] [A-F]"
 prop_checkTr2 = verify checkTr "tr 'a-z' 'A-Z'"
@@ -618,6 +610,54 @@ checkFindWithoutPath = CommandCheck (Basename "find") f
             not ("-" `isPrefixOf` flag) || length flag <= 2 && hasPath rest
     hasPath [] = False
 
+
+prop_checkTimeParameters1 = verify checkTimeParameters "time -f lol sleep 10"
+prop_checkTimeParameters2 = verifyNot checkTimeParameters "time sleep 10"
+prop_checkTimeParameters3 = verifyNot checkTimeParameters "time -p foo"
+prop_checkTimeParameters4 = verifyNot checkTimeParameters "command time -f lol sleep 10"
+checkTimeParameters = CommandCheck (Exactly "time") f
+  where
+    f (T_SimpleCommand _ _ (cmd:args:_)) =
+        whenShell [Bash, Sh] $
+            let s = concat $ oversimplify args in
+                when ("-" `isPrefixOf` s && s /= "-p") $
+                    info (getId cmd) 2023 "The shell may override 'time' as seen in man time(1). Use 'command time ..' for that one."
+
+    f _ = return ()
+
+prop_checkTimedCommand1 = verify checkTimedCommand "#!/bin/sh\ntime -p foo | bar"
+prop_checkTimedCommand2 = verify checkTimedCommand "#!/bin/dash\ntime ( foo; bar; )"
+prop_checkTimedCommand3 = verifyNot checkTimedCommand "#!/bin/sh\ntime sleep 1"
+checkTimedCommand = CommandCheck (Exactly "time") f where
+    f (T_SimpleCommand _ _ (c:args@(_:_))) =
+        whenShell [Sh, Dash] $ do
+            let cmd = last args -- "time" is parsed with a command as argument
+            when (isPiped cmd) $
+                warn (getId c) 2176 "'time' is undefined for pipelines. time single stage or bash -c instead."
+            when (isSimple cmd == Just False) $
+                warn (getId cmd) 2177 "'time' is undefined for compound commands, time sh -c instead."
+    f _ = return ()
+    isPiped cmd =
+        case cmd of
+            T_Pipeline _ _ (_:_:_) -> True
+            _ -> False
+    getCommand cmd =
+        case cmd of
+            T_Pipeline _ _ (T_Redirecting _ _ a : _) -> return a
+            _ -> fail ""
+    isSimple cmd = do
+        innerCommand <- getCommand cmd
+        case innerCommand of
+            T_SimpleCommand {} -> return True
+            _ -> return False
+
+prop_checkLocalScope1 = verify checkLocalScope "local foo=3"
+prop_checkLocalScope2 = verifyNot checkLocalScope "f() { local foo=3; }"
+checkLocalScope = CommandCheck (Exactly "local") $ \t ->
+    whenShell [Bash, Dash] $ do -- Ksh allows it, Sh doesn't support local
+        path <- getPathM t
+        unless (any isFunction path) $
+            err (getId t) 2168 "'local' is only valid in functions."
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

@@ -29,7 +29,7 @@ import ShellCheck.Regex
 
 import Control.Arrow (first)
 import Control.Monad.Identity
-import Control.Monad.Reader
+import Control.Monad.RWS
 import Control.Monad.State
 import Control.Monad.Writer
 import Data.Char
@@ -40,15 +40,47 @@ import qualified Data.Map as Map
 import Test.QuickCheck.All (forAllProperties)
 import Test.QuickCheck.Test (quickCheckWithResult, stdArgs, maxSuccess)
 
-type Analysis = ReaderT Parameters (Writer [TokenComment]) ()
+type Analysis = AnalyzerM ()
+type AnalyzerM a = RWS Parameters [TokenComment] Cache a
+nullCheck = const $ return ()
 
+
+data Checker = Checker {
+    perScript :: Root -> Analysis,
+    perToken :: Token -> Analysis
+}
+
+runChecker :: Parameters -> Checker -> [TokenComment]
+runChecker params checker = notes
+    where
+        root = rootNode params
+        check = perScript checker `composeAnalyzers` (\(Root x) -> void $ doAnalysis (perToken checker) x)
+        notes = snd $ evalRWS (check $ Root root) params Cache
+
+instance Monoid Checker where
+    mempty = Checker {
+        perScript = nullCheck,
+        perToken = nullCheck
+        }
+    mappend x y = Checker {
+        perScript = perScript x `composeAnalyzers` perScript y,
+        perToken = perToken x `composeAnalyzers` perToken y
+        }
+
+
+composeAnalyzers :: (a -> Analysis) -> (a -> Analysis) -> a -> Analysis
+composeAnalyzers f g x = f x >> g x
 
 data Parameters = Parameters {
     variableFlow :: [StackData],
     parentMap :: Map.Map Id Token,
     shellType :: Shell,
-    shellTypeSpecified :: Bool
+    shellTypeSpecified :: Bool,
+    rootNode :: Token
     }
+
+-- TODO: Cache results of common AST ops here
+data Cache = Cache {}
 
 data Scope = SubshellScope String | NoneScope deriving (Show, Eq)
 data StackData =
@@ -81,6 +113,14 @@ pScript s =
     }
   in prRoot . runIdentity $ parseScript (mockedSystemInterface []) pSpec
 
+-- For testing. If parsed, returns whether there are any comments
+producesComments :: Checker -> String -> Maybe Bool
+producesComments c s = do
+        root <- pScript s
+        let spec = defaultSpec root
+        let params = makeParameters spec
+        return . not . null $ runChecker params c
+
 makeComment :: Severity -> Id -> Code -> String -> TokenComment
 makeComment severity id code note =
     TokenComment id $ Comment severity code note
@@ -95,6 +135,7 @@ style id code str = addComment $ makeComment StyleC id code str
 
 makeParameters spec =
     let params = Parameters {
+        rootNode = root,
         shellType = fromMaybe (determineShell root) $ asShellType spec,
         shellTypeSpecified = isJust $ asShellType spec,
         parentMap = getParentTree root,
@@ -211,6 +252,10 @@ getClosestCommand tree t =
     getCommand t@(T_Redirecting {}) = return t
     getCommand _ = Nothing
 
+getClosestCommandM t = do
+    tree <- asks parentMap
+    return $ getClosestCommand tree t
+
 usedAsCommandName tree token = go (getId token) (tail $ getPath tree token)
   where
     go currentId (T_NormalWord id [word]:rest)
@@ -226,6 +271,12 @@ getPath tree t = t :
     case Map.lookup (getId t) tree of
         Nothing -> []
         Just parent -> getPath tree parent
+
+-- Version of the above taking the map from the current context
+-- Todo: give this the name "getPath"
+getPathM t = do
+    map <- asks parentMap
+    return $ getPath map t
 
 isParentOf tree parent child =
     elem (getId parent) . map getId $ getPath tree child
@@ -644,6 +695,10 @@ headOrDefault def _ = def
         [] -> Nothing
         (r:_) -> Just r
 
+-- Run a command if the shell is in the given list
+whenShell l c = do
+    shell <- asks shellType
+    when (shell `elem` l ) c
 
 
 filterByAnnotation token =

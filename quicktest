@@ -9,6 +9,7 @@
   ,ShellCheck.Parser.runTests
   ,ShellCheck.Checker.runTests
   ,ShellCheck.Checks.Commands.runTests
+  ,ShellCheck.Checks.ShellSupport.runTests
   ,ShellCheck.AnalyzerLib.runTests
     ]' | tr -d '\n' | cabal repl 2>&1 | tee /dev/stderr)
 if [[ $var == *$'\nTrue'* ]]
