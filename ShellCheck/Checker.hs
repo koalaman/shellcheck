@@ -158,5 +158,25 @@ prop_sourceDirectiveDoesntFollowFile =
                 [("foo", "source bar"), ("bar", "baz=3")]
                 "#shellcheck source=foo\n. \"$1\"; echo \"$baz\""
 
+prop_filewideAnnotationBase = [2086] == check "#!/bin/sh\necho $1"
+prop_filewideAnnotation1 = null $
+    check "#!/bin/sh\n# shellcheck disable=2086\necho $1"
+prop_filewideAnnotation2 = null $
+    check "#!/bin/sh\n# shellcheck disable=2086\ntrue\necho $1"
+prop_filewideAnnotation3 = null $
+    check "#!/bin/sh\n#unerlated\n# shellcheck disable=2086\ntrue\necho $1"
+prop_filewideAnnotation4 = null $
+    check "#!/bin/sh\n# shellcheck disable=2086\n#unrelated\ntrue\necho $1"
+prop_filewideAnnotation5 = null $
+    check "#!/bin/sh\n\n\n\n#shellcheck disable=2086\ntrue\necho $1"
+prop_filewideAnnotation6 = null $
+    check "#shellcheck shell=sh\n#unrelated\n#shellcheck disable=2086\ntrue\necho $1"
+prop_filewideAnnotation7 = null $
+    check "#!/bin/sh\n# shellcheck disable=2086\n#unrelated\ntrue\necho $1"
+
+prop_filewideAnnotationBase2 = [2086, 2181] == check "true\n[ $? == 0 ] && echo $1"
+prop_filewideAnnotation8 = null $
+    check "# Disable $? warning\n#shellcheck disable=SC2181\n# Disable quoting warning\n#shellcheck disable=2086\ntrue\n[ $? == 0 ] && echo $1"
+
 return []
 runTests = $quickCheckAll

@@ -2563,6 +2563,7 @@ readScriptFile = do
     verifyShell pos (getShell sb)
     if isValidShell (getShell sb) /= Just False
       then do
+            allspacing
             annotationId <- getNextId
             annotations <- readAnnotations
             commands <- withAnnotations annotations readCompoundListOrEmpty
