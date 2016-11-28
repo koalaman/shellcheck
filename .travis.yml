@@ -8,7 +8,7 @@ services:
 before_install:
   - export DOCKER_REPO=koalaman/shellcheck
   - |-
-    export TAG=$([ "$TRAVIS_BRANCH" == "master" ] && echo "latest" || echo $TRAVIS_BRANCH)
+    export TAG=$([ "$TRAVIS_BRANCH" == "master" ] && echo "latest" || ([ -n "$TRAVIS_TAG" ] && echo "$TRAVIS_TAG") || echo "$TRAVIS_BRANCH")
 
 script:
   - docker build -t builder -f Dockerfile_builder .
@@ -18,4 +18,4 @@ script:
 after_success:
   - docker login -e="$DOCKER_EMAIL" -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
   - |-
-    [ "$TRAVIS_BRANCH" == "master" ] && docker push $DOCKER_REPO:$TAG
+    ([ "$TRAVIS_BRANCH" == "master" ] || [ -n "$TRAVIS_TAG" ]) && docker push "$DOCKER_REPO:$TAG"
