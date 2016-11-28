@@ -293,6 +293,11 @@ ShellCheck recognizes a menagerie of other issues:
 Alexander Tarasikov,
 [via Twitter](https://twitter.com/astarasikov/status/568825996532707330)
 
+## Ignoring issues
+
+Issues can be ignored via environmental variable, command line, individually or globally within a file:
+
+https://github.com/koalaman/shellcheck/wiki/Ignore
 
 ## Reporting bugs
 
