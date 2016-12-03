@@ -111,6 +111,7 @@ data Token =
     | T_NormalWord Id [Token]
     | T_OR_IF Id
     | T_OrIf Id (Token) (Token)
+    | T_ParamSubSpecialChar Id String -- e.g. '%' in ${foo%bar}  or '/' in ${foo/bar/baz}
     | T_Pipeline Id [Token] [Token] -- [Pipe separators] [Commands]
     | T_ProcSub Id String [Token]
     | T_Rbrace Id
@@ -319,6 +320,7 @@ getId t = case t of
         T_DollarBraced id _  -> id
         T_DollarArithmetic id _  -> id
         T_BraceExpansion id _  -> id
+        T_ParamSubSpecialChar id _ -> id
         T_DollarBraceCommandExpansion id _  -> id
         T_IoFile id _ _  -> id
         T_IoDuplicate id _ _  -> id

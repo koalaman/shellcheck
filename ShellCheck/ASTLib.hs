@@ -86,6 +86,7 @@ oversimplify token =
         (T_Glob _ s) -> [s]
         (T_Pipeline _ _ [x]) -> oversimplify x
         (T_Literal _ x) -> [x]
+        (T_ParamSubSpecialChar _ x) -> [x]
         (T_SimpleCommand _ vars words) -> concatMap oversimplify words
         (T_Redirecting _ _ foo) -> oversimplify foo
         (T_DollarSingleQuoted _ s) -> [s]
@@ -188,6 +189,7 @@ getLiteralStringExt more = g
     g (TA_Expansion _ l) = allInList l
     g (T_SingleQuoted _ s) = return s
     g (T_Literal _ s) = return s
+    g (T_ParamSubSpecialChar _ s) = return s
     g x = more x
 
 -- Is this token a string literal?

@@ -64,6 +64,7 @@ variableStart = upper <|> lower <|> oneOf "_"
 variableChars = upper <|> lower <|> digit <|> oneOf "_"
 functionChars = variableChars <|> oneOf ":+-.?"
 specialVariable = oneOf "@*#?-$!"
+paramSubSpecialChars = oneOf "/:+-=%"
 quotableChars = "|&;<>()\\ '\t\n\r\xA0" ++ doubleQuotableChars
 quotable = almostSpace <|> unicodeDoubleQuote <|> oneOf quotableChars
 bracedQuotable = oneOf "}\"$`'"
@@ -1003,12 +1004,18 @@ readDollarBracedWord = do
     list <- many readDollarBracedPart
     return $ T_NormalWord id list
 
-readDollarBracedPart = readSingleQuoted <|> readDoubleQuoted <|> readExtglob <|> readNormalDollar <|> readUnquotedBackTicked <|> readDollarBracedLiteral
+readDollarBracedPart = readSingleQuoted <|> readDoubleQuoted <|>
+                       readParamSubSpecialChar <|> readExtglob <|> readNormalDollar <|>
+                       readUnquotedBackTicked <|> readDollarBracedLiteral
 
 readDollarBracedLiteral = do
     id <- getNextId
     vars <- (readBraceEscaped <|> (anyChar >>= \x -> return [x])) `reluctantlyTill1` bracedQuotable
     return $ T_Literal id $ concat vars
+
+readParamSubSpecialChar = do
+    id <- getNextId
+    T_ParamSubSpecialChar id <$> many1 paramSubSpecialChars
 
 prop_readProcSub1 = isOk readProcSub "<(echo test | wc -l)"
 prop_readProcSub2 = isOk readProcSub "<(  if true; then true; fi )"
