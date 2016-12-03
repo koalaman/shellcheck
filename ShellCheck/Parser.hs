@@ -1015,8 +1015,7 @@ readDollarBracedLiteral = do
 
 readParamSubSpecialChar = do
     id <- getNextId
-    many1 paramSubSpecialChars
-    return $ T_ParamSubSpecialChar id
+    T_ParamSubSpecialChar id <$> many1 paramSubSpecialChars
 
 prop_readProcSub1 = isOk readProcSub "<(echo test | wc -l)"
 prop_readProcSub2 = isOk readProcSub "<(  if true; then true; fi )"
