@@ -400,15 +400,20 @@ prop_checkShebang1 = verifyNotTree checkShebang "#!/usr/bin/env bash -x\necho co
 prop_checkShebang2 = verifyNotTree checkShebang "#! /bin/sh  -l "
 prop_checkShebang3 = verifyTree checkShebang "ls -l"
 prop_checkShebang4 = verifyNotTree checkShebang "#shellcheck shell=sh\nfoo"
+prop_checkShebang5 = verifyTree checkShebang "#!/usr/bin/env ash"
+prop_checkShebang6 = verifyNotTree checkShebang "#!/usr/bin/env ash\n# shellcheck shell=dash\n"
+prop_checkShebang7 = verifyNotTree checkShebang "#!/usr/bin/env ash\n# shellcheck shell=sh\n"
 checkShebang params (T_Annotation _ list t) =
     if any isOverride list then [] else checkShebang params t
   where
     isOverride (ShellOverride _) = True
     isOverride _ = False
-checkShebang params (T_Script id sb _) =
-    [makeComment ErrorC id 2148
-        "Tips depend on target shell and yours is unknown. Add a shebang."
-      | not (shellTypeSpecified params) && sb == "" ]
+checkShebang params (T_Script id sb _) = execWriter $
+    unless (shellTypeSpecified params) $ do
+        when (sb == "") $
+            err id 2148 "Tips depend on target shell and yours is unknown. Add a shebang."
+        when (executableFromShebang sb == "ash") $
+            warn id 2187 "Ash scripts will be checked as Dash. Add '# shellcheck shell=dash' to silence."
 
 
 prop_checkForInQuoted = verify checkForInQuoted "for f in \"$(ls)\"; do echo foo; done"

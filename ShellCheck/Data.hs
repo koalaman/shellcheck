@@ -88,6 +88,7 @@ shellForExecutable name =
         "sh"    -> return Sh
         "bash"  -> return Bash
         "dash"  -> return Dash
+        "ash"   -> return Dash -- There's also a warning for this.
         "ksh"   -> return Ksh
         "ksh88" -> return Ksh
         "ksh93" -> return Ksh

@@ -153,6 +153,7 @@ prop_determineShell4 = determineShell (fromJust $ pScript
 prop_determineShell5 = determineShell (fromJust $ pScript
     "#shellcheck shell=sh\nfoo") == Sh
 prop_determineShell6 = determineShell (fromJust $ pScript "#! /bin/sh") == Sh
+prop_determineShell7 = determineShell (fromJust $ pScript "#! /bin/ash") == Dash
 determineShell t = fromMaybe Bash $ do
     shellString <- foldl mplus Nothing $ getCandidates t
     shellForExecutable shellString
@@ -166,8 +167,13 @@ determineShell t = fromMaybe Bash $ do
     getCandidates (T_Annotation _ annotations s) =
         map forAnnotation annotations ++
            [Just $ fromShebang s]
-    fromShebang (T_Script _ s t) = shellFor s
+    fromShebang (T_Script _ s t) = executableFromShebang s
 
+-- Given a string like "/bin/bash" or "/usr/bin/env dash",
+-- return the shell basename like "bash" or "dash"
+executableFromShebang :: String -> String
+executableFromShebang = shellFor
+  where
     shellFor s | "/env " `isInfixOf` s = head (drop 1 (words s)++[""])
     shellFor s | ' ' `elem` s = shellFor $ takeWhile (/= ' ') s
     shellFor s = reverse . takeWhile (/= '/') . reverse $ s
