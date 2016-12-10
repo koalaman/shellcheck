@@ -82,6 +82,7 @@ commandChecks = [
     ,checkTimeParameters
     ,checkTimedCommand
     ,checkLocalScope
+    ,checkDeprecatedTempfile
     ]
 
 buildCommandMap :: [CommandCheck] -> Map.Map CommandName (Token -> Analysis)
@@ -658,6 +659,11 @@ checkLocalScope = CommandCheck (Exactly "local") $ \t ->
         path <- getPathM t
         unless (any isFunction path) $
             err (getId t) 2168 "'local' is only valid in functions."
+
+prop_checkDeprecatedTempfile1 = verify checkDeprecatedTempfile "var=$(tempfile)"
+prop_checkDeprecatedTempfile2 = verifyNot checkDeprecatedTempfile "tempfile=$(mktemp)"
+checkDeprecatedTempfile = CommandCheck (Basename "tempfile") $
+    \t -> warn (getId t) 2186 "tempfile is deprecated. Use mktemp instead."
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
