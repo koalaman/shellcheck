@@ -1534,40 +1534,32 @@ prop_readHereDoc8 = isOk readScript "cat <<foo>>bar\netc\nfoo"
 prop_readHereDoc9 = isOk readScript "if true; then cat << foo; fi\nbar\nfoo\n"
 prop_readHereDoc10= isOk readScript "if true; then cat << foo << bar; fi\nfoo\nbar\n"
 prop_readHereDoc11= isOk readScript "cat << foo $(\nfoo\n)lol\nfoo\n"
+prop_readHereDoc12= isOk readScript "cat << foo|cat\nbar\nfoo"
 readHereDoc = called "here document" $ do
     fid <- getNextId
     pos <- getPosition
     try $ string "<<"
     dashed <- (char '-' >> return Dashed) <|> return Undashed
-    tokenPosition <- getPosition
     sp <- spacing
     optional $ do
         try . lookAhead $ char '('
         let message = "Shells are space sensitive. Use '< <(cmd)', not '<<" ++ sp ++ "(cmd)'."
         parseProblemAt pos ErrorC 1038 message
     hid <- getNextId
-    (quoted, endToken) <-
-            liftM (\ x -> (Quoted, stripLiteral x)) readDoubleQuotedLiteral
-            <|> liftM (\ x -> (Quoted, x)) readSingleQuotedLiteral
-            <|> (readToken >>= (\x -> return (Unquoted, x)))
+    (quoted, endToken) <- readToken
 
     -- add empty tokens for now, read the rest in readPendingHereDocs
     let doc = T_HereDoc hid dashed quoted endToken []
     addPendingHereDoc doc
     return doc
   where
-    stripLiteral (T_Literal _ x) = x
-    stripLiteral (T_SingleQuoted _ x) = x
-
-    readToken =
-        liftM concat $ many1 (escaped <|> quoted <|> normal)
-      where
-        quoted = liftM stripLiteral readDoubleQuotedLiteral <|> readSingleQuotedLiteral
-        normal = anyChar `reluctantlyTill1` (whitespace <|> oneOf "<>;&)'\"\\")
-        escaped = do -- surely the user must be doing something wrong at this point
-            char '\\'
-            c <- anyChar
-            return [c]
+    quotes = "\"'\\"
+    -- Fun fact: bash considers << foo"" quoted, but not << <("foo").
+    -- Instead of replicating this, just read a token and strip quotes.
+    readToken = do
+        str <- readStringForParser readNormalWord
+        return (if any (`elem` quotes) str then Quoted else Unquoted,
+                filter (not . (`elem` quotes)) str)
 
 
 readPendingHereDocs = do
