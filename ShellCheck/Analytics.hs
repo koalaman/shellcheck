@@ -429,13 +429,13 @@ checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [word@(T_DoubleQuoted id list)]]
     when (any (\x -> willSplit x && not (mayBecomeMultipleArgs x)) list
             || (liftM wouldHaveBeenGlob (getLiteralString word) == Just True)) $
         err id 2066 "Since you double quoted this, it will not word split, and the loop will only run once."
-checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [T_SingleQuoted id s]] _) =
-    warn id 2041 $ "This is a literal string. To run as a command, use $(" ++ s ++ ")."
+checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [T_SingleQuoted id _]] _) =
+    warn id 2041 "This is a literal string. To run as a command, use $(..) instead of '..' . "
 checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [T_Literal id s]] _) =
     if ',' `elem` s
       then unless ('{' `elem` s) $
             warn id 2042 "Use spaces, not commas, to separate loop elements."
-      else warn id 2043 $ "This loop will only run once, with " ++ f ++ "='" ++ s ++ "'."
+      else warn id 2043 "This loop will only ever run once for a constant value. Did you perhaps mean to loop over dir/*, $var or $(cmd)?"
 checkForInQuoted _ _ = return ()
 
 prop_checkForInCat1 = verify checkForInCat "for f in $(cat foo); do stuff; done"
