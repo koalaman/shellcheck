@@ -133,6 +133,7 @@ prop_checkBashisms49= verify checkBashisms "#!/bin/dash\necho $MACHTYPE"
 prop_checkBashisms50= verify checkBashisms "#!/bin/sh\ncmd >& file"
 prop_checkBashisms51= verifyNot checkBashisms "#!/bin/sh\ncmd 2>&1"
 prop_checkBashisms52= verifyNot checkBashisms "#!/bin/sh\ncmd >&2"
+prop_checkBashisms53= verifyNot checkBashisms "#!/bin/sh\nprintf -- -f\n"
 checkBashisms = ForShell [Sh, Dash] $ \t -> do
     params <- ask
     kludge params t

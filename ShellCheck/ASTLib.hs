@@ -112,8 +112,8 @@ getFlagsUntil _ _ = error "Internal shellcheck error, please report! (getFlags o
 
 -- Get all flags in a GNU way, up until --
 getAllFlags = getFlagsUntil (== "--")
--- Get all flags in a BSD way, up until first non-flag argument
-getLeadingFlags = getFlagsUntil (not . ("-" `isPrefixOf`))
+-- Get all flags in a BSD way, up until first non-flag argument or --
+getLeadingFlags = getFlagsUntil (\x -> x == "--" || (not $ "-" `isPrefixOf` x))
 
 
 -- Given a T_DollarBraced, return a simplified version of the string contents.
