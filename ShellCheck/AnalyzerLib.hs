@@ -404,6 +404,7 @@ getModifiedVariables t =
             [(t, t, fromMaybe "COPROC" name, DataArray SourceInteger)]
 
         --Points to 'for' rather than variable
+        T_ForIn id str [] _ -> [(t, t, str, DataString $ SourceExternal)]
         T_ForIn id str words _ -> [(t, t, str, DataString $ SourceFrom words)]
         T_SelectIn id str words _ -> [(t, t, str, DataString $ SourceFrom words)]
         _ -> []
