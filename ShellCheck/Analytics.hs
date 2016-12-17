@@ -1930,12 +1930,14 @@ prop_checkWhileReadPitfalls4 = verifyNot checkWhileReadPitfalls "while read foo;
 prop_checkWhileReadPitfalls5 = verifyNot checkWhileReadPitfalls "while read foo; do echo ls | ssh $foo; done"
 prop_checkWhileReadPitfalls6 = verifyNot checkWhileReadPitfalls "while read foo <&3; do ssh $foo; done 3< foo"
 prop_checkWhileReadPitfalls7 = verify checkWhileReadPitfalls "while read foo; do if true; then ssh $foo uptime; fi; done < file"
+prop_checkWhileReadPitfalls8 = verifyNot checkWhileReadPitfalls "while read foo; do ssh -n $foo uptime; done < file"
 
 checkWhileReadPitfalls _ (T_WhileExpression id [command] contents)
         | isStdinReadCommand command =
     mapM_ checkMuncher contents
   where
     munchers = [ "ssh", "ffmpeg", "mplayer" ]
+    preventionFlags = ["n", "noconsolecontrols" ]
 
     isStdinReadCommand (T_Pipeline _ _ [T_Redirecting id redirs cmd]) =
         let plaintext = oversimplify cmd
@@ -1952,6 +1954,10 @@ checkWhileReadPitfalls _ (T_WhileExpression id [command] contents)
             _ -> potentially $ do
                 name <- getCommandBasename cmd
                 guard $ name `elem` munchers
+                
+                -- Sloppily check if the command has a flag to prevent eating stdin.
+                let flags = getAllFlags cmd
+                guard . not $ any (`elem` preventionFlags) $ map snd flags
                 return $ do
                     info id 2095 $
                         name ++ " may swallow stdin, preventing this loop from working properly."
