@@ -471,6 +471,7 @@ prop_checkPrintfVar7 = verify checkPrintfVar "printf -- foo bar baz"
 prop_checkPrintfVar8 = verifyNot checkPrintfVar "printf '%s %s %s' \"${var[@]}\""
 prop_checkPrintfVar9 = verifyNot checkPrintfVar "printf '%s %s %s\\n' *.png"
 prop_checkPrintfVar10= verifyNot checkPrintfVar "printf '%s %s %s' foo bar baz"
+prop_checkPrintfVar11= verifyNot checkPrintfVar "printf '%(%s%s)T' -1"
 checkPrintfVar = CommandCheck (Exactly "printf") (f . arguments) where
     f (doubledash:rest) | getLiteralString doubledash == Just "--" = f rest
     f (dashv:var:rest) | getLiteralString dashv == Just "-v" = f rest
@@ -480,6 +481,7 @@ checkPrintfVar = CommandCheck (Exactly "printf") (f . arguments) where
     countFormats string =
         case string of
             '%':'%':rest -> countFormats rest
+            '%':'(':rest -> 1 + countFormats (dropWhile (/= ')') rest)
             '%':rest -> 1 + countFormats rest
             _:rest -> countFormats rest
             [] -> 0
