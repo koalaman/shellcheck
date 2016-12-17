@@ -156,6 +156,7 @@ nodeChecks = [
     ,checkLoopVariableReassignment
     ,checkTrailingBracket
     ,checkReturnAgainstZero
+    ,checkRedirectedNowhere
     ]
 
 
@@ -2535,6 +2536,39 @@ checkReturnAgainstZero _ token =
             [exp@(T_DollarBraced {})] -> bracedString exp == "?"
             otherwise -> False
     message id = style id 2181 "Check exit code directly with e.g. 'if mycmd;', not indirectly with $?."
+
+prop_checkRedirectedNowhere1 = verify checkRedirectedNowhere "> file"
+prop_checkRedirectedNowhere2 = verify checkRedirectedNowhere "> file | grep foo"
+prop_checkRedirectedNowhere3 = verify checkRedirectedNowhere "grep foo | > bar"
+prop_checkRedirectedNowhere4 = verifyNot checkRedirectedNowhere "grep foo > bar"
+prop_checkRedirectedNowhere5 = verifyNot checkRedirectedNowhere "foo | grep bar > baz"
+prop_checkRedirectedNowhere6 = verifyNot checkRedirectedNowhere "var=$(value) 2> /dev/null"
+prop_checkRedirectedNowhere7 = verifyNot checkRedirectedNowhere "var=$(< file)"
+prop_checkRedirectedNowhere8 = verifyNot checkRedirectedNowhere "var=`< file`"
+checkRedirectedNowhere params token =
+    case token of
+        T_Pipeline _ _ [single] -> potentially $ do
+            redir <- getDanglingRedirect single
+            guard . not $ isInExpansion token
+            return $ warn (getId redir) 2188 "This redirection doesn't have a command. Move to its command (or use 'true' as no-op)."
+
+        T_Pipeline _ _ list -> forM_ list $ \x -> potentially $ do
+            redir <- getDanglingRedirect x
+            return $ err (getId redir) 2189 "You can't have | between this redirection and the command it should apply to."
+
+        _ -> return ()
+  where
+    isInExpansion t =
+        case drop 1 $ getPath (parentMap params) t of
+            T_DollarExpansion _ [_] : _ -> True
+            T_Backticked _ [_] : _ -> True
+            T_Annotation _ _ u : _ -> isInExpansion u
+            _ -> False
+    getDanglingRedirect token =
+        case token of
+            T_Redirecting _ (first:_) (T_SimpleCommand _ [] []) -> return first
+            _ -> Nothing
+
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
