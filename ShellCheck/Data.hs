@@ -33,6 +33,9 @@ internalVariables = [
     -- Other
     "USER", "TZ", "TERM", "LOGNAME", "LD_LIBRARY_PATH", "LANGUAGE", "DISPLAY",
     "HOSTNAME", "KRB5CCNAME", "XAUTHORITY"
+
+    -- Ksh
+    , ".sh.version"
   ]
 
 variablesWithoutSpaces = [
