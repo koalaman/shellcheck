@@ -337,7 +337,7 @@ checkInjectableFindSh = CommandCheck (Basename "find") (check . arguments)
 
     pattern = [
         (`elem` ["-exec", "-execdir"]),
-        (`elem` ["sh", "bash", "ksh"]),
+        (`elem` ["sh", "bash", "dash", "ksh"]),
         (== "-c")
         ]
     action (id, arg) =
