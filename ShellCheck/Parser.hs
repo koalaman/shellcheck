@@ -2587,8 +2587,8 @@ readScriptFile = do
     verifyShell pos s =
         case isValidShell s of
             Just True -> return ()
-            Just False -> parseProblemAt pos ErrorC 1071 "ShellCheck only supports sh/bash/ksh scripts. Sorry!"
-            Nothing -> parseProblemAt pos InfoC 1008 "This shebang was unrecognized. Note that ShellCheck only handles sh/bash/ksh."
+            Just False -> parseProblemAt pos ErrorC 1071 "ShellCheck only supports sh/bash/dash/ksh scripts. Sorry!"
+            Nothing -> parseProblemAt pos InfoC 1008 "This shebang was unrecognized. Note that ShellCheck only handles sh/bash/dash/ksh."
 
     isValidShell s =
         let good = s == "" || any (`isPrefixOf` s) goodShells
