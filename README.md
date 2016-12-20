@@ -107,7 +107,7 @@ This section describes how to build ShellCheck from a source directory. ShellChe
 
 #### Installing Cabal
 
-ShellCheck is built and packaged using Cabal. Install the package `cabal-install` from your system's package manager (with e.g. `apt-get`, `yum`, `zypper` or `brew`).
+ShellCheck is built and packaged using Cabal. Install the package `cabal-install` from your system's package manager (with e.g. `apt-get`, `brew`, `emerge`, `yum`, or `zypper`).
 
 On MacPorts, the package is instead called `hs-cabal-install`, while native Windows users should install the latest version of the Haskell platform from https://www.haskell.org/platform/
 
