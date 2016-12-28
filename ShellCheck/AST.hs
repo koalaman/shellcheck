@@ -45,7 +45,7 @@ data Token =
     | TC_And Id ConditionType String Token Token
     | TC_Binary Id ConditionType String Token Token
     | TC_Group Id ConditionType Token
-    | TC_Noary Id ConditionType Token
+    | TC_Nullary Id ConditionType Token
     | TC_Or Id ConditionType String Token Token
     | TC_Unary Id ConditionType String Token
     | T_AND_IF Id
@@ -258,7 +258,7 @@ analyze f g i =
     delve (TC_Group id typ token) = d1 token $ TC_Group id typ
     delve (TC_Binary id typ op lhs rhs) = d2 lhs rhs $ TC_Binary id typ op
     delve (TC_Unary id typ op token) = d1 token $ TC_Unary id typ op
-    delve (TC_Noary id typ token) = d1 token $ TC_Noary id typ
+    delve (TC_Nullary id typ token) = d1 token $ TC_Nullary id typ
 
     delve (TA_Binary id op t1 t2) = d2 t1 t2 $ TA_Binary id op
     delve (TA_Assignment id op t1 t2) = d2 t1 t2 $ TA_Assignment id op
@@ -356,7 +356,7 @@ getId t = case t of
         TC_Group id _ _  -> id
         TC_Binary id _ _ _ _  -> id
         TC_Unary id _ _ _  -> id
-        TC_Noary id _ _  -> id
+        TC_Nullary id _ _  -> id
         TA_Binary id _ _ _  -> id
         TA_Assignment id _ _ _  -> id
         TA_Unary id _ _  -> id

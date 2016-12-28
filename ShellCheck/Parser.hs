@@ -333,6 +333,13 @@ parseProblemAtWithEnd start end level code msg = do
 
 parseProblemAt pos = parseProblemAtWithEnd pos pos
 
+parseProblemAtId :: Monad m => Id -> Severity -> Integer -> String -> SCParser m ()
+parseProblemAtId id level code msg = do
+    map <- getMap
+    let pos = Map.findWithDefault 
+                (error "Internal error (no position for id). Please report.") id map
+    parseProblemAt pos level code msg
+
 -- Store non-parse problems inside
 
 parseNote c l a = do
@@ -528,7 +535,7 @@ readConditionContents single =
         condSpacing requiresSpacing
         return x
 
-    readCondNoaryOrBinary = do
+    readCondNullaryOrBinary = do
       id <- getNextId
       x <- readCondWord `attempting` (do
               pos <- getPosition
@@ -545,7 +552,16 @@ readConditionContents single =
                     then readRegex
                     else  readCondWord <|> (parseProblemAt pos ErrorC 1027 "Expected another argument for this operator." >> mzero)
             return (x `op` y)
-          ) <|> return (TC_Noary id typ x)
+          ) <|> ( do
+            checkTrailingOp x
+            return $ TC_Nullary id typ x
+          )
+
+    checkTrailingOp x = fromMaybe (return ()) $ do
+        (T_Literal id str) <- getTrailingUnquotedLiteral x
+        trailingOp <- listToMaybe (filter (`isSuffixOf` str) binaryTestOps)
+        return $ parseProblemAtId id ErrorC 1108 $
+            "You need a space before and after the " ++ trailingOp ++ " ."
 
     readCondGroup = do
           id <- getNextId
@@ -622,7 +638,7 @@ readConditionContents single =
         return $ TC_Unary id typ "!" expr
 
     readCondExpr =
-      readCondGroup <|> readCondUnaryExp <|> readCondNoaryOrBinary
+      readCondGroup <|> readCondUnaryExp <|> readCondNullaryOrBinary
 
     readCondOr = chainl1 readCondAnd readCondAndOp
     readCondAnd = chainl1 readCondTerm readCondOrOp

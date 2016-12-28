@@ -98,7 +98,7 @@ nodeChecks = [
     ,checkSingleBracketOperators
     ,checkDoubleBracketOperators
     ,checkLiteralBreakingTest
-    ,checkConstantNoary
+    ,checkConstantNullary
     ,checkDivBeforeMult
     ,checkArithmeticDeref
     ,checkArithmeticBadOctal
@@ -1021,7 +1021,7 @@ prop_checkLiteralBreakingTest8 = verifyNot checkLiteralBreakingTest "[ $(true)$(
 prop_checkLiteralBreakingTest10 = verify checkLiteralBreakingTest "[ -z foo ]"
 checkLiteralBreakingTest _ t = potentially $
         case t of
-            (TC_Noary _ _ w@(T_NormalWord _ l)) -> do
+            (TC_Nullary _ _ w@(T_NormalWord _ l)) -> do
                 guard . not $ isConstant w -- Covered by SC2078
                 comparisonWarning l `mplus` tautologyWarning w "Argument to implicit -n is always true due to literal strings."
             (TC_Unary _ _ op w@(T_NormalWord _ l)) ->
@@ -1045,14 +1045,14 @@ checkLiteralBreakingTest _ t = potentially $
         token <- listToMaybe $ filter isNonEmpty $ getWordParts t
         return $ err (getId token) 2157 s
 
-prop_checkConstantNoary = verify checkConstantNoary "[[ '$(foo)' ]]"
-prop_checkConstantNoary2 = verify checkConstantNoary "[ \"-f lol\" ]"
-prop_checkConstantNoary3 = verify checkConstantNoary "[[ cmd ]]"
-prop_checkConstantNoary4 = verify checkConstantNoary "[[ ! cmd ]]"
-prop_checkConstantNoary5 = verify checkConstantNoary "[[ true ]]"
-prop_checkConstantNoary6 = verify checkConstantNoary "[ 1 ]"
-prop_checkConstantNoary7 = verify checkConstantNoary "[ false ]"
-checkConstantNoary _ (TC_Noary _ _ t) | isConstant t =
+prop_checkConstantNullary = verify checkConstantNullary "[[ '$(foo)' ]]"
+prop_checkConstantNullary2 = verify checkConstantNullary "[ \"-f lol\" ]"
+prop_checkConstantNullary3 = verify checkConstantNullary "[[ cmd ]]"
+prop_checkConstantNullary4 = verify checkConstantNullary "[[ ! cmd ]]"
+prop_checkConstantNullary5 = verify checkConstantNullary "[[ true ]]"
+prop_checkConstantNullary6 = verify checkConstantNullary "[ 1 ]"
+prop_checkConstantNullary7 = verify checkConstantNullary "[ false ]"
+checkConstantNullary _ (TC_Nullary _ _ t) | isConstant t =
     case fromMaybe "" $ getLiteralString t of
         "false" -> err (getId t) 2158 "[ false ] is true. Remove the brackets."
         "0" -> err (getId t) 2159 "[ 0 ] is true. Use 'false' instead."
@@ -1062,7 +1062,7 @@ checkConstantNoary _ (TC_Noary _ _ t) | isConstant t =
   where
     string = fromMaybe "" $ getLiteralString t
 
-checkConstantNoary _ _ = return ()
+checkConstantNullary _ _ = return ()
 
 prop_checkForDecimals1 = verify checkForDecimals "((3.14*c))"
 prop_checkForDecimals2 = verify checkForDecimals "foo[1.2]=bar"
@@ -1180,10 +1180,10 @@ prop_checkValidCondOps2a= verifyNot checkValidCondOps "[ 3 \\> 2 ]"
 prop_checkValidCondOps3 = verifyNot checkValidCondOps "[ 1 = 2 -a 3 -ge 4 ]"
 prop_checkValidCondOps4 = verifyNot checkValidCondOps "[[ ! -v foo ]]"
 checkValidCondOps _ (TC_Binary id _ s _ _)
-    | s `notElem` ["-nt", "-ot", "-ef", "==", "!=", "<=", ">=", "-eq", "-ne", "-lt", "-le", "-gt", "-ge", "=~", ">", "<", "=", "\\<", "\\>", "\\<=", "\\>="] =
+    | s `notElem` binaryTestOps =
         warn id 2057 "Unknown binary operator."
 checkValidCondOps _ (TC_Unary id _ s _)
-    | s `notElem`  [ "!", "-a", "-b", "-c", "-d", "-e", "-f", "-g", "-h", "-L", "-k", "-p", "-r", "-s", "-S", "-t", "-u", "-w", "-x", "-O", "-G", "-N", "-z", "-n", "-o", "-v", "-R"] =
+    | s `notElem`  unaryTestOps =
         warn id 2058 "Unknown unary operator."
 checkValidCondOps _ _ = return ()
 
@@ -2362,7 +2362,7 @@ prop_checkGrepQ5= verifyNot checkShouldUseGrepQ "rm $(ls | grep file)"
 prop_checkGrepQ6= verifyNot checkShouldUseGrepQ "[[ -n $(pgrep foo) ]]"
 checkShouldUseGrepQ params t =
     potentially $ case t of
-        TC_Noary id _ token -> check id True token
+        TC_Nullary id _ token -> check id True token
         TC_Unary id _ "-n" token -> check id True token
         TC_Unary id _ "-z" token -> check id False token
         _ -> fail "not check"

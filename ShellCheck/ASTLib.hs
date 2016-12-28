@@ -171,6 +171,20 @@ getUnquotedLiteral (T_NormalWord _ list) =
     str _ = Nothing
 getUnquotedLiteral _ = Nothing
 
+-- Get the last unquoted T_Literal in a word like "${var}foo"THIS
+-- or nothing if the word does not end in an unquoted literal.
+getTrailingUnquotedLiteral :: Token -> Maybe Token
+getTrailingUnquotedLiteral t =
+    case t of
+        (T_NormalWord _ list@(_:_)) ->
+            from (last list)
+        _ -> Nothing
+  where
+    from t =
+        case t of
+            (T_Literal {}) -> return t
+            _ -> Nothing
+
 -- Maybe get the literal string of this token and any globs in it.
 getGlobOrLiteralString = getLiteralStringExt f
   where

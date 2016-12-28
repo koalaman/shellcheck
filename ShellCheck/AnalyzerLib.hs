@@ -217,7 +217,7 @@ isQuoteFreeNode strict tree t =
     -- Are any subnodes inherently self-quoting?
     isQuoteFreeContext t =
         case t of
-            TC_Noary _ DoubleBracket _ -> return True
+            TC_Nullary _ DoubleBracket _ -> return True
             TC_Unary _ DoubleBracket _ _ -> return True
             TC_Binary _ DoubleBracket _ _ _ -> return True
             TA_Sequence {} -> return True
