@@ -62,6 +62,7 @@ treeChecks = [
     ,checkShebang
     ,checkUnassignedReferences
     ,checkUncheckedCd
+    ,checkArrayAssignmentIndices
     ]
 
 runAnalytics :: AnalysisSpec -> [TokenComment]
@@ -1957,7 +1958,7 @@ checkWhileReadPitfalls _ (T_WhileExpression id [command] contents)
             _ -> potentially $ do
                 name <- getCommandBasename cmd
                 guard $ name `elem` munchers
-                
+
                 -- Sloppily check if the command has a flag to prevent eating stdin.
                 let flags = getAllFlags cmd
                 guard . not $ any (`elem` preventionFlags) $ map snd flags
@@ -2569,6 +2570,49 @@ checkRedirectedNowhere params token =
         case token of
             T_Redirecting _ (first:_) (T_SimpleCommand _ [] []) -> return first
             _ -> Nothing
+
+
+prop_checkArrayAssignmentIndices1 = verifyTree checkArrayAssignmentIndices "declare -A foo; foo=(bar)"
+prop_checkArrayAssignmentIndices2 = verifyNotTree checkArrayAssignmentIndices "declare -a foo; foo=(bar)"
+prop_checkArrayAssignmentIndices3 = verifyNotTree checkArrayAssignmentIndices "declare -A foo; foo=([i]=bar)"
+prop_checkArrayAssignmentIndices4 = verifyTree checkArrayAssignmentIndices "typeset -A foo; foo+=(bar)"
+prop_checkArrayAssignmentIndices5 = verifyTree checkArrayAssignmentIndices "arr=( [foo]= bar )"
+prop_checkArrayAssignmentIndices6 = verifyTree checkArrayAssignmentIndices "arr=( [foo] = bar )"
+prop_checkArrayAssignmentIndices7 = verifyTree checkArrayAssignmentIndices "arr=( var=value )"
+prop_checkArrayAssignmentIndices8 = verifyNotTree checkArrayAssignmentIndices "arr=( [foo]=bar )"
+prop_checkArrayAssignmentIndices9 = verifyNotTree checkArrayAssignmentIndices "arr=( [foo]=\"\" )"
+checkArrayAssignmentIndices params root =
+    runNodeAnalysis check params root
+  where
+    assocs = getAssociativeArrays root
+    check _ t =
+        case t of
+            T_Assignment _ _ name [] (T_Array _ list) ->
+                let isAssoc = name `elem` assocs in
+                    mapM_ (checkElement isAssoc) list
+            _ -> return ()
+
+    checkElement isAssociative t =
+        case t of
+            T_IndexedElement _ _ (T_Literal id "") ->
+                warn id 2192 "This array element has no value. Remove spaces after = or use \"\" for empty string."
+            T_IndexedElement {} ->
+                return ()
+
+            T_NormalWord _ parts ->
+                let literalEquals = do
+                    part <- parts
+                    (id, str) <- case part of
+                        T_Literal id str -> [(id,str)]
+                        _ -> []
+                    guard $ '=' `elem` str
+                    return $ warn id 2191 "The = here is literal. To assign by index, use ( [index]=value ) with no spaces. To keep as literal, quote it."
+                in
+                    if (null literalEquals && isAssociative)
+                    then warn (getId t) 2190 "Elements in associative arrays need index, e.g. array=( [index]=value ) ."
+                    else sequence_ literalEquals
+
+            _ -> return ()
 
 
 return []

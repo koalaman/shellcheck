@@ -297,7 +297,7 @@ getAssociativeArrays t =
     f :: Token -> Writer [String] ()
     f t@(T_SimpleCommand {}) = fromMaybe (return ()) $ do
         name <- getCommandName t
-        guard $ name == "declare"
+        guard $ name == "declare" || name == "typeset"
         let flags = getAllFlags t
         guard $ elem "A" $ map snd flags
         let args = map fst . filter ((==) "" . snd) $ flags
