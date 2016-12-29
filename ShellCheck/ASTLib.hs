@@ -309,3 +309,65 @@ getAssociativeArrays t =
         case t of
             T_Assignment _ _ name _ _ -> return name
             otherwise -> Nothing
+
+-- A Pseudoglob is a wildcard pattern used for checking if a match can succeed.
+-- For example, [[ $(cmd).jpg == [a-z] ]] will give the patterns *.jpg and ?, which
+-- can be proven never to match.
+data PseudoGlob = PGAny | PGMany | PGChar Char
+    deriving (Eq, Show)
+
+-- Turn a word into a PG pattern, replacing all unknown/runtime values with
+-- PGMany.
+wordToPseudoGlob :: Token -> Maybe [PseudoGlob]
+wordToPseudoGlob word =
+    simplifyPseudoGlob <$> concat <$> mapM f (getWordParts word)
+  where
+    f x = case x of
+        T_Literal _ s -> return $ map PGChar s
+        T_SingleQuoted _ s -> return $ map PGChar s
+
+        T_DollarBraced {} -> return [PGMany]
+        T_DollarExpansion {} -> return [PGMany]
+        T_Backticked {} -> return [PGMany]
+
+        T_Glob _ "?" -> return [PGAny]
+        T_Glob _ ('[':_)  -> return [PGAny]
+        T_Glob {} -> return [PGMany]
+
+        T_Extglob {} -> return [PGMany]
+
+        _ -> return [PGMany]
+
+-- Reorder a PseudoGlob for more efficient matching, e.g.
+-- f?*?**g -> f??*g
+simplifyPseudoGlob :: [PseudoGlob] -> [PseudoGlob]
+simplifyPseudoGlob = f
+  where
+    f [] = []
+    f (x@(PGChar _) : rest ) = x : f rest
+    f list =
+        let (anys, rest) = span (\x -> x == PGMany || x == PGAny) list in
+            order anys ++ f rest
+
+    order s = let (any, many) = partition (== PGAny) s in
+        any ++ take 1 many
+
+-- Check whether the two patterns can ever overlap.
+pseudoGlobsCanOverlap :: [PseudoGlob] -> [PseudoGlob] -> Bool
+pseudoGlobsCanOverlap = matchable
+  where
+    matchable x@(xf:xs) y@(yf:ys) =
+        case (xf, yf) of
+            (PGMany, _) -> matchable x ys || matchable xs y
+            (_, PGMany) -> matchable x ys || matchable xs y
+            (PGAny, _) -> matchable xs ys
+            (_, PGAny) -> matchable xs ys
+            (_, _) -> xf == yf && matchable xs ys
+
+    matchable [] [] = True
+    matchable (PGMany : rest) [] = matchable rest []
+    matchable (_:_) [] = False
+    matchable [] r = matchable r []
+
+wordsCanBeEqual x y = fromMaybe True $
+    liftM2 pseudoGlobsCanOverlap (wordToPseudoGlob x) (wordToPseudoGlob y)

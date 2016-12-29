@@ -158,6 +158,7 @@ nodeChecks = [
     ,checkTrailingBracket
     ,checkReturnAgainstZero
     ,checkRedirectedNowhere
+    ,checkUnmatchableCases
     ]
 
 
@@ -1001,14 +1002,20 @@ prop_checkConstantIfs5 = verifyNot checkConstantIfs "[[ $n -le $n ]]"
 prop_checkConstantIfs6 = verifyNot checkConstantIfs "[[ a -ot b ]]"
 prop_checkConstantIfs7 = verifyNot checkConstantIfs "[ a -nt b ]"
 prop_checkConstantIfs8 = verifyNot checkConstantIfs "[[ ~foo == '~foo' ]]"
+prop_checkConstantIfs9 = verify checkConstantIfs "[[ *.png == [a-z] ]]"
 checkConstantIfs _ (TC_Binary id typ op lhs rhs) | not isDynamic =
-    when (isConstant lhs && isConstant rhs) $
-        warn id 2050 "This expression is constant. Did you forget the $ on a variable?"
+    if isConstant lhs && isConstant rhs
+        then  warn id 2050 "This expression is constant. Did you forget the $ on a variable?"
+        else checkUnmatchable id op lhs rhs
   where
     isDynamic =
         op `elem` [ "-lt", "-gt", "-le", "-ge", "-eq", "-ne" ]
             && typ == DoubleBracket
         || op `elem` [ "-nt", "-ot", "-ef"]
+
+    checkUnmatchable id op lhs rhs =
+        when (op `elem` ["=", "==", "!="] && not (wordsCanBeEqual lhs rhs)) $
+            warn id 2193 "The arguments to this comparison can never be equal. Make sure your syntax is correct."
 checkConstantIfs _ _ = return ()
 
 prop_checkLiteralBreakingTest = verify checkLiteralBreakingTest "[[ a==$foo ]]"
@@ -2614,6 +2621,26 @@ checkArrayAssignmentIndices params root =
 
             _ -> return ()
 
+prop_checkUnmatchableCases1 = verify checkUnmatchableCases "case foo in bar) true; esac"
+prop_checkUnmatchableCases2 = verify checkUnmatchableCases "case foo-$bar in ??|*) true; esac"
+prop_checkUnmatchableCases3 = verify checkUnmatchableCases "case foo in foo) true; esac"
+prop_checkUnmatchableCases4 = verifyNot checkUnmatchableCases "case foo-$bar in foo*|*bar|*baz*) true; esac"
+checkUnmatchableCases _ t =
+    case t of
+        T_CaseExpression _ word list ->
+            if isConstant word
+            then warn (getId word) 2194
+                    "This word is constant. Did you forget the $ on a variable?"
+            else  potentially $ do
+                pg <- wordToPseudoGlob word
+                return $ mapM_ (check pg) (concatMap (\(_,x,_) -> x) list)
+        _ -> return ()
+  where
+    check target candidate = potentially $ do
+        candidateGlob <- wordToPseudoGlob candidate
+        guard . not $ pseudoGlobsCanOverlap target candidateGlob
+        return $ warn (getId candidate) 2195
+                    "This pattern will never match the case statement's word. Double check them."
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
