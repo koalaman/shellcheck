@@ -1309,19 +1309,16 @@ readExtglobPart = do
 
 
 readSingleEscaped = do
+    pos <- getPosition
     s <- backslash
-    let attempt level code p msg = do { try $ parseNote level code msg; x <- p; return [s,x]; }
+    x <- lookAhead anyChar
 
-    do {
-        x <- lookAhead singleQuote;
-        parseProblem InfoC 1003 "Are you trying to escape that single quote? echo 'You'\\''re doing it wrong'.";
-        return [s];
-    }
-        <|> attempt InfoC 1004 linefeed "You don't break lines with \\ in single quotes, it results in literal backslash-linefeed."
-        <|> do
-            x <- anyChar
-            return [s,x]
+    case x of
+        '\'' -> parseProblemAt pos InfoC 1003 "Want to escape a single quote? echo 'This is how it'\''s done'.";
+        '\n' -> parseProblemAt pos InfoC 1004 "This backslash+linefeed is literal. Break outside single quotes if you just want to break the line."
+        _ -> return ()
 
+    return [s]
 
 readDoubleEscaped = do
     bs <- backslash
