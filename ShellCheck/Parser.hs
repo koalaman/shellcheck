@@ -1379,19 +1379,29 @@ readBraced = try braceExpansion
     braceLiteral =
         T_Literal `withParser` readGenericLiteral1 (oneOf "{}\"$'," <|> whitespace)
 
-readNormalDollar = readDollarExpression <|> readDollarDoubleQuote <|> readDollarSingleQuote <|> readDollarLonely
-readDoubleQuotedDollar = readDollarExpression <|> readDollarLonely
+ensureDollar =
+    -- The grammar should have been designed along the lines of readDollarExpr = char '$' >> stuff, but
+    -- instead, each subunit parses its own $. This results in ~7 1-3 char lookaheads instead of one 1-char.
+    -- Instead of optimizing the grammar, here's a green cut that decreases shellcheck runtime by 10%:
+    lookAhead $ char '$'
+
+readNormalDollar = do
+    ensureDollar
+    readDollarExp <|> readDollarDoubleQuote <|> readDollarSingleQuote <|> readDollarLonely
+readDoubleQuotedDollar = do
+    ensureDollar
+    readDollarExp <|> readDollarLonely
+
 
 prop_readDollarExpression1 = isOk readDollarExpression "$(((1) && 3))"
 prop_readDollarExpression2 = isWarning readDollarExpression "$(((1)) && 3)"
 prop_readDollarExpression3 = isWarning readDollarExpression "$((\"$@\" &); foo;)"
 readDollarExpression :: Monad m => SCParser m Token
 readDollarExpression = do
-    -- The grammar should have been designed along the lines of readDollarExpr = char '$' >> stuff, but
-    -- instead, each subunit parses its own $. This results in ~7 1-3 char lookaheads instead of one 1-char.
-    -- Instead of optimizing the grammar, here's a green cut that decreases shellcheck runtime by 10%:
-    lookAhead $ char '$'
-    arithmetic <|> readDollarExpansion <|> readDollarBracket <|> readDollarBraceCommandExpansion <|> readDollarBraced <|> readDollarVariable
+    ensureDollar
+    readDollarExp
+
+readDollarExp = arithmetic <|> readDollarExpansion <|> readDollarBracket <|> readDollarBraceCommandExpansion <|> readDollarBraced <|> readDollarVariable
   where
     arithmetic = readAmbiguous "$((" readDollarArithmetic readDollarExpansion (\pos ->
         parseNoteAt pos WarningC 1102 "Shells disambiguate $(( differently or not at all. For $(command substition), add space after $( . For $((arithmetics)), fix parsing errors.")
