@@ -83,6 +83,8 @@ commandChecks = [
     ,checkTimedCommand
     ,checkLocalScope
     ,checkDeprecatedTempfile
+    ,checkDeprecatedEgrep
+    ,checkDeprecatedFgrep
     ]
 
 buildCommandMap :: [CommandCheck] -> Map.Map CommandName (Token -> Analysis)
@@ -666,6 +668,14 @@ prop_checkDeprecatedTempfile1 = verify checkDeprecatedTempfile "var=$(tempfile)"
 prop_checkDeprecatedTempfile2 = verifyNot checkDeprecatedTempfile "tempfile=$(mktemp)"
 checkDeprecatedTempfile = CommandCheck (Basename "tempfile") $
     \t -> warn (getId t) 2186 "tempfile is deprecated. Use mktemp instead."
+
+prop_checkDeprecatedEgrep = verify checkDeprecatedEgrep "egrep '.+'"
+checkDeprecatedEgrep = CommandCheck (Basename "egrep") $
+    \t -> info (getId t) 2196 "egrep is non-standard and deprecated. Use grep -E instead."
+
+prop_checkDeprecatedFgrep = verify checkDeprecatedFgrep "fgrep '*' files"
+checkDeprecatedFgrep = CommandCheck (Basename "fgrep") $
+    \t -> info (getId t) 2197 "fgrep is non-standard and deprecated. Use grep -F instead."
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
