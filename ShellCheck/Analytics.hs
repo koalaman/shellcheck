@@ -149,7 +149,7 @@ nodeChecks = [
     ,checkMultipleAppends
     ,checkSuspiciousIFS
     ,checkShouldUseGrepQ
-    ,checkTestGlobs
+    ,checkTestArgumentSplitting
     ,checkConcatenatedDollarAt
     ,checkTildeInPath
     ,checkMaskedReturns
@@ -1145,7 +1145,7 @@ checkComparisonAgainstGlob _ (TC_Binary _ DoubleBracket op _ (T_NormalWord id [T
         warn id 2053 $ "Quote the rhs of " ++ op ++ " in [[ ]] to prevent glob matching."
 checkComparisonAgainstGlob _ (TC_Binary _ SingleBracket op _ word)
         | (op == "=" || op == "==") && isGlob word =
-    err (getId word) 2081 "[ .. ] can't match globs. Use [[ .. ]] or grep."
+    err (getId word) 2081 "[ .. ] can't match globs. Use [[ .. ]] or case statement."
 checkComparisonAgainstGlob _ _ = return ()
 
 prop_checkCommarrays1 = verify checkCommarrays "a=(1, 2)"
@@ -2398,12 +2398,67 @@ checkShouldUseGrepQ params t =
             _ -> fail "unknown"
     isGrep = (`elem` ["grep", "egrep", "fgrep", "zgrep"])
 
-prop_checkTestGlobs1 = verify checkTestGlobs "[ -e *.mp3 ]"
-prop_checkTestGlobs2 = verifyNot checkTestGlobs "[[ $a == *b* ]]"
-checkTestGlobs params (TC_Unary _ _ op token) | isGlob token =
-    err (getId token) 2144 $
-       op ++ " doesn't work with globs. Use a for loop."
-checkTestGlobs _ _ = return ()
+prop_checkTestArgumentSplitting1 = verify checkTestArgumentSplitting "[ -e *.mp3 ]"
+prop_checkTestArgumentSplitting2 = verifyNot checkTestArgumentSplitting "[[ $a == *b* ]]"
+prop_checkTestArgumentSplitting3 = verify checkTestArgumentSplitting "[[ *.png == '' ]]"
+prop_checkTestArgumentSplitting4 = verify checkTestArgumentSplitting "[[ foo == f{o,oo,ooo} ]]"
+prop_checkTestArgumentSplitting5 = verify checkTestArgumentSplitting "[[ $@ ]]"
+prop_checkTestArgumentSplitting6 = verify checkTestArgumentSplitting "[ -e $@ ]"
+prop_checkTestArgumentSplitting7 = verify checkTestArgumentSplitting "[ $@ == $@ ]"
+prop_checkTestArgumentSplitting8 = verify checkTestArgumentSplitting "[[ $@ = $@ ]]"
+prop_checkTestArgumentSplitting9 = verifyNot checkTestArgumentSplitting "[[ foo =~ bar{1,2} ]]"
+prop_checkTestArgumentSplitting10 = verifyNot checkTestArgumentSplitting "[ \"$@\" ]"
+prop_checkTestArgumentSplitting11 = verify checkTestArgumentSplitting "[[ \"$@\" ]]"
+prop_checkTestArgumentSplitting12 = verify checkTestArgumentSplitting "[ *.png ]"
+prop_checkTestArgumentSplitting13 = verify checkTestArgumentSplitting "[ \"$@\" == \"\" ]"
+prop_checkTestArgumentSplitting14 = verify checkTestArgumentSplitting "[[ \"$@\" == \"\" ]]"
+prop_checkTestArgumentSplitting15 = verifyNot checkTestArgumentSplitting "[[ \"$*\" == \"\" ]]"
+checkTestArgumentSplitting :: Parameters -> Token -> Writer [TokenComment] ()
+checkTestArgumentSplitting _ t =
+    case t of
+        (TC_Unary _ _ op token) | isGlob token ->
+            err (getId token) 2144 $
+               op ++ " doesn't work with globs. Use a for loop."
+
+        (TC_Nullary _ typ token) -> do
+            checkBraces typ token
+            checkGlobs typ token
+            when (typ == DoubleBracket) $
+                checkArrays typ token
+
+        (TC_Unary _ typ op token) -> checkAll typ token
+
+        (TC_Binary _ typ op lhs rhs) ->
+            if op `elem` ["=", "==", "!=", "=~"]
+            then do
+                checkAll typ lhs
+                checkArrays typ rhs
+                checkBraces typ rhs
+            else mapM_ (checkAll typ) [lhs, rhs]
+        _ -> return ()
+  where
+    checkAll typ token = do
+        checkArrays typ token
+        checkBraces typ token
+        checkGlobs typ token
+
+    checkArrays typ token =
+        when (any isArrayExpansion $ getWordParts token) $
+            if typ == SingleBracket
+            then warn (getId token) 2198 "Arrays don't work as operands in [ ]. Use a loop (or concatenate with * instead of @)."
+            else err (getId token) 2199 "Arrays implicitly concatenate in [[ ]]. Use a loop (or explicit * instead of @)."
+
+    checkBraces typ token =
+        when (any isBraceExpansion $ getWordParts token) $
+            if typ == SingleBracket
+            then warn (getId token) 2200 "Brace expansions don't work as operands in [ ]. Use a loop."
+            else err (getId token) 2201 "Brace expansion doesn't happen in [[ ]]. Use a loop."
+
+    checkGlobs typ token =
+        when (isGlob token) $
+            if typ == SingleBracket
+            then warn (getId token) 2202 "Globs don't work as operands in [ ]. Use a loop."
+            else err (getId token) 2203 "Globs are ignored in [[ ]] except right of =/!=. Use a loop."
 
 
 prop_checkMaskedReturns1 = verify checkMaskedReturns "f() { local a=$(false); }"

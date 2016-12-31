@@ -276,6 +276,8 @@ isOnlyRedirection t =
 
 isFunction t = case t of T_Function {} -> True; _ -> False
 
+isBraceExpansion t = case t of T_BraceExpansion {} -> True; _ -> False
+
 -- Get the lists of commands from tokens that contain them, such as
 -- the body of while loops or branches of if statements.
 getCommandSequences t =
