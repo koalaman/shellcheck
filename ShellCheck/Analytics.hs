@@ -358,7 +358,7 @@ checkPipePitfalls _ (T_Pipeline id _ commands) = do
             let flagsGrep = fromMaybe [] $ map snd <$> getAllFlags <$> getCommand grep
                 flagsWc = fromMaybe [] $ map snd <$> getAllFlags <$> getCommand wc
             in
-                unless ((any (`elem` ["o", "only-matching"]) flagsGrep) || (any (`elem` ["m", "chars", "w", "words", "c", "bytes", "L", "max-line-length"]) flagsWc) || ((length flagsWc) == 0)) $
+                unless ((any (`elem` ["o", "only-matching", "r", "R", "recursive"]) flagsGrep) || (any (`elem` ["m", "chars", "w", "words", "c", "bytes", "L", "max-line-length"]) flagsWc) || ((length flagsWc) == 0)) $
                     style (getId grep) 2126 "Consider using grep -c instead of grep|wc -l."
 
     didLs <- liftM or . sequence $ [
