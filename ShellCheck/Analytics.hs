@@ -328,6 +328,13 @@ prop_checkPipePitfalls6 = verify checkPipePitfalls "find . | xargs foo"
 prop_checkPipePitfalls7 = verifyNot checkPipePitfalls "find . -printf '%s\\n' | xargs foo"
 prop_checkPipePitfalls8 = verify checkPipePitfalls "foo | grep bar | wc -l"
 prop_checkPipePitfalls9 = verifyNot checkPipePitfalls "foo | grep -o bar | wc -l"
+prop_checkPipePitfalls10 = verifyNot checkPipePitfalls "foo | grep -o bar | wc"
+prop_checkPipePitfalls11 = verifyNot checkPipePitfalls "foo | grep bar | wc"
+prop_checkPipePitfalls12 = verifyNot checkPipePitfalls "foo | grep -o bar | wc -c"
+prop_checkPipePitfalls13 = verifyNot checkPipePitfalls "foo | grep bar | wc -c"
+prop_checkPipePitfalls14 = verifyNot checkPipePitfalls "foo | grep -o bar | wc -cmwL"
+prop_checkPipePitfalls15 = verifyNot checkPipePitfalls "foo | grep bar | wc -cmwL"
+prop_checkPipePitfalls16 = verifyNot checkPipePitfalls "foo | grep -r bar | wc -l"
 checkPipePitfalls _ (T_Pipeline id _ commands) = do
     for ["find", "xargs"] $
         \(find:xargs:_) ->
@@ -349,10 +356,11 @@ checkPipePitfalls _ (T_Pipeline id _ commands) = do
 
     for ["grep", "wc"] $
         \(grep:wc:_) ->
-            let flags = fromMaybe [] $ map snd <$> getAllFlags <$> getCommand grep
+            let flagsGrep = fromMaybe [] $ map snd <$> getAllFlags <$> getCommand grep
+                flagsWc = fromMaybe [] $ map snd <$> getAllFlags <$> getCommand wc
             in
-                unless (any (`elem` ["o", "only-matching"]) flags) $
-                    style (getId grep) 2126 "Consider using grep -c instead of grep|wc."
+                unless ((any (`elem` ["o", "only-matching", "r", "R", "recursive"]) flagsGrep) || (any (`elem` ["m", "chars", "w", "words", "c", "bytes", "L", "max-line-length"]) flagsWc) || ((length flagsWc) == 0)) $
+                    style (getId grep) 2126 "Consider using grep -c instead of grep|wc -l."
 
     didLs <- liftM or . sequence $ [
         for' ["ls", "grep"] $
