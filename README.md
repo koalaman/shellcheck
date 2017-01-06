@@ -105,7 +105,7 @@ From Docker Hub:
 
 Using the Docker image can be done like so:
 
-    docker run -v $(pwd):/scripts koalaman/shellcheck /sripts/myscript.sh
+    docker run -v $(pwd):/scripts koalaman/shellcheck /scripts/myscript.sh
 
 Here the local directory ( $(pwd) ) is mounted into the containers directory "/scripts". The script "myscript.sh" is checked.
 
