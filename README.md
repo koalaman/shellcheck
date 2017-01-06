@@ -103,6 +103,12 @@ From Docker Hub:
 
     docker pull koalaman/shellcheck
 
+Using the Docker image can be done like so:
+
+    docker run -v $(pwd):/scripts koalaman/shellcheck /sripts/myscript.sh
+
+Here the local directory ( $(pwd) ) is mounted into the containers directory "/scripts". The script "myscript.sh" is checked.
+
 ## Compiling from source
 
 This section describes how to build ShellCheck from a source directory. ShellCheck is written in Haskell and requires 2GB of RAM to compile.
