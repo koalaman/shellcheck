@@ -159,6 +159,7 @@ nodeChecks = [
     ,checkReturnAgainstZero
     ,checkRedirectedNowhere
     ,checkUnmatchableCases
+    ,checkSubshellAsTest
     ]
 
 
@@ -2704,6 +2705,34 @@ checkUnmatchableCases _ t =
         guard . not $ pseudoGlobsCanOverlap target candidateGlob
         return $ warn (getId candidate) 2195
                     "This pattern will never match the case statement's word. Double check them."
+
+prop_checkSubshellAsTest1 = verify checkSubshellAsTest "( -e file )"
+prop_checkSubshellAsTest2 = verify checkSubshellAsTest "( 1 -gt 2 )"
+prop_checkSubshellAsTest3 = verifyNot checkSubshellAsTest "( grep -c foo bar )"
+prop_checkSubshellAsTest4 = verifyNot checkSubshellAsTest "[ 1 -gt 2 ]"
+prop_checkSubshellAsTest5 = verify checkSubshellAsTest "( -e file && -x file )"
+prop_checkSubshellAsTest6 = verify checkSubshellAsTest "( -e file || -x file && -t 1 )"
+prop_checkSubshellAsTest7 = verify checkSubshellAsTest "( ! -d file )"
+checkSubshellAsTest _ t =
+    case t of
+        T_Subshell id [w] -> check id w
+        _ -> return ()
+  where
+    check id t = case t of
+        (T_Banged _ w) -> check id w
+        (T_AndIf _ w _) -> check id w
+        (T_OrIf _ w _) -> check id w
+        (T_Pipeline _ _ [T_Redirecting _ _ (T_SimpleCommand _ [] (first:second:_))]) ->
+            checkParams id first second
+        _ -> return ()
+
+
+    checkParams id first second = do
+        when (fromMaybe False $ (`elem` unaryTestOps) <$> getLiteralString first) $
+            err id 2204 "(..) is a subshell. Did you mean [ .. ], a test expression?"
+        when (fromMaybe False $ (`elem` binaryTestOps) <$> getLiteralString second) $
+            warn id 2205 "(..) is a subshell. Did you mean [ .. ], a test expression?"
+
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
