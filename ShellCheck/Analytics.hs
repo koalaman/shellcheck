@@ -2514,7 +2514,7 @@ checkUncheckedCd params root =
         when(t `isUnqualifiedCommand` "cd"
             && not (isCdDotDot t)
             && not (isCondition $ getPath (parentMap params) t)) $
-                warn (getId t) 2164 "Use cd ... || exit in case cd fails."
+                warn (getId t) 2164 "Use 'cd ... || exit' or 'cd ... || return' in case cd fails."
     checkElement _ = return ()
     isCdDotDot t = oversimplify t == ["cd", ".."]
     hasSetE = isNothing $ doAnalysis (guard . not . isSetE) root
