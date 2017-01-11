@@ -56,16 +56,16 @@ While ShellCheck is mostly intended for interactive use, it can easily be added 
 
 ShellCheck makes canonical use of exit codes, and can output simple JSON, CheckStyle compatible XML, GCC compatible warnings as well as human readable text (with or without ANSI colors). See the [Integration](https://github.com/koalaman/shellcheck/wiki/Integration) wiki page for more documentation.
 
-## TravisCI Setup
+## Travis CI Setup
 
-If you want to use ShellCheck in TravisCI, setting it up is simple :tada:.
+If you want to use ShellCheck in Travis CI, setting it up is simple :tada:.
 
 ```yml
 language: bash
 addons:
   apt:
     sources:
-    - debian-sid    # Grab shellcheck from the Debian repo
+    - debian-sid    # Grab ShellCheck from the Debian repo
     packages:
     - shellcheck
 ```
