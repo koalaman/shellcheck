@@ -973,6 +973,7 @@ prop_checkQuotedCondRegex2 = verify checkQuotedCondRegex "[[ $foo =~ '(cow|bar)'
 prop_checkQuotedCondRegex3 = verifyNot checkQuotedCondRegex "[[ $foo =~ $foo ]]"
 prop_checkQuotedCondRegex4 = verifyNot checkQuotedCondRegex "[[ $foo =~ \"bar\" ]]"
 prop_checkQuotedCondRegex5 = verifyNot checkQuotedCondRegex "[[ $foo =~ 'cow bar' ]]"
+prop_checkQuotedCondRegex6 = verify checkQuotedCondRegex "[[ $foo =~ 'cow|bar' ]]"
 checkQuotedCondRegex _ (TC_Binary _ _ "=~" _ rhs) =
     case rhs of
         T_NormalWord id [T_DoubleQuoted _ _] -> error rhs
@@ -983,7 +984,7 @@ checkQuotedCondRegex _ (TC_Binary _ _ "=~" _ rhs) =
         unless (isConstantNonRe t) $
             err (getId t) 2076
                 "Don't quote rhs of =~, it'll match literally rather than as a regex."
-    re = mkRegex "[][*.+()]"
+    re = mkRegex "[][*.+()|]"
     hasMetachars s = s `matches` re
     isConstantNonRe t = fromMaybe False $ do
         s <- getLiteralString t
