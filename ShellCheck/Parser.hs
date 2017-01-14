@@ -1696,11 +1696,19 @@ readLineBreak = optional readNewlineList
 
 prop_readSeparator1 = isWarning readScript "a &; b"
 prop_readSeparator2 = isOk readScript "a & b"
+prop_readSeparator3 = isWarning readScript "a &amp; b"
+prop_readSeparator4 = isWarning readScript "a &gt; file; b"
 readSeparatorOp = do
     notFollowedBy2 (void g_AND_IF <|> void readCaseSeparator)
     notFollowedBy2 (string "&>")
     f <- try (do
+                    pos <- getPosition
                     char '&'
+                    optional $ do
+                        s <- lookAhead . choice . map (try . string) $
+                            ["amp;", "gt;", "lt;"]
+                        parseProblemAt pos ErrorC 1109 "This is an unquoted HTML entity. Replace with corresponding character."
+
                     spacing
                     pos <- getPosition
                     char ';'
