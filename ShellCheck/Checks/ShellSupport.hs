@@ -134,6 +134,7 @@ prop_checkBashisms50= verify checkBashisms "#!/bin/sh\ncmd >& file"
 prop_checkBashisms51= verifyNot checkBashisms "#!/bin/sh\ncmd 2>&1"
 prop_checkBashisms52= verifyNot checkBashisms "#!/bin/sh\ncmd >&2"
 prop_checkBashisms53= verifyNot checkBashisms "#!/bin/sh\nprintf -- -f\n"
+prop_checkBashisms54= verify checkBashisms "#!/bin/sh\nfoo+=bar"
 checkBashisms = ForShell [Sh, Dash] $ \t -> do
     params <- ask
     kludge params t
@@ -174,6 +175,8 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
     bashism (T_FdRedirect id ('{':_) _) = warnMsg id "named file descriptors are"
     bashism (T_FdRedirect id num _)
         | all isDigit num && length num > 1 = warnMsg id "FDs outside 0-9 are"
+    bashism (T_Assignment id Append _ _ _) =
+        warnMsg id "+= is"
     bashism (T_IoFile id _ word) | isNetworked =
             warnMsg id "/dev/{tcp,udp} is"
         where
