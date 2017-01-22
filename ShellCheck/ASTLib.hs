@@ -93,7 +93,7 @@ oversimplify token =
         (T_Annotation _ _ s) -> oversimplify s
         -- Workaround for let "foo = bar" parsing
         (TA_Sequence _ [TA_Expansion _ v]) -> concatMap oversimplify v
-        otherwise -> []
+        _ -> []
 
 
 -- Turn a SimpleCommand foo -avz --bar=baz into args "a", "v", "z", "bar",
@@ -114,6 +114,9 @@ getFlagsUntil _ _ = error "Internal shellcheck error, please report! (getFlags o
 getAllFlags = getFlagsUntil (== "--")
 -- Get all flags in a BSD way, up until first non-flag argument or --
 getLeadingFlags = getFlagsUntil (\x -> x == "--" || (not $ "-" `isPrefixOf` x))
+
+-- Check if a command has a flag.
+hasFlag cmd str = str `elem` (map snd $ getAllFlags cmd)
 
 
 -- Given a T_DollarBraced, return a simplified version of the string contents.

@@ -194,23 +194,27 @@ prop_checkGrepRe8 = verify checkGrepRe "ls | grep foo*.jpg"
 prop_checkGrepRe9 = verifyNot checkGrepRe "grep '[0-9]*' file"
 prop_checkGrepRe10= verifyNot checkGrepRe "grep '^aa*' file"
 prop_checkGrepRe11= verifyNot checkGrepRe "grep --include=*.png foo"
+prop_checkGrepRe12= verifyNot checkGrepRe "grep -F 'Foo*' file"
 
-checkGrepRe = CommandCheck (Basename "grep") (f . arguments) where
+checkGrepRe = CommandCheck (Basename "grep") check where
+    check cmd = f cmd (arguments cmd)
     -- --regex=*(extglob) doesn't work. Fixme?
     skippable (Just s) = not ("--regex=" `isPrefixOf` s) && "-" `isPrefixOf` s
     skippable _ = False
-    f [] = return ()
-    f (x:r) | skippable (getLiteralStringExt (const $ return "_") x) = f r
-    f (re:_) = do
+    f _ [] = return ()
+    f cmd (x:r) | skippable (getLiteralStringExt (const $ return "_") x) = f cmd r
+    f cmd (re:_) = do
         when (isGlob re) $
             warn (getId re) 2062 "Quote the grep pattern so the shell won't interpret it."
-        let string = concat $ oversimplify re
-        if isConfusedGlobRegex string then
-            warn (getId re) 2063 "Grep uses regex, but this looks like a glob."
-          else potentially $ do
-            char <- getSuspiciousRegexWildcard string
-            return $ info (getId re) 2022 $
-                "Note that unlike globs, " ++ [char] ++ "* here matches '" ++ [char, char, char] ++ "' but not '" ++ wordStartingWith char ++ "'."
+
+        unless (cmd `hasFlag` "F") $ do
+            let string = concat $ oversimplify re
+            if isConfusedGlobRegex string then
+                warn (getId re) 2063 "Grep uses regex, but this looks like a glob."
+              else potentially $ do
+                char <- getSuspiciousRegexWildcard string
+                return $ info (getId re) 2022 $
+                    "Note that unlike globs, " ++ [char] ++ "* here matches '" ++ [char, char, char] ++ "' but not '" ++ wordStartingWith char ++ "'."
 
     wordStartingWith c =
         head . filter ([c] `isPrefixOf`) $ candidates
