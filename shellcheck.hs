@@ -31,6 +31,7 @@ import qualified ShellCheck.Formatter.TTY
 import Control.Exception
 import Control.Monad
 import Control.Monad.Except
+import Data.Bits
 import Data.Char
 import Data.Functor
 import Data.Either
@@ -288,13 +289,47 @@ ioInterface options files = do
         fallback path _ = return path
 
 inputFile file = do
-    contents <-
+    handle <-
             if file == "-"
-            then getContents
-            else readFile file
+            then return stdin
+            else openBinaryFile file ReadMode
+
+    hSetBinaryMode handle True
+    contents <- decodeString <$> hGetContents handle -- closes handle
 
     seq (length contents) $
         return contents
+
+-- Decode a char8 string into a utf8 string, with fallback on
+-- ISO-8859-1. This avoids depending on additional libraries.
+decodeString = decode
+  where
+    decode [] = []
+    decode (c:rest) | isAscii c = c : decode rest
+    decode (c:rest) =
+        let num = (fromIntegral $ ord c) :: Int
+            next = case num of
+                _ | num >= 0xFF -> Nothing
+                  | num >= 0xFE -> construct (num .&. 0x00) 6 rest
+                  | num >= 0xFC -> construct (num .&. 0x01) 5 rest
+                  | num >= 0xF8 -> construct (num .&. 0x03) 4 rest
+                  | num >= 0xF0 -> construct (num .&. 0x07) 3 rest
+                  | num >= 0xE0 -> construct (num .&. 0x0F) 2 rest
+                  | num >= 0xC0 -> construct (num .&. 0x1F) 1 rest
+                  | True -> Nothing
+        in
+            case next of
+                Just (n, remainder) -> chr n : decode remainder
+                Nothing -> c : decode rest
+
+    construct x 0 rest = return (x, rest)
+    construct x n (c:rest) =
+        let num = (fromIntegral $ ord c) :: Int in
+            if num >= 0x80 && num <= 0xBF
+            then construct ((x `shiftL` 6) .|. (num .&. 0x3f)) (n-1) rest
+            else Nothing
+    construct _ _ _ = Nothing
+
 
 verifyFiles files =
     when (null files) $ do

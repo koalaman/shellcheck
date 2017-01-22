@@ -175,6 +175,15 @@ ShellCheck uses the follow exit codes:
 + 3: ShellCheck was invoked with bad syntax (e.g. unknown flag).
 + 4: ShellCheck was invoked with bad options (e.g. unknown formatter).
 
+# LOCALE
+This version of ShellCheck is only available in English. All files are
+leniently decoded as UTF-8, with a fallback of ISO-8859-1 for invalid
+sequences. `LC_CTYPE` is respected for output, and defaults to UTF-8 for
+locales where encoding is unspecified (such as the `C` locale).
+
+Windows users seeing `commitBuffer: invalid argument (invalid character)`
+should set their terminal to use UTF-8 with `chcp 65001`.
+
 # AUTHOR
 ShellCheck is written and maintained by Vidar Holen.
 
