@@ -1,0 +1,31 @@
+name: shellcheck
+version: '0.4.5+git'
+summary: ShellCheck, a static analysis tool for shell script
+description: |
+  ShellCheck is a GPLv3 tool that gives warnings and suggestions for bash/sh
+  shell scripts
+
+grade: stable
+confinement: classic
+
+apps:
+  shellcheck:
+    command: shellcheck
+
+parts:
+  shellcheck:
+    source: .
+    plugin: make
+    build-packages:
+      - cabal-install
+      - ghc
+      - libghc-json-dev
+      - libghc-mtl-dev
+      - libghc-parsec3-dev
+      - libghc-regex-tdfa-dev
+      - libghc-quickcheck2-dev
+    build: |
+      cabal update
+    install: |
+      cabal install
+      cp dist/build/shellcheck/shellcheck $SNAPCRAFT_PART_INSTALL
