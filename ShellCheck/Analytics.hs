@@ -745,9 +745,9 @@ checkStderrRedirect params redir@(T_Redirecting _ [
     usesOutput t =
         case t of
             (T_Pipeline _ _ list) -> length list > 1 && not (isParentOf (parentMap params) (last list) redir)
-            (T_ProcSub {}) -> True
-            (T_DollarExpansion {}) -> True
-            (T_Backticked {}) -> True
+            T_ProcSub {} -> True
+            T_DollarExpansion {} -> True
+            T_Backticked {} -> True
             _ -> False
     isCaptured = any usesOutput $ getPath (parentMap params) redir
 
@@ -776,6 +776,7 @@ prop_checkSingleQuotedVariables9 = verifyNot checkSingleQuotedVariables "find . 
 prop_checkSingleQuotedVariables10= verify checkSingleQuotedVariables "echo '`pwd`'"
 prop_checkSingleQuotedVariables11= verifyNot checkSingleQuotedVariables "sed '${/lol/d}'"
 prop_checkSingleQuotedVariables12= verifyNot checkSingleQuotedVariables "eval 'echo $1'"
+prop_checkSingleQuotedVariables13= verifyNot checkSingleQuotedVariables "busybox awk '{print $1}'"
 checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
     when (s `matches` re) $
         if "sed" == commandName
@@ -813,7 +814,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
     isOkAssignment t =
         case t of
             T_Assignment _ _ name _ _ -> name `elem` commonlyQuoted
-            otherwise -> False
+            _ -> False
 
     re = mkRegex "\\$[{(0-9a-zA-Z_]|`.*`"
     sedContra = mkRegex "\\$[{dpsaic]($|[^a-zA-Z])"

@@ -240,8 +240,15 @@ getCommand t =
 
 -- Maybe get the command name of a token representing a command
 getCommandName t = do
-    (T_SimpleCommand _ _ (w:_)) <- getCommand t
-    getLiteralString w
+    (T_SimpleCommand _ _ (w:rest)) <- getCommand t
+    s <- getLiteralString w
+    if "busybox" `isSuffixOf` s
+        then
+            case rest of
+                (applet:_) -> getLiteralString applet
+                _ -> return s
+        else
+            return s
 
 -- If a command substitution is a single command, get its name.
 --  $(date +%s) = Just "date"
