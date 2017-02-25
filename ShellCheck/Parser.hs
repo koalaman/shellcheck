@@ -58,18 +58,18 @@ linefeed = do
     c <- char '\n'
     readPendingHereDocs
     return c
-singleQuote = char '\'' <|> unicodeSingleQuote
-doubleQuote = char '"' <|> unicodeDoubleQuote
+singleQuote = char '\''
+doubleQuote = char '"'
 variableStart = upper <|> lower <|> oneOf "_"
 variableChars = upper <|> lower <|> digit <|> oneOf "_"
 functionChars = variableChars <|> oneOf ":+-.?"
 specialVariable = oneOf "@*#?-$!"
 paramSubSpecialChars = oneOf "/:+-=%"
 quotableChars = "|&;<>()\\ '\t\n\r\xA0" ++ doubleQuotableChars
-quotable = almostSpace <|> unicodeDoubleQuote <|> oneOf quotableChars
+quotable = almostSpace <|> oneOf quotableChars
 bracedQuotable = oneOf "}\"$`'"
-doubleQuotableChars = "\"$`" ++ unicodeDoubleQuoteChars
-doubleQuotable = unicodeDoubleQuote <|> oneOf doubleQuotableChars
+doubleQuotableChars = "\"$`"
+doubleQuotable = oneOf doubleQuotableChars
 whitespace = oneOf " \t" <|> carriageReturn <|> almostSpace <|> linefeed
 linewhitespace = oneOf " \t" <|> almostSpace
 
@@ -78,7 +78,8 @@ suspectCharAfterQuotes = variableChars <|> char '%'
 extglobStartChars = "?*@!+"
 extglobStart = oneOf extglobStartChars
 
-unicodeDoubleQuoteChars = "\x201C\x201D\x2033\x2036"
+unicodeDoubleQuotes = "\x201C\x201D\x2033\x2036"
+unicodeSingleQuotes = "\x2018\x2019"
 
 prop_spacing = isOk spacing "  \\\n # Comment"
 spacing = do
@@ -107,17 +108,12 @@ allspacingOrFail = do
     s <- allspacing
     when (null s) $ fail "Expected whitespace"
 
-unicodeDoubleQuote = do
+readUnicodeQuote = do
     pos <- getPosition
-    oneOf unicodeDoubleQuoteChars
-    parseProblemAt pos WarningC 1015 "This is a unicode double quote. Delete and retype it."
-    return '"'
-
-unicodeSingleQuote = do
-    pos <- getPosition
-    char '\x2018' <|> char '\x2019'
-    parseProblemAt pos WarningC 1016 "This is a unicode single quote. Delete and retype it."
-    return '"'
+    c <- oneOf (unicodeSingleQuotes ++ unicodeDoubleQuotes)
+    parseProblemAt pos WarningC 1110 "This is a unicode quote. Delete and retype it (or quote to make literal)."
+    id <- getNextIdAt pos
+    return $ T_Literal id [c]
 
 carriageReturn = do
     parseNote ErrorC 1017 "Literal carriage return. Run script through tr -d '\\r' ."
@@ -336,7 +332,7 @@ parseProblemAt pos = parseProblemAtWithEnd pos pos
 parseProblemAtId :: Monad m => Id -> Severity -> Integer -> String -> SCParser m ()
 parseProblemAtId id level code msg = do
     map <- getMap
-    let pos = Map.findWithDefault 
+    let pos = Map.findWithDefault
                 (error "Internal error (no position for id). Please report.") id map
     parseProblemAt pos level code msg
 
@@ -947,6 +943,9 @@ prop_readNormalWord6 = isOk readNormalWord "foo/{}"
 prop_readNormalWord7 = isOk readNormalWord "foo\\\nbar"
 prop_readNormalWord8 = isWarning readSubshell "(foo\\ \nbar)"
 prop_readNormalWord9 = isOk readSubshell "(foo\\ ;\nbar)"
+prop_readNormalWord10 = isWarning readNormalWord "\x201Chello\x201D"
+prop_readNormalWord11 = isWarning readNormalWord "\x2018hello\x2019"
+prop_readNormalWord12 = isWarning readNormalWord "hello\x2018"
 readNormalWord = readNormalishWord ""
 
 readNormalishWord end = do
@@ -986,6 +985,7 @@ readNormalWordPart end = do
         readBraced,
         readUnquotedBackTicked,
         readProcSub,
+        readUnicodeQuote,
         readNormalLiteral end,
         readLiteralCurlyBraces
       ]
@@ -1049,15 +1049,16 @@ readProcSub = called "process substitution" $ do
 
 prop_readSingleQuoted = isOk readSingleQuoted "'foo bar'"
 prop_readSingleQuoted2 = isWarning readSingleQuoted "'foo bar\\'"
-prop_readsingleQuoted3 = isWarning readSingleQuoted "\x2018hello\x2019"
 prop_readSingleQuoted4 = isWarning readNormalWord "'it's"
 prop_readSingleQuoted5 = isWarning readSimpleCommand "foo='bar\ncow 'arg"
 prop_readSingleQuoted6 = isOk readSimpleCommand "foo='bar cow 'arg"
+prop_readSingleQuoted7 = isOk readSingleQuoted "'foo\x201C\&bar'"
+prop_readSingleQuoted8 = isWarning readSingleQuoted "'foo\x2018\&bar'"
 readSingleQuoted = called "single quoted string" $ do
     id <- getNextId
     startPos <- getPosition
     singleQuote
-    s <- readSingleQuotedPart `reluctantlyTill` singleQuote
+    s <- many readSingleQuotedPart
     let string = concat s
     endPos <- getPosition
     singleQuote <|> fail "Expected end of single quoted string"
@@ -1082,7 +1083,15 @@ readSingleQuotedLiteral = do
 
 readSingleQuotedPart =
     readSingleEscaped
-    <|> many1 (noneOf "'\\\x2018\x2019")
+    <|> many1 (noneOf $ "'\\" ++ unicodeSingleQuotes)
+    <|> readUnicodeQuote
+   where
+    readUnicodeQuote = do
+        pos <- getPosition
+        x <- oneOf unicodeSingleQuotes
+        parseProblemAt pos WarningC 1112
+            "This is a unicode quote. Delete and retype it (or ignore/doublequote for literal)."
+        return [x]
 
 
 prop_readBackTicked = isOk (readBackTicked False) "`ls *.mp3`"
@@ -1158,11 +1167,12 @@ parseForgettingContext alsoOnSuccess parser = do
 
 prop_readDoubleQuoted = isOk readDoubleQuoted "\"Hello $FOO\""
 prop_readDoubleQuoted2 = isOk readDoubleQuoted "\"$'\""
-prop_readDoubleQuoted3 = isWarning readDoubleQuoted "\x201Chello\x201D"
+prop_readDoubleQuoted3 = isOk readDoubleQuoted "\"\x2018hello\x2019\""
 prop_readDoubleQuoted4 = isWarning readSimpleCommand "\"foo\nbar\"foo"
 prop_readDoubleQuoted5 = isOk readSimpleCommand "lol \"foo\nbar\" etc"
 prop_readDoubleQuoted6 = isOk readSimpleCommand "echo \"${ ls; }\""
 prop_readDoubleQuoted7 = isOk readSimpleCommand "echo \"${ ls;}bar\""
+prop_readDoubleQuoted8 = isWarning readDoubleQuoted "\"\x201Chello\x201D\""
 readDoubleQuoted = called "double quoted string" $ do
     id <- getNextId
     startPos <- getPosition
@@ -1187,7 +1197,15 @@ suggestForgotClosingQuote startPos endPos name = do
     parseProblemAt endPos InfoC 1079
         "This is actually an end quote, but due to next char it looks suspect."
 
-doubleQuotedPart = readDoubleLiteral <|> readDoubleQuotedDollar <|> readQuotedBackTicked
+doubleQuotedPart = readDoubleLiteral <|> readDoubleQuotedDollar <|> readQuotedBackTicked <|> readUnicodeQuote
+  where
+    readUnicodeQuote = do
+        pos <- getPosition
+        id <- getNextId
+        c <- oneOf unicodeDoubleQuotes
+        parseProblemAt pos WarningC 1111
+            "This is a unicode quote. Delete and retype it (or ignore/singlequote for literal)."
+        return $ T_Literal id [c]
 
 readDoubleQuotedLiteral = do
     doubleQuote
@@ -1201,7 +1219,7 @@ readDoubleLiteral = do
     return $ T_Literal id (concat s)
 
 readDoubleLiteralPart = do
-    x <- many1 (readDoubleEscaped <|> many1 (noneOf ('\\':doubleQuotableChars)))
+    x <- many1 (readDoubleEscaped <|> many1 (noneOf ('\\':doubleQuotableChars ++ unicodeDoubleQuotes)))
     return $ concat x
 
 readNormalLiteral end = do
@@ -1243,8 +1261,15 @@ readGlob = readExtglob <|> readSimple <|> readClass <|> readGlobbyLiteral
             c <- extglobStart <|> char '['
             return $ T_Literal id [c]
 
-readNormalLiteralPart end =
-    readNormalEscaped <|> many1 (noneOf (end ++ quotableChars ++ extglobStartChars ++ "[{}"))
+readNormalLiteralPart customEnd =
+    readNormalEscaped <|>
+        many1 (noneOf (customEnd ++ standardEnd))
+  where
+    standardEnd = "[{}"
+        ++ quotableChars
+        ++ extglobStartChars
+        ++ unicodeDoubleQuotes
+        ++ unicodeSingleQuotes
 
 readNormalEscaped = called "escaped char" $ do
     pos <- getPosition
