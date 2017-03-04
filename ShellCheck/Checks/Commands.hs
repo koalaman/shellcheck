@@ -363,7 +363,7 @@ checkFindActionPrecedence = CommandCheck (Basename "find") (f . arguments)
         then warnFor (list !! (length pattern - 1))
         else f rest
     isMatch = isParam [ "-name", "-regex", "-iname", "-iregex", "-wholename", "-iwholename" ]
-    isAction = isParam [ "-exec", "-execdir", "-delete", "-print", "-print0" ]
+    isAction = isParam [ "-exec", "-execdir", "-delete", "-print", "-print0", "-fls", "-fprint", "-fprint0", "-fprintf", "-ls", "-ok", "-okdir", "-printf" ]
     isParam strs t = fromMaybe False $ do
         param <- getLiteralString t
         return $ param `elem` strs
