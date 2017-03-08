@@ -36,9 +36,9 @@ Run `shellcheck yourscript` in your terminal for instant output, as seen above.
 
 You can see ShellCheck suggestions directly in a variety of editors.
 
-* Vim, through [Syntastic](https://github.com/scrooloose/syntastic):
+* Vim, through [ALE](https://github.com/w0rp/ale) or [Syntastic](https://github.com/scrooloose/syntastic):
 
-![Screenshot of vim showing inlined shellcheck feedback](doc/vim-syntastic.png).
+![Screenshot of Vim showing inlined shellcheck feedback](doc/vim-syntastic.png).
 
 * Emacs, through [Flycheck](https://github.com/flycheck/flycheck):
 
