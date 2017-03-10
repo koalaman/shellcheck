@@ -309,10 +309,7 @@ decodeString = decode
     decode (c:rest) =
         let num = (fromIntegral $ ord c) :: Int
             next = case num of
-                _ | num >= 0xFF -> Nothing
-                  | num >= 0xFE -> construct (num .&. 0x00) 6 rest
-                  | num >= 0xFC -> construct (num .&. 0x01) 5 rest
-                  | num >= 0xF8 -> construct (num .&. 0x03) 4 rest
+                _ | num >= 0xF8 -> Nothing
                   | num >= 0xF0 -> construct (num .&. 0x07) 3 rest
                   | num >= 0xE0 -> construct (num .&. 0x0F) 2 rest
                   | num >= 0xC0 -> construct (num .&. 0x1F) 1 rest
@@ -322,7 +319,9 @@ decodeString = decode
                 Just (n, remainder) -> chr n : decode remainder
                 Nothing -> c : decode rest
 
-    construct x 0 rest = return (x, rest)
+    construct x 0 rest = do
+        guard $ x <= 0x10FFFF
+        return (x, rest)
     construct x n (c:rest) =
         let num = (fromIntegral $ ord c) :: Int in
             if num >= 0x80 && num <= 0xBF
