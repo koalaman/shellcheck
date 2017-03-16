@@ -87,6 +87,11 @@ On Gentoo based distros:
 
     emerge --ask shellcheck
 
+On EPEL based distros:
+
+    yum -y install epel-release
+    yum install ShellCheck
+
 On Fedora based distros:
 
     dnf install ShellCheck
