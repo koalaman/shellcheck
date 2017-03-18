@@ -1958,7 +1958,7 @@ checkWhileReadPitfalls _ (T_WhileExpression id [command] contents)
         | isStdinReadCommand command =
     mapM_ checkMuncher contents
   where
-    munchers = [ "ssh", "ffmpeg", "mplayer" ]
+    munchers = [ "ssh", "ffmpeg", "mplayer", "HandBrakeCLI" ]
     preventionFlags = ["n", "noconsolecontrols" ]
 
     isStdinReadCommand (T_Pipeline _ _ [T_Redirecting id redirs cmd]) =
