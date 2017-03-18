@@ -23,6 +23,7 @@ import ShellCheck.AST
 
 import Control.Monad.Writer
 import Control.Monad
+import Data.Functor
 import Data.List
 import Data.Maybe
 
