@@ -2328,7 +2328,7 @@ readCompoundListOrEmpty = do
 
 readCmdPrefix = many1 (readIoRedirect <|> readAssignmentWord)
 readCmdSuffix = many1 (readIoRedirect <|> readCmdWord)
-readModifierSuffix = many1 (readIoRedirect <|> readAssignmentWord <|> readCmdWord)
+readModifierSuffix = many1 (readIoRedirect <|> readWellFormedAssignment <|> readCmdWord)
 readTimeSuffix = do
     flags <- many readFlag
     pipeline <- readPipeline
@@ -2394,12 +2394,16 @@ prop_readAssignmentWord9c= isOk readAssignmentWord "foo=  #bar"
 prop_readAssignmentWord10= isWarning readAssignmentWord "foo$n=42"
 prop_readAssignmentWord11= isOk readAssignmentWord "foo=([a]=b [c] [d]= [e f )"
 prop_readAssignmentWord12= isOk readAssignmentWord "a[b <<= 3 + c]='thing'"
-readAssignmentWord = try $ do
+readAssignmentWord = readAssignmentWordExt True
+readWellFormedAssignment = readAssignmentWordExt False
+readAssignmentWordExt lenient = try $ do
     id <- getNextId
     pos <- getPosition
-    optional (char '$' >> parseNote ErrorC 1066 "Don't use $ on the left side of assignments.")
+    when lenient $
+        optional (char '$' >> parseNote ErrorC 1066 "Don't use $ on the left side of assignments.")
     variable <- readVariableName
-    optional (readNormalDollar >> parseNoteAt pos ErrorC
+    when lenient $
+        optional (readNormalDollar >> parseNoteAt pos ErrorC
                                 1067 "For indirection, use (associative) arrays or 'read \"var$n\" <<< \"value\"'")
     indices <- many readArrayIndex
     hasLeftSpace <- liftM (not . null) spacing

@@ -223,10 +223,7 @@ isQuoteFreeNode strict tree t =
             TA_Sequence {} -> return True
             T_Arithmetic {} -> return True
             T_Assignment {} -> return True
-            T_Redirecting {} -> return $
-                if strict then False else
-                    -- Not true, just a hack to prevent warning about non-expansion refs
-                    any (isCommand t) ["local", "declare", "typeset", "export", "trap", "readonly"]
+            T_Redirecting {} -> return False
             T_DoubleQuoted _ _ -> return True
             T_DollarDoubleQuoted _ _ -> return True
             T_CaseExpression {} -> return True
