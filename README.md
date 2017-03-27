@@ -83,6 +83,10 @@ On Debian based distros:
 
     apt-get install shellcheck
 
+On Arch Linux based distros:
+
+    pacman -S shellcheck
+
 On Gentoo based distros:
 
     emerge --ask shellcheck
