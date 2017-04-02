@@ -722,6 +722,21 @@ filterByAnnotation token =
     parents = getParentTree token
     getCode (TokenComment _ (Comment _ c _)) = c
 
+-- Is this a ${#anything}, to get string length or array count?
+isCountingReference (T_DollarBraced id token) =
+    case concat $ oversimplify token of
+        '#':_ -> True
+        _ -> False
+isCountingReference _ = False
+
+-- FIXME: doesn't handle ${a:+$var} vs ${a:+"$var"}
+isQuotedAlternativeReference t =
+    case t of
+        T_DollarBraced _ _ ->
+            ":+" `isInfixOf` bracedString t
+        _ -> False
+
+
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

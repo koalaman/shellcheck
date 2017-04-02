@@ -160,6 +160,7 @@ nodeChecks = [
     ,checkRedirectedNowhere
     ,checkUnmatchableCases
     ,checkSubshellAsTest
+    ,checkSplittingInArrays
     ]
 
 
@@ -1606,9 +1607,9 @@ checkSpacefulness params t =
         return [makeComment InfoC (getId token) 2086 warning |
                   isExpansion token && spaced
                   && not (isArrayExpansion token) -- There's another warning for this
-                  && not (isCounting token)
+                  && not (isCountingReference token)
                   && not (isQuoteFree parents token)
-                  && not (isQuotedAlternative token)
+                  && not (isQuotedAlternativeReference token)
                   && not (usedAsCommandName parents token)]
       where
         warning = "Double quote to prevent globbing and word splitting."
@@ -1629,19 +1630,6 @@ checkSpacefulness params t =
     isExpansion t =
         case t of
             (T_DollarBraced _ _ ) -> True
-            _ -> False
-
-    isCounting (T_DollarBraced id token) =
-        case concat $ oversimplify token of
-            '#':_ -> True
-            _ -> False
-    isCounting _ = False
-
-    -- FIXME: doesn't handle ${a:+$var} vs ${a:+"$var"}
-    isQuotedAlternative t =
-        case t of
-            T_DollarBraced _ _ ->
-                ":+" `isInfixOf` bracedString t
             _ -> False
 
     isSpacefulWord :: (String -> Bool) -> [Token] -> Bool
@@ -2737,6 +2725,43 @@ checkSubshellAsTest _ t =
             err id 2204 "(..) is a subshell. Did you mean [ .. ], a test expression?"
         when (fromMaybe False $ (`elem` binaryTestOps) <$> getLiteralString second) $
             warn id 2205 "(..) is a subshell. Did you mean [ .. ], a test expression?"
+
+
+prop_checkSplittingInArrays1 = verify checkSplittingInArrays "a=( $var )"
+prop_checkSplittingInArrays2 = verify checkSplittingInArrays "a=( $(cmd) )"
+prop_checkSplittingInArrays3 = verifyNot checkSplittingInArrays "a=( \"$var\" )"
+prop_checkSplittingInArrays4 = verifyNot checkSplittingInArrays "a=( \"$(cmd)\" )"
+prop_checkSplittingInArrays5 = verifyNot checkSplittingInArrays "a=( $! $$ $# )"
+prop_checkSplittingInArrays6 = verifyNot checkSplittingInArrays "a=( ${#arr[@]} )"
+prop_checkSplittingInArrays7 = verifyNot checkSplittingInArrays "a=( foo{1,2} )"
+prop_checkSplittingInArrays8 = verifyNot checkSplittingInArrays "a=( * )"
+checkSplittingInArrays params t =
+    case t of
+        T_Array _ elements -> mapM_ check elements
+        _ -> return ()
+  where
+    check word = case word of
+        T_NormalWord _ parts -> mapM_ checkPart parts
+        _ -> return ()
+    checkPart part = case part of
+        T_DollarExpansion id _ -> forCommand id
+        T_DollarBraceCommandExpansion id _ -> forCommand id
+        T_Backticked id _ -> forCommand id
+        T_DollarBraced id str |
+            not (isCountingReference part)
+            && not (isQuotedAlternativeReference part)
+            && not (getBracedReference (bracedString part) `elem` variablesWithoutSpaces)
+            -> warn id 2206 $
+                if (shellType params == Ksh)
+                then "Quote to prevent word splitting, or split robustly with read -A or while read."
+                else "Quote to prevent word splitting, or split robustly with mapfile or read -a."
+        _ -> return ()
+
+    forCommand id =
+        warn id 2207 $
+            if (shellType params == Ksh)
+            then "Prefer read -A or while read to split command output (or quote to avoid splitting)."
+            else "Prefer mapfile or read -a to split command output (or quote to avoid splitting)."
 
 
 return []
