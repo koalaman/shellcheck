@@ -58,6 +58,7 @@ checks = [
     ,checkEchoSed
     ,checkBraceExpansionVars
     ,checkMultiDimensionalArrays
+    ,checkPS1Assignments
     ]
 
 testChecker (ForShell _ t) =
@@ -382,6 +383,32 @@ checkMultiDimensionalArrays = ForShell [Bash] f
 
     re = mkRegex "^\\[.*\\]\\[.*\\]"  -- Fixme, this matches ${foo:- [][]} and such as well
     isMultiDim t = getBracedModifier (bracedString t) `matches` re
+
+prop_checkPS11 = verify checkPS1Assignments "PS1='\\033[1;35m\\$ '"
+prop_checkPS11a= verify checkPS1Assignments "export PS1='\\033[1;35m\\$ '"
+prop_checkPSf2 = verify checkPS1Assignments "PS1='\\h \\e[0m\\$ '"
+prop_checkPS13 = verify checkPS1Assignments "PS1=$'\\x1b[c '"
+prop_checkPS14 = verify checkPS1Assignments "PS1=$'\\e[3m; '"
+prop_checkPS14a= verify checkPS1Assignments "export PS1=$'\\e[3m; '"
+prop_checkPS15 = verifyNot checkPS1Assignments "PS1='\\[\\033[1;35m\\]\\$ '"
+prop_checkPS16 = verifyNot checkPS1Assignments "PS1='\\[\\e1m\\e[1m\\]\\$ '"
+prop_checkPS17 = verifyNot checkPS1Assignments "PS1='e033x1B'"
+prop_checkPS18 = verifyNot checkPS1Assignments "PS1='\\[\\e\\]'"
+checkPS1Assignments = ForShell [Bash] f
+  where
+    f token = case token of
+        (T_Assignment _ _ "PS1" _ word) -> warnFor word
+        _ -> return ()
+
+    warnFor word =
+        let contents = concat $ oversimplify word in
+            when (containsUnescaped contents) $
+                info (getId word) 2025 "Make sure all escape sequences are enclosed in \\[..\\] to prevent line wrapping issues"
+    containsUnescaped s =
+        let unenclosed = subRegex enclosedRegex s "" in
+           isJust $ matchRegex escapeRegex unenclosed
+    enclosedRegex = mkRegex "\\\\\\[.*\\\\\\]" -- FIXME: shouldn't be eager
+    escapeRegex = mkRegex "\\\\x1[Bb]|\\\\e|\x1B|\\\\033"
 
 
 return []
