@@ -48,8 +48,8 @@ willSplit x =
     T_NormalWord _ l -> any willSplit l
     _ -> False
 
-isGlob (T_Extglob {}) = True
-isGlob (T_Glob {}) = True
+isGlob T_Extglob {} = True
+isGlob T_Glob {} = True
 isGlob (T_NormalWord _ l) = any isGlob l
 isGlob _ = False
 
@@ -144,9 +144,9 @@ mayBecomeMultipleArgs t = willBecomeMultipleArgs t || f t
 -- Is it certain that this word will becomes multiple words?
 willBecomeMultipleArgs t = willConcatInAssignment t || f t
   where
-    f (T_Extglob {}) = True
-    f (T_Glob {}) = True
-    f (T_BraceExpansion {}) = True
+    f T_Extglob {} = True
+    f T_Glob {} = True
+    f T_BraceExpansion {} = True
     f (T_DoubleQuoted _ parts) = any f parts
     f (T_NormalWord _ parts) = any f parts
     f _ = False
@@ -154,7 +154,7 @@ willBecomeMultipleArgs t = willConcatInAssignment t || f t
 -- This does token cause implicit concatenation in assignments?
 willConcatInAssignment token =
     case token of
-        t@(T_DollarBraced {}) -> isArrayExpansion t
+        t@T_DollarBraced {} -> isArrayExpansion t
         (T_DoubleQuoted _ parts) -> any willConcatInAssignment parts
         (T_NormalWord _ parts) -> any willConcatInAssignment parts
         _ -> False
@@ -169,7 +169,7 @@ onlyLiteralString = fromJust . getLiteralStringExt (const $ return "")
 
 -- Maybe get a literal string, but only if it's an unquoted argument.
 getUnquotedLiteral (T_NormalWord _ list) =
-    liftM concat $ mapM str list
+    concat <$> mapM str list
   where
     str (T_Literal _ s) = return s
     str _ = Nothing
@@ -186,7 +186,7 @@ getTrailingUnquotedLiteral t =
   where
     from t =
         case t of
-            (T_Literal {}) -> return t
+            T_Literal {} -> return t
             _ -> Nothing
 
 -- Maybe get the literal string of this token and any globs in it.
@@ -200,7 +200,7 @@ getGlobOrLiteralString = getLiteralStringExt f
 getLiteralStringExt :: (Token -> Maybe String) -> Token -> Maybe String
 getLiteralStringExt more = g
   where
-    allInList = liftM concat . mapM g
+    allInList = fmap concat . mapM g
     g (T_DoubleQuoted _ l) = allInList l
     g (T_DollarDoubleQuoted _ l) = allInList l
     g (T_NormalWord _ l) = allInList l
@@ -237,7 +237,7 @@ getCommand t =
         T_Redirecting _ _ w -> getCommand w
         T_SimpleCommand _ _ (w:_) -> return t
         T_Annotation _ _ t -> getCommand t
-        otherwise -> Nothing
+        _otherwise -> Nothing
 
 -- Maybe get the command name of a token representing a command
 getCommandName t = do
@@ -259,13 +259,13 @@ getCommandNameFromExpansion t =
         T_DollarExpansion _ [c] -> extract c
         T_Backticked _ [c] -> extract c
         T_DollarBraceCommandExpansion _ [c] -> extract c
-        otherwise -> Nothing
+        _otherwise -> Nothing
   where
     extract (T_Pipeline _ _ [cmd]) = getCommandName cmd
     extract _ = Nothing
 
 -- Get the basename of a token representing a command
-getCommandBasename = liftM basename . getCommandName
+getCommandBasename = fmap basename . getCommandName
   where
     basename = reverse . takeWhile (/= '/') . reverse
 
@@ -275,7 +275,7 @@ isAssignment t =
         T_SimpleCommand _ (w:_) [] -> True
         T_Assignment {} -> True
         T_Annotation _ _ w -> isAssignment w
-        otherwise -> False
+        _otherwise -> False
 
 isOnlyRedirection t =
     case t of
@@ -283,7 +283,7 @@ isOnlyRedirection t =
         T_Annotation _ _ w -> isOnlyRedirection w
         T_Redirecting _ (_:_) c -> isOnlyRedirection c
         T_SimpleCommand _ [] [] -> True
-        otherwise -> False
+        _otherwise -> False
 
 isFunction t = case t of T_Function {} -> True; _ -> False
 
@@ -301,14 +301,14 @@ getCommandSequences t =
         T_ForIn _ _ _ cmds -> [cmds]
         T_ForArithmetic _ _ _ _ cmds -> [cmds]
         T_IfExpression _ thens elses -> map snd thens ++ [elses]
-        otherwise -> []
+        _otherwise -> []
 
 -- Get a list of names of associative arrays
 getAssociativeArrays t =
     nub . execWriter $ doAnalysis f t
   where
     f :: Token -> Writer [String] ()
-    f t@(T_SimpleCommand {}) = fromMaybe (return ()) $ do
+    f t@T_SimpleCommand {} = fromMaybe (return ()) $ do
         name <- getCommandName t
         guard $ name == "declare" || name == "typeset"
         let flags = getAllFlags t
@@ -321,7 +321,7 @@ getAssociativeArrays t =
     nameAssignments t =
         case t of
             T_Assignment _ _ name _ _ -> return name
-            otherwise -> Nothing
+            _otherwise -> Nothing
 
 -- A Pseudoglob is a wildcard pattern used for checking if a match can succeed.
 -- For example, [[ $(cmd).jpg == [a-z] ]] will give the patterns *.jpg and ?, which
@@ -333,7 +333,7 @@ data PseudoGlob = PGAny | PGMany | PGChar Char
 -- PGMany.
 wordToPseudoGlob :: Token -> Maybe [PseudoGlob]
 wordToPseudoGlob word =
-    simplifyPseudoGlob <$> concat <$> mapM f (getWordParts word)
+    simplifyPseudoGlob . concat <$> mapM f (getWordParts word)
   where
     f x = case x of
         T_Literal _ s -> return $ map PGChar s

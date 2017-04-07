@@ -19,21 +19,21 @@
 -}
 module ShellCheck.AST where
 
-import Control.Monad
 import Control.Monad.Identity
 import Text.Parsec
 import qualified ShellCheck.Regex as Re
+import Prelude hiding (id)
 
-data Id = Id Int deriving (Show, Eq, Ord)
+newtype Id = Id Int deriving (Show, Eq, Ord)
 
 data Quoted = Quoted | Unquoted deriving (Show, Eq)
 data Dashed = Dashed | Undashed deriving (Show, Eq)
 data AssignmentMode = Assign | Append deriving (Show, Eq)
-data FunctionKeyword = FunctionKeyword Bool deriving (Show, Eq)
-data FunctionParentheses = FunctionParentheses Bool deriving (Show, Eq)
+newtype FunctionKeyword = FunctionKeyword Bool deriving (Show, Eq)
+newtype FunctionParentheses = FunctionParentheses Bool deriving (Show, Eq)
 data CaseType = CaseBreak | CaseFallThrough | CaseContinue deriving (Show, Eq)
 
-data Root = Root Token
+newtype Root = Root Token
 data Token =
     TA_Binary Id String Token Token
     | TA_Assignment Id String Token Token
@@ -49,7 +49,7 @@ data Token =
     | TC_Or Id ConditionType String Token Token
     | TC_Unary Id ConditionType String Token
     | T_AND_IF Id
-    | T_AndIf Id (Token) (Token)
+    | T_AndIf Id Token Token
     | T_Arithmetic Id Token
     | T_Array Id [Token]
     | T_IndexedElement Id [Token] Token
@@ -110,7 +110,7 @@ data Token =
     | T_NEWLINE Id
     | T_NormalWord Id [Token]
     | T_OR_IF Id
-    | T_OrIf Id (Token) (Token)
+    | T_OrIf Id Token Token
     | T_ParamSubSpecialChar Id String -- e.g. '%' in ${foo%bar}  or '/' in ${foo/bar/baz}
     | T_Pipeline Id [Token] [Token] -- [Pipe separators] [Commands]
     | T_ProcSub Id String [Token]
@@ -161,11 +161,6 @@ analyze f g i =
         g t
         i newT
     roundAll = mapM round
-
-    roundMaybe Nothing = return Nothing
-    roundMaybe (Just v) = do
-        s <- round v
-        return (Just s)
 
     dl l v = do
         x <- roundAll l
@@ -277,6 +272,7 @@ analyze f g i =
     delve (T_Include id includer script) = d2 includer script $ T_Include id
     delve t = return t
 
+getId :: Token -> Id
 getId t = case t of
         T_AND_IF id  -> id
         T_OR_IF id  -> id
@@ -379,7 +375,10 @@ getId t = case t of
 
 blank :: Monad m => Token -> m ()
 blank = const $ return ()
+doAnalysis :: Monad m => (Token -> m ()) -> Token -> m Token
 doAnalysis f = analyze f blank return
+doStackAnalysis :: Monad m => (Token -> m ()) -> (Token -> m ()) -> Token -> m Token
 doStackAnalysis startToken endToken = analyze startToken endToken return
+doTransform :: (Token -> Token) -> Token -> Token
 doTransform i = runIdentity . analyze blank blank (return . i)
 
