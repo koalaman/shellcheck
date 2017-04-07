@@ -24,7 +24,7 @@ import Control.Monad.Identity
 import qualified Data.Map as Map
 
 
-data SystemInterface m = SystemInterface {
+newtype SystemInterface m = SystemInterface {
     -- Read a file by filename, or return an error
     siReadFile :: String -> m (Either ErrorMessage String)
 }
@@ -42,6 +42,7 @@ data CheckResult = CheckResult {
     crComments :: [PositionedComment]
 } deriving (Show, Eq)
 
+emptyCheckSpec :: CheckSpec
 emptyCheckSpec = CheckSpec {
     csFilename = "",
     csScript = "",
@@ -68,13 +69,13 @@ data AnalysisSpec = AnalysisSpec {
     asExecutionMode :: ExecutionMode
 }
 
-data AnalysisResult = AnalysisResult {
+newtype AnalysisResult = AnalysisResult {
     arComments :: [TokenComment]
 }
 
 
 -- Formatter options
-data FormatterOptions = FormatterOptions {
+newtype FormatterOptions = FormatterOptions {
     foColorOption :: ColorOption
 }
 

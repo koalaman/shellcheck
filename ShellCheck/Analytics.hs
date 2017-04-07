@@ -358,13 +358,13 @@ checkPipePitfalls _ (T_Pipeline id _ commands) = do
 
     for ["grep", "wc"] $
         \(grep:wc:_) ->
-            let flagsGrep = fromMaybe [] $ map snd <$> getAllFlags <$> getCommand grep
-                flagsWc = fromMaybe [] $ map snd <$> getAllFlags <$> getCommand wc
+            let flagsGrep = fromMaybe [] $ map snd . getAllFlags <$> getCommand grep
+                flagsWc = fromMaybe [] $ map snd . getAllFlags <$> getCommand wc
             in
-                unless ((any (`elem` ["o", "only-matching", "r", "R", "recursive"]) flagsGrep) || (any (`elem` ["m", "chars", "w", "words", "c", "bytes", "L", "max-line-length"]) flagsWc) || ((length flagsWc) == 0)) $
+                unless (any (`elem` ["o", "only-matching", "r", "R", "recursive"]) flagsGrep || any (`elem` ["m", "chars", "w", "words", "c", "bytes", "L", "max-line-length"]) flagsWc || null flagsWc) $
                     style (getId grep) 2126 "Consider using grep -c instead of grep|wc -l."
 
-    didLs <- liftM or . sequence $ [
+    didLs <- fmap or . sequence $ [
         for' ["ls", "grep"] $
             \x -> warn x 2010 "Don't use ls | grep. Use a glob or a for loop with a condition to allow non-alphanumeric filenames.",
         for' ["ls", "xargs"] $
@@ -440,7 +440,7 @@ prop_checkForInQuoted5 = verify checkForInQuoted "for f in ls; do true; done"
 prop_checkForInQuoted6 = verifyNot checkForInQuoted "for f in \"${!arr}\"; do true; done"
 checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [word@(T_DoubleQuoted id list)]] _) =
     when (any (\x -> willSplit x && not (mayBecomeMultipleArgs x)) list
-            || (liftM wouldHaveBeenGlob (getLiteralString word) == Just True)) $
+            || (fmap wouldHaveBeenGlob (getLiteralString word) == Just True)) $
         err id 2066 "Since you double quoted this, it will not word split, and the loop will only run once."
 checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [T_SingleQuoted id _]] _) =
     warn id 2041 "This is a literal string. To run as a command, use $(..) instead of '..' . "
@@ -659,7 +659,7 @@ prop_checkConcatenatedDollarAt2 = verify checkConcatenatedDollarAt "echo ${arr[@
 prop_checkConcatenatedDollarAt3 = verify checkConcatenatedDollarAt "echo $a$@"
 prop_checkConcatenatedDollarAt4 = verifyNot checkConcatenatedDollarAt "echo $@"
 prop_checkConcatenatedDollarAt5 = verifyNot checkConcatenatedDollarAt "echo \"${arr[@]}\""
-checkConcatenatedDollarAt p word@(T_NormalWord {})
+checkConcatenatedDollarAt p word@T_NormalWord {}
     | not $ isQuoteFree (parentMap p) word =
         unless (null $ drop 1 parts) $
             mapM_ for array
@@ -884,8 +884,8 @@ checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
       decimalError = "Decimals are not supported. " ++
         "Either use integers only, or use bc or awk to compare."
 
-      checkStrings hs =
-        mapM_ stringError . take 1 . filter isNonNum $ hs
+      checkStrings =
+        mapM_ stringError . take 1 . filter isNonNum
 
       isNonNum t = fromMaybe False $ do
         s <- getLiteralStringExt (const $ return "") t
@@ -968,7 +968,7 @@ checkConditionalAndOrs _ t =
         (TC_Or id SingleBracket "-o" _ _) ->
             warn id 2166 "Prefer [ p ] || [ q ] as [ p -o q ] is not well defined."
 
-        otherwise -> return ()
+        _otherwise -> return ()
 
 prop_checkQuotedCondRegex1 = verify checkQuotedCondRegex "[[ $foo =~ \"bar.*\" ]]"
 prop_checkQuotedCondRegex2 = verify checkQuotedCondRegex "[[ $foo =~ '(cow|bar)' ]]"
@@ -1241,7 +1241,7 @@ checkUuoeVar _ p =
             unless (isCovered first rest || "-" `isPrefixOf` onlyLiteralString first) $
                 when (all couldBeOptimized vars) $ style id 2116
                     "Useless echo? Instead of 'cmd $(echo foo)', just use 'cmd foo'."
-          otherwise -> return ()
+          _otherwise -> return ()
 
 
 prop_checkTestRedirects1 = verify checkTestRedirects "test 3 > 1"
@@ -1257,12 +1257,12 @@ checkTestRedirects _ (T_Redirecting id redirs cmd) | cmd `isCommand` "test" =
     suspicious t = -- Ignore redirections of stderr because these are valid for squashing e.g. int errors,
         case t of  -- and >> and similar redirections because these are probably not comparisons.
             T_FdRedirect _ fd (T_IoFile _ op _) -> fd /= "2" && isComparison op
-            otherwise -> False
+            _otherwise -> False
     isComparison t =
         case t of
             T_Greater _ -> True
             T_Less _ -> True
-            otherwise -> False
+            _otherwise -> False
 checkTestRedirects _ _ = return ()
 
 prop_checkSudoRedirect1 = verify checkSudoRedirect "sudo echo 3 > /proc/file"
@@ -1665,7 +1665,7 @@ prop_checkQuotesInLiterals9 = verifyNotTree checkQuotesInLiterals "param=\"/foo/
 checkQuotesInLiterals params t =
     doVariableFlowAnalysis readF writeF Map.empty (variableFlow params)
   where
-    getQuotes name = liftM (Map.lookup name) get
+    getQuotes name = fmap (Map.lookup name) get
     setQuotes name ref = modify $ Map.insert name ref
     deleteQuotes = modify . Map.delete
     parents = parentMap params
@@ -1696,7 +1696,7 @@ checkQuotesInLiterals params t =
     squashesQuotes t =
         case t of
             T_DollarBraced id _ -> "#" `isPrefixOf` bracedString t
-            otherwise -> False
+            _otherwise -> False
 
     readF _ expr name = do
         assignment <- getQuotes name
@@ -1899,7 +1899,7 @@ checkUnassignedReferences params t = warnings
     -- Similarly, ${foo[bar baz]} may not be referencing bar/baz. Just skip these.
     isInArray var t = any isArray $ getPath (parentMap params) t
       where
-        isArray (T_Array {}) = True
+        isArray T_Array {} = True
         isArray b@(T_DollarBraced _ _) | var /= getBracedReference (bracedString b) = True
         isArray _ = False
 
@@ -1997,7 +1997,7 @@ checkPrefixAssignmentReference params t@(T_DollarBraced id value) =
     check (t:rest) =
         case t of
             T_SimpleCommand _ vars (_:_) -> mapM_ checkVar vars
-            otherwise -> check rest
+            _otherwise -> check rest
     checkVar (T_Assignment aId mode aName [] value) |
             aName == name && (aId `notElem` idPath) = do
         warn aId 2097 "This assignment is only seen by the forked process."
@@ -2154,7 +2154,7 @@ checkCatastrophicRm params t@(T_SimpleCommand id _ tokens) | t `isCommand` "rm" 
         f (T_Glob _ str) = return str
         f (T_DollarBraced _ word) =
             let var = onlyLiteralString word in
-                if any (flip isInfixOf var) [":?", ":-", ":="]
+                if any (`isInfixOf` var) [":?", ":-", ":="]
                 then Nothing
                 else return ""
         f _ = return ""
@@ -2291,8 +2291,8 @@ checkTildeInPath _ (T_SimpleCommand _ vars _) =
     checkVar _ = return ()
 
     hasTilde t = fromMaybe False (liftM2 elem (return '~') (getLiteralStringExt (const $ return "") t))
-    isQuoted (T_DoubleQuoted {}) = True
-    isQuoted (T_SingleQuoted {}) = True
+    isQuoted T_DoubleQuoted {} = True
+    isQuoted T_SingleQuoted {} = True
     isQuoted _ = False
 checkTildeInPath _ _ = return ()
 
@@ -2313,7 +2313,7 @@ shellSupport t =
   case t of
     T_CaseExpression _ _ list -> forCase (map (\(a,_,_) -> a) list)
     T_DollarBraceCommandExpansion {} -> ("${ ..; } command expansion", [Ksh])
-    otherwise -> ("", [])
+    _otherwise -> ("", [])
   where
     forCase seps | CaseContinue `elem` seps = ("cases with ;;&", [Bash])
     forCase seps | CaseFallThrough `elem` seps = ("cases with ;&", [Bash, Ksh])
@@ -2329,7 +2329,7 @@ checkMultipleAppends params t =
     mapM_ checkList $ getCommandSequences t
   where
     checkList list =
-        mapM_ checkGroup (groupWith (liftM fst) $ map getTarget list)
+        mapM_ checkGroup (groupWith (fmap fst) $ map getTarget list)
     checkGroup (f:_:_:_) | isJust f =
         style (snd $ fromJust f) 2129
             "Consider using { cmd1; cmd2; } >> file instead of individual redirects."
@@ -2340,7 +2340,7 @@ checkMultipleAppends params t =
         file <- mapMaybe getAppend list !!! 0
         return (file, id)
     getTarget _ = Nothing
-    getAppend (T_FdRedirect _ _ (T_IoFile _ (T_DGREAT {}) f)) = return f
+    getAppend (T_FdRedirect _ _ (T_IoFile _ T_DGREAT {} f)) = return f
     getAppend _ = Nothing
 
 
@@ -2487,7 +2487,7 @@ checkMaskedReturns _ _ = return ()
 
 prop_checkReadWithoutR1 = verify checkReadWithoutR "read -a foo"
 prop_checkReadWithoutR2 = verifyNot checkReadWithoutR "read -ar foo"
-checkReadWithoutR _ t@(T_SimpleCommand {}) | t `isUnqualifiedCommand` "read" =
+checkReadWithoutR _ t@T_SimpleCommand {} | t `isUnqualifiedCommand` "read" =
     unless ("r" `elem` map snd (getAllFlags t)) $
         info (getId t) 2162 "read without -r will mangle backslashes."
 checkReadWithoutR _ _ = return ()
@@ -2503,7 +2503,7 @@ prop_checkUncheckedCd8 = verifyNotTree checkUncheckedCd "set -o errexit; cd foo;
 checkUncheckedCd params root =
     if hasSetE then [] else execWriter $ doAnalysis checkElement root
   where
-    checkElement t@(T_SimpleCommand {}) =
+    checkElement t@T_SimpleCommand {} =
         when(t `isUnqualifiedCommand` "cd"
             && not (isCdDotDot t)
             && not (isCondition $ getPath (parentMap params) t)) $
@@ -2555,7 +2555,7 @@ prop_checkTrailingBracket5 = verifyNot checkTrailingBracket "run bar ']'"
 checkTrailingBracket _ token =
     case token of
         T_SimpleCommand _ _ tokens@(_:_) -> check (last tokens) token
-        otherwise -> return ()
+        _otherwise -> return ()
   where
     check t command =
         case t of
@@ -2566,7 +2566,7 @@ checkTrailingBracket _ token =
                 guard $ opposite `notElem` parameters
                 return $ warn id 2171 $
                     "Found trailing " ++ str ++ " outside test. Missing " ++ opposite ++ "?"
-            otherwise -> return ()
+            _otherwise -> return ()
     invert s =
         case s of
             "]]" -> "[["
@@ -2590,7 +2590,7 @@ checkReturnAgainstZero _ token =
             when (isExitCode exp) $ message (getId exp)
         TA_Sequence _ [exp] ->
             when (isExitCode exp) $ message (getId exp)
-        otherwise -> return ()
+        _otherwise -> return ()
   where
     check lhs rhs =
         if isZero rhs && isExitCode lhs
@@ -2599,8 +2599,8 @@ checkReturnAgainstZero _ token =
     isZero t = getLiteralString t == Just "0"
     isExitCode t =
         case getWordParts t of
-            [exp@(T_DollarBraced {})] -> bracedString exp == "?"
-            otherwise -> False
+            [exp@T_DollarBraced {}] -> bracedString exp == "?"
+            _otherwise -> False
     message id = style id 2181 "Check exit code directly with e.g. 'if mycmd;', not indirectly with $?."
 
 prop_checkRedirectedNowhere1 = verify checkRedirectedNowhere "> file"
@@ -2672,7 +2672,7 @@ checkArrayAssignmentIndices params root =
                     guard $ '=' `elem` str
                     return $ warn id 2191 "The = here is literal. To assign by index, use ( [index]=value ) with no spaces. To keep as literal, quote it."
                 in
-                    if (null literalEquals && isAssociative)
+                    if null literalEquals && isAssociative
                     then warn (getId t) 2190 "Elements in associative arrays need index, e.g. array=( [index]=value ) ."
                     else sequence_ literalEquals
 
@@ -2752,14 +2752,14 @@ checkSplittingInArrays params t =
             && not (isQuotedAlternativeReference part)
             && not (getBracedReference (bracedString part) `elem` variablesWithoutSpaces)
             -> warn id 2206 $
-                if (shellType params == Ksh)
+                if shellType params == Ksh
                 then "Quote to prevent word splitting, or split robustly with read -A or while read."
                 else "Quote to prevent word splitting, or split robustly with mapfile or read -a."
         _ -> return ()
 
     forCommand id =
         warn id 2207 $
-            if (shellType params == Ksh)
+            if shellType params == Ksh
             then "Prefer read -A or while read to split command output (or quote to avoid splitting)."
             else "Prefer mapfile or read -a to split command output (or quote to avoid splitting)."
 

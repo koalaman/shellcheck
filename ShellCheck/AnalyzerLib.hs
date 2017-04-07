@@ -163,7 +163,7 @@ determineShell t = fromMaybe Bash $ do
             (ShellOverride s) -> return s
             _ -> fail ""
     getCandidates :: Token -> [Maybe String]
-    getCandidates t@(T_Script {}) = [Just $ fromShebang t]
+    getCandidates t@T_Script {} = [Just $ fromShebang t]
     getCandidates (T_Annotation _ annotations s) =
         map forAnnotation annotations ++
            [Just $ fromShebang s]
@@ -252,7 +252,7 @@ isParamTo tree cmd =
 getClosestCommand tree t =
     msum . map getCommand $ getPath tree t
   where
-    getCommand t@(T_Redirecting {}) = return t
+    getCommand t@T_Redirecting {} = return t
     getCommand _ = Nothing
 
 getClosestCommandM t = do
@@ -319,8 +319,8 @@ getVariableFlow shell parents t =
             unless (assignFirst t) $ setWritten t
             when (scopeType /= NoneScope) $ modify (StackScopeEnd:)
 
-    assignFirst (T_ForIn {}) = True
-    assignFirst (T_SelectIn {}) = True
+    assignFirst T_ForIn {} = True
+    assignFirst T_SelectIn {} = True
     assignFirst _ = False
 
     setRead t =
@@ -374,7 +374,7 @@ getModifiedVariables t =
                                     [(x, x, name, dataTypeFrom DataString w)]
                                 _ -> []
                       ) vars
-        c@(T_SimpleCommand {}) ->
+        c@T_SimpleCommand {} ->
             getModifiedVariableCommand c
 
         TA_Unary _ "++|" var -> maybeToList $ do
@@ -401,7 +401,7 @@ getModifiedVariables t =
             [(t, t, fromMaybe "COPROC" name, DataArray SourceInteger)]
 
         --Points to 'for' rather than variable
-        T_ForIn id str [] _ -> [(t, t, str, DataString $ SourceExternal)]
+        T_ForIn id str [] _ -> [(t, t, str, DataString SourceExternal)]
         T_ForIn id str words _ -> [(t, t, str, DataString $ SourceFrom words)]
         T_SelectIn id str words _ -> [(t, t, str, DataString $ SourceFrom words)]
         _ -> []
@@ -496,7 +496,7 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal 
 
     getModifierParam def t@(T_Assignment _ _ name _ value) =
         [(base, t, name, dataTypeFrom def value)]
-    getModifierParam def t@(T_NormalWord {}) = maybeToList $ do
+    getModifierParam def t@T_NormalWord {} = maybeToList $ do
         name <- getLiteralString t
         guard $ isVariableName name
         return (base, t, name, def SourceDeclaration)
@@ -584,7 +584,7 @@ getReferencedVariables parents t =
                 getVariablesFromLiteralToken word
         else []
 
-    literalizer (TA_Index {}) = return ""  -- x[0] becomes a reference of x
+    literalizer TA_Index {} = return ""  -- x[0] becomes a reference of x
     literalizer _ = Nothing
 
     getIfReference context token = maybeToList $ do
@@ -717,7 +717,7 @@ filterByAnnotation token =
       where
         hasNum (DisableComment ts) = num == ts
         hasNum _ = False
-    shouldIgnoreFor _ (T_Include {}) = True -- Ignore included files
+    shouldIgnoreFor _ T_Include {} = True -- Ignore included files
     shouldIgnoreFor _ _ = False
     parents = getParentTree token
     getCode (TokenComment _ (Comment _ c _)) = c
