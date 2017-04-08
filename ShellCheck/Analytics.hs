@@ -968,7 +968,7 @@ checkConditionalAndOrs _ t =
         (TC_Or id SingleBracket "-o" _ _) ->
             warn id 2166 "Prefer [ p ] || [ q ] as [ p -o q ] is not well defined."
 
-        _otherwise -> return ()
+        _ -> return ()
 
 prop_checkQuotedCondRegex1 = verify checkQuotedCondRegex "[[ $foo =~ \"bar.*\" ]]"
 prop_checkQuotedCondRegex2 = verify checkQuotedCondRegex "[[ $foo =~ '(cow|bar)' ]]"
@@ -1241,7 +1241,7 @@ checkUuoeVar _ p =
             unless (isCovered first rest || "-" `isPrefixOf` onlyLiteralString first) $
                 when (all couldBeOptimized vars) $ style id 2116
                     "Useless echo? Instead of 'cmd $(echo foo)', just use 'cmd foo'."
-          _otherwise -> return ()
+          _ -> return ()
 
 
 prop_checkTestRedirects1 = verify checkTestRedirects "test 3 > 1"
@@ -1257,12 +1257,12 @@ checkTestRedirects _ (T_Redirecting id redirs cmd) | cmd `isCommand` "test" =
     suspicious t = -- Ignore redirections of stderr because these are valid for squashing e.g. int errors,
         case t of  -- and >> and similar redirections because these are probably not comparisons.
             T_FdRedirect _ fd (T_IoFile _ op _) -> fd /= "2" && isComparison op
-            _otherwise -> False
+            _ -> False
     isComparison t =
         case t of
             T_Greater _ -> True
             T_Less _ -> True
-            _otherwise -> False
+            _ -> False
 checkTestRedirects _ _ = return ()
 
 prop_checkSudoRedirect1 = verify checkSudoRedirect "sudo echo 3 > /proc/file"
@@ -1696,7 +1696,7 @@ checkQuotesInLiterals params t =
     squashesQuotes t =
         case t of
             T_DollarBraced id _ -> "#" `isPrefixOf` bracedString t
-            _otherwise -> False
+            _ -> False
 
     readF _ expr name = do
         assignment <- getQuotes name
@@ -1997,7 +1997,7 @@ checkPrefixAssignmentReference params t@(T_DollarBraced id value) =
     check (t:rest) =
         case t of
             T_SimpleCommand _ vars (_:_) -> mapM_ checkVar vars
-            _otherwise -> check rest
+            _ -> check rest
     checkVar (T_Assignment aId mode aName [] value) |
             aName == name && (aId `notElem` idPath) = do
         warn aId 2097 "This assignment is only seen by the forked process."
@@ -2313,7 +2313,7 @@ shellSupport t =
   case t of
     T_CaseExpression _ _ list -> forCase (map (\(a,_,_) -> a) list)
     T_DollarBraceCommandExpansion {} -> ("${ ..; } command expansion", [Ksh])
-    _otherwise -> ("", [])
+    _ -> ("", [])
   where
     forCase seps | CaseContinue `elem` seps = ("cases with ;;&", [Bash])
     forCase seps | CaseFallThrough `elem` seps = ("cases with ;&", [Bash, Ksh])
@@ -2555,7 +2555,7 @@ prop_checkTrailingBracket5 = verifyNot checkTrailingBracket "run bar ']'"
 checkTrailingBracket _ token =
     case token of
         T_SimpleCommand _ _ tokens@(_:_) -> check (last tokens) token
-        _otherwise -> return ()
+        _ -> return ()
   where
     check t command =
         case t of
@@ -2566,7 +2566,7 @@ checkTrailingBracket _ token =
                 guard $ opposite `notElem` parameters
                 return $ warn id 2171 $
                     "Found trailing " ++ str ++ " outside test. Missing " ++ opposite ++ "?"
-            _otherwise -> return ()
+            _ -> return ()
     invert s =
         case s of
             "]]" -> "[["
@@ -2590,7 +2590,7 @@ checkReturnAgainstZero _ token =
             when (isExitCode exp) $ message (getId exp)
         TA_Sequence _ [exp] ->
             when (isExitCode exp) $ message (getId exp)
-        _otherwise -> return ()
+        _ -> return ()
   where
     check lhs rhs =
         if isZero rhs && isExitCode lhs
@@ -2600,7 +2600,7 @@ checkReturnAgainstZero _ token =
     isExitCode t =
         case getWordParts t of
             [exp@T_DollarBraced {}] -> bracedString exp == "?"
-            _otherwise -> False
+            _ -> False
     message id = style id 2181 "Check exit code directly with e.g. 'if mycmd;', not indirectly with $?."
 
 prop_checkRedirectedNowhere1 = verify checkRedirectedNowhere "> file"

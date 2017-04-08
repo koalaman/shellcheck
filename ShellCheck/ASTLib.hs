@@ -237,7 +237,7 @@ getCommand t =
         T_Redirecting _ _ w -> getCommand w
         T_SimpleCommand _ _ (w:_) -> return t
         T_Annotation _ _ t -> getCommand t
-        _otherwise -> Nothing
+        _ -> Nothing
 
 -- Maybe get the command name of a token representing a command
 getCommandName t = do
@@ -259,7 +259,7 @@ getCommandNameFromExpansion t =
         T_DollarExpansion _ [c] -> extract c
         T_Backticked _ [c] -> extract c
         T_DollarBraceCommandExpansion _ [c] -> extract c
-        _otherwise -> Nothing
+        _ -> Nothing
   where
     extract (T_Pipeline _ _ [cmd]) = getCommandName cmd
     extract _ = Nothing
@@ -275,7 +275,7 @@ isAssignment t =
         T_SimpleCommand _ (w:_) [] -> True
         T_Assignment {} -> True
         T_Annotation _ _ w -> isAssignment w
-        _otherwise -> False
+        _ -> False
 
 isOnlyRedirection t =
     case t of
@@ -283,7 +283,7 @@ isOnlyRedirection t =
         T_Annotation _ _ w -> isOnlyRedirection w
         T_Redirecting _ (_:_) c -> isOnlyRedirection c
         T_SimpleCommand _ [] [] -> True
-        _otherwise -> False
+        _ -> False
 
 isFunction t = case t of T_Function {} -> True; _ -> False
 
@@ -301,7 +301,7 @@ getCommandSequences t =
         T_ForIn _ _ _ cmds -> [cmds]
         T_ForArithmetic _ _ _ _ cmds -> [cmds]
         T_IfExpression _ thens elses -> map snd thens ++ [elses]
-        _otherwise -> []
+        _ -> []
 
 -- Get a list of names of associative arrays
 getAssociativeArrays t =
@@ -321,7 +321,7 @@ getAssociativeArrays t =
     nameAssignments t =
         case t of
             T_Assignment _ _ name _ _ -> return name
-            _otherwise -> Nothing
+            _ -> Nothing
 
 -- A Pseudoglob is a wildcard pattern used for checking if a match can succeed.
 -- For example, [[ $(cmd).jpg == [a-z] ]] will give the patterns *.jpg and ?, which
