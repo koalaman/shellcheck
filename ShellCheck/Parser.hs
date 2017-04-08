@@ -2569,7 +2569,13 @@ prop_readShebang2 = isWarning readShebang "!# /bin/sh\n"
 prop_readShebang3 = isNotOk readShebang "#shellcheck shell=/bin/sh\n"
 prop_readShebang4 = isWarning readShebang "! /bin/sh"
 readShebang = do
-    try readCorrect <|> try readSwapped <|> try readMissingHash
+    choice $ map try [
+        readCorrect,
+        readSwapped,
+        readTooManySpaces,
+        readMissingHash,
+        readMissingBang
+        ]
     many linewhitespace
     str <- many $ noneOf "\r\n"
     optional carriageReturn
@@ -2577,20 +2583,46 @@ readShebang = do
     return str
   where
     readCorrect = void $ string "#!"
+
     readSwapped = do
         pos <- getPosition
         string "!#"
         parseProblemAt pos ErrorC 1084
             "Use #!, not !#, for the shebang."
 
+    skipSpaces = liftM (not . null) $ many linewhitespace
+    readTooManySpaces = do
+        startPos <- getPosition
+        startSpaces <- skipSpaces
+        char '#'
+        middlePos <- getPosition
+        middleSpaces <- skipSpaces
+        char '!'
+        when startSpaces $
+            parseProblemAt startPos ErrorC 1114
+                "Remove leading spaces before the shebang."
+        when middleSpaces $
+            parseProblemAt middlePos ErrorC 1115
+                "Remove spaces between # and ! in the shebang."
+
     readMissingHash = do
         pos <- getPosition
         char '!'
-        lookAhead $ do
-            many linewhitespace
-            char '/'
+        ensurePathAhead
         parseProblemAt pos ErrorC 1104
             "Use #!, not just !, for the shebang."
+
+    readMissingBang = do
+        char '#'
+        pos <- getPosition
+        ensurePathAhead
+        parseProblemAt pos ErrorC 1113
+            "Use #!, not just #, for the shebang."
+
+
+    ensurePathAhead = lookAhead $ do
+        many linewhitespace
+        char '/'
 
 verifyEof = eof <|> choice [
         ifParsable g_Lparen $
