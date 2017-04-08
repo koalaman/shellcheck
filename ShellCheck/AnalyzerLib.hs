@@ -94,7 +94,12 @@ data StackData =
 data DataType = DataString DataSource | DataArray DataSource
   deriving (Show)
 
-data DataSource = SourceFrom [Token] | SourceExternal | SourceDeclaration | SourceInteger
+data DataSource =
+    SourceFrom [Token]
+    | SourceExternal
+    | SourceDeclaration
+    | SourceInteger
+    | SourceChecked
   deriving (Show)
 
 data VariableState = Dead Token String | Alive deriving (Show)
@@ -388,6 +393,18 @@ getModifiedVariables t =
             name <- getLiteralString lhs
             return (t, t, name, DataString $ SourceFrom [rhs])
 
+        -- Count [[ -v foo ]] as an "assignment".
+        -- This is to prevent [ -v foo ] being unassigned or unused.
+        TC_Unary id _ "-v" token -> maybeToList $ do
+            str <- fmap (takeWhile (/= '[')) $ -- Quoted index
+                    flip getLiteralStringExt token $ \x ->
+                case x of
+                    T_Glob _ s -> return s -- Unquoted index
+                    _ -> Nothing
+
+            guard . not . null $ str
+            return (t, token, str, DataString $ SourceChecked)
+
         T_DollarBraced _ l -> maybeToList $ do
             let string = bracedString t
             let modifier = getBracedModifier string
@@ -584,8 +601,10 @@ getReferencedVariables parents t =
                 getVariablesFromLiteralToken word
         else []
 
-    literalizer TA_Index {} = return ""  -- x[0] becomes a reference of x
-    literalizer _ = Nothing
+    literalizer t = case t of
+        TA_Index {} -> return ""  -- x[0] becomes a reference of x
+        T_Glob _ s -> return s    -- Also when parsed as globs
+        _ -> Nothing
 
     getIfReference context token = maybeToList $ do
             str <- getLiteralStringExt literalizer token

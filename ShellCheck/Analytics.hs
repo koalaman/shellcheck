@@ -1795,6 +1795,7 @@ prop_checkUnused32= verifyTree checkUnusedAssignments "let a=b=c; echo $a"
 prop_checkUnused33= verifyNotTree checkUnusedAssignments "a=foo; [[ foo =~ ^{$a}$ ]]"
 prop_checkUnused34= verifyNotTree checkUnusedAssignments "foo=1; (( t = foo )); echo $t"
 prop_checkUnused35= verifyNotTree checkUnusedAssignments "a=foo; b=2; echo ${a:b}"
+prop_checkUnused36= verifyNotTree checkUnusedAssignments "if [[ -v foo ]]; then true; fi"
 checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
     flow = variableFlow params
@@ -1845,6 +1846,10 @@ prop_checkUnassignedReferences25= verifyNotTree checkUnassignedReferences "decla
 prop_checkUnassignedReferences26= verifyNotTree checkUnassignedReferences "a::b() { foo; }; readonly -f a::b"
 prop_checkUnassignedReferences27= verifyNotTree checkUnassignedReferences ": ${foo:=bar}"
 prop_checkUnassignedReferences28= verifyNotTree checkUnassignedReferences "#!/bin/ksh\necho \"${.sh.version}\"\n"
+prop_checkUnassignedReferences29= verifyNotTree checkUnassignedReferences "if [[ -v foo ]]; then echo $foo; fi"
+prop_checkUnassignedReferences30= verifyNotTree checkUnassignedReferences "if [[ -v foo[3] ]]; then echo ${foo[3]}; fi"
+prop_checkUnassignedReferences31= verifyNotTree checkUnassignedReferences "X=1; if [[ -v foo[$X+42] ]]; then echo ${foo[$X+42]}; fi"
+prop_checkUnassignedReferences32= verifyNotTree checkUnassignedReferences "if [[ -v \"foo[1]\" ]]; then echo ${foo[@]}; fi"
 checkUnassignedReferences params t = warnings
   where
     (readMap, writeMap) = execState (mapM tally $ variableFlow params) (Map.empty, Map.empty)
@@ -2415,12 +2420,19 @@ prop_checkTestArgumentSplitting12 = verify checkTestArgumentSplitting "[ *.png ]
 prop_checkTestArgumentSplitting13 = verify checkTestArgumentSplitting "[ \"$@\" == \"\" ]"
 prop_checkTestArgumentSplitting14 = verify checkTestArgumentSplitting "[[ \"$@\" == \"\" ]]"
 prop_checkTestArgumentSplitting15 = verifyNot checkTestArgumentSplitting "[[ \"$*\" == \"\" ]]"
+prop_checkTestArgumentSplitting16 = verifyNot checkTestArgumentSplitting "[[ -v foo[123] ]]"
 checkTestArgumentSplitting :: Parameters -> Token -> Writer [TokenComment] ()
 checkTestArgumentSplitting _ t =
     case t of
-        (TC_Unary _ _ op token) | isGlob token ->
-            err (getId token) 2144 $
-               op ++ " doesn't work with globs. Use a for loop."
+        (TC_Unary _ typ op token) | isGlob token ->
+            if op == "-v"
+            then
+                when (typ == SingleBracket) $
+                    err (getId token) 2208 $
+                      "Use [[ ]] or quote arguments to -v to avoid glob expansion."
+            else
+                err (getId token) 2144 $
+                   op ++ " doesn't work with globs. Use a for loop."
 
         (TC_Nullary _ typ token) -> do
             checkBraces typ token
