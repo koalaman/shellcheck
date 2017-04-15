@@ -791,6 +791,7 @@ prop_checkSingleQuotedVariables10= verify checkSingleQuotedVariables "echo '`pwd
 prop_checkSingleQuotedVariables11= verifyNot checkSingleQuotedVariables "sed '${/lol/d}'"
 prop_checkSingleQuotedVariables12= verifyNot checkSingleQuotedVariables "eval 'echo $1'"
 prop_checkSingleQuotedVariables13= verifyNot checkSingleQuotedVariables "busybox awk '{print $1}'"
+prop_checkSingleQuotedVariables14= verifyNot checkSingleQuotedVariables "[ -v 'bar[$foo]' ]"
 checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
     when (s `matches` re) $
         if "sed" == commandName
@@ -828,6 +829,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
     isOkAssignment t =
         case t of
             T_Assignment _ _ name _ _ -> name `elem` commonlyQuoted
+            TC_Unary _ _ "-v" _ -> True
             _ -> False
 
     re = mkRegex "\\$[{(0-9a-zA-Z_]|`.*`"
