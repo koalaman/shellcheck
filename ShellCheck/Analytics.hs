@@ -256,15 +256,28 @@ prop_checkAssignAteCommand1 = verify checkAssignAteCommand "A=ls -l"
 prop_checkAssignAteCommand2 = verify checkAssignAteCommand "A=ls --sort=$foo"
 prop_checkAssignAteCommand3 = verify checkAssignAteCommand "A=cat foo | grep bar"
 prop_checkAssignAteCommand4 = verifyNot checkAssignAteCommand "A=foo ls -l"
-prop_checkAssignAteCommand5 = verifyNot checkAssignAteCommand "PAGER=cat grep bar"
-checkAssignAteCommand _ (T_SimpleCommand id (T_Assignment _ _ _ _ assignmentTerm:[]) (firstWord:_)) =
-    when ("-" `isPrefixOf` concat (oversimplify firstWord) ||
-        isCommonCommand (getLiteralString assignmentTerm)
-            && not (isCommonCommand (getLiteralString firstWord))) $
-                warn id 2037 "To assign the output of a command, use var=$(cmd) ."
+prop_checkAssignAteCommand5 = verify checkAssignAteCommand "PAGER=cat grep bar"
+prop_checkAssignAteCommand6 = verifyNot checkAssignAteCommand "PAGER=\"cat\" grep bar"
+prop_checkAssignAteCommand7 = verify checkAssignAteCommand "here=pwd"
+checkAssignAteCommand _ (T_SimpleCommand id (T_Assignment _ _ _ _ assignmentTerm:[]) list) =
+    -- Check if first word is intended as an argument (flag or glob).
+    if firstWordIsArg list
+    then
+        err id 2037 "To assign the output of a command, use var=$(cmd) ."
+    else
+        -- Check if it's a known, unquoted command name.
+        when (isCommonCommand $ getUnquotedLiteral assignmentTerm) $
+            warn id 2209 "Use var=$(command) to assign output (or quote to assign string)."
   where
     isCommonCommand (Just s) = s `elem` commonCommands
     isCommonCommand _ = False
+    firstWordIsArg list = fromMaybe False $ do
+        head <- list !!! 0
+        return . or $ mapMaybe ($ head) [return . isGlob, isFlag]
+    isFlag word = do
+        first <- (concat $ oversimplify word) !!! 0
+        return $ first == '-'
+
 checkAssignAteCommand _ _ = return ()
 
 prop_checkArithmeticOpCommand1 = verify checkArithmeticOpCommand "i=i + 1"
