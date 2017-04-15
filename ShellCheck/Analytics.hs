@@ -2220,6 +2220,7 @@ prop_checkUnpassedInFunctions8 = verifyNotTree checkUnpassedInFunctions "foo() {
 prop_checkUnpassedInFunctions9 = verifyNotTree checkUnpassedInFunctions "foo() { echo $(($b)); }; foo;"
 prop_checkUnpassedInFunctions10= verifyNotTree checkUnpassedInFunctions "foo() { echo $!; }; foo;"
 prop_checkUnpassedInFunctions11= verifyNotTree checkUnpassedInFunctions "foo() { bar() { echo $1; }; bar baz; }; foo;"
+prop_checkUnpassedInFunctions12= verifyNotTree checkUnpassedInFunctions "foo() { echo ${!var*}; }; foo;"
 checkUnpassedInFunctions params root =
     execWriter $ mapM_ warnForGroup referenceGroups
   where
@@ -2242,11 +2243,15 @@ checkUnpassedInFunctions params root =
             _ -> False
     isPositionalReference function x =
         case x of
-            Reference (_, t, str) -> isPositional str && t `isDirectChildOf` function
+            Reference (_, t, str) -> isPositional (lt str) && t `isDirectChildOf` function
             _ -> False
 
     isDirectChildOf child parent = fromMaybe False $ do
-        function <- find (\x -> case x of T_Function {} -> True; _ -> False) $ getPath (parentMap params) child
+        function <- find (\x -> case x of
+            T_Function {} -> True
+            T_Script {} -> True  -- for sourced files
+            _ -> False) $
+                getPath (parentMap params) child
         return $ getId parent == getId function
 
     referenceList :: [(String, Bool, Token)]
@@ -2255,12 +2260,12 @@ checkUnpassedInFunctions params root =
     checkCommand :: Token -> Maybe (Writer [(String, Bool, Token)] ())
     checkCommand t@(T_SimpleCommand _ _ (cmd:args)) = do
         str <- getLiteralString cmd
-        unless (Map.member str functionMap) $ fail "irrelevant"
+        guard $ Map.member str functionMap
         return $ tell [(str, null args, t)]
     checkCommand _ = Nothing
 
     isPositional str = str == "*" || str == "@"
-        || (all isDigit str && str /= "0")
+        || (all isDigit str && str /= "0" && str /= "")
 
     isArgumentless (_, b, _) = b
     referenceGroups = Map.elems $ foldr updateWith Map.empty referenceList
