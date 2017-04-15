@@ -2243,7 +2243,7 @@ checkUnpassedInFunctions params root =
             _ -> False
     isPositionalReference function x =
         case x of
-            Reference (_, t, str) -> isPositional (lt str) && t `isDirectChildOf` function
+            Reference (_, t, str) -> isPositional str && t `isDirectChildOf` function
             _ -> False
 
     isDirectChildOf child parent = fromMaybe False $ do
