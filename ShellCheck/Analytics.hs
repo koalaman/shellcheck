@@ -161,6 +161,7 @@ nodeChecks = [
     ,checkUnmatchableCases
     ,checkSubshellAsTest
     ,checkSplittingInArrays
+    ,checkRedirectionToNumber
     ]
 
 
@@ -2795,6 +2796,17 @@ checkSplittingInArrays params t =
             then "Prefer read -A or while read to split command output (or quote to avoid splitting)."
             else "Prefer mapfile or read -a to split command output (or quote to avoid splitting)."
 
+
+prop_checkRedirectionToNumber1 = verify checkRedirectionToNumber "( 1 > 2 )"
+prop_checkRedirectionToNumber2 = verify checkRedirectionToNumber "foo 1>2"
+prop_checkRedirectionToNumber3 = verifyNot checkRedirectionToNumber "echo foo > '2'"
+prop_checkRedirectionToNumber4 = verifyNot checkRedirectionToNumber "foo 1>&2"
+checkRedirectionToNumber _ t = case t of
+    T_IoFile id _ word -> potentially $ do
+        file <- getUnquotedLiteral word
+        guard $ all isDigit file
+        return $ warn id 2210 "This is a file redirection. Was it supposed to be a comparison or fd operation?"
+    _ -> return ()
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
