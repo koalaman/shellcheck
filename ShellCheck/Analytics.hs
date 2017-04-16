@@ -162,6 +162,7 @@ nodeChecks = [
     ,checkSubshellAsTest
     ,checkSplittingInArrays
     ,checkRedirectionToNumber
+    ,checkGlobAsCommand
     ]
 
 
@@ -1940,8 +1941,9 @@ checkUnassignedReferences params t = warnings
 prop_checkGlobsAsOptions1 = verify checkGlobsAsOptions "rm *.txt"
 prop_checkGlobsAsOptions2 = verify checkGlobsAsOptions "ls ??.*"
 prop_checkGlobsAsOptions3 = verifyNot checkGlobsAsOptions "rm -- *.txt"
+prop_checkGlobsAsOptions4 = verifyNot checkGlobsAsOptions "*.txt"
 checkGlobsAsOptions _ (T_SimpleCommand _ _ args) =
-    mapM_ check $ takeWhile (not . isEndOfArgs) args
+    mapM_ check $ takeWhile (not . isEndOfArgs) (drop 1 args)
   where
     check v@(T_NormalWord _ (T_Glob id s:_)) | s == "*" || s == "?" =
         info id 2035 "Use ./*glob* or -- *glob* so names with dashes won't become options."
@@ -2806,6 +2808,15 @@ checkRedirectionToNumber _ t = case t of
         file <- getUnquotedLiteral word
         guard $ all isDigit file
         return $ warn id 2210 "This is a file redirection. Was it supposed to be a comparison or fd operation?"
+    _ -> return ()
+
+prop_checkGlobAsCommand1 = verify checkGlobAsCommand "foo*"
+prop_checkGlobAsCommand2 = verify checkGlobAsCommand "$(var[i])"
+prop_checkGlobAsCommand3 = verifyNot checkGlobAsCommand "echo foo*"
+checkGlobAsCommand _ t = case t of
+    T_SimpleCommand _ _ (first:_) ->
+        when (isGlob first) $
+            warn (getId first) 2211 "This is a glob used as a command name. Was it supposed to be in ${..}, array, or is it missing quoting?"
     _ -> return ()
 
 return []
