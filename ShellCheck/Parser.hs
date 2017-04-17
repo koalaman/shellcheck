@@ -848,11 +848,13 @@ prop_readCondition14= isOk readCondition "[ foo '>' bar ]"
 prop_readCondition15= isOk readCondition "[ foo \">=\" bar ]"
 prop_readCondition16= isOk readCondition "[ foo \\< bar ]"
 prop_readCondition17= isOk readCondition "[[ ${file::1} = [-.\\|/\\\\] ]]"
+prop_readCondition18= isOk readCondition "[ ]"
 readCondition = called "test expression" $ do
     opos <- getPosition
     id <- getNextId
     open <- try (string "[[") <|> string "["
     let single = open == "["
+    let typ = if single then SingleBracket else DoubleBracket
 
     pos <- getPosition
     space <- allspacing
@@ -864,7 +866,11 @@ readCondition = called "test expression" $ do
     when (single && '\n' `elem` space) $
         parseProblemAt pos ErrorC 1080 "You need \\ before line feeds to break lines in [ ]."
 
-    condition <- readConditionContents single
+    condition <- readConditionContents single <|> do
+        guard . not . null $ space
+        lookAhead $ string "]"
+        id <- getNextIdAt pos
+        return $ TC_Empty id typ
 
     cpos <- getPosition
     close <- try (string "]]") <|> string "]" <|> fail "Expected test to end here (don't wrap commands in []/[[]])"
@@ -872,7 +878,7 @@ readCondition = called "test expression" $ do
     when (open == "[" && close /= "]" ) $ parseProblemAt opos ErrorC 1034 "Did you mean [[ ?"
     spacing
     many readCmdWord -- Read and throw away remainders to get then/do warnings. Fixme?
-    return $ T_Condition id (if single then SingleBracket else DoubleBracket) condition
+    return $ T_Condition id typ condition
 
 readAnnotationPrefix = do
     char '#'

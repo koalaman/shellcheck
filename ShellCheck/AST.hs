@@ -48,6 +48,7 @@ data Token =
     | TC_Nullary Id ConditionType Token
     | TC_Or Id ConditionType String Token Token
     | TC_Unary Id ConditionType String Token
+    | TC_Empty Id ConditionType
     | T_AND_IF Id
     | T_AndIf Id Token Token
     | T_Arithmetic Id Token
@@ -372,6 +373,7 @@ getId t = case t of
         T_CoProcBody id _ -> id
         T_Include id _ _ -> id
         T_UnparsedIndex id _ _ -> id
+        TC_Empty id _ -> id
 
 blank :: Monad m => Token -> m ()
 blank = const $ return ()

@@ -163,6 +163,7 @@ nodeChecks = [
     ,checkSplittingInArrays
     ,checkRedirectionToNumber
     ,checkGlobAsCommand
+    ,checkEmptyCondition
     ]
 
 
@@ -2817,6 +2818,12 @@ checkGlobAsCommand _ t = case t of
     T_SimpleCommand _ _ (first:_) ->
         when (isGlob first) $
             warn (getId first) 2211 "This is a glob used as a command name. Was it supposed to be in ${..}, array, or is it missing quoting?"
+    _ -> return ()
+
+prop_checkEmptyCondition1 = verify checkEmptyCondition "if [ ]; then ..; fi"
+prop_checkEmptyCondition2 = verifyNot checkEmptyCondition "[ foo -o bar ]"
+checkEmptyCondition _ t = case t of
+    TC_Empty id _ -> style id 2212 "Use 'false' instead of empty [/[[ conditionals."
     _ -> return ()
 
 return []
