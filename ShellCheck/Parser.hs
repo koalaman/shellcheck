@@ -2400,6 +2400,9 @@ prop_readAssignmentWord9c= isOk readAssignmentWord "foo=  #bar"
 prop_readAssignmentWord10= isWarning readAssignmentWord "foo$n=42"
 prop_readAssignmentWord11= isOk readAssignmentWord "foo=([a]=b [c] [d]= [e f )"
 prop_readAssignmentWord12= isOk readAssignmentWord "a[b <<= 3 + c]='thing'"
+prop_readAssignmentWord13= isOk readAssignmentWord "var=( (1 2) (3 4) )"
+prop_readAssignmentWord14= isOk readAssignmentWord "var=( 1 [2]=(3 4) )"
+prop_readAssignmentWord15= isOk readAssignmentWord "var=(1 [2]=(3 4))"
 readAssignmentWord = readAssignmentWordExt True
 readWellFormedAssignment = readAssignmentWordExt False
 readAssignmentWordExt lenient = try $ do
@@ -2459,7 +2462,11 @@ readArrayIndex = do
 readArray :: Monad m => SCParser m Token
 readArray = called "array assignment" $ do
     id <- getNextId
+    opening <- getPosition
     char '('
+    optional $ do
+        lookAhead $ char '('
+        parseProblemAt opening ErrorC 1116 "Missing $ on a $((..)) expression? (or use ( ( for arrays)."
     allspacing
     words <- readElement `reluctantlyTill` char ')'
     char ')' <|> fail "Expected ) to close array assignment"
@@ -2472,9 +2479,9 @@ readArray = called "array assignment" $ do
             x <- many1 readArrayIndex
             char '='
             return x
-        value <- readNormalWord <|> nothing
+        value <- readRegular <|> nothing
         return $ T_IndexedElement id index value
-    readRegular = readNormalWord
+    readRegular = readArray <|> readNormalWord
 
     nothing = do
         id <- getNextId
