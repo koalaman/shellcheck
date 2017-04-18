@@ -157,6 +157,11 @@ Valid keys are:
     used to tell shellcheck where to look for a file whose name is determined
     at runtime, or to skip a source by telling it to use `/dev/null`.
 
+**shell**
+:   Overrides the shell detected from the shebang.  This is useful for
+    files meant to be included (and thus lacking a shebang), or possibly
+    as a more targeted alternative to 'disable=2039'.
+
 # ENVIRONMENT VARIABLES
 The environment variable `SHELLCHECK_OPTS` can be set with default flags:
 
