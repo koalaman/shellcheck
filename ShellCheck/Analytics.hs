@@ -867,25 +867,33 @@ prop_checkNumberComparisons6 = verify checkNumberComparisons "[[ 3.14 -eq $foo ]
 prop_checkNumberComparisons7 = verifyNot checkNumberComparisons "[[ 3.14 == $foo ]]"
 prop_checkNumberComparisons8 = verify checkNumberComparisons "[ foo <= bar ]"
 prop_checkNumberComparisons9 = verify checkNumberComparisons "[ foo \\>= bar ]"
-prop_checkNumberComparisons11= verify checkNumberComparisons "[ $foo -eq 'N' ]"
-prop_checkNumberComparisons12= verify checkNumberComparisons "[ x$foo -gt x${N} ]"
+prop_checkNumberComparisons11 = verify checkNumberComparisons "[ $foo -eq 'N' ]"
+prop_checkNumberComparisons12 = verify checkNumberComparisons "[ x$foo -gt x${N} ]"
+prop_checkNumberComparisons13 = verify checkNumberComparisons "[ $foo > $bar ]"
+prop_checkNumberComparisons14 = verifyNot checkNumberComparisons "[[ foo < bar ]]"
+prop_checkNumberComparisons15 = verifyNot checkNumberComparisons "[ $foo '>' $bar ]"
 checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
-    if isNum lhs && not (isNonNum rhs)
-       || isNum rhs && not (isNonNum lhs)
+    if isNum lhs || isNum rhs
       then do
         when (isLtGt op) $
           err id 2071 $
             op ++ " is for string comparisons. Use " ++ eqv op ++ " instead."
-        when (isLeGe op) $
+        when (isLeGe op && hasStringComparison) $
             err id 2071 $ op ++ " is not a valid operator. " ++
               "Use " ++ eqv op ++ " ."
       else do
         when (isLeGe op || isLtGt op) $
             mapM_ checkDecimals [lhs, rhs]
 
-        when (isLeGe op) $
+        when (isLeGe op && hasStringComparison) $
             err id 2122 $ op ++ " is not a valid operator. " ++
-                "Use '! a " ++ invert op ++ " b' instead."
+                "Use '! a " ++ esc ++ invert op ++ " b' instead."
+
+        when (typ == SingleBracket && op `elem` ["<", ">"]) $
+            case shellType params of
+                Sh -> return ()  -- These are unsupported and will be caught by bashism checks.
+                Dash -> err id 2073 $ "Escape \\" ++ op ++ " to prevent it redirecting."
+                _ -> err id 2073 $ "Escape \\" ++ op ++ " to prevent it redirecting (or switch to [[ .. ]])."
 
     when (op `elem` ["-lt", "-gt", "-le", "-ge", "-eq"]) $ do
         mapM_ checkDecimals [lhs, rhs]
@@ -893,6 +901,7 @@ checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
             checkStrings [lhs, rhs]
 
   where
+      hasStringComparison = shellType params /= Sh
       isLtGt = flip elem ["<", "\\<", ">", "\\>"]
       isLeGe = flip elem ["<=", "\\<=", ">=", "\\>="]
 
@@ -942,26 +951,19 @@ checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
       invert "<=" = ">"
       invert ">=" = "<"
 
-      floatRegex = mkRegex "^[0-9]+\\.[0-9]+$"
+      floatRegex = mkRegex "^[-+]?[0-9]+\\.[0-9]+$"
 checkNumberComparisons _ _ = return ()
 
 prop_checkSingleBracketOperators1 = verify checkSingleBracketOperators "[ test =~ foo ]"
-prop_checkSingleBracketOperators2 = verify checkSingleBracketOperators "[ $foo > $bar ]"
-prop_checkSingleBracketOperators3 = verifyNot checkSingleBracketOperators "[[ foo < bar ]]"
-prop_checkSingleBracketOperators5 = verify checkSingleBracketOperators "until [ $n <= $z ]; do echo foo; done"
-prop_checkSingleBracketOperators6 = verifyNot checkSingleBracketOperators "[ $foo '>' $bar ]"
-checkSingleBracketOperators _ (TC_Binary id typ op lhs rhs)
-    | typ == SingleBracket && op `elem` ["<", ">", "<=", ">="] =
-        err id 2073 $ "Can't use " ++ op ++" in [ ]. Escape it or use [[..]]."
-checkSingleBracketOperators _ (TC_Binary id typ op lhs rhs)
-    | typ == SingleBracket && op == "=~" =
-        err id 2074 $ "Can't use " ++ op ++" in [ ]. Use [[..]] instead."
+checkSingleBracketOperators params (TC_Binary id SingleBracket "=~" lhs rhs) =
+    when (shellType params `elem` [Bash, Ksh]) $
+        err id 2074 $ "Can't use =~ in [ ]. Use [[..]] instead."
 checkSingleBracketOperators _ _ = return ()
 
 prop_checkDoubleBracketOperators1 = verify checkDoubleBracketOperators "[[ 3 \\< 4 ]]"
 prop_checkDoubleBracketOperators3 = verifyNot checkDoubleBracketOperators "[[ foo < bar ]]"
 checkDoubleBracketOperators _ x@(TC_Binary id typ op lhs rhs)
-    | typ == DoubleBracket && op `elem` ["\\<", "\\>", "\\<=", "\\>="] =
+    | typ == DoubleBracket && op `elem` ["\\<", "\\>"] =
         err id 2075 $ "Escaping " ++ op ++" is required in [..], but invalid in [[..]]"
 checkDoubleBracketOperators _ _ = return ()
 

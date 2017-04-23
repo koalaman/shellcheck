@@ -161,10 +161,15 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
     bashism (T_Condition id DoubleBracket _) = warnMsg id "[[ ]] is"
     bashism (T_HereString id _) = warnMsg id "here-strings are"
     bashism (TC_Binary id SingleBracket op _ _)
-        | op `elem` [ "-nt", "-ef", "\\<", "\\>"] =
+        | op `elem` [ "<", ">", "\\<", "\\>", "<=", ">=", "\\<=", "\\>="] =
+            unless isDash $ warnMsg id $ "lexicographical " ++ op ++ " is"
+    bashism (TC_Binary id SingleBracket op _ _)
+        | op `elem` [ "-nt", "-ef" ] =
             unless isDash $ warnMsg id $ op ++ " is"
     bashism (TC_Binary id SingleBracket "==" _ _) =
             warnMsg id "== in place of = is"
+    bashism (TC_Binary id SingleBracket "=~" _ _) =
+            warnMsg id "=~ regex matching is"
     bashism (TC_Unary id _ "-a" _) =
             warnMsg id "unary -a in place of -e is"
     bashism (TA_Unary id op _)
