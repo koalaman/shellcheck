@@ -48,6 +48,8 @@ You can see ShellCheck suggestions directly in a variety of editors.
 
 * Atom, through [Linter](https://github.com/AtomLinter/linter-shellcheck).
 
+* VSCode, through [vscode-shellcheck](https://github.com/timonwong/vscode-shellcheck).
+
 * Most other editors, through [GCC error compatibility](shellcheck.1.md#user-content-formats).
 
 
