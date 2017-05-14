@@ -62,6 +62,8 @@ treeChecks = [
     ,checkShebang
     ,checkUnassignedReferences
     ,checkUncheckedCd
+    ,checkUncheckedPushd
+    ,checkUncheckedPopd
     ,checkArrayAssignmentIndices
     ]
 
@@ -2539,7 +2541,7 @@ prop_checkUncheckedCd6 = verifyNotTree checkUncheckedCd "cd .."
 prop_checkUncheckedCd7 = verifyNotTree checkUncheckedCd "#!/bin/bash -e\ncd foo\nrm bar"
 prop_checkUncheckedCd8 = verifyNotTree checkUncheckedCd "set -o errexit; cd foo; rm bar"
 checkUncheckedCd params root =
-    if hasSetE then [] else execWriter $ doAnalysis checkElement root
+    if hasSetE root then [] else execWriter $ doAnalysis checkElement root
   where
     checkElement t@T_SimpleCommand {} =
         when(t `isUnqualifiedCommand` "cd"
@@ -2548,7 +2550,47 @@ checkUncheckedCd params root =
                 warn (getId t) 2164 "Use 'cd ... || exit' or 'cd ... || return' in case cd fails."
     checkElement _ = return ()
     isCdDotDot t = oversimplify t == ["cd", ".."]
-    hasSetE = isNothing $ doAnalysis (guard . not . isSetE) root
+
+prop_checkUncheckedPushd1 = verifyTree checkUncheckedPushd "pushd ~/src; rm -r foo"
+prop_checkUncheckedPushd2 = verifyNotTree checkUncheckedPushd "pushd ~/src || exit; rm -r foo"
+prop_checkUncheckedPushd3 = verifyNotTree checkUncheckedPushd "set -e; pushd ~/src; rm -r foo"
+prop_checkUncheckedPushd4 = verifyNotTree checkUncheckedPushd "if pushd foo; then rm foo; fi"
+prop_checkUncheckedPushd5 = verifyTree checkUncheckedPushd "if true; then pushd foo; fi"
+prop_checkUncheckedPushd6 = verifyNotTree checkUncheckedPushd "pushd .."
+prop_checkUncheckedPushd7 = verifyNotTree checkUncheckedPushd "#!/bin/bash -e\npushd foo\nrm bar"
+prop_checkUncheckedPushd8 = verifyNotTree checkUncheckedPushd "set -o errexit; pushd foo; rm bar"
+prop_checkUncheckedPushd9 = verifyNotTree checkUncheckedPushd "pushd -n foo"
+checkUncheckedPushd params root =
+    if hasSetE root then [] else execWriter $ doAnalysis checkElement root
+  where
+    checkElement t@T_SimpleCommand {} =
+        when(t `isUnqualifiedCommand` "pushd"
+            && not (isPushdDotDot t)
+            && not ("n" `elem` map snd (getAllFlags t))
+            && not (isCondition $ getPath (parentMap params) t)) $
+                warn (getId t) 2164 "Use 'pushd ... || exit' or 'pushd ... || return' in case pushd fails."
+    checkElement _ = return ()
+    isPushdDotDot t = oversimplify t == ["pushd", ".."]
+
+prop_checkUncheckedPopd1 = verifyTree checkUncheckedPopd "popd; rm -r foo"
+prop_checkUncheckedPopd2 = verifyNotTree checkUncheckedPopd "popd || exit; rm -r foo"
+prop_checkUncheckedPopd3 = verifyNotTree checkUncheckedPopd "set -e; popd; rm -r foo"
+prop_checkUncheckedPopd4 = verifyNotTree checkUncheckedPopd "if popd; then rm foo; fi"
+prop_checkUncheckedPopd5 = verifyTree checkUncheckedPopd "if true; then popd; fi"
+prop_checkUncheckedPopd6 = verifyTree checkUncheckedPopd "popd"
+prop_checkUncheckedPopd7 = verifyNotTree checkUncheckedPopd "#!/bin/bash -e\npopd\nrm bar"
+prop_checkUncheckedPopd8 = verifyNotTree checkUncheckedPopd "set -o errexit; popd; rm bar"
+checkUncheckedPopd params root =
+    if hasSetE root then [] else execWriter $ doAnalysis checkElement root
+  where
+    checkElement t@T_SimpleCommand {} =
+        when(t `isUnqualifiedCommand` "popd"
+            && not (isCondition $ getPath (parentMap params) t)) $
+                warn (getId t) 2164 "Use 'popd || exit' or 'popd || return' in case popd fails."
+    checkElement _ = return ()
+
+hasSetE root = isNothing $ doAnalysis (guard . not . isSetE) root
+  where
     isSetE t =
         case t of
             T_Script _ str _ -> str `matches` re
