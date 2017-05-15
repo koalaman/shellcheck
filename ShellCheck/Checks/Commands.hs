@@ -385,17 +385,26 @@ prop_checkMkdirDashPM11 = verifyNot checkMkdirDashPM "mkdir --parents a/b"
 prop_checkMkdirDashPM12 = verifyNot checkMkdirDashPM "mkdir --mode=0755 a/b"
 prop_checkMkdirDashPM13 = verifyNot checkMkdirDashPM "mkdir_func -pm 0755 a/b"
 prop_checkMkdirDashPM14 = verifyNot checkMkdirDashPM "mkdir -p -m 0755 singlelevel"
+prop_checkMkdirDashPM15 = verifyNot checkMkdirDashPM "mkdir -p -m 0755 ../bin"
+prop_checkMkdirDashPM16 = verify checkMkdirDashPM "mkdir -p -m 0755 ../bin/laden"
+prop_checkMkdirDashPM17 = verifyNot checkMkdirDashPM "mkdir -p -m 0755 ./bin"
+prop_checkMkdirDashPM18 = verify checkMkdirDashPM "mkdir -p -m 0755 ./bin/laden"
+prop_checkMkdirDashPM19 = verifyNot checkMkdirDashPM "mkdir -p -m 0755 ./../bin"
+prop_checkMkdirDashPM20 = verifyNot checkMkdirDashPM "mkdir -p -m 0755 .././bin"
+prop_checkMkdirDashPM21 = verifyNot checkMkdirDashPM "mkdir -p -m 0755 ../../bin"
 checkMkdirDashPM = CommandCheck (Basename "mkdir") check
   where
     check t = potentially $ do
         let flags = getAllFlags t
         dashP <- find ((\f -> f == "p" || f == "parents") . snd) flags
         dashM <- find ((\f -> f == "m" || f == "mode") . snd) flags
-        guard $ any couldHaveSubdirs (drop 1 $ arguments t) -- mkdir -pm 0700 dir  is fine, but dir/subdir is not.
+        -- mkdir -pm 0700 dir  is fine, so is ../dir, but dir/subdir is not.
+        guard $ any couldHaveSubdirs (drop 1 $ arguments t)
         return $ warn (getId $ fst dashM) 2174 "When used with -p, -m only applies to the deepest directory."
     couldHaveSubdirs t = fromMaybe True $ do
         name <- getLiteralString t
-        return $ '/' `elem` name
+        return $ '/' `elem` name && not (name `matches` re)
+    re = mkRegex "^(\\.\\.?\\/)+[^/]+$"
 
 
 prop_checkNonportableSignals1 = verify checkNonportableSignals "trap f 8"
