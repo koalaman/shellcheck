@@ -129,9 +129,9 @@ From Docker Hub:
 
 Using the Docker image can be done like so:
 
-    docker run -v $(pwd):/scripts koalaman/shellcheck /scripts/myscript.sh
+    docker run -v "$PWD:/mnt" koalaman/shellcheck myscript
 
-Here the local directory ( $(pwd) ) is mounted into the containers directory "/scripts". The script "myscript.sh" is checked.
+Here the current directory `$PWD` is mounted as the container's directory `/mnt`, which is ShellCheck's working directory in the image. The script `myscript` is checked.
 
 ## Compiling from source
 
