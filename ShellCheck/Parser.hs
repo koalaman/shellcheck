@@ -889,10 +889,13 @@ prop_readAnnotation1 = isOk readAnnotation "# shellcheck disable=1234,5678\n"
 prop_readAnnotation2 = isOk readAnnotation "# shellcheck disable=SC1234 disable=SC5678\n"
 prop_readAnnotation3 = isOk readAnnotation "# shellcheck disable=SC1234 source=/dev/null disable=SC5678\n"
 prop_readAnnotation4 = isWarning readAnnotation "# shellcheck cats=dogs disable=SC1234\n"
+prop_readAnnotation5 = isOk readAnnotation "# shellcheck disable=SC2002 # All cats are precious\n"
+prop_readAnnotation6 = isOk readAnnotation "# shellcheck disable=SC1234 # shellcheck foo=bar\n"
 readAnnotation = called "shellcheck annotation" $ do
     try readAnnotationPrefix
     many1 linewhitespace
     values <- many1 (readDisable <|> readSourceOverride <|> readShellOverride <|> anyKey)
+    optional readAnyComment
     linefeed
     many linewhitespace
     return $ concat values
@@ -926,7 +929,8 @@ readAnnotation = called "shellcheck annotation" $ do
 
     anyKey = do
         pos <- getPosition
-        anyChar `reluctantlyTill1` whitespace
+        noneOf "#\r\n"
+        anyChar `reluctantlyTill` whitespace
         many linewhitespace
         parseNoteAt pos WarningC 1107 "This directive is unknown. It will be ignored."
         return []
@@ -937,6 +941,9 @@ readAnnotations = do
 
 readComment = do
     unexpecting "shellcheck annotation" readAnnotationPrefix
+    readAnyComment
+
+readAnyComment = do
     char '#'
     many $ noneOf "\r\n"
 
@@ -2729,13 +2736,17 @@ readScript = do
     script <- readScriptFile
     reparseIndices script
 
-isWarning p s = parsesCleanly p s == Just False
-isOk p s =      parsesCleanly p s == Just True
-isNotOk p s =   parsesCleanly p s == Nothing
 
-testParse string = runIdentity $ do
-    (res, _) <- runParser (mockedSystemInterface []) readScript "-" string
+-- Interactively run a parser in ghci:
+-- debugParse readScript "echo 'hello world'"
+debugParse p string = runIdentity $ do
+    (res, _) <- runParser (mockedSystemInterface []) p "-" string
     return res
+
+
+isOk p s =      parsesCleanly p s == Just True   -- The string parses with no warnings
+isWarning p s = parsesCleanly p s == Just False  -- The string parses with warnings
+isNotOk p s =   parsesCleanly p s == Nothing     -- The string does not parse
 
 parsesCleanly parser string = runIdentity $ do
     (res, sys) <- runParser (mockedSystemInterface [])
@@ -2744,6 +2755,16 @@ parsesCleanly parser string = runIdentity $ do
         (Right userState, systemState) ->
             return $ Just . null $ parseNotes userState ++ parseProblems systemState
         (Left _, _) -> return Nothing
+
+-- For printf debugging: print the value of an expression
+-- Example: return $ dump $ T_Literal id [c]
+dump :: Show a => a -> a
+dump x = trace (show x) x
+
+-- Like above, but print a specific expression:
+-- Example: return $ dumps ("Returning: " ++ [c])  $ T_Literal id [c]
+dumps :: Show x => x -> a -> a
+dumps t = trace (show t)
 
 parseWithNotes parser = do
     item <- parser
@@ -2876,9 +2897,6 @@ parseScript :: Monad m =>
 parseScript sys spec =
     parseShell sys (psFilename spec) (psScript spec)
 
-
-lt x = trace (show x) x
-ltt t = trace (show t)
 
 return []
 runTests = $quickCheckAll
