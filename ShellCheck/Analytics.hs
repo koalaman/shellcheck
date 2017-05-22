@@ -1525,6 +1525,7 @@ prop_subshellAssignmentCheck15 = verifyNotTree subshellAssignmentCheck "#!/bin/k
 prop_subshellAssignmentCheck16 = verifyNotTree subshellAssignmentCheck "(set -e); echo $@"
 prop_subshellAssignmentCheck17 = verifyNotTree subshellAssignmentCheck "foo=${ { bar=$(baz); } 2>&1; }; echo $foo $bar"
 prop_subshellAssignmentCheck18 = verifyTree subshellAssignmentCheck "( exec {n}>&2; ); echo $n"
+prop_subshellAssignmentCheck19 = verifyNotTree subshellAssignmentCheck "#!/bin/bash\nshopt -s lastpipe; echo a | read -r b; echo \"$b\""
 subshellAssignmentCheck params t =
     let flow = variableFlow params
         check = findSubshelled flow [("oops",[])] Map.empty
@@ -2108,7 +2109,7 @@ checkLoopKeywordScope params t |
   where
     name = getCommandName t
     path = let p = getPath (parentMap params) t in filter relevant p
-    subshellType t = case leadType (shellType params) (parentMap params) t of
+    subshellType t' = case leadType (shellType params) (parentMap params) t' t of
         NoneScope -> Nothing
         SubshellScope str -> return str
     relevant t = isLoop t || isFunction t || isJust (subshellType t)
@@ -2236,7 +2237,7 @@ checkUnpassedInFunctions params root =
     functions = execWriter $ doAnalysis (tell . maybeToList . findFunction) root
 
     findFunction t@(T_Function id _ _ name body) =
-        let flow = getVariableFlow (shellType params) (parentMap params) body
+        let flow = getVariableFlow (shellType params) (parentMap params) body root
         in
           if any (isPositionalReference t) flow && not (any isPositionalAssignment flow)
             then return t

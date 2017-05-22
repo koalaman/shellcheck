@@ -145,7 +145,7 @@ makeParameters spec =
         shellTypeSpecified = isJust $ asShellType spec,
         parentMap = getParentTree root,
         variableFlow =
-            getVariableFlow (shellType params) (parentMap params) root
+            getVariableFlow (shellType params) (parentMap params) root root
     } in params
   where root = asScript spec
 
@@ -322,18 +322,18 @@ tokenIsJustCommandOutput t = case t of
     check _ = False
 
 -- TODO: Replace this with a proper Control Flow Graph
-getVariableFlow shell parents t =
+getVariableFlow shell parents t root =
     let (_, stack) = runState (doStackAnalysis startScope endScope t) []
     in reverse stack
   where
     startScope t =
-        let scopeType = leadType shell parents t
+        let scopeType = leadType shell parents t root
         in do
             when (scopeType /= NoneScope) $ modify (StackScope scopeType:)
             when (assignFirst t) $ setWritten t
 
     endScope t =
-        let scopeType = leadType shell parents t
+        let scopeType = leadType shell parents t root
         in do
             setRead t
             unless (assignFirst t) $ setWritten t
@@ -352,7 +352,7 @@ getVariableFlow shell parents t =
         in mapM_ (\v -> modify (Assignment v:)) written
 
 
-leadType shell parents t =
+leadType shell parents t root =
     case t of
         T_DollarExpansion _ _  -> SubshellScope "$(..) expansion"
         T_Backticked _ _  -> SubshellScope "`..` expansion"
@@ -381,10 +381,18 @@ leadType shell parents t =
 
     lastCreatesSubshell =
         case shell of
-            Bash -> True
+            Bash -> not hasShoptLastPipe
             Dash -> True
             Sh -> True
             Ksh -> False
+
+    hasShoptLastPipe = isNothing $ doAnalysis (guard . not . isShoptLastPipe) root
+    isShoptLastPipe t =
+        case t of
+            T_SimpleCommand {}  ->
+                t `isUnqualifiedCommand` "shopt" &&
+                    ("lastpipe" `elem` oversimplify t)
+            _ -> False
 
 getModifiedVariables t =
     case t of
