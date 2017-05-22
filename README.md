@@ -349,7 +349,9 @@ https://github.com/koalaman/shellcheck/issues
 
 ## Contributing
 
-Please submit patches to code or documentation as GitHub pull requests!
+Please submit patches to code or documentation as GitHub pull requests! Check
+out the [DevGuide](https://github.com/koalaman/shellcheck/wiki/DevGuide) on the
+ShellCheck Wiki.
 
 Contributions must be licensed under the GNU GPLv3.
 The contributor retains the copyright.
