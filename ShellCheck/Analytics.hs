@@ -659,15 +659,12 @@ prop_checkUnquotedDollarAt6 = verifyNot checkUnquotedDollarAt "a=$@"
 prop_checkUnquotedDollarAt7 = verify checkUnquotedDollarAt "for f in ${var[@]}; do true; done"
 prop_checkUnquotedDollarAt8 = verifyNot checkUnquotedDollarAt "echo \"${args[@]:+${args[@]}}\""
 prop_checkUnquotedDollarAt9 = verifyNot checkUnquotedDollarAt "echo ${args[@]:+\"${args[@]}\"}"
+prop_checkUnquotedDollarAt10 = verifyNot checkUnquotedDollarAt "echo ${@+\"$@\"}"
 checkUnquotedDollarAt p word@(T_NormalWord _ parts) | not $ isStrictlyQuoteFree (parentMap p) word =
     forM_ (take 1 $ filter isArrayExpansion parts) $ \x ->
-        unless (isAlternative x) $
+        unless (isQuotedAlternativeReference x) $
             err (getId x) 2068
                 "Double quote array expansions to avoid re-splitting elements."
-  where
-    -- Fixme: should detect whether the alternative is quoted
-    isAlternative b@(T_DollarBraced _ t) = ":+" `isInfixOf` bracedString b
-    isAlternative _ = False
 checkUnquotedDollarAt _ _ = return ()
 
 prop_checkConcatenatedDollarAt1 = verify checkConcatenatedDollarAt "echo \"foo$@\""
@@ -1609,6 +1606,7 @@ prop_checkSpacefulness31= verifyNotTree checkSpacefulness "echo \"`echo \\\"$1\\
 prop_checkSpacefulness32= verifyNotTree checkSpacefulness "var=$1; [ -v var ]"
 prop_checkSpacefulness33= verifyTree checkSpacefulness "for file; do echo $file; done"
 prop_checkSpacefulness34= verifyTree checkSpacefulness "declare foo$n=$1"
+prop_checkSpacefulness35= verifyNotTree checkSpacefulness "echo ${1+\"$1\"}"
 
 checkSpacefulness params t =
     doVariableFlowAnalysis readF writeF (Map.fromList defaults) (variableFlow params)

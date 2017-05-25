@@ -784,8 +784,10 @@ isCountingReference _ = False
 isQuotedAlternativeReference t =
     case t of
         T_DollarBraced _ _ ->
-            ":+" `isInfixOf` bracedString t
+            getBracedModifier (bracedString t) `matches` re
         _ -> False
+  where
+    re = mkRegex "(^|\\]):?\\+"
 
 
 
