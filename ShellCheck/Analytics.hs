@@ -2106,7 +2106,7 @@ checkLoopKeywordScope params t |
   where
     name = getCommandName t
     path = let p = getPath (parentMap params) t in filter relevant p
-    subshellType t' = case leadType (shellType params) (parentMap params) t' t of
+    subshellType t = case leadType params t of
         NoneScope -> Nothing
         SubshellScope str -> return str
     relevant t = isLoop t || isFunction t || isJust (subshellType t)
@@ -2168,7 +2168,7 @@ checkUnpassedInFunctions params root =
     functions = execWriter $ doAnalysis (tell . maybeToList . findFunction) root
 
     findFunction t@(T_Function id _ _ name body) =
-        let flow = getVariableFlow (shellType params) (parentMap params) body root
+        let flow = getVariableFlow params body
         in
           if any (isPositionalReference t) flow && not (any isPositionalAssignment flow)
             then return t
@@ -2471,7 +2471,9 @@ prop_checkUncheckedCd6 = verifyNotTree checkUncheckedCd "cd .."
 prop_checkUncheckedCd7 = verifyNotTree checkUncheckedCd "#!/bin/bash -e\ncd foo\nrm bar"
 prop_checkUncheckedCd8 = verifyNotTree checkUncheckedCd "set -o errexit; cd foo; rm bar"
 checkUncheckedCd params root =
-    if hasSetE then [] else execWriter $ doAnalysis checkElement root
+    if hasSetE params
+    then []
+    else execWriter $ doAnalysis checkElement root
   where
     checkElement t@T_SimpleCommand {} =
         when(t `isUnqualifiedCommand` "cd"
@@ -2480,15 +2482,6 @@ checkUncheckedCd params root =
                 warn (getId t) 2164 "Use 'cd ... || exit' or 'cd ... || return' in case cd fails."
     checkElement _ = return ()
     isCdDotDot t = oversimplify t == ["cd", ".."]
-    hasSetE = isNothing $ doAnalysis (guard . not . isSetE) root
-    isSetE t =
-        case t of
-            T_Script _ str _ -> str `matches` re
-            T_SimpleCommand {}  ->
-                t `isUnqualifiedCommand` "set" &&
-                    ("errexit" `elem` oversimplify t || "e" `elem` map snd (getAllFlags t))
-            _ -> False
-    re = mkRegex "[[:space:]]-[^-]*e"
 
 prop_checkLoopVariableReassignment1 = verify checkLoopVariableReassignment "for i in *; do for i in *.bar; do true; done; done"
 prop_checkLoopVariableReassignment2 = verify checkLoopVariableReassignment "for i in *; do for((i=0; i<3; i++)); do true; done; done"

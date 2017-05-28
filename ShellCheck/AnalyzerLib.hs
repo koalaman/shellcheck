@@ -72,6 +72,8 @@ composeAnalyzers :: (a -> Analysis) -> (a -> Analysis) -> a -> Analysis
 composeAnalyzers f g x = f x >> g x
 
 data Parameters = Parameters {
+    hasLastpipe :: Bool,           -- Whether this script has the 'lastpipe' option set/default.
+    hasSetE     :: Bool,           -- Whether this script has 'set -e' anywhere.
     variableFlow :: [StackData],   -- A linear (bad) analysis of data flow
     parentMap :: Map.Map Id Token, -- A map from Id to parent Token
     shellType :: Shell,            -- The shell type, such as Bash or Ksh
@@ -142,12 +144,47 @@ makeParameters spec =
     let params = Parameters {
         rootNode = root,
         shellType = fromMaybe (determineShell root) $ asShellType spec,
+        hasSetE = containsSetE root,
+        hasLastpipe =
+            case shellType params of
+                Bash -> containsLastpipe root
+                Dash -> False
+                Sh -> False
+                Ksh -> True,
+
         shellTypeSpecified = isJust $ asShellType spec,
         parentMap = getParentTree root,
-        variableFlow =
-            getVariableFlow (shellType params) (parentMap params) root root
+        variableFlow = getVariableFlow params root
     } in params
   where root = asScript spec
+
+
+-- Does this script mention 'set -e' anywhere?
+-- Used as a hack to disable certain warnings.
+containsSetE root = isNothing $ doAnalysis (guard . not . isSetE) root
+  where
+    isSetE t =
+        case t of
+            T_Script _ str _ -> str `matches` re
+            T_SimpleCommand {}  ->
+                t `isUnqualifiedCommand` "set" &&
+                    ("errexit" `elem` oversimplify t ||
+                        "e" `elem` map snd (getAllFlags t))
+            _ -> False
+    re = mkRegex "[[:space:]]-[^-]*e"
+
+-- Does this script mention 'shopt -s lastpipe' anywhere?
+-- Also used as a hack.
+containsLastpipe root =
+        isNothing $ doAnalysis (guard . not . isShoptLastPipe) root
+    where
+        isShoptLastPipe t =
+            case t of
+                T_SimpleCommand {}  ->
+                    t `isUnqualifiedCommand` "shopt" &&
+                        ("lastpipe" `elem` oversimplify t)
+                _ -> False
+
 
 prop_determineShell0 = determineShell (fromJust $ pScript "#!/bin/sh") == Sh
 prop_determineShell1 = determineShell (fromJust $ pScript "#!/usr/bin/env ksh") == Ksh
@@ -337,18 +374,18 @@ tokenIsJustCommandOutput t = case t of
     check _ = False
 
 -- TODO: Replace this with a proper Control Flow Graph
-getVariableFlow shell parents t root =
+getVariableFlow params t =
     let (_, stack) = runState (doStackAnalysis startScope endScope t) []
     in reverse stack
   where
     startScope t =
-        let scopeType = leadType shell parents t root
+        let scopeType = leadType params t
         in do
             when (scopeType /= NoneScope) $ modify (StackScope scopeType:)
             when (assignFirst t) $ setWritten t
 
     endScope t =
-        let scopeType = leadType shell parents t root
+        let scopeType = leadType params t
         in do
             setRead t
             unless (assignFirst t) $ setWritten t
@@ -359,7 +396,7 @@ getVariableFlow shell parents t root =
     assignFirst _ = False
 
     setRead t =
-        let read    = getReferencedVariables parents t
+        let read    = getReferencedVariables (parentMap params) t
         in mapM_ (\v -> modify (Reference v:)) read
 
     setWritten t =
@@ -367,7 +404,7 @@ getVariableFlow shell parents t root =
         in mapM_ (\v -> modify (Assignment v:)) written
 
 
-leadType shell parents t root =
+leadType params t =
     case t of
         T_DollarExpansion _ _  -> SubshellScope "$(..) expansion"
         T_Backticked _ _  -> SubshellScope "`..` expansion"
@@ -381,7 +418,7 @@ leadType shell parents t root =
         _ -> NoneScope
   where
     parentPipeline = do
-        parent <- Map.lookup (getId t) parents
+        parent <- Map.lookup (getId t) (parentMap params)
         case parent of
             T_Pipeline {} -> return parent
             _ -> Nothing
@@ -390,24 +427,9 @@ leadType shell parents t root =
         (T_Pipeline _ _ list) <- parentPipeline
         if length list <= 1
             then return False
-            else if lastCreatesSubshell
+            else if not $ hasLastpipe params
                 then return True
                 else return . not $ (getId . head $ reverse list) == getId t
-
-    lastCreatesSubshell =
-        case shell of
-            Bash -> not hasShoptLastPipe
-            Dash -> True
-            Sh -> True
-            Ksh -> False
-
-    hasShoptLastPipe = isNothing $ doAnalysis (guard . not . isShoptLastPipe) root
-    isShoptLastPipe t =
-        case t of
-            T_SimpleCommand {}  ->
-                t `isUnqualifiedCommand` "shopt" &&
-                    ("lastpipe" `elem` oversimplify t)
-            _ -> False
 
 getModifiedVariables t =
     case t of
