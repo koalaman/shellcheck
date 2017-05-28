@@ -141,7 +141,6 @@ nodeChecks = [
     ,checkWrongArithmeticAssignment
     ,checkConditionalAndOrs
     ,checkFunctionDeclarations
-    ,checkCatastrophicRm
     ,checkStderrPipe
     ,checkOverridingPath
     ,checkArrayAsString
@@ -2134,72 +2133,6 @@ checkFunctionDeclarations params
                 warn id 2113 "'function' keyword is non-standard. Use 'foo()' instead of 'function foo'."
 checkFunctionDeclarations _ _ = return ()
 
-
-prop_checkCatastrophicRm1 = verify checkCatastrophicRm "rm -r $1/$2"
-prop_checkCatastrophicRm2 = verify checkCatastrophicRm "rm -r /home/$foo"
-prop_checkCatastrophicRm3 = verifyNot checkCatastrophicRm "rm -r /home/${USER:?}/*"
-prop_checkCatastrophicRm4 = verify checkCatastrophicRm "rm -fr /home/$(whoami)/*"
-prop_checkCatastrophicRm5 = verifyNot checkCatastrophicRm "rm -r /home/${USER:-thing}/*"
-prop_checkCatastrophicRm6 = verify checkCatastrophicRm "rm --recursive /etc/*$config*"
-prop_checkCatastrophicRm8 = verify checkCatastrophicRm "rm -rf /home"
-prop_checkCatastrophicRm9 = verifyNot checkCatastrophicRm "rm -rf -- /home"
-prop_checkCatastrophicRm10= verifyNot checkCatastrophicRm "rm -r \"${DIR}\"/{.gitignore,.gitattributes,ci}"
-prop_checkCatastrophicRm11= verify checkCatastrophicRm "rm -r /{bin,sbin}/$exec"
-prop_checkCatastrophicRm12= verify checkCatastrophicRm "rm -r /{{usr,},{bin,sbin}}/$exec"
-prop_checkCatastrophicRm13= verifyNot checkCatastrophicRm "rm -r /{{a,b},{c,d}}/$exec"
-prop_checkCatastrophicRmA = verify checkCatastrophicRm "rm -rf /usr /lib/nvidia-current/xorg/xorg"
-prop_checkCatastrophicRmB = verify checkCatastrophicRm "rm -rf \"$STEAMROOT/\"*"
-checkCatastrophicRm params t@(T_SimpleCommand id _ tokens) | t `isCommand` "rm" =
-    when (any isRecursiveFlag simpleArgs) $
-        mapM_ (mapM_ checkWord . braceExpand) tokens
-  where
-    simpleArgs = oversimplify t
-
-    checkWord token =
-        case getLiteralString token of
-            Just str ->
-                when (notElem "--" simpleArgs && (fixPath str `elem` importantPaths)) $
-                    warn (getId token) 2114 "Warning: deletes a system directory. Use 'rm --' to disable this message."
-            Nothing ->
-                checkWord' token
-
-    checkWord' token = fromMaybe (return ()) $ do
-        filename <- getPotentialPath token
-        let path = fixPath filename
-        return . when (path `elem` importantPaths) $
-            warn (getId token) 2115 $ "Use \"${var:?}\" to ensure this never expands to " ++ path ++ " ."
-
-    fixPath filename =
-        let normalized = skipRepeating '/' . skipRepeating '*' $ filename in
-            if normalized == "/" then normalized else stripTrailing '/' normalized
-
-    getPotentialPath = getLiteralStringExt f
-      where
-        f (T_Glob _ str) = return str
-        f (T_DollarBraced _ word) =
-            let var = onlyLiteralString word in
-                if any (`isInfixOf` var) [":?", ":-", ":="]
-                then Nothing
-                else return ""
-        f _ = return ""
-
-    isRecursiveFlag "--recursive" = True
-    isRecursiveFlag ('-':'-':_) = False
-    isRecursiveFlag ('-':str) = 'r' `elem` str || 'R' `elem` str
-    isRecursiveFlag _ = False
-
-    stripTrailing c = reverse . dropWhile (== c) . reverse
-    skipRepeating c (a:b:rest) | a == b && b == c = skipRepeating c (b:rest)
-    skipRepeating c (a:r) = a:skipRepeating c r
-    skipRepeating _ [] = []
-
-    paths = [
-        "", "/bin", "/etc", "/home", "/mnt", "/usr", "/usr/share", "/usr/local",
-        "/var", "/lib"
-        ]
-    importantPaths = filter (not . null) $
-        ["", "/", "/*", "/*/*"] >>= (\x -> map (++x) paths)
-checkCatastrophicRm _ _ = return ()
 
 
 prop_checkStderrPipe1 = verify checkStderrPipe "#!/bin/ksh\nfoo |& bar"
