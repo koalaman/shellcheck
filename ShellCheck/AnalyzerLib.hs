@@ -268,10 +268,13 @@ isParamTo tree cmd =
 -- Get the parent command (T_Redirecting) of a Token, if any.
 getClosestCommand :: Map.Map Id Token -> Token -> Maybe Token
 getClosestCommand tree t =
-    msum . map getCommand $ getPath tree t
+    findFirst findCommand $ getPath tree t
   where
-    getCommand t@T_Redirecting {} = return t
-    getCommand _ = Nothing
+    findCommand t =
+        case t of
+            T_Redirecting {} -> return True
+            T_Script {} -> return False
+            _ -> Nothing
 
 -- Like above, if koala_man knew Haskell when starting this project.
 getClosestCommandM t = do
@@ -309,6 +312,18 @@ parents params = getPath (parentMap params)
 pathTo t = do
     parents <- reader parentMap
     return $ getPath parents t
+
+-- Find the first match in a list where the predicate is Just True.
+-- Stops if it's Just False and ignores Nothing.
+findFirst :: (a -> Maybe Bool) -> [a] -> Maybe a
+findFirst p l =
+    case l of
+        [] -> Nothing
+        (x:xs) ->
+            case p x of
+                Just True -> return x
+                Just False -> Nothing
+                Nothing -> findFirst p xs
 
 -- Check whether a word is entirely output from a single command
 tokenIsJustCommandOutput t = case t of

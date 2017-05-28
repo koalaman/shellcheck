@@ -38,7 +38,7 @@ import Control.Monad.RWS
 import Data.Char
 import Data.List
 import Data.Maybe
-import qualified Data.Map as Map
+import qualified Data.Map.Strict as Map
 import Test.QuickCheck.All (forAllProperties)
 import Test.QuickCheck.Test (quickCheckWithResult, stdArgs, maxSuccess)
 
@@ -85,13 +85,14 @@ commandChecks = [
     ,checkDeprecatedTempfile
     ,checkDeprecatedEgrep
     ,checkDeprecatedFgrep
+    ,checkWhileGetoptsCase
     ]
 
 buildCommandMap :: [CommandCheck] -> Map.Map CommandName (Token -> Analysis)
 buildCommandMap = foldl' addCheck Map.empty
   where
     addCheck map (CommandCheck name function) =
-        Map.insertWith' composeAnalyzers name function map
+        Map.insertWith composeAnalyzers name function map
 
 
 checkCommand :: Map.Map CommandName (Token -> Analysis) -> Token -> Analysis
@@ -689,6 +690,72 @@ checkDeprecatedEgrep = CommandCheck (Basename "egrep") $
 prop_checkDeprecatedFgrep = verify checkDeprecatedFgrep "fgrep '*' files"
 checkDeprecatedFgrep = CommandCheck (Basename "fgrep") $
     \t -> info (getId t) 2197 "fgrep is non-standard and deprecated. Use grep -F instead."
+
+prop_checkWhileGetoptsCase1 = verify checkWhileGetoptsCase "while getopts 'a:b' x; do case $x in a) foo;; esac; done"
+prop_checkWhileGetoptsCase2 = verify checkWhileGetoptsCase "while getopts 'a:' x; do case $x in a) foo;; b) bar;; esac; done"
+prop_checkWhileGetoptsCase3 = verifyNot checkWhileGetoptsCase "while getopts 'a:b' x; do case $x in a) foo;; b) bar;; esac; done"
+prop_checkWhileGetoptsCase4 = verifyNot checkWhileGetoptsCase "while getopts 'a:123' x; do case $x in a) foo;; [0-9]) bar;; esac; done"
+prop_checkWhileGetoptsCase5 = verifyNot checkWhileGetoptsCase "while getopts 'a:' x; do case $x in a) foo;; \\?) bar;; *) baz;; esac; done"
+checkWhileGetoptsCase = CommandCheck (Exactly "getopts") f
+  where
+    f :: Token -> Analysis
+    f t@(T_SimpleCommand _ _ (cmd:arg1:_))  = do
+        path <- getPathM t
+        potentially $ do
+            options <- getLiteralString arg1
+            (T_WhileExpression _ _ body) <- findFirst whileLoop path
+            caseCmd <- mapMaybe findCase body !!! 0
+            return $ check (getId arg1) (map (:[]) $ filter (/= ':') options) caseCmd
+    f _ = return ()
+
+    check :: Id -> [String] -> Token -> Analysis
+    check optId opts (T_CaseExpression id _ list) = do
+            unless (Nothing `Map.member` handledMap) $
+                mapM_ (warnUnhandled optId id) $ catMaybes $ Map.keys notHandled
+
+            mapM_ warnRedundant $ Map.toList notRequested
+
+        where
+            handledMap = Map.fromList (concatMap getHandledStrings list)
+            requestedMap = Map.fromList $ map (\x -> (Just x, ())) opts
+
+            notHandled = Map.difference requestedMap handledMap
+            notRequested = Map.difference handledMap requestedMap
+
+    warnUnhandled optId caseId str =
+        warn caseId 2213 $ "getopts specified -" ++ str ++ ", but it's not handled by this 'case'."
+
+    warnRedundant (key, expr) = potentially $ do
+        str <- key
+        guard $ str `notElem` ["*", ":", "?"]
+        return $ warn (getId expr) 2214 "This case is not specified by getopts."
+
+    getHandledStrings (_, globs, _) =
+        map (\x -> (literal x, x)) globs
+
+    literal :: Token -> Maybe String
+    literal t = do
+        getLiteralString t <> fromGlob t
+
+    fromGlob t =
+        case t of
+            T_Glob _ ('[':c:']':[]) -> return [c]
+            T_Glob _ "*" -> return "*"
+            _ -> Nothing
+
+    whileLoop t =
+        case t of
+            T_WhileExpression {} -> return True
+            T_Script {} -> return False
+            _ -> Nothing
+
+    findCase t =
+        case t of
+            T_Annotation _ _ x -> findCase x
+            T_Pipeline _ _ [x] -> findCase x
+            T_Redirecting _ _ x@(T_CaseExpression {}) -> return x
+            _ -> Nothing
+
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
