@@ -1369,10 +1369,11 @@ prop_checkInexplicablyUnquoted4 = verify checkInexplicablyUnquoted "echo \"VALUE
 prop_checkInexplicablyUnquoted5 = verifyNot checkInexplicablyUnquoted "\"$dir\"/\"$file\""
 prop_checkInexplicablyUnquoted6 = verifyNot checkInexplicablyUnquoted "\"$dir\"some_stuff\"$file\""
 prop_checkInexplicablyUnquoted7 = verifyNot checkInexplicablyUnquoted "${dir/\"foo\"/\"bar\"}"
+prop_checkInexplicablyUnquoted8 = verifyNot checkInexplicablyUnquoted "  'foo'\\\n  'bar'"
 checkInexplicablyUnquoted _ (T_NormalWord id tokens) = mapM_ check (tails tokens)
   where
     check (T_SingleQuoted _ _:T_Literal id str:_)
-        | all isAlphaNum str =
+        | not (null str) && all isAlphaNum str =
         info id 2026 "This word is outside of quotes. Did you intend to 'nest '\"'single quotes'\"' instead'? "
 
     check (T_DoubleQuoted _ a:trapped:T_DoubleQuoted _ b:_) =
