@@ -440,18 +440,8 @@ readConditionContents single =
 
         getOp = do
             id <- getNextId
-            op <- anyQuotedOp <|> anyEscapedOp <|> anyOp
+            op <- readRegularOrEscaped anyOp
             return $ TC_Binary id typ op
-
-        -- hacks to read quoted operators without having to read a shell word
-        anyEscapedOp = try $ do
-            char '\\'
-            escaped <$> anyOp
-        anyQuotedOp = try $ do
-            c <- oneOf "'\""
-            s <- anyOp
-            char c
-            return $ escaped s
 
         anyOp = flagOp <|> flaglessOp <|> fail
                     "Expected comparison operator (don't wrap commands in []/[[]])"
@@ -461,7 +451,22 @@ readConditionContents single =
             return s
         flaglessOp =
             choice $ map (try . string) flaglessOps
-        escaped s = if any (`elem` s) "<>" then '\\':s else s
+
+        -- hacks to read quoted operators without having to read a shell word
+    readEscaped p = try $ withEscape <|> withQuotes
+      where
+        withEscape = do
+            char '\\'
+            escaped <$> p
+        withQuotes = do
+            c <- oneOf "'\""
+            s <- p
+            char c
+            return $ escaped s
+        escaped s = if any (`elem` s) "<>()" then '\\':s else s
+
+    readRegularOrEscaped p = readEscaped p <|> p
+
 
     guardArithmetic = do
         try . lookAhead $ disregard (oneOf "+*/%") <|> disregard (string "- ")
@@ -560,29 +565,30 @@ readConditionContents single =
             "You need a space before and after the " ++ trailingOp ++ " ."
 
     readCondGroup = do
-          id <- getNextId
-          pos <- getPosition
-          lparen <- try $ string "(" <|> string "\\("
-          when (single && lparen == "(") $
-              parseProblemAt pos ErrorC 1028 "In [..] you have to escape (). Use [[..]] instead."
-          when (not single && lparen == "\\(") $
-              parseProblemAt pos ErrorC 1029 "In [[..]] you shouldn't escape ()."
-          condSpacing single
-          x <- readCondContents
-          cpos <- getPosition
-          rparen <- string ")" <|> string "\\)"
-          condSpacing single
-          when (single && rparen == ")") $
-              parseProblemAt cpos ErrorC 1030 "In [..] you have to escape (). Use [[..]] instead."
-          when (not single && rparen == "\\)") $
-              parseProblemAt cpos ErrorC 1031 "In [[..]] you shouldn't escape ()."
-          when (isEscaped lparen `xor` isEscaped rparen) $
-              parseProblemAt pos ErrorC 1032 "Did you just escape one half of () but not the other?"
-          return $ TC_Group id typ x
+        id <- getNextId
+        pos <- getPosition
+        lparen <- try $ readRegularOrEscaped (string "(")
+        when (single && lparen == "(") $
+            singleWarning pos
+        when (not single && lparen == "\\(") $
+            doubleWarning pos
+        condSpacing single
+        x <- readCondContents
+        cpos <- getPosition
+        rparen <- readRegularOrEscaped (string ")")
+        condSpacing single
+        when (single && rparen == ")") $
+            singleWarning cpos
+        when (not single && rparen == "\\)") $
+            doubleWarning cpos
+        return $ TC_Group id typ x
+
       where
-        isEscaped ('\\':_) = True
-        isEscaped _ = False
-        xor x y = x && not y || not x && y
+        singleWarning pos =
+            parseProblemAt pos ErrorC 1028 "In [..] you have to escape \\( \\) or preferably combine [..] expressions."
+        doubleWarning pos =
+            parseProblemAt pos ErrorC 1029 "In [[..]] you shouldn't escape ( or )."
+
 
     -- Currently a bit of a hack since parsing rules are obscure
     regexOperatorAhead = lookAhead (do
@@ -849,6 +855,7 @@ prop_readCondition15= isOk readCondition "[ foo \">=\" bar ]"
 prop_readCondition16= isOk readCondition "[ foo \\< bar ]"
 prop_readCondition17= isOk readCondition "[[ ${file::1} = [-.\\|/\\\\] ]]"
 prop_readCondition18= isOk readCondition "[ ]"
+prop_readCondition19= isOk readCondition "[ '(' x \")\" ]"
 readCondition = called "test expression" $ do
     opos <- getPosition
     id <- getNextId
