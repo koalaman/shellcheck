@@ -13,16 +13,16 @@ before_install:
 script:
   - mkdir deploy
   # Windows .exe
-  - rm -rf dist cabal || true
   - docker pull koalaman/winghc
   - docker run -v "$PWD:/appdata" koalaman/winghc cuib
-  - cp "dist/build/ShellCheck/shellcheck.exe" "deploy/windows-$TAG.exe"
+  - cp "dist/build/ShellCheck/shellcheck.exe" "deploy/shellcheck-$TAG.exe"
   # Linux Docker
   - docker build -t builder -f Dockerfile_builder .
   - docker run --rm -it -v "$(pwd):/mnt" builder
   - docker build -t "$DOCKER_REPO:$TAG" .
 
 after_success:
+  - ./.prepare_deploy
   - docker login -e="$DOCKER_EMAIL" -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
   - |-
     ([ "$TRAVIS_BRANCH" == "master" ] || [ -n "$TRAVIS_TAG" ]) && docker push "$DOCKER_REPO:$TAG"
