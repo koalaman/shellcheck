@@ -25,7 +25,7 @@ There are a variety of ways to use ShellCheck!
 #### On the web
 Paste a shell script on http://www.shellcheck.net for instant feedback.
 
-[ShellCheck.net](http://www.shellcheck.net) is always synchronized to the latest git commit, and is the simplest way to give ShellCheck a go. Tell your friends!
+[ShellCheck.net](http://www.shellcheck.net) is always synchronized to the latest git commit, and is the easiest way to give ShellCheck a go. Tell your friends!
 
 
 #### From your terminal
@@ -126,13 +126,9 @@ or use OneClickInstall - https://software.opensuse.org/package/ShellCheck
 From Docker Hub:
 
     docker pull koalaman/shellcheck
-
-Using the Docker image can be done like so:
-
     docker run -v "$PWD:/mnt" koalaman/shellcheck myscript
 
-Here the current directory `$PWD` is mounted as the container's directory `/mnt`, which is ShellCheck's working directory in the image. The script `myscript` is checked.
-
+For Windows, you can download [precompiled Windows executables](https://storage.googleapis.com/shellcheck/shellcheck-latest.zip).              
 ## Compiling from source
 
 This section describes how to build ShellCheck from a source directory. ShellCheck is written in Haskell and requires 2GB of RAM to compile.
