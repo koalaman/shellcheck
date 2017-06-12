@@ -61,7 +61,7 @@ treeChecks = [
     ,checkArrayWithoutIndex
     ,checkShebang
     ,checkUnassignedReferences
-    ,checkUncheckedCd
+    ,checkUncheckedCdPushdPopd
     ,checkArrayAssignmentIndices
     ]
 
@@ -2463,26 +2463,48 @@ checkReadWithoutR _ t@T_SimpleCommand {} | t `isUnqualifiedCommand` "read" =
         info (getId t) 2162 "read without -r will mangle backslashes."
 checkReadWithoutR _ _ = return ()
 
-prop_checkUncheckedCd1 = verifyTree checkUncheckedCd "cd ~/src; rm -r foo"
-prop_checkUncheckedCd2 = verifyNotTree checkUncheckedCd "cd ~/src || exit; rm -r foo"
-prop_checkUncheckedCd3 = verifyNotTree checkUncheckedCd "set -e; cd ~/src; rm -r foo"
-prop_checkUncheckedCd4 = verifyNotTree checkUncheckedCd "if cd foo; then rm foo; fi"
-prop_checkUncheckedCd5 = verifyTree checkUncheckedCd "if true; then cd foo; fi"
-prop_checkUncheckedCd6 = verifyNotTree checkUncheckedCd "cd .."
-prop_checkUncheckedCd7 = verifyNotTree checkUncheckedCd "#!/bin/bash -e\ncd foo\nrm bar"
-prop_checkUncheckedCd8 = verifyNotTree checkUncheckedCd "set -o errexit; cd foo; rm bar"
-checkUncheckedCd params root =
-    if hasSetE params
-    then []
+prop_checkUncheckedCd1 = verifyTree checkUncheckedCdPushdPopd "cd ~/src; rm -r foo"
+prop_checkUncheckedCd2 = verifyNotTree checkUncheckedCdPushdPopd "cd ~/src || exit; rm -r foo"
+prop_checkUncheckedCd3 = verifyNotTree checkUncheckedCdPushdPopd "set -e; cd ~/src; rm -r foo"
+prop_checkUncheckedCd4 = verifyNotTree checkUncheckedCdPushdPopd "if cd foo; then rm foo; fi"
+prop_checkUncheckedCd5 = verifyTree checkUncheckedCdPushdPopd "if true; then cd foo; fi"
+prop_checkUncheckedCd6 = verifyNotTree checkUncheckedCdPushdPopd "cd .."
+prop_checkUncheckedCd7 = verifyNotTree checkUncheckedCdPushdPopd "#!/bin/bash -e\ncd foo\nrm bar"
+prop_checkUncheckedCd8 = verifyNotTree checkUncheckedCdPushdPopd "set -o errexit; cd foo; rm bar"
+prop_checkUncheckedPushd1 = verifyTree checkUncheckedCdPushdPopd "pushd ~/src; rm -r foo"
+prop_checkUncheckedPushd2 = verifyNotTree checkUncheckedCdPushdPopd "pushd ~/src || exit; rm -r foo"
+prop_checkUncheckedPushd3 = verifyNotTree checkUncheckedCdPushdPopd "set -e; pushd ~/src; rm -r foo"
+prop_checkUncheckedPushd4 = verifyNotTree checkUncheckedCdPushdPopd "if pushd foo; then rm foo; fi"
+prop_checkUncheckedPushd5 = verifyTree checkUncheckedCdPushdPopd "if true; then pushd foo; fi"
+prop_checkUncheckedPushd6 = verifyNotTree checkUncheckedCdPushdPopd "pushd .."
+prop_checkUncheckedPushd7 = verifyNotTree checkUncheckedCdPushdPopd "#!/bin/bash -e\npushd foo\nrm bar"
+prop_checkUncheckedPushd8 = verifyNotTree checkUncheckedCdPushdPopd "set -o errexit; pushd foo; rm bar"
+prop_checkUncheckedPushd9 = verifyNotTree checkUncheckedCdPushdPopd "pushd -n foo"
+prop_checkUncheckedPopd1 = verifyTree checkUncheckedCdPushdPopd "popd; rm -r foo"
+prop_checkUncheckedPopd2 = verifyNotTree checkUncheckedCdPushdPopd "popd || exit; rm -r foo"
+prop_checkUncheckedPopd3 = verifyNotTree checkUncheckedCdPushdPopd "set -e; popd; rm -r foo"
+prop_checkUncheckedPopd4 = verifyNotTree checkUncheckedCdPushdPopd "if popd; then rm foo; fi"
+prop_checkUncheckedPopd5 = verifyTree checkUncheckedCdPushdPopd "if true; then popd; fi"
+prop_checkUncheckedPopd6 = verifyTree checkUncheckedCdPushdPopd "popd"
+prop_checkUncheckedPopd7 = verifyNotTree checkUncheckedCdPushdPopd "#!/bin/bash -e\npopd\nrm bar"
+prop_checkUncheckedPopd8 = verifyNotTree checkUncheckedCdPushdPopd "set -o errexit; popd; rm bar"
+
+checkUncheckedCdPushdPopd params root =
+    if hasSetE params then
+        []
     else execWriter $ doAnalysis checkElement root
   where
     checkElement t@T_SimpleCommand {} =
-        when(t `isUnqualifiedCommand` "cd"
-            && not (isCdDotDot t)
+        when(name t `elem` ["cd", "pushd", "popd"]
+            && not (isSafeDir t)
+            && not (name t == "pushd" && ("n" `elem` map snd (getAllFlags t)))
             && not (isCondition $ getPath (parentMap params) t)) $
                 warn (getId t) 2164 "Use 'cd ... || exit' or 'cd ... || return' in case cd fails."
     checkElement _ = return ()
-    isCdDotDot t = oversimplify t == ["cd", ".."]
+    name t = fromMaybe "" $ getCommandName t
+    isSafeDir t = case oversimplify t of
+          [_, ".."] -> True;
+          _ -> False
 
 prop_checkLoopVariableReassignment1 = verify checkLoopVariableReassignment "for i in *; do for i in *.bar; do true; done; done"
 prop_checkLoopVariableReassignment2 = verify checkLoopVariableReassignment "for i in *; do for((i=0; i<3; i++)); do true; done; done"
