@@ -25,7 +25,7 @@ There are a variety of ways to use ShellCheck!
 #### On the web
 Paste a shell script on http://www.shellcheck.net for instant feedback.
 
-[ShellCheck.net](http://www.shellcheck.net) is always synchronized to the latest git commit, and is the simplest way to give ShellCheck a go. Tell your friends!
+[ShellCheck.net](http://www.shellcheck.net) is always synchronized to the latest git commit, and is the easiest way to give ShellCheck a go. Tell your friends!
 
 
 #### From your terminal
@@ -126,13 +126,9 @@ or use OneClickInstall - https://software.opensuse.org/package/ShellCheck
 From Docker Hub:
 
     docker pull koalaman/shellcheck
+    docker run -v "$PWD:/mnt" koalaman/shellcheck myscript
 
-Using the Docker image can be done like so:
-
-    docker run -v $(pwd):/scripts koalaman/shellcheck /scripts/myscript.sh
-
-Here the local directory ( $(pwd) ) is mounted into the containers directory "/scripts". The script "myscript.sh" is checked.
-
+For Windows, you can download [precompiled Windows executables](https://storage.googleapis.com/shellcheck/shellcheck-latest.zip).              
 ## Compiling from source
 
 This section describes how to build ShellCheck from a source directory. ShellCheck is written in Haskell and requires 2GB of RAM to compile.
@@ -153,6 +149,10 @@ Verify that `cabal` is installed and update its dependency list with
 `git clone` this repository, and `cd` to the ShellCheck source directory to build/install:
 
     $ cabal install
+
+Or if you intend to run the tests:
+
+    $ cabal install --enable-tests
 
 This will compile ShellCheck and install it to your `~/.cabal/bin` directory.
 
@@ -349,7 +349,9 @@ https://github.com/koalaman/shellcheck/issues
 
 ## Contributing
 
-Please submit patches to code or documentation as GitHub pull requests!
+Please submit patches to code or documentation as GitHub pull requests! Check
+out the [DevGuide](https://github.com/koalaman/shellcheck/wiki/DevGuide) on the
+ShellCheck Wiki.
 
 Contributions must be licensed under the GNU GPLv3.
 The contributor retains the copyright.

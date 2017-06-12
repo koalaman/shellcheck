@@ -38,7 +38,7 @@ import Control.Monad.RWS
 import Data.Char
 import Data.List
 import Data.Maybe
-import qualified Data.Map as Map
+import qualified Data.Map.Strict as Map
 import Test.QuickCheck.All (forAllProperties)
 import Test.QuickCheck.Test (quickCheckWithResult, stdArgs, maxSuccess)
 
@@ -85,13 +85,15 @@ commandChecks = [
     ,checkDeprecatedTempfile
     ,checkDeprecatedEgrep
     ,checkDeprecatedFgrep
+    ,checkWhileGetoptsCase
+    ,checkCatastrophicRm
     ]
 
 buildCommandMap :: [CommandCheck] -> Map.Map CommandName (Token -> Analysis)
 buildCommandMap = foldl' addCheck Map.empty
   where
     addCheck map (CommandCheck name function) =
-        Map.insertWith' composeAnalyzers name function map
+        Map.insertWith composeAnalyzers name function map
 
 
 checkCommand :: Map.Map CommandName (Token -> Analysis) -> Token -> Analysis
@@ -385,17 +387,26 @@ prop_checkMkdirDashPM11 = verifyNot checkMkdirDashPM "mkdir --parents a/b"
 prop_checkMkdirDashPM12 = verifyNot checkMkdirDashPM "mkdir --mode=0755 a/b"
 prop_checkMkdirDashPM13 = verifyNot checkMkdirDashPM "mkdir_func -pm 0755 a/b"
 prop_checkMkdirDashPM14 = verifyNot checkMkdirDashPM "mkdir -p -m 0755 singlelevel"
+prop_checkMkdirDashPM15 = verifyNot checkMkdirDashPM "mkdir -p -m 0755 ../bin"
+prop_checkMkdirDashPM16 = verify checkMkdirDashPM "mkdir -p -m 0755 ../bin/laden"
+prop_checkMkdirDashPM17 = verifyNot checkMkdirDashPM "mkdir -p -m 0755 ./bin"
+prop_checkMkdirDashPM18 = verify checkMkdirDashPM "mkdir -p -m 0755 ./bin/laden"
+prop_checkMkdirDashPM19 = verifyNot checkMkdirDashPM "mkdir -p -m 0755 ./../bin"
+prop_checkMkdirDashPM20 = verifyNot checkMkdirDashPM "mkdir -p -m 0755 .././bin"
+prop_checkMkdirDashPM21 = verifyNot checkMkdirDashPM "mkdir -p -m 0755 ../../bin"
 checkMkdirDashPM = CommandCheck (Basename "mkdir") check
   where
     check t = potentially $ do
         let flags = getAllFlags t
         dashP <- find ((\f -> f == "p" || f == "parents") . snd) flags
         dashM <- find ((\f -> f == "m" || f == "mode") . snd) flags
-        guard $ any couldHaveSubdirs (drop 1 $ arguments t) -- mkdir -pm 0700 dir  is fine, but dir/subdir is not.
+        -- mkdir -pm 0700 dir  is fine, so is ../dir, but dir/subdir is not.
+        guard $ any couldHaveSubdirs (drop 1 $ arguments t)
         return $ warn (getId $ fst dashM) 2174 "When used with -p, -m only applies to the deepest directory."
     couldHaveSubdirs t = fromMaybe True $ do
         name <- getLiteralString t
-        return $ '/' `elem` name
+        return $ '/' `elem` name && not (name `matches` re)
+    re = mkRegex "^(\\.\\.?\\/)+[^/]+$"
 
 
 prop_checkNonportableSignals1 = verify checkNonportableSignals "trap f 8"
@@ -680,6 +691,131 @@ checkDeprecatedEgrep = CommandCheck (Basename "egrep") $
 prop_checkDeprecatedFgrep = verify checkDeprecatedFgrep "fgrep '*' files"
 checkDeprecatedFgrep = CommandCheck (Basename "fgrep") $
     \t -> info (getId t) 2197 "fgrep is non-standard and deprecated. Use grep -F instead."
+
+prop_checkWhileGetoptsCase1 = verify checkWhileGetoptsCase "while getopts 'a:b' x; do case $x in a) foo;; esac; done"
+prop_checkWhileGetoptsCase2 = verify checkWhileGetoptsCase "while getopts 'a:' x; do case $x in a) foo;; b) bar;; esac; done"
+prop_checkWhileGetoptsCase3 = verifyNot checkWhileGetoptsCase "while getopts 'a:b' x; do case $x in a) foo;; b) bar;; esac; done"
+prop_checkWhileGetoptsCase4 = verifyNot checkWhileGetoptsCase "while getopts 'a:123' x; do case $x in a) foo;; [0-9]) bar;; esac; done"
+prop_checkWhileGetoptsCase5 = verifyNot checkWhileGetoptsCase "while getopts 'a:' x; do case $x in a) foo;; \\?) bar;; *) baz;; esac; done"
+checkWhileGetoptsCase = CommandCheck (Exactly "getopts") f
+  where
+    f :: Token -> Analysis
+    f t@(T_SimpleCommand _ _ (cmd:arg1:_))  = do
+        path <- getPathM t
+        potentially $ do
+            options <- getLiteralString arg1
+            (T_WhileExpression _ _ body) <- findFirst whileLoop path
+            caseCmd <- mapMaybe findCase body !!! 0
+            return $ check (getId arg1) (map (:[]) $ filter (/= ':') options) caseCmd
+    f _ = return ()
+
+    check :: Id -> [String] -> Token -> Analysis
+    check optId opts (T_CaseExpression id _ list) = do
+            unless (Nothing `Map.member` handledMap) $
+                mapM_ (warnUnhandled optId id) $ catMaybes $ Map.keys notHandled
+
+            mapM_ warnRedundant $ Map.toList notRequested
+
+        where
+            handledMap = Map.fromList (concatMap getHandledStrings list)
+            requestedMap = Map.fromList $ map (\x -> (Just x, ())) opts
+
+            notHandled = Map.difference requestedMap handledMap
+            notRequested = Map.difference handledMap requestedMap
+
+    warnUnhandled optId caseId str =
+        warn caseId 2213 $ "getopts specified -" ++ str ++ ", but it's not handled by this 'case'."
+
+    warnRedundant (key, expr) = potentially $ do
+        str <- key
+        guard $ str `notElem` ["*", ":", "?"]
+        return $ warn (getId expr) 2214 "This case is not specified by getopts."
+
+    getHandledStrings (_, globs, _) =
+        map (\x -> (literal x, x)) globs
+
+    literal :: Token -> Maybe String
+    literal t = do
+        getLiteralString t <> fromGlob t
+
+    fromGlob t =
+        case t of
+            T_Glob _ ('[':c:']':[]) -> return [c]
+            T_Glob _ "*" -> return "*"
+            _ -> Nothing
+
+    whileLoop t =
+        case t of
+            T_WhileExpression {} -> return True
+            T_Script {} -> return False
+            _ -> Nothing
+
+    findCase t =
+        case t of
+            T_Annotation _ _ x -> findCase x
+            T_Pipeline _ _ [x] -> findCase x
+            T_Redirecting _ _ x@(T_CaseExpression {}) -> return x
+            _ -> Nothing
+
+prop_checkCatastrophicRm1 = verify checkCatastrophicRm "rm -r $1/$2"
+prop_checkCatastrophicRm2 = verify checkCatastrophicRm "rm -r /home/$foo"
+prop_checkCatastrophicRm3 = verifyNot checkCatastrophicRm "rm -r /home/${USER:?}/*"
+prop_checkCatastrophicRm4 = verify checkCatastrophicRm "rm -fr /home/$(whoami)/*"
+prop_checkCatastrophicRm5 = verifyNot checkCatastrophicRm "rm -r /home/${USER:-thing}/*"
+prop_checkCatastrophicRm6 = verify checkCatastrophicRm "rm --recursive /etc/*$config*"
+prop_checkCatastrophicRm8 = verify checkCatastrophicRm "rm -rf /home"
+prop_checkCatastrophicRm10= verifyNot checkCatastrophicRm "rm -r \"${DIR}\"/{.gitignore,.gitattributes,ci}"
+prop_checkCatastrophicRm11= verify checkCatastrophicRm "rm -r /{bin,sbin}/$exec"
+prop_checkCatastrophicRm12= verify checkCatastrophicRm "rm -r /{{usr,},{bin,sbin}}/$exec"
+prop_checkCatastrophicRm13= verifyNot checkCatastrophicRm "rm -r /{{a,b},{c,d}}/$exec"
+prop_checkCatastrophicRmA = verify checkCatastrophicRm "rm -rf /usr /lib/nvidia-current/xorg/xorg"
+prop_checkCatastrophicRmB = verify checkCatastrophicRm "rm -rf \"$STEAMROOT/\"*"
+checkCatastrophicRm = CommandCheck (Basename "rm") $ \t ->
+    when (isRecursive t) $
+        mapM_ (mapM_ checkWord . braceExpand) $ arguments t
+  where
+    isRecursive = any (`elem` ["r", "R", "recursive"]) . map snd . getAllFlags
+
+    checkWord token =
+        case getLiteralString token of
+            Just str ->
+                when (fixPath str `elem` importantPaths) $
+                    warn (getId token) 2114 "Warning: deletes a system directory."
+            Nothing ->
+                checkWord' token
+
+    checkWord' token = fromMaybe (return ()) $ do
+        filename <- getPotentialPath token
+        let path = fixPath filename
+        return . when (path `elem` importantPaths) $
+            warn (getId token) 2115 $ "Use \"${var:?}\" to ensure this never expands to " ++ path ++ " ."
+
+    fixPath filename =
+        let normalized = skipRepeating '/' . skipRepeating '*' $ filename in
+            if normalized == "/" then normalized else stripTrailing '/' normalized
+
+    getPotentialPath = getLiteralStringExt f
+      where
+        f (T_Glob _ str) = return str
+        f (T_DollarBraced _ word) =
+            let var = onlyLiteralString word in
+                -- This shouldn't handle non-colon cases.
+                if any (`isInfixOf` var) [":?", ":-", ":="]
+                then Nothing
+                else return ""
+        f _ = return ""
+
+    stripTrailing c = reverse . dropWhile (== c) . reverse
+    skipRepeating c (a:b:rest) | a == b && b == c = skipRepeating c (b:rest)
+    skipRepeating c (a:r) = a:skipRepeating c r
+    skipRepeating _ [] = []
+
+    paths = [
+        "", "/bin", "/etc", "/home", "/mnt", "/usr", "/usr/share", "/usr/local",
+        "/var", "/lib", "/dev", "/media", "/boot", "/lib64", "/usr/bin"
+        ]
+    importantPaths = filter (not . null) $
+        ["", "/", "/*", "/*/*"] >>= (\x -> map (++x) paths)
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

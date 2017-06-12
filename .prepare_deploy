@@ -1,0 +1,34 @@
+#!/bin/bash
+# This script packages up Travis compiled binaries
+set -ex
+shopt -s nullglob
+cd deploy
+
+cp ../LICENSE LICENSE.txt
+sed -e $'s/$/\r/' > README.txt << END
+This is a precompiled ShellCheck binary.
+      http://www.shellcheck.net/
+
+ShellCheck is a static analysis tool for shell scripts.
+It's licensed under the GNU General Public License v3.0.
+Information and source code is available on the website.
+
+This binary was compiled on $(date -u).
+
+
+
+      ====== Latest commits ======
+
+$(git log -n 3)
+END
+
+for file in ./*.exe
+do
+  zip "${file%.*}.zip" README.txt LICENSE.txt "$file"
+done
+
+for file in ./*
+do
+  sha512sum "$file" > "$file.sha512sum"
+done
+

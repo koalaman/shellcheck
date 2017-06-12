@@ -72,11 +72,13 @@ composeAnalyzers :: (a -> Analysis) -> (a -> Analysis) -> a -> Analysis
 composeAnalyzers f g x = f x >> g x
 
 data Parameters = Parameters {
-    variableFlow :: [StackData],
-    parentMap :: Map.Map Id Token,
-    shellType :: Shell,
-    shellTypeSpecified :: Bool,
-    rootNode :: Token
+    hasLastpipe :: Bool,           -- Whether this script has the 'lastpipe' option set/default.
+    hasSetE     :: Bool,           -- Whether this script has 'set -e' anywhere.
+    variableFlow :: [StackData],   -- A linear (bad) analysis of data flow
+    parentMap :: Map.Map Id Token, -- A map from Id to parent Token
+    shellType :: Shell,            -- The shell type, such as Bash or Ksh
+    shellTypeSpecified :: Bool,    -- True if shell type was forced via flags
+    rootNode :: Token              -- The root node of the AST
     }
 
 -- TODO: Cache results of common AST ops here
@@ -142,12 +144,47 @@ makeParameters spec =
     let params = Parameters {
         rootNode = root,
         shellType = fromMaybe (determineShell root) $ asShellType spec,
+        hasSetE = containsSetE root,
+        hasLastpipe =
+            case shellType params of
+                Bash -> containsLastpipe root
+                Dash -> False
+                Sh -> False
+                Ksh -> True,
+
         shellTypeSpecified = isJust $ asShellType spec,
         parentMap = getParentTree root,
-        variableFlow =
-            getVariableFlow (shellType params) (parentMap params) root
+        variableFlow = getVariableFlow params root
     } in params
   where root = asScript spec
+
+
+-- Does this script mention 'set -e' anywhere?
+-- Used as a hack to disable certain warnings.
+containsSetE root = isNothing $ doAnalysis (guard . not . isSetE) root
+  where
+    isSetE t =
+        case t of
+            T_Script _ str _ -> str `matches` re
+            T_SimpleCommand {}  ->
+                t `isUnqualifiedCommand` "set" &&
+                    ("errexit" `elem` oversimplify t ||
+                        "e" `elem` map snd (getAllFlags t))
+            _ -> False
+    re = mkRegex "[[:space:]]-[^-]*e"
+
+-- Does this script mention 'shopt -s lastpipe' anywhere?
+-- Also used as a hack.
+containsLastpipe root =
+        isNothing $ doAnalysis (guard . not . isShoptLastPipe) root
+    where
+        isShoptLastPipe t =
+            case t of
+                T_SimpleCommand {}  ->
+                    t `isUnqualifiedCommand` "shopt" &&
+                        ("lastpipe" `elem` oversimplify t)
+                _ -> False
+
 
 prop_determineShell0 = determineShell (fromJust $ pScript "#!/bin/sh") == Sh
 prop_determineShell1 = determineShell (fromJust $ pScript "#!/usr/bin/env ksh") == Ksh
@@ -184,8 +221,10 @@ executableFromShebang = shellFor
     shellFor s = reverse . takeWhile (/= '/') . reverse $ s
 
 
---- Context seeking
 
+-- Given a root node, make a map from Id to parent Token.
+-- This is used to populate parentMap in Parameters
+getParentTree :: Token -> Map.Map Id Token
 getParentTree t =
     snd . snd $ runState (doStackAnalysis pre post t) ([], Map.empty)
   where
@@ -195,17 +234,23 @@ getParentTree t =
         case rest of [] -> put (rest, map)
                      (x:_) -> put (rest, Map.insert (getId t) x map)
 
+-- Given a root node, make a map from Id to Token
+getTokenMap :: Token -> Map.Map Id Token
 getTokenMap t =
     execState (doAnalysis f t) Map.empty
   where
     f t = modify (Map.insert (getId t) t)
 
 
--- Is this node self quoting for a regular element?
-isQuoteFree = isQuoteFreeNode False
-
--- Is this node striclty self quoting, for array expansions
+-- Is this token in a quoting free context? (i.e. would variable expansion split)
+-- True:  Assignments, [[ .. ]], here docs, already in double quotes
+-- False: Regular words
 isStrictlyQuoteFree = isQuoteFreeNode True
+
+-- Like above, but also allow some cases where splitting may be desired.
+-- True:  Like above + for loops
+-- False: Like above
+isQuoteFree = isQuoteFreeNode False
 
 
 isQuoteFreeNode strict tree t =
@@ -239,6 +284,9 @@ isQuoteFreeNode strict tree t =
             T_SelectIn {} -> return (not strict)
             _ -> Nothing
 
+-- Check if a token is a parameter to a certain command by name:
+-- Example: isParamTo (parentMap params) "sed" t
+isParamTo :: Map.Map Id Token -> String -> Token -> Bool
 isParamTo tree cmd =
     go
   where
@@ -254,16 +302,23 @@ isParamTo tree cmd =
             T_Redirecting {} -> isCommand t cmd
             _ -> False
 
+-- Get the parent command (T_Redirecting) of a Token, if any.
+getClosestCommand :: Map.Map Id Token -> Token -> Maybe Token
 getClosestCommand tree t =
-    msum . map getCommand $ getPath tree t
+    findFirst findCommand $ getPath tree t
   where
-    getCommand t@T_Redirecting {} = return t
-    getCommand _ = Nothing
+    findCommand t =
+        case t of
+            T_Redirecting {} -> return True
+            T_Script {} -> return False
+            _ -> Nothing
 
+-- Like above, if koala_man knew Haskell when starting this project.
 getClosestCommandM t = do
     tree <- asks parentMap
     return $ getClosestCommand tree t
 
+-- Is the token used as a command name (the first word in a T_SimpleCommand)?
 usedAsCommandName tree token = go (getId token) (tail $ getPath tree token)
   where
     go currentId (T_NormalWord id [word]:rest)
@@ -274,7 +329,7 @@ usedAsCommandName tree token = go (getId token) (tail $ getPath tree token)
         | currentId == getId word = True
     go _ _ = False
 
--- A list of the element and all its parents
+-- A list of the element and all its parents up to the root node.
 getPath tree t = t :
     case Map.lookup (getId t) tree of
         Nothing -> []
@@ -295,6 +350,18 @@ pathTo t = do
     parents <- reader parentMap
     return $ getPath parents t
 
+-- Find the first match in a list where the predicate is Just True.
+-- Stops if it's Just False and ignores Nothing.
+findFirst :: (a -> Maybe Bool) -> [a] -> Maybe a
+findFirst p l =
+    case l of
+        [] -> Nothing
+        (x:xs) ->
+            case p x of
+                Just True -> return x
+                Just False -> Nothing
+                Nothing -> findFirst p xs
+
 -- Check whether a word is entirely output from a single command
 tokenIsJustCommandOutput t = case t of
     T_NormalWord id [T_DollarExpansion _ cmds] -> check cmds
@@ -307,18 +374,18 @@ tokenIsJustCommandOutput t = case t of
     check _ = False
 
 -- TODO: Replace this with a proper Control Flow Graph
-getVariableFlow shell parents t =
+getVariableFlow params t =
     let (_, stack) = runState (doStackAnalysis startScope endScope t) []
     in reverse stack
   where
     startScope t =
-        let scopeType = leadType shell parents t
+        let scopeType = leadType params t
         in do
             when (scopeType /= NoneScope) $ modify (StackScope scopeType:)
             when (assignFirst t) $ setWritten t
 
     endScope t =
-        let scopeType = leadType shell parents t
+        let scopeType = leadType params t
         in do
             setRead t
             unless (assignFirst t) $ setWritten t
@@ -329,7 +396,7 @@ getVariableFlow shell parents t =
     assignFirst _ = False
 
     setRead t =
-        let read    = getReferencedVariables parents t
+        let read    = getReferencedVariables (parentMap params) t
         in mapM_ (\v -> modify (Reference v:)) read
 
     setWritten t =
@@ -337,7 +404,7 @@ getVariableFlow shell parents t =
         in mapM_ (\v -> modify (Assignment v:)) written
 
 
-leadType shell parents t =
+leadType params t =
     case t of
         T_DollarExpansion _ _  -> SubshellScope "$(..) expansion"
         T_Backticked _ _  -> SubshellScope "`..` expansion"
@@ -351,7 +418,7 @@ leadType shell parents t =
         _ -> NoneScope
   where
     parentPipeline = do
-        parent <- Map.lookup (getId t) parents
+        parent <- Map.lookup (getId t) (parentMap params)
         case parent of
             T_Pipeline {} -> return parent
             _ -> Nothing
@@ -360,16 +427,9 @@ leadType shell parents t =
         (T_Pipeline _ _ list) <- parentPipeline
         if length list <= 1
             then return False
-            else if lastCreatesSubshell
+            else if not $ hasLastpipe params
                 then return True
                 else return . not $ (getId . head $ reverse list) == getId t
-
-    lastCreatesSubshell =
-        case shell of
-            Bash -> True
-            Dash -> True
-            Sh -> True
-            Ksh -> False
 
 getModifiedVariables t =
     case t of
@@ -623,13 +683,20 @@ dataTypeFrom defaultType v = (case v of T_Array {} -> DataArray; _ -> defaultTyp
 
 --- Command specific checks
 
+-- Compare a command to a string: t `isCommand` "sed" (also matches /usr/bin/sed)
 isCommand token str = isCommandMatch token (\cmd -> cmd  == str || ('/' : str) `isSuffixOf` cmd)
+
+-- Compare a command to a literal. Like above, but checks full path.
 isUnqualifiedCommand token str = isCommandMatch token (== str)
 
 isCommandMatch token matcher = fromMaybe False $ do
     cmd <- getCommandName token
     return $ matcher cmd
 
+-- Does this regex look like it was intended as a glob?
+-- True:  *foo*
+-- False: .*foo.*
+isConfusedGlobRegex :: String -> Bool
 isConfusedGlobRegex ('*':_) = True
 isConfusedGlobRegex [x,'*'] | x /= '\\' = True
 isConfusedGlobRegex _ = False
@@ -656,6 +723,7 @@ getVariablesFromLiteral string =
   where
     variableRegex = mkRegex "\\$\\{?([A-Za-z0-9_]+)"
 
+-- Get the variable name from an expansion like ${var:-foo}
 prop_getBracedReference1 = getBracedReference "foo" == "foo"
 prop_getBracedReference2 = getBracedReference "#foo" == "foo"
 prop_getBracedReference3 = getBracedReference "#" == "#"
@@ -706,13 +774,22 @@ getBracedModifier s = fromMaybe "" . listToMaybe $ do
     dropModifier (c:rest) | c `elem` "#!" = [rest, c:rest]
     dropModifier x = [x]
 
--- Useful generic functions
+-- Useful generic functions.
+
+-- Run an action in a Maybe (or do nothing).
+-- Example:
+-- potentially $ do
+--   s <- getLiteralString cmd
+--   guard $ s `elem` ["--recursive", "-r"]
+--   return $ warn .. "Something something recursive"
 potentially :: Monad m => Maybe (m ()) -> m ()
 potentially = fromMaybe (return ())
 
+-- Get element 0 or a default. Like `head` but safe.
 headOrDefault _ (a:_) = a
 headOrDefault def _ = def
 
+--- Get element n of a list, or Nothing. Like `!!` but safe.
 (!!!) list i =
     case drop i list of
         [] -> Nothing
@@ -752,8 +829,10 @@ isCountingReference _ = False
 isQuotedAlternativeReference t =
     case t of
         T_DollarBraced _ _ ->
-            ":+" `isInfixOf` bracedString t
+            getBracedModifier (bracedString t) `matches` re
         _ -> False
+  where
+    re = mkRegex "(^|\\]):?\\+"
 
 
 
