@@ -6,37 +6,36 @@ ShellCheck is a GPLv3 tool that gives warnings and suggestions for bash/sh shell
 
 The goals of ShellCheck are
 
-  - To point out and clarify typical beginner's syntax issues
-    that cause a shell to give cryptic error messages.
+- To point out and clarify typical beginner's syntax issues that cause a shell
+  to give cryptic error messages.
 
-  - To point out and clarify typical intermediate level semantic problems
-    that cause a shell to behave strangely and counter-intuitively.
+- To point out and clarify typical intermediate level semantic problems that
+  cause a shell to behave strangely and counter-intuitively.
 
-  - To point out subtle caveats, corner cases and pitfalls that may cause an
-    advanced user's otherwise working script to fail under future circumstances.
+- To point out subtle caveats, corner cases and pitfalls that may cause an
+  advanced user's otherwise working script to fail under future circumstances.
 
 See [the gallery of bad code](README.md#user-content-gallery-of-bad-code) for examples of what ShellCheck can help you identify!
 
-
 ## How to use
+
 There are a variety of ways to use ShellCheck!
 
+### On the web
 
-#### On the web
 Paste a shell script on http://www.shellcheck.net for instant feedback.
 
 [ShellCheck.net](http://www.shellcheck.net) is always synchronized to the latest git commit, and is the easiest way to give ShellCheck a go. Tell your friends!
 
+### From your terminal
 
-#### From your terminal
 Run `shellcheck yourscript` in your terminal for instant output, as seen above.
 
-
-#### In your editor
+### In your editor
 
 You can see ShellCheck suggestions directly in a variety of editors.
 
-* Vim, through [ALE](https://github.com/w0rp/ale) or [Syntastic](https://github.com/scrooloose/syntastic):
+* Vim, through [ALE](https://github.com/w0rp/ale), [Neomake](https://github.com/neomake/neomake), or [Syntastic](https://github.com/scrooloose/syntastic):
 
 ![Screenshot of Vim showing inlined shellcheck feedback](doc/vim-syntastic.png).
 
@@ -52,8 +51,8 @@ You can see ShellCheck suggestions directly in a variety of editors.
 
 * Most other editors, through [GCC error compatibility](shellcheck.1.md#user-content-formats).
 
+### In your build or test suites
 
-#### In your build or test suites
 While ShellCheck is mostly intended for interactive use, it can easily be added to builds or test suites.
 
 ShellCheck makes canonical use of exit codes, and can output simple JSON, CheckStyle compatible XML, GCC compatible warnings as well as human readable text (with or without ANSI colors). See the [Integration](https://github.com/koalaman/shellcheck/wiki/Integration) wiki page for more documentation.
@@ -116,25 +115,25 @@ On openSUSE:Tumbleweed:
 
 On other openSUSE distributions:
 
-add OBS devel:languages:haskell repository from https://build.opensuse.org/project/repositories/devel:languages:haskell
+Add OBS devel:languages:haskell repository from https://build.opensuse.org/project/repositories/devel:languages:haskell
 
     zypper ar http://download.opensuse.org/repositories/devel:/languages:/haskell/openSUSE_$(version)/devel:languages:haskell.repo
     zypper in ShellCheck
 
-or use OneClickInstall - https://software.opensuse.org/package/ShellCheck
+Or use OneClickInstall - https://software.opensuse.org/package/ShellCheck
 
 From Docker Hub:
 
     docker pull koalaman/shellcheck
     docker run -v "$PWD:/mnt" koalaman/shellcheck myscript
 
-For Windows, you can download [precompiled Windows executables](https://storage.googleapis.com/shellcheck/shellcheck-latest.zip).              
+For Windows, you can download [precompiled Windows executables](https://storage.googleapis.com/shellcheck/shellcheck-latest.zip).
+
 ## Compiling from source
 
 This section describes how to build ShellCheck from a source directory. ShellCheck is written in Haskell and requires 2GB of RAM to compile.
 
-
-#### Installing Cabal
+### Installing Cabal
 
 ShellCheck is built and packaged using Cabal. Install the package `cabal-install` from your system's package manager (with e.g. `apt-get`, `brew`, `emerge`, `yum`, or `zypper`).
 
@@ -144,7 +143,7 @@ Verify that `cabal` is installed and update its dependency list with
 
     $ cabal update
 
-#### Compiling ShellCheck
+### Compiling ShellCheck
 
 `git clone` this repository, and `cd` to the ShellCheck source directory to build/install:
 
@@ -177,17 +176,17 @@ In Powershell ISE, you may need to additionally update the output encoding:
 
     > [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-#### Running tests
+### Running tests
 
 To run the unit test suite:
 
     $ cabal test
 
-
 ## Gallery of bad code
+
 So what kind of things does ShellCheck look for? Here is an incomplete list of detected issues.
 
-#### Quoting
+### Quoting
 
 ShellCheck can recognize several types of incorrect quoting:
 
@@ -202,8 +201,7 @@ ShellCheck can recognize several types of incorrect quoting:
     echo 'Path is $PATH'              # Variables in single quotes
     trap "echo Took ${SECONDS}s" 0    # Prematurely expanded trap
 
-
-#### Conditionals
+### Conditionals
 
 ShellCheck can recognize many types of incorrect test statements.
 
@@ -219,8 +217,7 @@ ShellCheck can recognize many types of incorrect test statements.
     [[ "$$file" == *.jpg ]]           # Comparisons that can't succeed
     (( 1 -lt 2 ))                     # Using test operators in ((..))
 
-
-#### Frequently misused commands
+### Frequently misused commands
 
 ShellCheck can recognize instances where commands are used incorrectly:
 
@@ -235,8 +232,7 @@ ShellCheck can recognize instances where commands are used incorrectly:
     find -name \*.bak -o -name \*~ -delete  # Implicit precedence in find
     f() { whoami; }; sudo f           # External use of internal functions
 
-
-#### Common beginner's mistakes
+### Common beginner's mistakes
 
 ShellCheck recognizes many common beginner's syntax errors:
 
@@ -250,10 +246,8 @@ ShellCheck recognizes many common beginner's syntax errors:
     echo "Argument 10 is $10"         # Positional parameter misreference
     if $(myfunction); then ..; fi     # Wrapping commands in $()
     else if othercondition; then ..   # Using 'else if'
-    
 
-
-#### Style
+### Style
 
 ShellCheck can make suggestions to improve style:
 
@@ -266,8 +260,7 @@ ShellCheck can make suggestions to improve style:
     echo "$(date)"                    # Useless use of echo
     cat file | grep foo               # Useless use of cat
 
-
-#### Data and typing errors
+### Data and typing errors
 
 ShellCheck can recognize issues related to data and typing:
 
@@ -280,8 +273,7 @@ ShellCheck can recognize issues related to data and typing:
     echo "Hello $name"                # Unassigned lowercase variables
     cmd | read bar; echo $bar         # Assignments in subshells
 
-
-#### Robustness
+### Robustness
 
 ShellCheck can make suggestions for improving the robustness of a script:
 
@@ -292,11 +284,9 @@ ShellCheck can make suggestions for improving the robustness of a script:
     for f in $(ls *.txt); do         # Iterating over ls output
     export MYVAR=$(cmd)              # Masked exit codes
 
-
-#### Portability
+### Portability
 
 ShellCheck will warn when using features not supported by the shebang. For example, if you set the shebang to `#!/bin/sh`, ShellCheck will warn about portability issues similar to `checkbashisms`:
-
 
     echo {1..$n}                     # Works in ksh, but not bash/dash/sh
     echo {1..10}                     # Works in ksh and bash, but not dash/sh
@@ -309,8 +299,7 @@ ShellCheck will warn when using features not supported by the shebang. For examp
     local var=value                  # local is undefined in sh
     time sleep 1 | sleep 5           # Undefined uses of 'time'
 
-
-#### Miscellaneous
+### Miscellaneous
 
 ShellCheck recognizes a menagerie of other issues:
 
@@ -324,8 +313,6 @@ ShellCheck recognizes a menagerie of other issues:
     echo $((n/180*100))               # Unnecessary loss of precision
     ls *[:digit:].txt                 # Bad character class globs
     sed 's/foo/bar/' file > file      # Redirecting to input
-
-
 
 ## Testimonials
 
@@ -346,7 +333,6 @@ Please use the GitHub issue tracker for any bugs or feature suggestions:
 
 https://github.com/koalaman/shellcheck/issues
 
-
 ## Contributing
 
 Please submit patches to code or documentation as GitHub pull requests! Check
@@ -355,7 +341,6 @@ ShellCheck Wiki.
 
 Contributions must be licensed under the GNU GPLv3.
 The contributor retains the copyright.
-
 
 ## Copyright
 
