@@ -127,7 +127,10 @@ From Docker Hub:
     docker pull koalaman/shellcheck
     docker run -v "$PWD:/mnt" koalaman/shellcheck myscript
 
-For Windows, you can download [precompiled Windows executables](https://storage.googleapis.com/shellcheck/shellcheck-latest.zip).
+Alternatively, get freshly built binaries here:
+
+* [Linux, x86_64](https://storage.googleapis.com/shellcheck/shellcheck-latest.linux.x86_64.tar.xz) (statically linked)
+* [Windows, x86](https://storage.googleapis.com/shellcheck/shellcheck-latest.zip)
 
 ## Compiling from source
 
