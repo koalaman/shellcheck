@@ -27,6 +27,14 @@ do
   zip "${file%.*}.zip" README.txt LICENSE.txt "$file"
 done
 
+for file in *.linux
+do
+  base="${file%.*}"
+  cp "$file" "shellcheck"
+  tar -cJf "$base.linux.x86_64.tar.xz" --transform="s:^:$base/:" README.txt LICENSE.txt shellcheck
+  rm "shellcheck"
+done
+
 for file in ./*
 do
   sha512sum "$file" > "$file.sha512sum"

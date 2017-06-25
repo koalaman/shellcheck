@@ -1,11 +1,10 @@
-FROM alpine:latest
+FROM scratch
 
-MAINTAINER Nikyle Nguyen <NLKNguyen@MSN.com>
+MAINTAINER Vidar Holen <vidar@vidarholen.net>
 
-COPY package/bin/shellcheck /usr/local/bin/
-COPY package/lib/           /usr/local/lib/
-
-RUN ldconfig /usr/local/lib
+# This file assumes ShellCheck has already been built.
+# See https://github.com/koalaman/scbuilder
+COPY shellcheck /
 
 WORKDIR /mnt
-ENTRYPOINT ["shellcheck"]
+ENTRYPOINT ["/shellcheck"]
