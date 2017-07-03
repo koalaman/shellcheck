@@ -125,6 +125,11 @@ isFlag token =
         T_Literal _ ('-':_) : _ -> True
         _ -> False
 
+-- Is this token a flag where the - is unquoted?
+isUnquotedFlag token = fromMaybe False $ do
+    str <- getLeadingUnquotedString token
+    return $ "-" `isPrefixOf` str
+
 -- Given a T_DollarBraced, return a simplified version of the string contents.
 bracedString (T_DollarBraced _ l) = concat $ oversimplify l
 bracedString _ = error "Internal shellcheck error, please report! (bracedString on non-variable)"
@@ -193,6 +198,13 @@ getTrailingUnquotedLiteral t =
         case t of
             T_Literal {} -> return t
             _ -> Nothing
+
+-- Get the leading, unquoted, literal string of a token (if any).
+getLeadingUnquotedString :: Token -> Maybe String
+getLeadingUnquotedString t =
+    case t of
+        T_NormalWord _ ((T_Literal _ s) : _) -> return s
+        _ -> Nothing
 
 -- Maybe get the literal string of this token and any globs in it.
 getGlobOrLiteralString = getLiteralStringExt f

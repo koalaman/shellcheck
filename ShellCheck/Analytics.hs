@@ -162,6 +162,7 @@ nodeChecks = [
     ,checkSplittingInArrays
     ,checkRedirectionToNumber
     ,checkGlobAsCommand
+    ,checkFlagAsCommand
     ,checkEmptyCondition
     ]
 
@@ -275,10 +276,7 @@ checkAssignAteCommand _ (T_SimpleCommand id (T_Assignment _ _ _ _ assignmentTerm
     isCommonCommand _ = False
     firstWordIsArg list = fromMaybe False $ do
         head <- list !!! 0
-        return . or $ mapMaybe ($ head) [return . isGlob, isFlag]
-    isFlag word = do
-        first <- (concat $ oversimplify word) !!! 0
-        return $ first == '-'
+        return $ isGlob head || isUnquotedFlag head
 
 checkAssignAteCommand _ _ = return ()
 
@@ -2769,6 +2767,18 @@ checkGlobAsCommand _ t = case t of
         when (isGlob first) $
             warn (getId first) 2211 "This is a glob used as a command name. Was it supposed to be in ${..}, array, or is it missing quoting?"
     _ -> return ()
+
+
+prop_checkFlagAsCommand1 = verify checkFlagAsCommand "-e file"
+prop_checkFlagAsCommand2 = verify checkFlagAsCommand "foo\n  --bar=baz"
+prop_checkFlagAsCommand3 = verifyNot checkFlagAsCommand "'--myexec--' args"
+prop_checkFlagAsCommand4 = verifyNot checkFlagAsCommand "var=cmd --arg"  -- Handled by SC2037
+checkFlagAsCommand _ t = case t of
+    T_SimpleCommand _ [] (first:_) ->
+        when (isUnquotedFlag first) $
+            warn (getId first) 2215 "This flag is used as a command name. Bad line break or missing [ .. ]?"
+    _ -> return ()
+
 
 prop_checkEmptyCondition1 = verify checkEmptyCondition "if [ ]; then ..; fi"
 prop_checkEmptyCondition2 = verifyNot checkEmptyCondition "[ foo -o bar ]"
