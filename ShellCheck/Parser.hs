@@ -2063,10 +2063,13 @@ readSubshell = called "explicit subshell" $ do
 
 prop_readBraceGroup = isOk readBraceGroup "{ a; b | c | d; e; }"
 prop_readBraceGroup2 = isWarning readBraceGroup "{foo;}"
+prop_readBraceGroup3 = isOk readBraceGroup "{(foo)}"
 readBraceGroup = called "brace group" $ do
     id <- getNextId
     char '{'
-    allspacingOrFail <|> parseProblem ErrorC 1054 "You need a space after the '{'."
+    void allspacingOrFail <|> optional (do
+        lookAhead $ noneOf "(" -- {( is legal
+        parseProblem ErrorC 1054 "You need a space after the '{'.")
     optional $ do
         pos <- getPosition
         lookAhead $ char '}'
