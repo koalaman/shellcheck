@@ -164,6 +164,7 @@ nodeChecks = [
     ,checkGlobAsCommand
     ,checkFlagAsCommand
     ,checkEmptyCondition
+    ,checkPipeToNowhere
     ]
 
 
@@ -362,9 +363,6 @@ checkPipePitfalls _ (T_Pipeline id _ commands) = do
                 hasParameter "printf"
               ]) $ warn (getId find) 2038
                       "Use -print0/-0 or -exec + to allow for non-alphanumeric filenames."
-
-    for ["?", "echo"] $
-        \(_:echo:_) -> info (getId echo) 2008 "echo doesn't read from stdin, are you sure you should be piping to it?"
 
     for' ["ps", "grep"] $
         \x -> info x 2009 "Consider using pgrep instead of grepping ps output."
@@ -2785,6 +2783,54 @@ prop_checkEmptyCondition2 = verifyNot checkEmptyCondition "[ foo -o bar ]"
 checkEmptyCondition _ t = case t of
     TC_Empty id _ -> style id 2212 "Use 'false' instead of empty [/[[ conditionals."
     _ -> return ()
+
+prop_checkPipeToNowhere1 = verify checkPipeToNowhere "foo | echo bar"
+prop_checkPipeToNowhere2 = verify checkPipeToNowhere "basename < file.txt"
+prop_checkPipeToNowhere3 = verify checkPipeToNowhere "printf 'Lol' <<< str"
+prop_checkPipeToNowhere4 = verify checkPipeToNowhere "printf 'Lol' << eof\nlol\neof\n"
+prop_checkPipeToNowhere5 = verifyNot checkPipeToNowhere "echo foo | xargs du"
+prop_checkPipeToNowhere6 = verifyNot checkPipeToNowhere "ls | echo $(cat)"
+prop_checkPipeToNowhere7 = verifyNot checkPipeToNowhere "echo foo | var=$(cat) ls"
+checkPipeToNowhere :: Parameters -> Token -> WriterT [TokenComment] Identity ()
+checkPipeToNowhere _ t =
+    case t of
+        T_Pipeline _ _ (first:rest) -> mapM_ checkPipe rest
+        T_Redirecting _ redirects cmd -> when (any redirectsStdin redirects) $ checkRedir cmd
+        _ -> return ()
+  where
+    checkPipe redir = potentially $ do
+        cmd <- getCommand redir
+        name <- getCommandBasename cmd
+        guard $ name `elem` nonReadingCommands
+        guard . not $ hasAdditionalConsumers cmd
+        return $ warn (getId cmd) 2216 $
+            "Piping to '" ++ name ++ "', a command that doesn't read stdin. Wrong command or missing xargs?"
+
+    checkRedir cmd = potentially $ do
+        name <- getCommandBasename cmd
+        guard $ name `elem` nonReadingCommands
+        guard . not $ hasAdditionalConsumers cmd
+        return $ warn (getId cmd) 2217 $
+            "Redirecting to '" ++ name ++ "', a command that doesn't read stdin. Bad quoting or missing xargs?"
+
+    -- Could any words in a SimpleCommand consume stdin (e.g. echo "$(cat)")?
+    hasAdditionalConsumers t = fromMaybe True $ do
+        doAnalysis (guard . not . mayConsume) t
+        return False
+
+    mayConsume t =
+        case t of
+            T_ProcSub {} -> True
+            T_Backticked {} -> True
+            T_DollarExpansion {} -> True
+            _ -> False
+
+    redirectsStdin t =
+        case t of
+            T_FdRedirect _ _ (T_IoFile _ T_Less {} _) -> True
+            T_FdRedirect _ _ T_HereDoc {} -> True
+            T_FdRedirect _ _ T_HereString {} -> True
+            _ -> False
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
