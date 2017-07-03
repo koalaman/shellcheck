@@ -2443,7 +2443,11 @@ readAssignmentWordExt lenient = try $ do
         return $ T_Assignment id op variable indices value
       else do
         when (hasLeftSpace || hasRightSpace) $
-            parseNoteAt pos ErrorC 1068 "Don't put spaces around the = in assignments."
+            parseNoteAt pos ErrorC 1068 $
+                "Don't put spaces around the "
+                ++ if op == Append
+                    then "+= when appending."
+                    else "= in assignments."
         value <- readArray <|> readNormalWord
         spacing
         return $ T_Assignment id op variable indices value
