@@ -14,7 +14,7 @@
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
 
-    yOU should have received a copy of the GNU General Public License
+    You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -}
 {-# LANGUAGE NoMonomorphismRestriction, TemplateHaskell, FlexibleContexts #-}
@@ -1799,6 +1799,7 @@ prop_readSimpleCommand3 = isOk readSimpleCommand "export foo=(bar baz)"
 prop_readSimpleCommand4 = isOk readSimpleCommand "typeset -a foo=(lol)"
 prop_readSimpleCommand5 = isOk readSimpleCommand "time if true; then echo foo; fi"
 prop_readSimpleCommand6 = isOk readSimpleCommand "time -p ( ls -l; )"
+prop_readSimpleCommand7 = isOk readSimpleCommand "\\ls"
 readSimpleCommand = called "simple command" $ do
     pos <- getPosition
     id1 <- getNextId
@@ -1968,7 +1969,12 @@ readCommand = choice [
     readSimpleCommand
     ]
 
-readCmdName = readCmdWord
+readCmdName = do
+    -- Ignore alias suppression
+    optional . try $ do
+        char '\\'
+        lookAhead $ variableChars
+    readCmdWord
 readCmdWord = readNormalWord <* spacing
 
 prop_readIfClause = isOk readIfClause "if false; then foo; elif true; then stuff; more stuff; else cows; fi"
