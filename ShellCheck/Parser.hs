@@ -2131,6 +2131,7 @@ prop_readForClause8 = isOk readForClause "for ((;;)) ; do echo $i\ndone"
 prop_readForClause9 = isOk readForClause "for i do true; done"
 prop_readForClause10= isOk readForClause "for ((;;)) { true; }"
 prop_readForClause12= isWarning readForClause "for $a in *; do echo \"$a\"; done"
+prop_readForClause13= isOk readForClause "for foo\nin\\\n  bar\\\n  baz\ndo true; done"
 readForClause = called "for loop" $ do
     pos <- getPosition
     (T_For id) <- g_For
@@ -2158,7 +2159,7 @@ readForClause = called "for loop" $ do
     readRegular id pos = do
         acceptButWarn (char '$') ErrorC 1086
             "Don't use $ on the iterator name in for loops."
-        name <- readVariableName `thenSkip` spacing
+        name <- readVariableName `thenSkip` allspacing
         values <- readInClause <|> (optional readSequentialSep >> return [])
         group <- readDoGroup pos
         return $ T_ForIn id name values group
@@ -2532,7 +2533,7 @@ tryParseWordToken keyword t = try $ do
         try . lookAhead $ char '#'
         parseProblem ErrorC 1099 "You need a space before the #."
 
-    try $ lookAhead keywordSeparator
+    lookAhead keywordSeparator
     when (str /= keyword) $
         parseProblem ErrorC 1081 $
             "Scripts are case sensitive. Use '" ++ keyword ++ "', not '" ++ str ++ "'."
@@ -2591,7 +2592,7 @@ g_Semi = do
     tryToken ";" T_Semi
 
 keywordSeparator =
-    eof <|> disregard whitespace <|> disregard (oneOf ";()[<>&|")
+    eof <|> disregard (try allspacingOrFail) <|> disregard (oneOf ";()[<>&|")
 
 readKeyword = choice [ g_Then, g_Else, g_Elif, g_Fi, g_Do, g_Done, g_Esac, g_Rbrace, g_Rparen, g_DSEMI ]
 
