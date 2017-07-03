@@ -119,6 +119,11 @@ getLeadingFlags = getFlagsUntil (\x -> x == "--" || (not $ "-" `isPrefixOf` x))
 -- Check if a command has a flag.
 hasFlag cmd str = str `elem` (map snd $ getAllFlags cmd)
 
+-- Is this token a word that starts with a dash?
+isFlag token =
+    case getWordParts token of
+        T_Literal _ ('-':_) : _ -> True
+        _ -> False
 
 -- Given a T_DollarBraced, return a simplified version of the string contents.
 bracedString (T_DollarBraced _ l) = concat $ oversimplify l

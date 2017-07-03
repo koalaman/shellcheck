@@ -415,9 +415,13 @@ prop_checkNonportableSignals3 = verifyNot checkNonportableSignals "trap f 14"
 prop_checkNonportableSignals4 = verify checkNonportableSignals "trap f SIGKILL"
 prop_checkNonportableSignals5 = verify checkNonportableSignals "trap f 9"
 prop_checkNonportableSignals6 = verify checkNonportableSignals "trap f stop"
+prop_checkNonportableSignals7 = verifyNot checkNonportableSignals "trap 'stop' int"
 checkNonportableSignals = CommandCheck (Exactly "trap") (f . arguments)
   where
-    f = mapM_ check
+    f args = case args of
+        first:rest -> unless (isFlag first) $ mapM_ check rest
+        _ -> return ()
+
     check param = potentially $ do
         str <- getLiteralString param
         let id = getId param
