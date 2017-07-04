@@ -68,7 +68,7 @@ paramSubSpecialChars = oneOf "/:+-=%"
 quotableChars = "|&;<>()\\ '\t\n\r\xA0" ++ doubleQuotableChars
 quotable = almostSpace <|> oneOf quotableChars
 bracedQuotable = oneOf "}\"$`'"
-doubleQuotableChars = "\"$`"
+doubleQuotableChars = "\\\"$`"
 doubleQuotable = oneOf doubleQuotableChars
 whitespace = oneOf " \t" <|> carriageReturn <|> almostSpace <|> linefeed
 linewhitespace = oneOf " \t" <|> almostSpace
@@ -1193,6 +1193,8 @@ prop_readDoubleQuoted5 = isOk readSimpleCommand "lol \"foo\nbar\" etc"
 prop_readDoubleQuoted6 = isOk readSimpleCommand "echo \"${ ls; }\""
 prop_readDoubleQuoted7 = isOk readSimpleCommand "echo \"${ ls;}bar\""
 prop_readDoubleQuoted8 = isWarning readDoubleQuoted "\"\x201Chello\x201D\""
+prop_readDoubleQuoted9 = isWarning readDoubleQuoted "\"foo\\n\""
+prop_readDoubleQuoted10 = isOk readDoubleQuoted "\"foo\\\\n\""
 readDoubleQuoted = called "double quoted string" $ do
     id <- getNextId
     startPos <- getPosition
@@ -1239,7 +1241,7 @@ readDoubleLiteral = do
     return $ T_Literal id (concat s)
 
 readDoubleLiteralPart = do
-    x <- many1 (readDoubleEscaped <|> many1 (noneOf ('\\':doubleQuotableChars ++ unicodeDoubleQuotes)))
+    x <- many1 (readDoubleEscaped <|> many1 (noneOf (doubleQuotableChars ++ unicodeDoubleQuotes)))
     return $ concat x
 
 readNormalLiteral end = do
@@ -1366,10 +1368,15 @@ readSingleEscaped = do
     return [s]
 
 readDoubleEscaped = do
+    pos <- getPosition
     bs <- backslash
     (linefeed >> return "")
         <|> liftM return doubleQuotable
-        <|> liftM (\ x -> [bs, x]) anyChar
+        <|> do
+            c <- anyChar
+            parseNoteAt pos StyleC 1117 $
+                "Backslash is literal in \"\\" ++ [c] ++ "\". Prefer explicit escaping: \"\\\\" ++ [c] ++ "\"."
+            return [bs, c]
 
 readBraceEscaped = do
     bs <- backslash
