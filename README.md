@@ -124,7 +124,7 @@ Or use OneClickInstall - https://software.opensuse.org/package/ShellCheck
 
 From Docker Hub:
 
-    docker pull koalaman/shellcheck
+    docker pull koalaman/shellcheck:latest  # Or  :v0.4.6  for a release version
     docker run -v "$PWD:/mnt" koalaman/shellcheck myscript
 
 Alternatively, get freshly built binaries here:
