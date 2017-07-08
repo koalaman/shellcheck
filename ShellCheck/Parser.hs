@@ -1701,9 +1701,9 @@ readPendingHereDocs = do
     debugHereDoc pos endToken doc
         | endToken `isInfixOf` doc =
             let lookAt line = when (endToken `isInfixOf` line) $
-                      parseProblemAt pos ErrorC 1041 ("Close matches include '" ++ line ++ "' (!= '" ++ endToken ++ "').")
+                      parseProblemAt pos ErrorC 1042 ("Close matches include '" ++ line ++ "' (!= '" ++ endToken ++ "').")
             in do
-                  parseProblemAt pos ErrorC 1042 ("Found '" ++ endToken ++ "' further down, but not on a separate line.")
+                  parseProblemAt pos ErrorC 1041 ("Found '" ++ endToken ++ "' further down, but not on a separate line.")
                   mapM_ lookAt (lines doc)
         | map toLower endToken `isInfixOf` map toLower doc =
             parseProblemAt pos ErrorC 1043 ("Found " ++ endToken ++ " further down, but with wrong casing.")
