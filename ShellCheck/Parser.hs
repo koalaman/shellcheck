@@ -1609,6 +1609,10 @@ prop_readHereDoc10= isOk readScript "if true; then cat << foo << bar; fi\nfoo\nb
 prop_readHereDoc11= isOk readScript "cat << foo $(\nfoo\n)lol\nfoo\n"
 prop_readHereDoc12= isOk readScript "cat << foo|cat\nbar\nfoo"
 prop_readHereDoc13= isOk readScript "cat <<'#!'\nHello World\n#!\necho Done"
+prop_readHereDoc14= isWarning readScript "cat << foo\nbar\nfoo \n"
+prop_readHereDoc15= isWarning readScript "cat <<foo\nbar\nfoo bar\n"
+prop_readHereDoc16= isOk readScript "cat <<- ' foo'\nbar\n foo\n"
+prop_readHereDoc17= isWarning readScript "cat <<- ' foo'\nbar\n  foo\n"
 readHereDoc = called "here document" $ do
     fid <- getNextId
     pos <- getPosition
@@ -1642,19 +1646,36 @@ readPendingHereDocs = do
   where
     readDoc (T_HereDoc id dashed quoted endToken _) = do
         pos <- getPosition
-        hereData <- anyChar `reluctantlyTill` do
-                        many linewhitespace
+        hereData <- concat <$> rawLine `reluctantlyTill` do
+                        linewhitespace `reluctantlyTill` string endToken
                         string endToken
-                        void (char '\n') <|> eof
+                        void linewhitespace <|> void (oneOf "\n;&#)") <|> eof
         do
-            spaces <- many linewhitespace
+            spaces <- linewhitespace `reluctantlyTill` string endToken
             verifyHereDoc dashed quoted spaces hereData
             string endToken
+            trailingPos <- getPosition
+            trailers <- lookAhead $ many (noneOf "\n")
+            let ppt = parseProblemAt trailingPos ErrorC
+            unless (null trailers) $
+                if all isSpace trailers
+                then ppt 1118 "Delete whitespace after the here-doc end token."
+                else case (head $ dropWhile isSpace trailers) of
+                    ')' -> ppt 1119 $ "Add a linefeed between end token and terminating ')'."
+                    '#' -> ppt 1120 "No comments allowed after here-doc token. Comment the next line instead."
+                    c | c `elem` ";&" ->
+                        ppt 1121 "Add ;/& terminators (and other syntax) on the line with the <<, not here."
+                    _ -> ppt 1122 "Nothing allowed after end token. To continue a command, put it on the line with the <<."
             parsedData <- parseHereData quoted pos hereData
             list <- parseHereData quoted pos hereData
             addToHereDocMap id list
 
          `attempting` (eof >> debugHereDoc pos endToken hereData)
+
+    rawLine = do
+        c <- many $ noneOf "\n"
+        void (char '\n') <|> eof
+        return $ c ++ "\n"
 
     parseHereData Quoted startPos hereData = do
         id <- getNextIdAt startPos
@@ -1682,7 +1703,7 @@ readPendingHereDocs = do
             let lookAt line = when (endToken `isInfixOf` line) $
                       parseProblemAt pos ErrorC 1041 ("Close matches include '" ++ line ++ "' (!= '" ++ endToken ++ "').")
             in do
-                  parseProblemAt pos ErrorC 1042 ("Found '" ++ endToken ++ "' further down, but not entirely by itself.")
+                  parseProblemAt pos ErrorC 1042 ("Found '" ++ endToken ++ "' further down, but not on a separate line.")
                   mapM_ lookAt (lines doc)
         | map toLower endToken `isInfixOf` map toLower doc =
             parseProblemAt pos ErrorC 1043 ("Found " ++ endToken ++ " further down, but with wrong casing.")
