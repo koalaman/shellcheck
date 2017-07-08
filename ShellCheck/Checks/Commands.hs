@@ -620,6 +620,8 @@ prop_checkFindWithoutPath1 = verify checkFindWithoutPath "find -type f"
 prop_checkFindWithoutPath2 = verify checkFindWithoutPath "find"
 prop_checkFindWithoutPath3 = verifyNot checkFindWithoutPath "find . -type f"
 prop_checkFindWithoutPath4 = verifyNot checkFindWithoutPath "find -H -L \"$path\" -print"
+prop_checkFindWithoutPath5 = verifyNot checkFindWithoutPath "find -O3 ."
+prop_checkFindWithoutPath6 = verifyNot checkFindWithoutPath "find -D exec ."
 checkFindWithoutPath = CommandCheck (Basename "find") f
   where
     f (T_SimpleCommand _ _ (cmd:args)) =
@@ -628,11 +630,12 @@ checkFindWithoutPath = CommandCheck (Basename "find") f
 
     -- This is a bit of a kludge. find supports flag arguments both before and after the path,
     -- as well as multiple non-flag arguments that are not the path. We assume that all the
-    -- pre-path flags are single characters, which is generally the case.
+    -- pre-path flags are single characters, which is generally the case except for -O3.
     hasPath (first:rest) =
         let flag = fromJust $ getLiteralStringExt (const $ return "___") first in
-            not ("-" `isPrefixOf` flag) || length flag <= 2 && hasPath rest
+            not ("-" `isPrefixOf` flag) || isLeadingFlag flag && hasPath rest
     hasPath [] = False
+    isLeadingFlag flag = length flag <= 2 || "-O" `isPrefixOf` flag
 
 
 prop_checkTimeParameters1 = verify checkTimeParameters "time -f lol sleep 10"
