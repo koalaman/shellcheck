@@ -1610,6 +1610,7 @@ prop_readHereDoc9 = isOk readScript "if true; then cat << foo; fi\nbar\nfoo\n"
 prop_readHereDoc10= isOk readScript "if true; then cat << foo << bar; fi\nfoo\nbar\n"
 prop_readHereDoc11= isOk readScript "cat << foo $(\nfoo\n)lol\nfoo\n"
 prop_readHereDoc12= isOk readScript "cat << foo|cat\nbar\nfoo"
+prop_readHereDoc13= isOk readScript "cat <<'#!'\nHello World\n#!\necho Done"
 readHereDoc = called "here document" $ do
     fid <- getNextId
     pos <- getPosition
@@ -1644,11 +1645,11 @@ readPendingHereDocs = do
     readDoc (T_HereDoc id dashed quoted endToken _) = do
         pos <- getPosition
         hereData <- anyChar `reluctantlyTill` do
-                        spacing
+                        many linewhitespace
                         string endToken
                         disregard (char '\n') <|> eof
         do
-            spaces <- spacing
+            spaces <- many linewhitespace
             verifyHereDoc dashed quoted spaces hereData
             string endToken
             parsedData <- parseHereData quoted pos hereData
