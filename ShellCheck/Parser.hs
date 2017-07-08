@@ -357,10 +357,8 @@ unexpecting s p = try $
 
 notFollowedBy2 = unexpecting ""
 
-disregard = void
-
 reluctantlyTill p end =
-    (lookAhead (disregard (try end) <|> eof) >> return []) <|> do
+    (lookAhead (void (try end) <|> eof) >> return []) <|> do
         x <- p
         more <- reluctantlyTill p end
         return $ x:more
@@ -469,7 +467,7 @@ readConditionContents single =
 
 
     guardArithmetic = do
-        try . lookAhead $ disregard (oneOf "+*/%") <|> disregard (string "- ")
+        try . lookAhead $ void (oneOf "+*/%") <|> void (string "- ")
         parseProblem ErrorC 1076 $
             if single
             then "Trying to do math? Use e.g. [ $((i/2+7)) -ge 18 ]."
@@ -512,7 +510,7 @@ readConditionContents single =
             parseProblemAt pos ErrorC 1021
                 "You need a space before the \\)"
             fail "Missing space before )"
-        disregard spacing
+        void spacing
         return x
       where endedWith str (T_NormalWord id s@(_:_)) =
                 case last s of T_Literal id s -> str `isSuffixOf` s
@@ -605,7 +603,7 @@ readConditionContents single =
                 readNormalLiteral "( " <|>
                 readPipeLiteral <|>
                 readGlobLiteral)
-        disregard spacing
+        void spacing
         return $ T_NormalWord id parts
       where
         readGlobLiteral = do
@@ -1152,7 +1150,7 @@ readBackTicked quoted = called "backtick expansion" $ do
         verifyEof
         return cmds
     backtick =
-      disregard (char '`') <|> do
+      void (char '`') <|> do
          pos <- getPosition
          char '´'
          parseProblemAt pos ErrorC 1077
@@ -1647,7 +1645,7 @@ readPendingHereDocs = do
         hereData <- anyChar `reluctantlyTill` do
                         many linewhitespace
                         string endToken
-                        disregard (char '\n') <|> eof
+                        void (char '\n') <|> eof
         do
             spaces <- many linewhitespace
             verifyHereDoc dashed quoted spaces hereData
@@ -1773,7 +1771,7 @@ readSeparatorOp = do
     spacing
     return f
 
-readSequentialSep = disregard (g_Semi >> readLineBreak) <|> disregard readNewlineList
+readSequentialSep = void (g_Semi >> readLineBreak) <|> void readNewlineList
 readSeparator =
     do
         separator <- readSeparatorOp
@@ -2197,14 +2195,14 @@ readSelectClause = called "select loop" $ do
 readInClause = do
     g_In
     things <- readCmdWord `reluctantlyTill`
-                (disregard g_Semi <|> disregard linefeed <|> disregard g_Do)
+                (void g_Semi <|> void linefeed <|> void g_Do)
 
     do {
         lookAhead g_Do;
         parseNote ErrorC 1063 "You need a line feed or semicolon before the 'do'.";
     } <|> do {
         optional g_Semi;
-        disregard allspacing;
+        void allspacing;
     }
 
     return things
@@ -2266,7 +2264,7 @@ prop_readFunctionDefinition11= isWarning readFunctionDefinition "function foo{\n
 readFunctionDefinition = called "function" $ do
     functionSignature <- try readFunctionSignature
     allspacing
-    disregard (lookAhead $ oneOf "{(") <|> parseProblem ErrorC 1064 "Expected a { to open the function definition."
+    void (lookAhead $ oneOf "{(") <|> parseProblem ErrorC 1064 "Expected a { to open the function definition."
     group <- readBraceGroup <|> readSubshell
     return $ functionSignature group
   where
@@ -2451,7 +2449,7 @@ readAssignmentWordExt lenient = try $ do
     pos <- getPosition
     op <- readAssignmentOp
     hasRightSpace <- liftM (not . null) spacing
-    isEndOfCommand <- liftM isJust $ optionMaybe (try . lookAhead $ (disregard (oneOf "\r\n;&|)") <|> eof))
+    isEndOfCommand <- liftM isJust $ optionMaybe (try . lookAhead $ (void (oneOf "\r\n;&|)") <|> eof))
     if not hasLeftSpace && (hasRightSpace || isEndOfCommand)
       then do
         when (variable /= "IFS" && hasRightSpace && not isEndOfCommand) $
@@ -2606,7 +2604,7 @@ g_Semi = do
     tryToken ";" T_Semi
 
 keywordSeparator =
-    eof <|> disregard (try allspacingOrFail) <|> disregard (oneOf ";()[<>&|")
+    eof <|> void (try allspacingOrFail) <|> void (oneOf ";()[<>&|")
 
 readKeyword = choice [ g_Then, g_Else, g_Elif, g_Fi, g_Do, g_Done, g_Esac, g_Rbrace, g_Rparen, g_DSEMI ]
 
