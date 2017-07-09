@@ -2043,7 +2043,7 @@ readIfPart = do
             parseProblem ErrorC 1050 "Expected 'then'."
             return "Expected 'then'"
 
-        acceptButWarn g_Semi ErrorC 1051 "No semicolons directly after 'then'."
+        acceptButWarn g_Semi ErrorC 1051 "Semicolons directly after 'then' are not allowed. Just remove it."
         allspacing
         verifyNotEmptyIf "then"
 
@@ -2062,7 +2062,7 @@ readElifPart = called "elif clause" $ do
         parseProblemAt pos ErrorC 1049 "Did you forget the 'then' for this 'elif'?"
 
     g_Then
-    acceptButWarn g_Semi ErrorC 1052 "No semicolons directly after 'then'."
+    acceptButWarn g_Semi ErrorC 1052 "Semicolons directly after 'then' are not allowed. Just remove it."
     allspacing
     verifyNotEmptyIf "then"
     action <- readTerm
@@ -2074,7 +2074,7 @@ readElifPart = called "elif clause" $ do
 readElsePart = called "else clause" $ do
     pos <- getPosition
     g_Else
-    acceptButWarn g_Semi ErrorC 1053 "No semicolons directly after 'else'."
+    acceptButWarn g_Semi ErrorC 1053 "Semicolons directly after 'else' are not allowed. Just remove it."
     allspacing
     verifyNotEmptyIf "else"
     readTerm
