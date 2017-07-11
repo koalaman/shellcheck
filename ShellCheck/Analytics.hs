@@ -63,6 +63,7 @@ treeChecks = [
     ,checkUnassignedReferences
     ,checkUncheckedCdPushdPopd
     ,checkArrayAssignmentIndices
+    ,checkUseBeforeDefinition
     ]
 
 runAnalytics :: AnalysisSpec -> [TokenComment]
@@ -1522,7 +1523,7 @@ prop_subshellAssignmentCheck19 = verifyNotTree subshellAssignmentCheck "#!/bin/b
 subshellAssignmentCheck params t =
     let flow = variableFlow params
         check = findSubshelled flow [("oops",[])] Map.empty
-    in snd $ runWriter check
+    in execWriter check
 
 
 findSubshelled [] _ _ = return ()
@@ -2831,6 +2832,37 @@ checkPipeToNowhere _ t =
             T_FdRedirect _ _ T_HereDoc {} -> True
             T_FdRedirect _ _ T_HereString {} -> True
             _ -> False
+
+prop_checkUseBeforeDefinition1 = verifyTree checkUseBeforeDefinition "f; f() { true; }"
+prop_checkUseBeforeDefinition2 = verifyNotTree checkUseBeforeDefinition "f() { true; }; f"
+prop_checkUseBeforeDefinition3 = verifyNotTree checkUseBeforeDefinition "if ! mycmd --version; then mycmd() { true; }; fi"
+prop_checkUseBeforeDefinition4 = verifyNotTree checkUseBeforeDefinition "mycmd || mycmd() { f; }"
+checkUseBeforeDefinition _ t =
+    execWriter $ evalStateT (mapM_ examine $ revCommands) Map.empty
+  where
+    examine t = case t of
+        T_Pipeline _ _ [T_Redirecting _ _ (T_Function _ _ _ name _)] ->
+            modify $ Map.insert name t
+        T_Annotation _ _ w -> examine w
+        T_Pipeline _ _ cmds -> do
+            m <- get
+            unless (Map.null m) $
+                mapM_ (checkUsage m) $ concatMap recursiveSequences cmds
+        _ -> return ()
+
+    checkUsage map cmd = potentially $ do
+        name <- getCommandName cmd
+        def <- Map.lookup name map
+        return $
+            err (getId cmd) 2218
+                "This function is only defined later. Move the definition up."
+
+    revCommands = reverse $ concat $ getCommandSequences t
+    recursiveSequences x =
+        let list = concat $ getCommandSequences x in
+            if null list
+            then [x]
+            else concatMap recursiveSequences list
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

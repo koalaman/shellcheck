@@ -308,6 +308,7 @@ isBraceExpansion t = case t of T_BraceExpansion {} -> True; _ -> False
 
 -- Get the lists of commands from tokens that contain them, such as
 -- the body of while loops or branches of if statements.
+getCommandSequences :: Token -> [[Token]]
 getCommandSequences t =
     case t of
         T_Script _ _ cmds -> [cmds]
@@ -318,6 +319,7 @@ getCommandSequences t =
         T_ForIn _ _ _ cmds -> [cmds]
         T_ForArithmetic _ _ _ _ cmds -> [cmds]
         T_IfExpression _ thens elses -> map snd thens ++ [elses]
+        T_Annotation _ _ t -> getCommandSequences t
         _ -> []
 
 -- Get a list of names of associative arrays
