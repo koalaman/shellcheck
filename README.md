@@ -80,6 +80,11 @@ On systems with Cabal (installs to `~/.cabal/bin`):
     cabal update
     cabal install ShellCheck
 
+On systems with Stack (installs to `~/.local/bin`):
+
+    stack update
+    stack install ShellCheck
+    
 On Debian based distros:
 
     apt-get install shellcheck
