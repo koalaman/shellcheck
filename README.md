@@ -19,7 +19,7 @@ See [the gallery of bad code](README.md#user-content-gallery-of-bad-code) for ex
 
 ## How to use
 
-There are a variety of ways to use ShellCheck!
+There are a number of ways to use ShellCheck!
 
 ### On the web
 
@@ -136,6 +136,8 @@ Alternatively, get freshly built binaries here:
 
 * [Linux, x86_64](https://storage.googleapis.com/shellcheck/shellcheck-latest.linux.x86_64.tar.xz) (statically linked)
 * [Windows, x86](https://storage.googleapis.com/shellcheck/shellcheck-latest.zip)
+
+or see the [storage bucket listing](https://shellcheck.storage.googleapis.com/index.html) for checksums and release builds.
 
 ## Compiling from source
 
