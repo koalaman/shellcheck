@@ -83,7 +83,8 @@ options = [
         (OptArg (maybe (Flag "color" "always") (Flag "color")) "WHEN")
         "Use color (auto, always, never)",
     Option "s" ["shell"]
-        (ReqArg (Flag "shell") "SHELLNAME") "Specify dialect (sh,bash,dash,ksh)",
+        (ReqArg (Flag "shell") "SHELLNAME")
+        "Specify dialect (sh, bash, dash, ksh)",
     Option "x" ["external-sources"]
         (NoArg $ Flag "externals" "true") "Allow 'source' outside of FILES.",
     Option "V" ["version"]
