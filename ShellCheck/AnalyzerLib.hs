@@ -623,7 +623,7 @@ getOffsetReferences mods = fromMaybe [] $ do
     offsets <- match !!! 0
     return $ matchAllStrings variableNameRegex offsets
   where
-    re = mkRegex "^ *:(.*)"
+    re = mkRegex "^ *:([^-=?+].*)"
 
 getReferencedVariables parents t =
     case t of
