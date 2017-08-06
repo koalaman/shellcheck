@@ -77,12 +77,14 @@ options = [
     Option "e" ["exclude"]
         (ReqArg (Flag "exclude") "CODE1,CODE2..") "exclude types of warnings",
     Option "f" ["format"]
-        (ReqArg (Flag "format") "FORMAT") "output format",
+        (ReqArg (Flag "format") "FORMAT")
+        "output format (checkstyle, gcc, json, tty)",
     Option "C" ["color"]
         (OptArg (maybe (Flag "color" "always") (Flag "color")) "WHEN")
         "Use color (auto, always, never)",
     Option "s" ["shell"]
-        (ReqArg (Flag "shell") "SHELLNAME") "Specify dialect (sh,bash,dash,ksh)",
+        (ReqArg (Flag "shell") "SHELLNAME")
+        "Specify dialect (sh, bash, dash, ksh)",
     Option "x" ["external-sources"]
         (NoArg $ Flag "externals" "true") "Allow 'source' outside of FILES.",
     Option "V" ["version"]
