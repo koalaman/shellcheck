@@ -35,6 +35,7 @@ import Data.Bits
 import Data.Char
 import Data.Functor
 import Data.Either
+import Data.List
 import qualified Data.Map as Map
 import Data.Maybe
 import Data.Monoid
@@ -77,8 +78,8 @@ options = [
     Option "e" ["exclude"]
         (ReqArg (Flag "exclude") "CODE1,CODE2..") "exclude types of warnings",
     Option "f" ["format"]
-        (ReqArg (Flag "format") "FORMAT")
-        "output format (checkstyle, gcc, json, tty)",
+        (ReqArg (Flag "format") "FORMAT") $
+        "output format (" ++ formatList ++ ")",
     Option "C" ["color"]
         (OptArg (maybe (Flag "color" "always") (Flag "color")) "WHEN")
         "Use color (auto, always, never)",
@@ -108,6 +109,10 @@ formats options = Map.fromList [
     ("json", ShellCheck.Formatter.JSON.format),
     ("tty",  ShellCheck.Formatter.TTY.format options)
     ]
+
+formatList = intercalate ", " names
+  where
+    names = Map.keys $ formats (formatterOptions defaultOptions)
 
 getOption [] _ = Nothing
 getOption (Flag var val:_) name | name == var = return val
