@@ -77,7 +77,8 @@ options = [
     Option "e" ["exclude"]
         (ReqArg (Flag "exclude") "CODE1,CODE2..") "exclude types of warnings",
     Option "f" ["format"]
-        (ReqArg (Flag "format") "FORMAT") "output format",
+        (ReqArg (Flag "format") "FORMAT")
+        "output format (checkstyle, gcc, json, tty)",
     Option "C" ["color"]
         (OptArg (maybe (Flag "color" "always") (Flag "color")) "WHEN")
         "Use color (auto, always, never)",
