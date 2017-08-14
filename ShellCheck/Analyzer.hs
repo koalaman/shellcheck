@@ -32,7 +32,7 @@ import qualified ShellCheck.Checks.ShellSupport
 analyzeScript :: AnalysisSpec -> AnalysisResult
 analyzeScript spec = AnalysisResult {
     arComments =
-        filterByAnnotation (asScript spec) . nub $
+        filterByAnnotation spec params . nub $
             runAnalytics spec
             ++ runChecker params (checkers params)
 }

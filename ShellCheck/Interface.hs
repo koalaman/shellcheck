@@ -33,6 +33,7 @@ newtype SystemInterface m = SystemInterface {
 data CheckSpec = CheckSpec {
     csFilename :: String,
     csScript :: String,
+    csCheckSourced :: Bool,
     csExcludedWarnings :: [Integer],
     csShellTypeOverride :: Maybe Shell
 } deriving (Show, Eq)
@@ -46,6 +47,7 @@ emptyCheckSpec :: CheckSpec
 emptyCheckSpec = CheckSpec {
     csFilename = "",
     csScript = "",
+    csCheckSourced = False,
     csExcludedWarnings = [],
     csShellTypeOverride = Nothing
 }
@@ -53,7 +55,8 @@ emptyCheckSpec = CheckSpec {
 -- Parser input and output
 data ParseSpec = ParseSpec {
     psFilename :: String,
-    psScript :: String
+    psScript :: String,
+    psCheckSourced :: Bool
 } deriving (Show, Eq)
 
 data ParseResult = ParseResult {
@@ -66,7 +69,8 @@ data ParseResult = ParseResult {
 data AnalysisSpec = AnalysisSpec {
     asScript :: Token,
     asShellType :: Maybe Shell,
-    asExecutionMode :: ExecutionMode
+    asExecutionMode :: ExecutionMode,
+    asCheckSourced :: Bool
 }
 
 newtype AnalysisResult = AnalysisResult {

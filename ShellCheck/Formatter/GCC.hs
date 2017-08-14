@@ -31,14 +31,25 @@ format = return Formatter {
     header = return (),
     footer = return (),
     onFailure = outputError,
-    onResult = outputResult
+    onResult = outputAll
 }
 
 outputError file error = hPutStrLn stderr $ file ++ ": " ++ error
 
-outputResult result contents = do
-    let comments = makeNonVirtual (crComments result) contents
-    mapM_ (putStrLn . formatComment (crFilename result)) comments
+outputAll cr sys = mapM_ f groups
+  where
+    comments = crComments cr
+    groups = groupWith sourceFile comments
+    f :: [PositionedComment] -> IO ()
+    f group = do
+        let filename = sourceFile (head group)
+        result <- (siReadFile sys) filename
+        let contents = either (const "") id result
+        outputResult filename contents group
+
+outputResult filename contents warnings = do
+    let comments = makeNonVirtual warnings contents
+    mapM_ (putStrLn . formatComment filename) comments
 
 formatComment filename c = concat [
     filename, ":",

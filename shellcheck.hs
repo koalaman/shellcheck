@@ -33,8 +33,9 @@ import Control.Monad
 import Control.Monad.Except
 import Data.Bits
 import Data.Char
-import Data.Functor
 import Data.Either
+import Data.Functor
+import Data.IORef
 import Data.List
 import qualified Data.Map as Map
 import Data.Maybe
@@ -75,21 +76,23 @@ defaultOptions = Options {
 
 usageHeader = "Usage: shellcheck [OPTIONS...] FILES..."
 options = [
-    Option "e" ["exclude"]
-        (ReqArg (Flag "exclude") "CODE1,CODE2..") "exclude types of warnings",
-    Option "f" ["format"]
-        (ReqArg (Flag "format") "FORMAT") $
-        "output format (" ++ formatList ++ ")",
+    Option "a" ["check-sourced"]
+        (NoArg $ Flag "sourced" "false") "Include warnings from sourced files",
     Option "C" ["color"]
         (OptArg (maybe (Flag "color" "always") (Flag "color")) "WHEN")
         "Use color (auto, always, never)",
+    Option "e" ["exclude"]
+        (ReqArg (Flag "exclude") "CODE1,CODE2..") "Exclude types of warnings",
+    Option "f" ["format"]
+        (ReqArg (Flag "format") "FORMAT") $
+        "Output format (" ++ formatList ++ ")",
     Option "s" ["shell"]
         (ReqArg (Flag "shell") "SHELLNAME")
         "Specify dialect (sh, bash, dash, ksh)",
-    Option "x" ["external-sources"]
-        (NoArg $ Flag "externals" "true") "Allow 'source' outside of FILES.",
     Option "V" ["version"]
-        (NoArg $ Flag "version" "true") "Print version information"
+        (NoArg $ Flag "version" "true") "Print version information",
+    Option "x" ["external-sources"]
+        (NoArg $ Flag "externals" "true") "Allow 'source' outside of FILES"
     ]
 
 printErr = lift . hPutStrLn stderr
@@ -136,7 +139,7 @@ getExclusions options =
     in
         map (Prelude.read . clean) elements :: [Int]
 
-toStatus = liftM (either id id) . runExceptT
+toStatus = fmap (either id id) . runExceptT
 
 getEnvArgs = do
     opts <- getEnv "SHELLCHECK_OPTS" `catch` cantWaitForLookupEnv
@@ -193,23 +196,27 @@ runFormatter sys format options files = do
         newStatus <- process file `catch` handler file
         return $ status `mappend` newStatus
     handler :: FilePath -> IOException -> IO Status
-    handler file e = do
-        onFailure format file (show e)
+    handler file e = reportFailure file (show e)
+    reportFailure file str = do
+        onFailure format file str
         return RuntimeException
 
     process :: FilePath -> IO Status
     process filename = do
-        contents <- inputFile filename
-        let checkspec = (checkSpec options) {
-            csFilename = filename,
-            csScript = contents
-        }
-        result <- checkScript sys checkspec
-        onResult format result contents
-        return $
-            if null (crComments result)
-            then NoProblems
-            else SomeProblems
+        input <- (siReadFile sys) filename
+        either (reportFailure filename) check input
+      where
+        check contents = do
+            let checkspec = (checkSpec options) {
+                csFilename = filename,
+                csScript = contents
+            }
+            result <- checkScript sys checkspec
+            onResult format result sys
+            return $
+                if null (crComments result)
+                then NoProblems
+                else SomeProblems
 
 parseColorOption colorOption =
     case colorOption of
@@ -254,6 +261,13 @@ parseOption flag options =
                 }
             }
 
+        Flag "sourced" _ ->
+            return options {
+                checkSpec = (checkSpec options) {
+                    csCheckSourced = True
+                }
+            }
+
         _ -> return options
   where
     die s = do
@@ -268,14 +282,28 @@ parseOption flag options =
 
 ioInterface options files = do
     inputs <- mapM normalize files
+    cache <- newIORef emptyCache
     return SystemInterface {
-        siReadFile = get inputs
+        siReadFile = get cache inputs
     }
   where
-    get inputs file = do
+    emptyCache :: Map.Map FilePath String
+    emptyCache = Map.empty
+    get cache inputs file = do
+        map <- readIORef cache
+        case Map.lookup file map of
+            Just x -> return $ Right x
+            Nothing -> fetch cache inputs file
+
+    fetch cache inputs file = do
         ok <- allowable inputs file
         if ok
-          then (Right <$> inputFile file) `catch` handler
+          then (do
+            (contents, shouldCache) <- inputFile file
+            when shouldCache $
+                modifyIORef cache $ Map.insert file contents
+            return $ Right contents
+            ) `catch` handler
           else return $ Left (file ++ " was not specified as input (see shellcheck -x).")
 
       where
@@ -296,16 +324,19 @@ ioInterface options files = do
         fallback path _ = return path
 
 inputFile file = do
-    handle <-
+    (handle, shouldCache) <-
             if file == "-"
-            then return stdin
-            else openBinaryFile file ReadMode
+            then return (stdin, True)
+            else do
+                h <- openBinaryFile file ReadMode
+                reopenable <- hIsSeekable h
+                return (h, not reopenable)
 
     hSetBinaryMode handle True
     contents <- decodeString <$> hGetContents handle -- closes handle
 
     seq (length contents) $
-        return contents
+        return (contents, shouldCache)
 
 -- Decode a char8 string into a utf8 string, with fallback on
 -- ISO-8859-1. This avoids depending on additional libraries.

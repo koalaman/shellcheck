@@ -43,15 +43,22 @@ colorForLevel level =
         "style"   -> 32 -- green
         "message" -> 1 -- bold
         "source"  -> 0 -- none
-        otherwise -> 0 -- none
+        _ -> 0         -- none
 
 outputError options file error = do
     color <- getColorFunc $ foColorOption options
     hPutStrLn stderr $ color "error" $ file ++ ": " ++ error
 
-outputResult options result contents = do
+outputResult options result sys = do
     color <- getColorFunc $ foColorOption options
     let comments = crComments result
+    let fileGroups = groupWith sourceFile comments
+    mapM_ (outputForFile color sys) fileGroups
+
+outputForFile color sys comments = do
+    let fileName = sourceFile (head comments)
+    result <- (siReadFile sys) fileName
+    let contents = either (const "") id result
     let fileLines = lines contents
     let lineCount = fromIntegral $ length fileLines
     let groups = groupWith lineNo comments
@@ -62,7 +69,7 @@ outputResult options result contents = do
                         else fileLines !! fromIntegral (lineNum - 1)
         putStrLn ""
         putStrLn $ color "message" $
-           "In " ++ crFilename result ++" line " ++ show lineNum ++ ":"
+           "In " ++ fileName ++" line " ++ show lineNum ++ ":"
         putStrLn (color "source" line)
         mapM_ (\c -> putStrLn (color (severityText c) $ cuteIndent c)) x
         putStrLn ""

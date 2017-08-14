@@ -25,11 +25,12 @@ import ShellCheck.Interface
 -- A formatter that carries along an arbitrary piece of data
 data Formatter = Formatter {
     header ::  IO (),
-    onResult :: CheckResult -> String -> IO (),
+    onResult :: CheckResult -> SystemInterface IO -> IO (),
     onFailure :: FilePath -> ErrorMessage -> IO (),
     footer :: IO ()
 }
 
+sourceFile (PositionedComment pos _ _) = posFile pos
 lineNo (PositionedComment pos _ _) = posLine pos
 endLineNo (PositionedComment _ end _) = posLine end
 colNo  (PositionedComment pos _ _) = posColumn pos

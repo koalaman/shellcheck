@@ -34,14 +34,27 @@ format = return Formatter {
         putStrLn "<checkstyle version='4.3'>",
 
     onFailure = outputError,
-    onResult = outputResult,
+    onResult = outputResults,
 
     footer = putStrLn "</checkstyle>"
 }
 
-outputResult result contents = do
-    let comments = makeNonVirtual (crComments result) contents
-    putStrLn . formatFile (crFilename result) $ comments
+outputResults cr sys =
+    if null comments
+    then outputFile (crFilename cr) "" []
+    else mapM_ outputGroup fileGroups
+  where
+    comments = crComments cr
+    fileGroups = groupWith sourceFile comments
+    outputGroup group = do
+        let filename = sourceFile (head group)
+        result <- (siReadFile sys) filename
+        let contents = either (const "") id result
+        outputFile filename contents group
+
+outputFile filename contents warnings = do
+    let comments = makeNonVirtual warnings contents
+    putStrLn . formatFile filename $ comments
 
 formatFile name comments = concat [
     "<file ", attr "name" name, ">\n",

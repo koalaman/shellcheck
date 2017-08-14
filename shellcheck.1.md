@@ -32,6 +32,12 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 
 # OPTIONS
 
+**-a**,\ **--check-sourced**
+
+:   Emit warnings in sourced files. Normally, `shellcheck` will only warn
+    about issues in the specified files. With this option, any issues in
+    sourced files files will also be reported.
+
 **-C**[*WHEN*],\ **--color**[=*WHEN*]
 
 :   For TTY output, enable colors *always*, *never* or *auto*. The default
@@ -66,6 +72,7 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
     By default, `shellcheck` will only follow files specified on the command
     line (plus `/dev/null`). This option allows following any file the script
     may `source`.
+
 
 # FORMATS
 

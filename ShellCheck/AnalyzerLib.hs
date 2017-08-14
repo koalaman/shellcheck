@@ -109,6 +109,7 @@ data VariableState = Dead Token String | Alive deriving (Show)
 defaultSpec root = AnalysisSpec {
     asScript = root,
     asShellType = Nothing,
+    asCheckSourced = False,
     asExecutionMode = Executed
 }
 
@@ -116,7 +117,8 @@ pScript s =
   let
     pSpec = ParseSpec {
         psFilename = "script",
-        psScript = s
+        psScript = s,
+        psCheckSourced = False
     }
   in prRoot . runIdentity $ parseScript (mockedSystemInterface []) pSpec
 
@@ -801,9 +803,10 @@ whenShell l c = do
     when (shell `elem` l ) c
 
 
-filterByAnnotation token =
+filterByAnnotation asSpec params =
     filter (not . shouldIgnore)
   where
+    token = asScript asSpec
     idFor (TokenComment id _) = id
     shouldIgnore note =
         any (shouldIgnoreFor (getCode note)) $
@@ -813,9 +816,9 @@ filterByAnnotation token =
       where
         hasNum (DisableComment ts) = num == ts
         hasNum _ = False
-    shouldIgnoreFor _ T_Include {} = True -- Ignore included files
+    shouldIgnoreFor _ T_Include {} = not $ asCheckSourced asSpec
     shouldIgnoreFor _ _ = False
-    parents = getParentTree token
+    parents = parentMap params
     getCode (TokenComment _ (Comment _ c _)) = c
 
 -- Is this a ${#anything}, to get string length or array count?

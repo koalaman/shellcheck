@@ -54,7 +54,8 @@ checkScript sys spec = do
     checkScript contents = do
         result <- parseScript sys ParseSpec {
             psFilename = csFilename spec,
-            psScript = contents
+            psScript = contents,
+            psCheckSourced = csCheckSourced spec
         }
         let parseMessages = prComments result
         let analysisMessages =
@@ -77,6 +78,7 @@ checkScript sys spec = do
         AnalysisSpec {
             asScript = root,
             asShellType = csShellTypeOverride spec,
+            asCheckSourced = csCheckSourced spec,
             asExecutionMode = Executed
          }
 
@@ -88,13 +90,21 @@ getErrors sys spec =
 
 check = checkWithIncludes []
 
+checkWithSpec includes =
+    getErrors (mockedSystemInterface includes)
+
 checkWithIncludes includes src =
-    getErrors
-        (mockedSystemInterface includes)
-        emptyCheckSpec {
-            csScript = src,
-            csExcludedWarnings = [2148]
-        }
+    checkWithSpec includes emptyCheckSpec {
+        csScript = src,
+        csExcludedWarnings = [2148]
+    }
+
+checkRecursive includes src =
+    checkWithSpec includes emptyCheckSpec {
+        csScript = src,
+        csExcludedWarnings = [2148],
+        csCheckSourced = True
+    }
 
 prop_findsParseIssue = check "echo \"$12\"" == [1037]
 
@@ -152,6 +162,12 @@ prop_cantSourceDynamic2 =
 
 prop_canSourceDynamicWhenRedirected =
     null $ checkWithIncludes [("lib", "")] "#shellcheck source=lib\n. \"$1\""
+
+prop_recursiveAnalysis =
+    [2086] == checkRecursive [("lib", "echo $1")] "source lib"
+
+prop_recursiveParsing =
+    [1037] == checkRecursive [("lib", "echo \"$10\"")] "source lib"
 
 prop_sourceDirectiveDoesntFollowFile =
     null $ checkWithIncludes

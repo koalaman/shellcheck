@@ -47,7 +47,7 @@ import qualified Data.Map as Map
 
 import Test.QuickCheck.All (quickCheckAll)
 
-type SCBase m = Mr.ReaderT (SystemInterface m) (Ms.StateT SystemState m)
+type SCBase m = Mr.ReaderT (Environment m) (Ms.StateT SystemState m)
 type SCParser m v = ParsecT String UserState (SCBase m) v
 
 backslash :: Monad m => SCParser m Char
@@ -248,12 +248,14 @@ addParseNote n = do
 
 shouldIgnoreCode code = do
     context <- getCurrentContexts
-    return $ any disabling context
+    checkSourced <- Mr.asks checkSourced
+    return $ any (disabling checkSourced) context
   where
-    disabling (ContextAnnotation list) =
-        any disabling' list
-    disabling (ContextSource _) = True -- Don't add messages for sourced files
-    disabling _ = False
+    disabling checkSourced item =
+        case item of
+            ContextAnnotation list -> any disabling' list
+            ContextSource _ -> not $ checkSourced
+            _ -> False
     disabling' (DisableComment n) = code == n
     disabling' _ = False
 
@@ -295,6 +297,11 @@ data SystemState = SystemState {
 initialSystemState = SystemState {
     contextStack = [],
     parseProblems = []
+}
+
+data Environment m = Environment {
+    systemInterface :: SystemInterface m,
+    checkSourced :: Bool
 }
 
 parseProblem level code msg = do
@@ -1879,7 +1886,7 @@ readSource pos t@(T_Redirecting _ _ (T_SimpleCommand _ _ (cmd:file:_))) = do
                     "This file appears to be recursively sourced. Ignoring."
                 return t
               else do
-                sys <- Mr.ask
+                sys <- Mr.asks systemInterface
                 input <-
                     if filename == "/dev/null" -- always allow /dev/null
                     then return (Right "")
@@ -2788,8 +2795,14 @@ readScript = do
 -- Interactively run a parser in ghci:
 -- debugParse readScript "echo 'hello world'"
 debugParse p string = runIdentity $ do
-    (res, _) <- runParser (mockedSystemInterface []) p "-" string
+    (res, _) <- runParser testEnvironment p "-" string
     return res
+
+testEnvironment =
+    Environment {
+        systemInterface = (mockedSystemInterface []),
+        checkSourced = False
+    }
 
 
 isOk p s =      parsesCleanly p s == Just True   -- The string parses with no warnings
@@ -2797,7 +2810,7 @@ isWarning p s = parsesCleanly p s == Just False  -- The string parses with warni
 isNotOk p s =   parsesCleanly p s == Nothing     -- The string does not parse
 
 parsesCleanly parser string = runIdentity $ do
-    (res, sys) <- runParser (mockedSystemInterface [])
+    (res, sys) <- runParser testEnvironment
                     (parser >> eof >> getState) "-" string
     case (res, sys) of
         (Right userState, systemState) ->
@@ -2842,22 +2855,22 @@ getStringFromParsec errors =
                 Message s     ->  if null s then Nothing else return $ s ++ "."
 
 runParser :: Monad m =>
-    SystemInterface m ->
+    Environment m ->
     SCParser m v ->
     String ->
     String ->
     m (Either ParseError v, SystemState)
 
-runParser sys p filename contents =
+runParser env p filename contents =
     Ms.runStateT
         (Mr.runReaderT
             (runParserT p initialUserState filename contents)
-            sys)
+            env)
         initialSystemState
 system = lift . lift . lift
 
-parseShell sys name contents = do
-    (result, state) <- runParser sys (parseWithNotes readScript) name contents
+parseShell env name contents = do
+    (result, state) <- runParser env (parseWithNotes readScript) name contents
     case result of
         Right (script, userstate) ->
             return ParseResult {
@@ -2943,7 +2956,12 @@ posToPos sp = Position {
 parseScript :: Monad m =>
         SystemInterface m -> ParseSpec -> m ParseResult
 parseScript sys spec =
-    parseShell sys (psFilename spec) (psScript spec)
+    parseShell env (psFilename spec) (psScript spec)
+  where
+    env = Environment {
+        systemInterface = sys,
+        checkSourced = psCheckSourced spec
+    }
 
 
 return []
