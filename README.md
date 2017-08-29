@@ -127,6 +127,10 @@ Add OBS devel:languages:haskell repository from https://build.opensuse.org/proje
 
 Or use OneClickInstall - https://software.opensuse.org/package/ShellCheck
 
+On Solus:
+
+    eopkg install shellcheck
+
 From Docker Hub:
 
     docker pull koalaman/shellcheck:latest  # Or  :v0.4.6  for a release version
