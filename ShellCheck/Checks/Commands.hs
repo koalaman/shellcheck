@@ -198,6 +198,7 @@ prop_checkGrepRe9 = verifyNot checkGrepRe "grep '[0-9]*' file"
 prop_checkGrepRe10= verifyNot checkGrepRe "grep '^aa*' file"
 prop_checkGrepRe11= verifyNot checkGrepRe "grep --include=*.png foo"
 prop_checkGrepRe12= verifyNot checkGrepRe "grep -F 'Foo*' file"
+prop_checkGrepRe13= verifyNot checkGrepRe "grep -- -foo bar*"
 
 checkGrepRe = CommandCheck (Basename "grep") check where
     check cmd = f cmd (arguments cmd)
@@ -205,8 +206,18 @@ checkGrepRe = CommandCheck (Basename "grep") check where
     skippable (Just s) = not ("--regex=" `isPrefixOf` s) && "-" `isPrefixOf` s
     skippable _ = False
     f _ [] = return ()
-    f cmd (x:r) | skippable (getLiteralStringExt (const $ return "_") x) = f cmd r
-    f cmd (re:_) = do
+    f cmd (x:r) =
+        let str = getLiteralStringExt (const $ return "_") x
+        in
+            if str == Just "--"
+            then checkRE cmd r -- Regex is *after* this
+            else
+                if skippable str
+                then f cmd r           -- Regex is elsewhere
+                else checkRE cmd (x:r) -- Regex is this
+
+    checkRE _ [] = return ()
+    checkRE cmd (re:_) = do
         when (isGlob re) $
             warn (getId re) 2062 "Quote the grep pattern so the shell won't interpret it."
 
