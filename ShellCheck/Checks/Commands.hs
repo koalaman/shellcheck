@@ -87,6 +87,7 @@ commandChecks = [
     ,checkDeprecatedFgrep
     ,checkWhileGetoptsCase
     ,checkCatastrophicRm
+    ,checkLetUsage
     ]
 
 buildCommandMap :: [CommandCheck] -> Map.Map CommandName (Token -> Analysis)
@@ -823,6 +824,14 @@ checkCatastrophicRm = CommandCheck (Basename "rm") $ \t ->
         ]
     importantPaths = filter (not . null) $
         ["", "/", "/*", "/*/*"] >>= (\x -> map (++x) paths)
+
+
+prop_checkLetUsage1 = verify checkLetUsage "let a=1"
+prop_checkLetUsage2 = verifyNot checkLetUsage "(( a=1 ))"
+checkLetUsage = CommandCheck (Exactly "let") f
+  where
+    f t = whenShell [Bash,Ksh] $ do
+        style (getId t) 2219 $ "Instead of 'let expr', prefer (( expr )) ."
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
