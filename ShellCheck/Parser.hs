@@ -62,7 +62,10 @@ singleQuote = char '\''
 doubleQuote = char '"'
 variableStart = upper <|> lower <|> oneOf "_"
 variableChars = upper <|> lower <|> digit <|> oneOf "_"
-functionChars = variableChars <|> oneOf ":+-.?"
+-- Chars to allow in function names
+functionChars = variableChars <|> oneOf ":+?-./^"
+-- Chars to allow in functions using the 'function' keyword
+extendedFunctionChars = functionChars <|> oneOf "[]*=!"
 specialVariable = oneOf "@*#?-$!"
 paramSubSpecialChars = oneOf "/:+-=%"
 quotableChars = "|&;<>()\\ '\t\n\r\xA0" ++ doubleQuotableChars
@@ -2289,6 +2292,7 @@ prop_readFunctionDefinition8 = isOk readFunctionDefinition "foo() (ls)"
 prop_readFunctionDefinition9 = isOk readFunctionDefinition "function foo { true; }"
 prop_readFunctionDefinition10= isOk readFunctionDefinition "function foo () { true; }"
 prop_readFunctionDefinition11= isWarning readFunctionDefinition "function foo{\ntrue\n}"
+prop_readFunctionDefinition12= isOk readFunctionDefinition "function []!() { true; }"
 readFunctionDefinition = called "function" $ do
     functionSignature <- try readFunctionSignature
     allspacing
@@ -2305,7 +2309,7 @@ readFunctionDefinition = called "function" $ do
                 string "function"
                 whitespace
             spacing
-            name <- readFunctionName
+            name <- many1 extendedFunctionChars
             spaces <- spacing
             hasParens <- wasIncluded readParens
             when (not hasParens && null spaces) $
@@ -2315,7 +2319,7 @@ readFunctionDefinition = called "function" $ do
 
         readWithoutFunction = try $ do
             id <- getNextId
-            name <- readFunctionName
+            name <- many1 functionChars
             guard $ name /= "time"  -- Interfers with time ( foo )
             spacing
             readParens
@@ -2329,8 +2333,6 @@ readFunctionDefinition = called "function" $ do
                 many $ noneOf "\n){"
                 g_Rparen
             return ()
-
-        readFunctionName = many1 functionChars
 
 prop_readCoProc1 = isOk readCoProc "coproc foo { echo bar; }"
 prop_readCoProc2 = isOk readCoProc "coproc { echo bar; }"
