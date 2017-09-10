@@ -199,6 +199,8 @@ prop_checkGrepRe10= verifyNot checkGrepRe "grep '^aa*' file"
 prop_checkGrepRe11= verifyNot checkGrepRe "grep --include=*.png foo"
 prop_checkGrepRe12= verifyNot checkGrepRe "grep -F 'Foo*' file"
 prop_checkGrepRe13= verifyNot checkGrepRe "grep -- -foo bar*"
+prop_checkGrepRe14= verifyNot checkGrepRe "grep -e -foo bar*"
+prop_checkGrepRe15= verifyNot checkGrepRe "grep --regex -foo bar*"
 
 checkGrepRe = CommandCheck (Basename "grep") check where
     check cmd = f cmd (arguments cmd)
@@ -209,7 +211,7 @@ checkGrepRe = CommandCheck (Basename "grep") check where
     f cmd (x:r) =
         let str = getLiteralStringExt (const $ return "_") x
         in
-            if str == Just "--"
+            if str `elem` [Just "--", Just "-e", Just "--regex"]
             then checkRE cmd r -- Regex is *after* this
             else
                 if skippable str
