@@ -715,7 +715,7 @@ checkDeprecatedFgrep = CommandCheck (Basename "fgrep") $
 
 prop_checkWhileGetoptsCase1 = verify checkWhileGetoptsCase "while getopts 'a:b' x; do case $x in a) foo;; esac; done"
 prop_checkWhileGetoptsCase2 = verify checkWhileGetoptsCase "while getopts 'a:' x; do case $x in a) foo;; b) bar;; esac; done"
-prop_checkWhileGetoptsCase3 = verifyNot checkWhileGetoptsCase "while getopts 'a:b' x; do case $x in a) foo;; b) bar;; esac; done"
+prop_checkWhileGetoptsCase3 = verifyNot checkWhileGetoptsCase "while getopts 'a:b' x; do case $x in a) foo;; b) bar;; *) :;esac; done"
 prop_checkWhileGetoptsCase4 = verifyNot checkWhileGetoptsCase "while getopts 'a:123' x; do case $x in a) foo;; [0-9]) bar;; esac; done"
 prop_checkWhileGetoptsCase5 = verifyNot checkWhileGetoptsCase "while getopts 'a:' x; do case $x in a) foo;; \\?) bar;; *) baz;; esac; done"
 checkWhileGetoptsCase = CommandCheck (Exactly "getopts") f
@@ -732,8 +732,11 @@ checkWhileGetoptsCase = CommandCheck (Exactly "getopts") f
 
     check :: Id -> [String] -> Token -> Analysis
     check optId opts (T_CaseExpression id _ list) = do
-            unless (Nothing `Map.member` handledMap) $
+            unless (Nothing `Map.member` handledMap) $ do
                 mapM_ (warnUnhandled optId id) $ catMaybes $ Map.keys notHandled
+
+                unless (any (`Map.member` handledMap) [Just "*",Just "?"]) $
+                    warn id 2220 "Invalid flags are not handled. Add a *) case."
 
             mapM_ warnRedundant $ Map.toList notRequested
 
@@ -763,6 +766,7 @@ checkWhileGetoptsCase = CommandCheck (Exactly "getopts") f
         case t of
             T_Glob _ ('[':c:']':[]) -> return [c]
             T_Glob _ "*" -> return "*"
+            T_Glob _ "?" -> return "?"
             _ -> Nothing
 
     whileLoop t =
