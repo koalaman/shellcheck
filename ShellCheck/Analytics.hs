@@ -2665,22 +2665,50 @@ prop_checkUnmatchableCases1 = verify checkUnmatchableCases "case foo in bar) tru
 prop_checkUnmatchableCases2 = verify checkUnmatchableCases "case foo-$bar in ??|*) true; esac"
 prop_checkUnmatchableCases3 = verify checkUnmatchableCases "case foo in foo) true; esac"
 prop_checkUnmatchableCases4 = verifyNot checkUnmatchableCases "case foo-$bar in foo*|*bar|*baz*) true; esac"
+prop_checkUnmatchableCases5 = verify checkUnmatchableCases "case $f in *.txt) true;; f??.txt) false;; esac"
+prop_checkUnmatchableCases6 = verifyNot checkUnmatchableCases "case $f in ?*) true;; *) false;; esac"
+prop_checkUnmatchableCases7 = verifyNot checkUnmatchableCases "case $f in $(x)) true;; asdf) false;; esac"
+prop_checkUnmatchableCases8 = verify checkUnmatchableCases "case $f in cow) true;; bar|cow) false;; esac"
 checkUnmatchableCases _ t =
     case t of
-        T_CaseExpression _ word list ->
+        T_CaseExpression _ word list -> do
+            let patterns = concatMap snd3 list
+
             if isConstant word
-            then warn (getId word) 2194
-                    "This word is constant. Did you forget the $ on a variable?"
-            else  potentially $ do
-                pg <- wordToPseudoGlob word
-                return $ mapM_ (check pg) (concatMap (\(_,x,_) -> x) list)
+                then warn (getId word) 2194
+                        "This word is constant. Did you forget the $ on a variable?"
+                else  potentially $ do
+                    pg <- wordToPseudoGlob word
+                    return $ mapM_ (check pg) patterns
+
+            let exactGlobs = tupMap wordToExactPseudoGlob patterns
+            let fuzzyGlobs = tupMap wordToPseudoGlob patterns
+            let dominators = zip exactGlobs (tails $ drop 1 fuzzyGlobs)
+
+            mapM_ checkDoms dominators
+
         _ -> return ()
   where
+    snd3 (_,x,_) = x
     check target candidate = potentially $ do
         candidateGlob <- wordToPseudoGlob candidate
         guard . not $ pseudoGlobsCanOverlap target candidateGlob
         return $ warn (getId candidate) 2195
                     "This pattern will never match the case statement's word. Double check them."
+
+    tupMap f l = zip l (map f l)
+    checkDoms ((glob, Just x), rest) =
+        case filter (\(_, p) -> x `pseudoGlobIsSuperSetof` p) valids of
+            ((first,_):_) -> do
+                warn (getId glob) 2221 "This pattern always overrides a later one."
+                warn (getId first) 2222 "This pattern never matches because of a previous pattern."
+            _ -> return ()
+      where
+        valids = concatMap f rest
+        f (x, Just y) = [(x,y)]
+        f _ = []
+    checkDoms _ = return ()
+
 
 prop_checkSubshellAsTest1 = verify checkSubshellAsTest "( -e file )"
 prop_checkSubshellAsTest2 = verify checkSubshellAsTest "( 1 -gt 2 )"

@@ -371,6 +371,19 @@ wordToPseudoGlob word =
 
         _ -> return [PGMany]
 
+-- Turn a word into a PG pattern, but only if we can preserve
+-- exact semantics.
+wordToExactPseudoGlob :: Token -> Maybe [PseudoGlob]
+wordToExactPseudoGlob word =
+    simplifyPseudoGlob . concat <$> mapM f (getWordParts word)
+  where
+    f x = case x of
+        T_Literal _ s -> return $ map PGChar s
+        T_SingleQuoted _ s -> return $ map PGChar s
+        T_Glob _ "?" -> return [PGAny]
+        T_Glob _ "*" -> return [PGMany]
+        _ -> fail "Unknown token type"
+
 -- Reorder a PseudoGlob for more efficient matching, e.g.
 -- f?*?**g -> f??*g
 simplifyPseudoGlob :: [PseudoGlob] -> [PseudoGlob]
@@ -401,6 +414,23 @@ pseudoGlobsCanOverlap = matchable
     matchable (PGMany : rest) [] = matchable rest []
     matchable (_:_) [] = False
     matchable [] r = matchable r []
+
+-- Check whether the first pattern always overlaps the second.
+pseudoGlobIsSuperSetof :: [PseudoGlob] -> [PseudoGlob] -> Bool
+pseudoGlobIsSuperSetof = matchable
+  where
+    matchable x@(xf:xs) y@(yf:ys) =
+        case (xf, yf) of
+            (PGMany, PGMany) -> matchable x ys
+            (PGMany, _) -> matchable x ys || matchable xs y
+            (_, PGMany) -> False
+            (PGAny, _) -> matchable xs ys
+            (_, PGAny) -> False
+            (_, _) -> xf == yf && matchable xs ys
+
+    matchable [] [] = True
+    matchable (PGMany : rest) [] = matchable rest []
+    matchable _ _ = False
 
 wordsCanBeEqual x y = fromMaybe True $
     liftM2 pseudoGlobsCanOverlap (wordToPseudoGlob x) (wordToPseudoGlob y)
