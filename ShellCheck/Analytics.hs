@@ -635,13 +635,11 @@ checkShorthandIf _ _ = return ()
 
 prop_checkDollarStar = verify checkDollarStar "for f in $*; do ..; done"
 prop_checkDollarStar2 = verifyNot checkDollarStar "a=$*"
+prop_checkDollarStar3 = verifyNot checkDollarStar "[[ $* = 'a b' ]]"
 checkDollarStar p t@(T_NormalWord _ [b@(T_DollarBraced id _)])
       | bracedString b == "*"  =
-    unless isAssigned $
+    unless (isStrictlyQuoteFree (parentMap p) t) $
         warn id 2048 "Use \"$@\" (with quotes) to prevent whitespace problems."
-  where
-    path = getPath (parentMap p) t
-    isAssigned = any isAssignment . take 2 $ path
 checkDollarStar _ _ = return ()
 
 
