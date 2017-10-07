@@ -57,20 +57,6 @@ While ShellCheck is mostly intended for interactive use, it can easily be added 
 
 ShellCheck makes canonical use of exit codes, and can output simple JSON, CheckStyle compatible XML, GCC compatible warnings as well as human readable text (with or without ANSI colors). See the [Integration](https://github.com/koalaman/shellcheck/wiki/Integration) wiki page for more documentation.
 
-## Travis CI Setup
-
-If you want to use ShellCheck in Travis CI, setting it up is simple :tada:.
-
-```yml
-language: bash
-addons:
-  apt:
-    sources:
-    - debian-sid    # Grab ShellCheck from the Debian repo
-    packages:
-    - shellcheck
-```
-
 ## Installing
 
 The easiest way to install ShellCheck locally is through your package manager.
@@ -136,12 +122,29 @@ From Docker Hub:
     docker pull koalaman/shellcheck:latest  # Or  :v0.4.6  for a release version
     docker run -v "$PWD:/mnt" koalaman/shellcheck myscript
 
-Alternatively, get freshly built binaries here:
+or use `koalaman/shellcheck-alpine` if you want a larger Alpine Linux based image to extend.
+
+Alternatively, get freshly built binaries for the latest commit here:
 
 * [Linux, x86_64](https://storage.googleapis.com/shellcheck/shellcheck-latest.linux.x86_64.tar.xz) (statically linked)
 * [Windows, x86](https://storage.googleapis.com/shellcheck/shellcheck-latest.zip)
 
 or see the [storage bucket listing](https://shellcheck.storage.googleapis.com/index.html) for checksums and release builds.
+
+## Travis CI Setup
+
+If you want to use ShellCheck in Travis CI, you can most easily install it via `apt`:
+
+```yml
+language: bash
+addons:
+  apt:
+    sources:
+    - debian-sid    # Grab ShellCheck from the Debian repo
+    packages:
+    - shellcheck
+```
+
 
 ## Compiling from source
 

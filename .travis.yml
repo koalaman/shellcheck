@@ -24,12 +24,18 @@ script:
   - rm -rf dist || true
   # Linux Docker image
   - docker build -t "$DOCKER_REPO:$TAG" .
+  # Linux Alpine based Docker image
+  - sed 's/^FROM .*/FROM alpine:latest/' Dockerfile > Dockerfile.alpine
+  - docker build -f Dockerfile.alpine -t "$DOCKER_REPO-alpine:$TAG" .
 
 after_success:
   - ./.prepare_deploy
-  - docker login -e="$DOCKER_EMAIL" -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
-  - |-
-    ([ "$TRAVIS_BRANCH" == "master" ] || [ -n "$TRAVIS_TAG" ]) && docker push "$DOCKER_REPO:$TAG"
+  - if [ "$TRAVIS_BRANCH" == "master" ] || [ -n "$TRAVIS_TAG" ];
+    then
+      docker login -e="$DOCKER_EMAIL" -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD";
+      docker push "$DOCKER_REPO:$TAG";
+      docker push "$DOCKER_REPO-alpine:$TAG";
+    fi
 
 after_failure:
   - id
