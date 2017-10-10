@@ -17,6 +17,35 @@ The goals of ShellCheck are
 
 See [the gallery of bad code](README.md#user-content-gallery-of-bad-code) for examples of what ShellCheck can help you identify!
 
+## Table of Contents
+
+- [How to use](#how-to-use)
+  - [On the web](#on-the-web)
+  - [From your terminal](#from-your-terminal)
+  - [In your editor](#in-your-editor)
+  - [In your build or test suites](#in-your-build-or-test-suites)
+- [Installing](#installing)
+- [Travis CI Setup](#travis-ci-setup)
+- [Compiling from source](#compiling-from-source)
+  - [Installing Cabal](#installing-cabal)
+  - [Compiling ShellCheck](#compiling-shellcheck)
+  - [Running tests](#running-tests)
+- [Gallery of bad code](#gallery-of-bad-code)
+  - [Quoting](#quoting)
+  - [Conditionals](#conditionals)
+  - [Frequently misused commands](#frequently-misused-commands)
+  - [Common beginner's mistakes](#common-beginners-mistakes)
+  - [Style](#style)
+  - [Data and typing errors](#data-and-typing-errors)
+  - [Robustness](#robustness)
+  - [Portability](#portability)
+  - [Miscellaneous](#miscellaneous)
+- [Testimonials](#testimonials)
+- [Ignoring issues](#ignoring-issues)
+- [Reporting bugs](#reporting-bugs)
+- [Contributing](#contributing)
+- [Copyright](#copyright)
+
 ## How to use
 
 There are a number of ways to use ShellCheck!
