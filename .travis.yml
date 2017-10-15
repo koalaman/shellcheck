@@ -6,36 +6,51 @@ services:
   - docker
 
 before_install:
-  - export DOCKER_REPO=koalaman/shellcheck
-  - |-
-    export TAG=$([ "$TRAVIS_BRANCH" == "master" ] && echo "latest" || ([ -n "$TRAVIS_TAG" ] && echo "$TRAVIS_TAG") || echo "$TRAVIS_BRANCH")
+  - DOCKER_BASE="$DOCKER_USERNAME/shellcheck"
+  - DOCKER_BUILDS=""
+  - TAGS=""
+  - test "$TRAVIS_BRANCH" = master && TAGS="$TAGS latest" || true
+  - test -n "$TRAVIS_TAG"          && TAGS="$TAGS $TRAVIS_TAG" || true
+  - test "$TRAVIS_BRANCH" = master && test -n "$TRAVIS_TAG" && TAGS="$TAGS stable" || true
 
 script:
   - mkdir deploy
   # Windows .exe
   - docker pull koalaman/winghc
   - docker run --user="$UID" --rm -v "$PWD:/appdata" koalaman/winghc cuib
-  - cp "dist/build/ShellCheck/shellcheck.exe" "deploy/shellcheck-$TAG.exe"
+  - for tag in $TAGS; do cp "dist/build/ShellCheck/shellcheck.exe" "deploy/shellcheck-$tag.exe"; done
   - rm -rf dist || true
   # Linux static executable
   - docker pull koalaman/scbuilder
   - docker run --user="$UID" --rm -v "$PWD:/mnt" koalaman/scbuilder
-  - cp "shellcheck" "deploy/shellcheck-$TAG.linux"
+  - for tag in $TAGS; do cp "shellcheck" "deploy/shellcheck-$tag.linux"; done
+  - ./shellcheck --version
   - rm -rf dist || true
   # Linux Docker image
-  - docker build -t "$DOCKER_REPO:$TAG" .
+  - name="$DOCKER_BASE"
+  - DOCKER_BUILDS="$DOCKER_BUILDS $name"
+  - docker build -t "$name:current" .
+  - docker run "$name:current" --version
   # Linux Alpine based Docker image
+  - name="$DOCKER_BASE-alpine"
+  - DOCKER_BUILDS="$DOCKER_BUILDS $name"
   - sed 's/^FROM .*/FROM alpine:latest/' Dockerfile > Dockerfile.alpine
-  - docker build -f Dockerfile.alpine -t "$DOCKER_REPO-alpine:$TAG" .
+  - docker build -f Dockerfile.alpine -t "$name:current" .
+  - docker run "$name:current" --version
+  # Misc packaging
+  - ./.prepare_deploy
 
 after_success:
-  - ./.prepare_deploy
-  - if [ "$TRAVIS_BRANCH" == "master" ] || [ -n "$TRAVIS_TAG" ];
-    then
-      docker login -e="$DOCKER_EMAIL" -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD";
-      docker push "$DOCKER_REPO:$TAG";
-      docker push "$DOCKER_REPO-alpine:$TAG";
-    fi
+  - docker login -e="$DOCKER_EMAIL" -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
+  - for repo in $DOCKER_BUILDS;
+    do
+      for tag in $TAGS;
+      do
+        echo "Deploying $repo:current as $repo:$tag...";
+        docker tag "$repo:current" "$repo:$tag";
+        docker push "$repo:$tag";
+      done;
+    done;
 
 after_failure:
   - id
