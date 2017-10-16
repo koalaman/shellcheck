@@ -148,8 +148,10 @@ On Solus:
 
 From Docker Hub:
 
-    docker pull koalaman/shellcheck:latest  # Or  :v0.4.6  for a release version
-    docker run -v "$PWD:/mnt" koalaman/shellcheck myscript
+```sh
+docker pull koalaman/shellcheck:latest  # Or  :v0.4.6  for a release version
+docker run -v "$PWD:/mnt" koalaman/shellcheck myscript
+```
 
 or use `koalaman/shellcheck-alpine` if you want a larger Alpine Linux based image to extend.
 
@@ -209,12 +211,16 @@ This will compile ShellCheck and install it to your `~/.cabal/bin` directory.
 
 Add this directory to your `PATH` (for bash, add this to your `~/.bashrc`):
 
-    export PATH="$HOME/.cabal/bin:$PATH"
+```sh
+export PATH="$HOME/.cabal/bin:$PATH"
+```
 
 Log out and in again, and verify that your PATH is set up correctly:
 
-    $ which shellcheck
-    ~/.cabal/bin/shellcheck
+```sh
+$ which shellcheck
+~/.cabal/bin/shellcheck
+```
 
 On native Windows, the `PATH` should already be set up, but the system
 may use a legacy codepage. In `cmd.exe`, `powershell.exe` and Powershell ISE,
@@ -242,129 +248,147 @@ So what kind of things does ShellCheck look for? Here is an incomplete list of d
 
 ShellCheck can recognize several types of incorrect quoting:
 
-    echo $1                           # Unquoted variables
-    find . -name *.ogg                # Unquoted find/grep patterns
-    rm "~/my file.txt"                # Quoted tilde expansion
-    v='--verbose="true"'; cmd $v      # Literal quotes in variables
-    for f in "*.ogg"                  # Incorrectly quoted 'for' loops
-    touch $@                          # Unquoted $@
-    echo 'Don't forget to restart!'   # Singlequote closed by apostrophe
-    echo 'Don\'t try this at home'    # Attempting to escape ' in ''
-    echo 'Path is $PATH'              # Variables in single quotes
-    trap "echo Took ${SECONDS}s" 0    # Prematurely expanded trap
+```sh
+echo $1                           # Unquoted variables
+find . -name *.ogg                # Unquoted find/grep patterns
+rm "~/my file.txt"                # Quoted tilde expansion
+v='--verbose="true"'; cmd $v      # Literal quotes in variables
+for f in "*.ogg"                  # Incorrectly quoted 'for' loops
+touch $@                          # Unquoted $@
+echo 'Don't forget to restart!'   # Singlequote closed by apostrophe
+echo 'Don\'t try this at home'    # Attempting to escape ' in ''
+echo 'Path is $PATH'              # Variables in single quotes
+trap "echo Took ${SECONDS}s" 0    # Prematurely expanded trap
+```
 
 ### Conditionals
 
 ShellCheck can recognize many types of incorrect test statements.
 
-    [[ n != 0 ]]                      # Constant test expressions
-    [[ -e *.mpg ]]                    # Existence checks of globs
-    [[ $foo==0 ]]                     # Always true due to missing spaces
-    [[ -n "$foo " ]]                  # Always true due to literals
-    [[ $foo =~ "fo+" ]]               # Quoted regex in =~
-    [ foo =~ re ]                     # Unsupported [ ] operators
-    [ $1 -eq "shellcheck" ]           # Numerical comparison of strings
-    [ $n && $m ]                      # && in [ .. ]
-    [ grep -q foo file ]              # Command without $(..)
-    [[ "$$file" == *.jpg ]]           # Comparisons that can't succeed
-    (( 1 -lt 2 ))                     # Using test operators in ((..))
+```sh
+[[ n != 0 ]]                      # Constant test expressions
+[[ -e *.mpg ]]                    # Existence checks of globs
+[[ $foo==0 ]]                     # Always true due to missing spaces
+[[ -n "$foo " ]]                  # Always true due to literals
+[[ $foo =~ "fo+" ]]               # Quoted regex in =~
+[ foo =~ re ]                     # Unsupported [ ] operators
+[ $1 -eq "shellcheck" ]           # Numerical comparison of strings
+[ $n && $m ]                      # && in [ .. ]
+[ grep -q foo file ]              # Command without $(..)
+[[ "$$file" == *.jpg ]]           # Comparisons that can't succeed
+(( 1 -lt 2 ))                     # Using test operators in ((..))
+```
 
 ### Frequently misused commands
 
 ShellCheck can recognize instances where commands are used incorrectly:
 
-    grep '*foo*' file                 # Globs in regex contexts
-    find . -exec foo {} && bar {} \;  # Prematurely terminated find -exec
-    sudo echo 'Var=42' > /etc/profile # Redirecting sudo
-    time --format=%s sleep 10         # Passing time(1) flags to time builtin
-    while read h; do ssh "$h" uptime  # Commands eating while loop input
-    alias archive='mv $1 /backup'     # Defining aliases with arguments
-    tr -cd '[a-zA-Z0-9]'              # [] around ranges in tr
-    exec foo; echo "Done!"            # Misused 'exec'
-    find -name \*.bak -o -name \*~ -delete  # Implicit precedence in find
-    f() { whoami; }; sudo f           # External use of internal functions
+```sh
+grep '*foo*' file                 # Globs in regex contexts
+find . -exec foo {} && bar {} \;  # Prematurely terminated find -exec
+sudo echo 'Var=42' > /etc/profile # Redirecting sudo
+time --format=%s sleep 10         # Passing time(1) flags to time builtin
+while read h; do ssh "$h" uptime  # Commands eating while loop input
+alias archive='mv $1 /backup'     # Defining aliases with arguments
+tr -cd '[a-zA-Z0-9]'              # [] around ranges in tr
+exec foo; echo "Done!"            # Misused 'exec'
+find -name \*.bak -o -name \*~ -delete  # Implicit precedence in find
+f() { whoami; }; sudo f           # External use of internal functions
+```
 
 ### Common beginner's mistakes
 
 ShellCheck recognizes many common beginner's syntax errors:
 
-    var = 42                          # Spaces around = in assignments
-    $foo=42                           # $ in assignments
-    for $var in *; do ...             # $ in for loop variables
-    var$n="Hello"                     # Wrong indirect assignment
-    echo ${var$n}                     # Wrong indirect reference
-    var=(1, 2, 3)                     # Comma separated arrays
-    array=( [index] = value )         # Incorrect index initialization
-    echo "Argument 10 is $10"         # Positional parameter misreference
-    if $(myfunction); then ..; fi     # Wrapping commands in $()
-    else if othercondition; then ..   # Using 'else if'
+```sh
+var = 42                          # Spaces around = in assignments
+$foo=42                           # $ in assignments
+for $var in *; do ...             # $ in for loop variables
+var$n="Hello"                     # Wrong indirect assignment
+echo ${var$n}                     # Wrong indirect reference
+var=(1, 2, 3)                     # Comma separated arrays
+array=( [index] = value )         # Incorrect index initialization
+echo "Argument 10 is $10"         # Positional parameter misreference
+if $(myfunction); then ..; fi     # Wrapping commands in $()
+else if othercondition; then ..   # Using 'else if'
+```
 
 ### Style
 
 ShellCheck can make suggestions to improve style:
 
-    [[ -z $(find /tmp | grep mpg) ]]  # Use grep -q instead
-    a >> log; b >> log; c >> log      # Use a redirection block instead
-    echo "The time is `date`"         # Use $() instead
-    cd dir; process *; cd ..;         # Use subshells instead
-    echo $[1+2]                       # Use standard $((..)) instead of old $[]
-    echo $(($RANDOM % 6))             # Don't use $ on variables in $((..))
-    echo "$(date)"                    # Useless use of echo
-    cat file | grep foo               # Useless use of cat
+```sh
+[[ -z $(find /tmp | grep mpg) ]]  # Use grep -q instead
+a >> log; b >> log; c >> log      # Use a redirection block instead
+echo "The time is `date`"         # Use $() instead
+cd dir; process *; cd ..;         # Use subshells instead
+echo $[1+2]                       # Use standard $((..)) instead of old $[]
+echo $(($RANDOM % 6))             # Don't use $ on variables in $((..))
+echo "$(date)"                    # Useless use of echo
+cat file | grep foo               # Useless use of cat
+```
 
 ### Data and typing errors
 
 ShellCheck can recognize issues related to data and typing:
 
-    args="$@"                         # Assigning arrays to strings
-    files=(foo bar); echo "$files"    # Referencing arrays as strings
-    declare -A arr=(foo bar)          # Associative arrays without index
-    printf "%s\n" "Arguments: $@."    # Concatenating strings and arrays
-    [[ $# > 2 ]]                      # Comparing numbers as strings
-    var=World; echo "Hello " var      # Unused lowercase variables
-    echo "Hello $name"                # Unassigned lowercase variables
-    cmd | read bar; echo $bar         # Assignments in subshells
+```sh
+args="$@"                         # Assigning arrays to strings
+files=(foo bar); echo "$files"    # Referencing arrays as strings
+declare -A arr=(foo bar)          # Associative arrays without index
+printf "%s\n" "Arguments: $@."    # Concatenating strings and arrays
+[[ $# > 2 ]]                      # Comparing numbers as strings
+var=World; echo "Hello " var      # Unused lowercase variables
+echo "Hello $name"                # Unassigned lowercase variables
+cmd | read bar; echo $bar         # Assignments in subshells
+```
 
 ### Robustness
 
 ShellCheck can make suggestions for improving the robustness of a script:
 
-    rm -rf "$STEAMROOT/"*            # Catastrophic rm
-    touch ./-l; ls *                 # Globs that could become options
-    find . -exec sh -c 'a && b {}' \; # Find -exec shell injection
-    printf "Hello $name"             # Variables in printf format
-    for f in $(ls *.txt); do         # Iterating over ls output
-    export MYVAR=$(cmd)              # Masked exit codes
+```sh
+rm -rf "$STEAMROOT/"*            # Catastrophic rm
+touch ./-l; ls *                 # Globs that could become options
+find . -exec sh -c 'a && b {}' \; # Find -exec shell injection
+printf "Hello $name"             # Variables in printf format
+for f in $(ls *.txt); do         # Iterating over ls output
+export MYVAR=$(cmd)              # Masked exit codes
+```
 
 ### Portability
 
 ShellCheck will warn when using features not supported by the shebang. For example, if you set the shebang to `#!/bin/sh`, ShellCheck will warn about portability issues similar to `checkbashisms`:
 
-    echo {1..$n}                     # Works in ksh, but not bash/dash/sh
-    echo {1..10}                     # Works in ksh and bash, but not dash/sh
-    echo -n 42                       # Works in ksh, bash and dash, undefined in sh
-    trap 'exit 42' sigint            # Unportable signal spec
-    cmd &> file                      # Unportable redirection operator
-    read foo < /dev/tcp/host/22      # Unportable intercepted files
-    foo-bar() { ..; }                # Undefined/unsupported function name
-    [ $UID = 0 ]                     # Variable undefined in dash/sh
-    local var=value                  # local is undefined in sh
-    time sleep 1 | sleep 5           # Undefined uses of 'time'
+```sh
+echo {1..$n}                     # Works in ksh, but not bash/dash/sh
+echo {1..10}                     # Works in ksh and bash, but not dash/sh
+echo -n 42                       # Works in ksh, bash and dash, undefined in sh
+trap 'exit 42' sigint            # Unportable signal spec
+cmd &> file                      # Unportable redirection operator
+read foo < /dev/tcp/host/22      # Unportable intercepted files
+foo-bar() { ..; }                # Undefined/unsupported function name
+[ $UID = 0 ]                     # Variable undefined in dash/sh
+local var=value                  # local is undefined in sh
+time sleep 1 | sleep 5           # Undefined uses of 'time'
+```
 
 ### Miscellaneous
 
 ShellCheck recognizes a menagerie of other issues:
 
-    PS1='\e[0;32m\$\e[0m '            # PS1 colors not in \[..\]
-    PATH="$PATH:~/bin"                # Literal tilde in $PATH
-    rm “file”                         # Unicode quotes
-    echo "Hello world"                # Carriage return / DOS line endings
-    echo hello \                      # Trailing spaces after \
-    var=42 echo $var                  # Expansion of inlined environment
-    #!/bin/bash -x -e                 # Common shebang errors
-    echo $((n/180*100))               # Unnecessary loss of precision
-    ls *[:digit:].txt                 # Bad character class globs
-    sed 's/foo/bar/' file > file      # Redirecting to input
+```sh
+PS1='\e[0;32m\$\e[0m '            # PS1 colors not in \[..\]
+PATH="$PATH:~/bin"                # Literal tilde in $PATH
+rm “file”                         # Unicode quotes
+echo "Hello world"                # Carriage return / DOS line endings
+echo hello \                      # Trailing spaces after \
+var=42 echo $var                  # Expansion of inlined environment
+#!/bin/bash -x -e                 # Common shebang errors
+echo $((n/180*100))               # Unnecessary loss of precision
+ls *[:digit:].txt                 # Bad character class globs
+sed 's/foo/bar/' file > file      # Redirecting to input
+```
 
 ## Testimonials
 
