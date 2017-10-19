@@ -1,0 +1,8 @@
+- id: shellcheck
+  name: shellcheck
+  description: |
+    A static analysis tool for shell scripts
+    https://www.shellcheck.net
+  entry: koalaman/shellcheck
+  language: docker_image
+  types: [shell]
