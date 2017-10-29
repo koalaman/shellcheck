@@ -906,7 +906,7 @@ prop_readAnnotation3 = isOk readAnnotation "# shellcheck disable=SC1234 source=/
 prop_readAnnotation4 = isWarning readAnnotation "# shellcheck cats=dogs disable=SC1234\n"
 prop_readAnnotation5 = isOk readAnnotation "# shellcheck disable=SC2002 # All cats are precious\n"
 prop_readAnnotation6 = isOk readAnnotation "# shellcheck disable=SC1234 # shellcheck foo=bar\n"
-readAnnotation = called "shellcheck annotation" $ do
+readAnnotation = called "shellcheck directive" $ do
     try readAnnotationPrefix
     many1 linewhitespace
     values <- many1 (readDisable <|> readSourceOverride <|> readShellOverride <|> anyKey)
@@ -937,7 +937,7 @@ readAnnotation = called "shellcheck annotation" $ do
 
     forKey s p = do
         try $ string s
-        char '='
+        char '=' <|> fail "Expected '=' after directive key"
         value <- p
         many linewhitespace
         return value
@@ -1937,7 +1937,12 @@ prop_readAndOr1 = isOk readAndOr "# shellcheck disable=1\nfoo"
 prop_readAndOr2 = isOk readAndOr "# shellcheck disable=1\n# lol\n# shellcheck disable=3\nfoo"
 readAndOr = do
     aid <- getNextId
+    apos <- getPosition
     annotations <- readAnnotations
+
+    unless (null annotations) $ optional $ do
+        try . lookAhead $ readKeyword
+        parseProblemAt apos ErrorC 1123 "ShellCheck directives are only valid in front of complete compound commands, like 'if', not e.g. individual 'elif' branches."
 
     andOr <- withAnnotations annotations $
         chainr1 readPipeline $ do
@@ -2258,9 +2263,12 @@ readCaseList = many readCaseItem
 
 readCaseItem = called "case item" $ do
     notFollowedBy2 g_Esac
+    optional $ do
+        try . lookAhead $ readAnnotationPrefix
+        parseProblem ErrorC 1124 "ShellCheck directives are only valid in front of complete commands like 'case' statements, not individual case branches."
     optional g_Lparen
     spacing
-    pattern <- readPattern
+    pattern' <- readPattern
     void g_Rparen <|> do
         parseProblem ErrorC 1085
             "Did you forget to move the ;; after extending this case item?"
@@ -2273,7 +2281,7 @@ readCaseItem = called "case item" $ do
         parseProblemAt pos ErrorC 1074
             "Did you forget the ;; after the previous case item?"
     readLineBreak
-    return (separator, pattern, list)
+    return (separator, pattern', list)
 
 readCaseSeparator = choice [
     tryToken ";;&" (const ()) >> return CaseContinue,
