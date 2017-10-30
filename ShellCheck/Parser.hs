@@ -909,46 +909,46 @@ prop_readAnnotation6 = isOk readAnnotation "# shellcheck disable=SC1234 # shellc
 readAnnotation = called "shellcheck directive" $ do
     try readAnnotationPrefix
     many1 linewhitespace
-    values <- many1 (readDisable <|> readSourceOverride <|> readShellOverride <|> anyKey)
+    values <- many1 readKey
     optional readAnyComment
-    linefeed
+    void linefeed <|> do
+        parseNote ErrorC 1125 "Invalid key=value pair? Ignoring the rest of this directive starting here."
+        many (noneOf "\n")
+        void linefeed <|> eof
     many linewhitespace
     return $ concat values
   where
-    readDisable = forKey "disable" $
-        readCode `sepBy` char ','
-      where
-        readCode = do
-            optional $ string "SC"
-            int <- many1 digit
-            return $ DisableComment (read int)
-
-    readSourceOverride = forKey "source" $ do
-        filename <- many1 $ noneOf " \n"
-        return [SourceOverride filename]
-
-    readShellOverride = forKey "shell" $ do
-        pos <- getPosition
-        shell <- many1 $ noneOf " \n"
-        when (isNothing $ shellForExecutable shell) $
-            parseNoteAt pos ErrorC 1103
-                "This shell type is unknown. Use e.g. sh or bash."
-        return [ShellOverride shell]
-
-    forKey s p = do
-        try $ string s
+    readKey = do
+        keyPos <- getPosition
+        key <- many1 letter
         char '=' <|> fail "Expected '=' after directive key"
-        value <- p
-        many linewhitespace
-        return value
+        annotations <- case key of
+            "disable" -> readCode `sepBy` char ','
+              where
+                readCode = do
+                    optional $ string "SC"
+                    int <- many1 digit
+                    return $ DisableComment (read int)
 
-    anyKey = do
-        pos <- getPosition
-        noneOf "#\r\n"
-        anyChar `reluctantlyTill` whitespace
+            "source" -> do
+                filename <- many1 $ noneOf " \n"
+                return [SourceOverride filename]
+
+            "shell" -> do
+                pos <- getPosition
+                shell <- many1 $ noneOf " \n"
+                when (isNothing $ shellForExecutable shell) $
+                    parseNoteAt pos ErrorC 1103
+                        "This shell type is unknown. Use e.g. sh or bash."
+                return [ShellOverride shell]
+
+            _ -> do
+                parseNoteAt keyPos WarningC 1107 "This directive is unknown. It will be ignored."
+                anyChar `reluctantlyTill` whitespace
+                return []
+
         many linewhitespace
-        parseNoteAt pos WarningC 1107 "This directive is unknown. It will be ignored."
-        return []
+        return annotations
 
 readAnnotations = do
     annotations <- many (readAnnotation `thenSkip` allspacing)
