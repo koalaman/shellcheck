@@ -1759,6 +1759,7 @@ readIoRedirect = do
     id <- getNextId
     n <- readIoSource
     redir <- readHereString <|> readHereDoc <|> readIoDuplicate <|> readIoFile
+    skipAnnotationAndWarn
     spacing
     return $ T_FdRedirect id n redir
 
@@ -1842,6 +1843,7 @@ readSimpleCommand = called "simple command" $ do
     id1 <- getNextId
     id2 <- getNextId
     prefix <- option [] readCmdPrefix
+    skipAnnotationAndWarn
     cmd <- option Nothing $ do { f <- readCmdName; return $ Just f; }
     when (null prefix && isNothing cmd) $ fail "Expected a command"
     case cmd of
@@ -2017,7 +2019,18 @@ readCmdName = do
         char '\\'
         lookAhead $ variableChars
     readCmdWord
-readCmdWord = readNormalWord <* spacing
+
+readCmdWord = do
+    skipAnnotationAndWarn
+    readNormalWord <* spacing
+
+-- Due to poor planning, annotations after commands isn't handled well.
+-- At the time this function is used, it's usually too late to skip
+-- comments, so you end up with a parse failure instead.
+skipAnnotationAndWarn = optional $ do
+        try . lookAhead $ readAnnotationPrefix
+        parseProblem ErrorC 1126 "Place shellcheck directives before commands, not after."
+        readAnyComment
 
 prop_readIfClause = isOk readIfClause "if false; then foo; elif true; then stuff; more stuff; else cows; fi"
 prop_readIfClause2 = isWarning readIfClause "if false; then; echo oo; fi"
@@ -2619,7 +2632,7 @@ g_While = tryWordToken "while" T_While
 g_Until = tryWordToken "until" T_Until
 g_For = tryWordToken "for" T_For
 g_Select = tryWordToken "select" T_Select
-g_In = tryWordToken "in" T_In
+g_In = tryWordToken "in" T_In <* skipAnnotationAndWarn
 g_Lbrace = tryWordToken "{" T_Lbrace
 g_Rbrace = do -- handled specially due to ksh echo "${ foo; }bar"
     id <- getNextId
