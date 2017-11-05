@@ -487,8 +487,8 @@ getModifiedVariables t =
 
 isClosingFileOp op =
     case op of
-        T_IoFile _ (T_GREATAND _) (T_NormalWord _ [T_Literal _ "-"]) -> True
-        T_IoFile _ (T_LESSAND  _) (T_NormalWord _ [T_Literal _ "-"]) -> True
+        T_IoDuplicate _ (T_GREATAND _) "-" -> True
+        T_IoDuplicate _ (T_LESSAND  _) "-" -> True
         _ -> False
 
 
