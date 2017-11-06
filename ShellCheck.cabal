@@ -70,7 +70,6 @@ library
 
 executable shellcheck
     build-depends:
-      ShellCheck,
       base >= 4 && < 5,
       containers,
       directory,
@@ -84,7 +83,6 @@ executable shellcheck
 test-suite test-shellcheck
     type: exitcode-stdio-1.0
     build-depends:
-      ShellCheck,
       base >= 4 && < 5,
       containers,
       directory,
