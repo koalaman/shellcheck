@@ -41,7 +41,7 @@ import Data.List
 import Data.Maybe
 import Data.Ord
 import Debug.Trace
-import qualified Data.Map as Map
+import qualified Data.Map.Strict as Map
 import Test.QuickCheck.All (forAllProperties)
 import Test.QuickCheck.Test (quickCheckWithResult, stdArgs, maxSuccess)
 
@@ -1872,7 +1872,7 @@ checkUnassignedReferences params t = warnings
     tally (Assignment (_, _, name, _))  =
         modify (\(read, written) -> (read, Map.insert name () written))
     tally (Reference (_, place, name)) =
-        modify (\(read, written) -> (Map.insertWith' (const id) name place read, written))
+        modify (\(read, written) -> (Map.insertWith (const id) name place read, written))
     tally _ = return ()
 
     unassigned = Map.toList $ Map.difference (Map.difference readMap writeMap) defaultAssigned
