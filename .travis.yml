@@ -69,3 +69,4 @@ deploy:
   local-dir: deploy
   on:
     repo: koalaman/shellcheck
+    all_branches: true

@@ -1,4 +1,4 @@
-## Latest - ???
+## v0.4.7 - 2017-12-08
 ### Added
 - Statically linked binaries for Linux and Windows (see README.md)!
 - `-a` flag to also include warnings in `source`d files
