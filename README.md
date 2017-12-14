@@ -52,9 +52,9 @@ There are a number of ways to use ShellCheck!
 
 ### On the web
 
-Paste a shell script on http://www.shellcheck.net for instant feedback.
+Paste a shell script on https://www.shellcheck.net for instant feedback.
 
-[ShellCheck.net](http://www.shellcheck.net) is always synchronized to the latest git commit, and is the easiest way to give ShellCheck a go. Tell your friends!
+[ShellCheck.net](https://www.shellcheck.net) is always synchronized to the latest git commit, and is the easiest way to give ShellCheck a go. Tell your friends!
 
 ### From your terminal
 

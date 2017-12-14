@@ -2,7 +2,7 @@
     Copyright 2012-2015 Vidar Holen
 
     This file is part of ShellCheck.
-    http://www.vidarholen.net/contents/shellcheck
+    https://www.shellcheck.net
 
     ShellCheck is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -15,7 +15,7 @@
     GNU General Public License for more details.
 
     You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -}
 import ShellCheck.Data
 import ShellCheck.Checker
@@ -378,4 +378,4 @@ printVersion = do
     putStrLn   "ShellCheck - shell script analysis tool"
     putStrLn $ "version: " ++ shellcheckVersion
     putStrLn   "license: GNU General Public License, version 3"
-    putStrLn   "website: http://www.shellcheck.net"
+    putStrLn   "website: https://www.shellcheck.net"

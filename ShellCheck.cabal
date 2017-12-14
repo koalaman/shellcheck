@@ -6,7 +6,7 @@ License-file:     LICENSE
 Category:         Static Analysis
 Author:           Vidar Holen
 Maintainer:       vidar@vidarholen.net
-Homepage:         http://www.shellcheck.net/
+Homepage:         https://www.shellcheck.net/
 Build-Type:       Custom
 Cabal-Version:    >= 1.8
 Bug-reports:      https://github.com/koalaman/shellcheck/issues

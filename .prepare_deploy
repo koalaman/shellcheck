@@ -7,7 +7,7 @@ cd deploy
 cp ../LICENSE LICENSE.txt
 sed -e $'s/$/\r/' > README.txt << END
 This is a precompiled ShellCheck binary.
-      http://www.shellcheck.net/
+      https://www.shellcheck.net/
 
 ShellCheck is a static analysis tool for shell scripts.
 It's licensed under the GNU General Public License v3.0.
