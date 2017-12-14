@@ -207,7 +207,7 @@ https://github.com/koalaman/shellcheck/issues
 # COPYRIGHT
 Copyright 2012-2015, Vidar Holen.
 Licensed under the GNU General Public License version 3 or later,
-see http://gnu.org/licenses/gpl.html
+see https://gnu.org/licenses/gpl.html
 
 
 # SEE ALSO
