@@ -2819,6 +2819,7 @@ prop_checkPipeToNowhere4 = verify checkPipeToNowhere "printf 'Lol' << eof\nlol\n
 prop_checkPipeToNowhere5 = verifyNot checkPipeToNowhere "echo foo | xargs du"
 prop_checkPipeToNowhere6 = verifyNot checkPipeToNowhere "ls | echo $(cat)"
 prop_checkPipeToNowhere7 = verifyNot checkPipeToNowhere "echo foo | var=$(cat) ls"
+prop_checkPipeToNowhere8 = verify checkPipeToNowhere "foo | true"
 checkPipeToNowhere :: Parameters -> Token -> WriterT [TokenComment] Identity ()
 checkPipeToNowhere _ t =
     case t of
