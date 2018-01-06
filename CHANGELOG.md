@@ -1,3 +1,7 @@
+## Latest - ???
+### Added
+- SC2223: Quote warning specific to `: ${var=value}`
+
 ## v0.4.7 - 2017-12-08
 ### Added
 - Statically linked binaries for Linux and Windows (see README.md)!

@@ -1617,16 +1617,23 @@ checkSpacefulness params t =
         modify $ Map.insert name bool
 
     readF _ token name = do
-        spaced <- hasSpaces name
-        return [makeComment InfoC (getId token) 2086 warning |
-                  isExpansion token && spaced
+        spaces <- hasSpaces name
+        return [warning |
+                  isExpansion token && spaces
                   && not (isArrayExpansion token) -- There's another warning for this
                   && not (isCountingReference token)
                   && not (isQuoteFree parents token)
                   && not (isQuotedAlternativeReference token)
                   && not (usedAsCommandName parents token)]
       where
-        warning = "Double quote to prevent globbing and word splitting."
+        warning =
+            if isDefaultAssignment (parentMap params) token
+            then
+                makeComment InfoC (getId token) 2223
+                    "This default assignment may cause DoS due to globbing. Quote it."
+            else
+                makeComment InfoC (getId token) 2086
+                    "Double quote to prevent globbing and word splitting."
 
     writeF _ _ name (DataString SourceExternal) = setSpaces name True >> return []
     writeF _ _ name (DataString SourceInteger) = setSpaces name False >> return []
@@ -1664,6 +1671,12 @@ checkSpacefulness params t =
       where
         globspace = "*?[] \t\n"
         containsAny s = any (`elem` s)
+
+    isDefaultAssignment parents token =
+        let modifier = getBracedModifier $ bracedString token in
+            isExpansion token
+            && any (`isPrefixOf` modifier) ["=", ":="]
+            && isParamTo parents ":" token
 
 prop_checkQuotesInLiterals1 = verifyTree checkQuotesInLiterals "param='--foo=\"bar\"'; app $param"
 prop_checkQuotesInLiterals1a= verifyTree checkQuotesInLiterals "param=\"--foo='lolbar'\"; app $param"
