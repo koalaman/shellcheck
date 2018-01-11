@@ -129,15 +129,8 @@ On OS X with MacPorts:
 
     port install shellcheck
 
-On openSUSE:Tumbleweed:
+On openSUSE
 
-    zypper in ShellCheck
-
-On other openSUSE distributions:
-
-Add OBS devel:languages:haskell repository from https://build.opensuse.org/project/repositories/devel:languages:haskell
-
-    zypper ar http://download.opensuse.org/repositories/devel:/languages:/haskell/openSUSE_$(version)/devel:languages:haskell.repo
     zypper in ShellCheck
 
 Or use OneClickInstall - https://software.opensuse.org/package/ShellCheck
