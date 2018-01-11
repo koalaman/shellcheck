@@ -1703,7 +1703,7 @@ readPendingHereDocs = do
 
     verifyHereDoc dashed quoted spacing hereInfo = do
         when (dashed == Undashed && spacing /= "") $
-            parseNote ErrorC 1039 "Use <<- instead of << if you want to indent the end token."
+            parseNote ErrorC 1039 "Remove indentation before end token (or use <<- and indent with tabs)."
         when (dashed == Dashed && filter (/= '\t') spacing /= "" ) $
             parseNote ErrorC 1040 "When using <<-, you can only indent with tabs."
         return ()
