@@ -845,6 +845,7 @@ prop_checkUnquotedN = verify checkUnquotedN "if [ -n $foo ]; then echo cow; fi"
 prop_checkUnquotedN2 = verify checkUnquotedN "[ -n $cow ]"
 prop_checkUnquotedN3 = verifyNot checkUnquotedN "[[ -n $foo ]] && echo cow"
 prop_checkUnquotedN4 = verify checkUnquotedN "[ -n $cow -o -t 1 ]"
+prop_checkUnquotedN5 = verifyNot checkUnquotedN "[ -n \"$@\" ]"
 checkUnquotedN _ (TC_Unary _ SingleBracket "-n" (T_NormalWord id [t])) | willSplit t =
        err id 2070 "-n doesn't work with unquoted arguments. Quote or use [[ ]]."
 checkUnquotedN _ _ = return ()

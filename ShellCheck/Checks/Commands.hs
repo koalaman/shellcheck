@@ -88,6 +88,7 @@ commandChecks = [
     ,checkWhileGetoptsCase
     ,checkCatastrophicRm
     ,checkLetUsage
+    ,checkMvArguments, checkCpArguments, checkLnArguments
     ]
 
 buildCommandMap :: [CommandCheck] -> Map.Map CommandName (Token -> Analysis)
@@ -849,6 +850,42 @@ checkLetUsage = CommandCheck (Exactly "let") f
   where
     f t = whenShell [Bash,Ksh] $ do
         style (getId t) 2219 $ "Instead of 'let expr', prefer (( expr )) ."
+
+
+missingDestination handler token = do
+    case params of
+        [single] -> do
+            unless (hasTarget || mayBecomeMultipleArgs single) $
+                handler token
+        _ -> return ()
+  where
+    args = getAllFlags token
+    params = map fst $ filter (\(_,x) -> x == "") args
+    hasTarget =
+        any (\x -> x /= "" && x `isPrefixOf` "target-directory") $
+            map snd args
+
+prop_checkMvArguments1 = verify    checkMvArguments "mv 'foo bar'"
+prop_checkMvArguments2 = verifyNot checkMvArguments "mv foo bar"
+prop_checkMvArguments3 = verifyNot checkMvArguments "mv 'foo bar'{,bak}"
+prop_checkMvArguments4 = verifyNot checkMvArguments "mv \"$@\""
+prop_checkMvArguments5 = verifyNot checkMvArguments "mv -t foo bar"
+prop_checkMvArguments6 = verifyNot checkMvArguments "mv --target-directory=foo bar"
+prop_checkMvArguments7 = verifyNot checkMvArguments "mv --target-direc=foo bar"
+prop_checkMvArguments8 = verifyNot checkMvArguments "mv --version"
+prop_checkMvArguments9 = verifyNot checkMvArguments "mv \"${!var}\""
+checkMvArguments = CommandCheck (Basename "mv") $ missingDestination f
+  where
+    f t = err (getId t) 2224 "This mv has no destination. Check the arguments."
+
+checkCpArguments = CommandCheck (Basename "cp") $ missingDestination f
+  where
+    f t = err (getId t) 2225 "This cp has no destination. Check the arguments."
+
+checkLnArguments = CommandCheck (Basename "ln") $ missingDestination f
+  where
+    f t = warn (getId t) 2226 "This ln has no destination. Check the arguments, or specify '.' explicitly."
+
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

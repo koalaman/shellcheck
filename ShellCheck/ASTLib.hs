@@ -112,6 +112,7 @@ getFlagsUntil stopCondition (T_SimpleCommand _ _ (_:args)) =
 getFlagsUntil _ _ = error "Internal shellcheck error, please report! (getFlags on non-command)"
 
 -- Get all flags in a GNU way, up until --
+getAllFlags :: Token -> [(Token, String)]
 getAllFlags = getFlagsUntil (== "--")
 -- Get all flags in a BSD way, up until first non-flag argument or --
 getLeadingFlags = getFlagsUntil (\x -> x == "--" || (not $ "-" `isPrefixOf` x))
