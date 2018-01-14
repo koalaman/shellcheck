@@ -34,21 +34,21 @@ script:
   # Linux Alpine based Docker image
   - name="$DOCKER_BASE-alpine"
   - DOCKER_BUILDS="$DOCKER_BUILDS $name"
-  - sed 's/^FROM .*/FROM alpine:latest/' Dockerfile > Dockerfile.alpine
+  - sed -e 's/^FROM .*/FROM alpine:latest/' -e '/WORKDIR/d' -e '/ENTRYPOINT/d' Dockerfile > Dockerfile.alpine
   - docker build -f Dockerfile.alpine -t "$name:current" .
-  - docker run "$name:current" --version
+  - docker run "$name:current" sh -c 'shellcheck --version'
   # Misc packaging
   - ./.prepare_deploy
 
 after_success:
-  - docker login -e="$DOCKER_EMAIL" -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
+  - docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
   - for repo in $DOCKER_BUILDS;
     do
       for tag in $TAGS;
       do
         echo "Deploying $repo:current as $repo:$tag...";
-        docker tag "$repo:current" "$repo:$tag";
-        docker push "$repo:$tag";
+        docker tag "$repo:current" "$repo:$tag" || exit 1;
+        docker push "$repo:$tag" || exit 1;
       done;
     done;
 
