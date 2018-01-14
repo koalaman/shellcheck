@@ -2035,7 +2035,7 @@ skipAnnotationAndWarn = optional $ do
 prop_readIfClause = isOk readIfClause "if false; then foo; elif true; then stuff; more stuff; else cows; fi"
 prop_readIfClause2 = isWarning readIfClause "if false; then; echo oo; fi"
 prop_readIfClause3 = isWarning readIfClause "if false; then true; else; echo lol; fi"
-prop_readIfClause4 = isWarning readIfClause "if false; then true; else if true; then echo lol; fi"
+prop_readIfClause4 = isWarning readIfClause "if false; then true; else if true; then echo lol; fi; fi"
 prop_readIfClause5 = isOk readIfClause "if false; then true; else\nif true; then echo lol; fi; fi"
 readIfClause = called "if expression" $ do
     id <- getNextId
@@ -2080,12 +2080,9 @@ readIfPart = do
 
 readElifPart = called "elif clause" $ do
     pos <- getPosition
-    correctElif <- elif
-    unless correctElif $
-        parseProblemAt pos ErrorC 1075 "Use 'elif' instead of 'else if' (or put 'if' on new line if nesting)."
+    g_Elif
     allspacing
     condition <- readTerm
-
     ifNextToken (g_Fi <|> g_Elif <|> g_Else) $
         parseProblemAt pos ErrorC 1049 "Did you forget the 'then' for this 'elif'?"
 
@@ -2095,13 +2092,14 @@ readElifPart = called "elif clause" $ do
     verifyNotEmptyIf "then"
     action <- readTerm
     return (condition, action)
-  where
-    elif = (g_Elif >> return True) <|>
-        try (g_Else >> g_If >> return False)
 
 readElsePart = called "else clause" $ do
     pos <- getPosition
     g_Else
+    optional $ do
+        try . lookAhead $ g_If
+        parseProblemAt pos ErrorC 1075 "Use 'elif' instead of 'else if' (or put 'if' on new line if nesting)."
+
     acceptButWarn g_Semi ErrorC 1053 "Semicolons directly after 'else' are not allowed. Just remove it."
     allspacing
     verifyNotEmptyIf "else"
@@ -2917,7 +2915,7 @@ parseShell env name contents = do
     isName _ = False
     notesForContext list = zipWith ($) [first, second] $ filter isName list
     first (ContextName pos str) = ParseNote pos pos ErrorC 1073 $
-        "Couldn't parse this " ++ str ++ "."
+        "Couldn't parse this " ++ str ++ ". Fix to allow more checks."
     second (ContextName pos str) = ParseNote pos pos InfoC 1009 $
         "The mentioned parser error was in this " ++ str ++ "."
 

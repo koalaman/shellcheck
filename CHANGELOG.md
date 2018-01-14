@@ -2,6 +2,9 @@
 ### Added
 - SC2223: Quote warning specific to `: ${var=value}`
 
+### Changed
+- SC1073: 'else if' is now parsed correctly and not like 'elif'
+
 ## v0.4.7 - 2017-12-08
 ### Added
 - Statically linked binaries for Linux and Windows (see README.md)!
