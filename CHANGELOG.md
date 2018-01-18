@@ -1,6 +1,7 @@
 ## Latest - ???
 ### Added
 - SC2223: Quote warning specific to `: ${var=value}`
+- SC1127: Warn about C-style comments
 
 ### Changed
 - SC1073: 'else if' is now parsed correctly and not like 'elif'

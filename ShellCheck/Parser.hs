@@ -1838,6 +1838,10 @@ prop_readSimpleCommand4 = isOk readSimpleCommand "typeset -a foo=(lol)"
 prop_readSimpleCommand5 = isOk readSimpleCommand "time if true; then echo foo; fi"
 prop_readSimpleCommand6 = isOk readSimpleCommand "time -p ( ls -l; )"
 prop_readSimpleCommand7 = isOk readSimpleCommand "\\ls"
+prop_readSimpleCommand8 = isWarning readSimpleCommand "// Lol"
+prop_readSimpleCommand9 = isWarning readSimpleCommand "/* Lolbert */"
+prop_readSimpleCommand10 = isWarning readSimpleCommand "/**** Lolbert */"
+prop_readSimpleCommand11 = isOk readSimpleCommand "/\\* foo"
 readSimpleCommand = called "simple command" $ do
     pos <- getPosition
     id1 <- getNextId
@@ -1846,6 +1850,10 @@ readSimpleCommand = called "simple command" $ do
     skipAnnotationAndWarn
     cmd <- option Nothing $ do { f <- readCmdName; return $ Just f; }
     when (null prefix && isNothing cmd) $ fail "Expected a command"
+
+    when (cStyleComment cmd) $
+        parseProblemAt pos ErrorC 1127 "Was this intended as a comment? Use # in sh."
+
     case cmd of
       Nothing -> return $ makeSimpleCommand id1 id2 prefix [] []
       Just cmd -> do
@@ -1868,6 +1876,13 @@ readSimpleCommand = called "simple command" $ do
         if isCommand list cmd
         then action
         else getParser def cmd rest
+
+    cStyleComment cmd =
+        case cmd of
+            Just (T_NormalWord _ [T_Literal _ "//"]) -> True
+            Just (T_NormalWord _ (T_Literal _ "/" : T_Glob _ "*" :_)) -> True
+            _ -> False
+
 
 
 readSource :: Monad m => SourcePos -> Token -> SCParser m Token
