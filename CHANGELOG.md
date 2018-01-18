@@ -4,6 +4,9 @@
 - SC2223: Quote warning specific to `: ${var=value}`
 - SC1127: Warn about C-style comments
 
+### Fixed
+- Annotations intended for a command's here documents now work
+
 ### Changed
 - SC1073: 'else if' is now parsed correctly and not like 'elif'
 

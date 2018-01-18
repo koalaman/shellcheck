@@ -143,7 +143,7 @@ data Context =
     deriving (Show)
 
 data HereDocContext =
-        HereDocPending Token -- on linefeed, read this T_HereDoc
+        HereDocPending Token [Context] -- on linefeed, read this T_HereDoc
     deriving (Show)
 
 data UserState = UserState {
@@ -194,9 +194,10 @@ addToHereDocMap id list = do
 
 addPendingHereDoc t = do
     state <- getState
+    context <- getCurrentContexts
     let docs = pendingHereDocs state
     putState $ state {
-        pendingHereDocs = HereDocPending t : docs
+        pendingHereDocs = HereDocPending t context : docs
     }
 
 popPendingHereDocs = do
@@ -205,9 +206,7 @@ popPendingHereDocs = do
     putState $ state {
         pendingHereDocs = []
     }
-    return . map extract . reverse $ pendingHereDocs state
-  where
-    extract (HereDocPending t) = t
+    return . reverse $ pendingHereDocs state
 
 getMap = positionMap <$> getState
 getParseNotes = parseNotes <$> getState
@@ -372,15 +371,16 @@ acceptButWarn parser level code note =
         parseProblemAt pos level code note
       )
 
-withContext entry p = do
-    pushContext entry
-    do
-        v <- p
-        popContext
-        return v
-     <|> do -- p failed without consuming input, abort context
-        v <- popContext
-        fail ""
+parsecBracket before after op = do
+    val <- before
+    (op val <* optional (after val)) <|> (after val *> fail "")
+
+swapContext contexts p =
+    parsecBracket (getCurrentContexts <* setCurrentContexts contexts)
+                  setCurrentContexts
+                  (const p)
+
+withContext entry p = parsecBracket (pushContext entry) (const popContext) (const p)
 
 called s p = do
     pos <- getPosition
@@ -1594,6 +1594,8 @@ prop_readHereDoc14= isWarning readScript "cat << foo\nbar\nfoo \n"
 prop_readHereDoc15= isWarning readScript "cat <<foo\nbar\nfoo bar\n"
 prop_readHereDoc16= isOk readScript "cat <<- ' foo'\nbar\n foo\n"
 prop_readHereDoc17= isWarning readScript "cat <<- ' foo'\nbar\n  foo\n"
+prop_readHereDoc18= isWarning readScript "cat << foo\nLoose \\t\nfoo"
+prop_readHereDoc19= isOk readScript "# shellcheck disable=SC1117\ncat << foo\nLoose \\t\nfoo"
 readHereDoc = called "here document" $ do
     fid <- getNextId
     pos <- getPosition
@@ -1625,7 +1627,8 @@ readPendingHereDocs = do
     docs <- popPendingHereDocs
     mapM_ readDoc docs
   where
-    readDoc (T_HereDoc id dashed quoted endToken _) = do
+    readDoc (HereDocPending (T_HereDoc id dashed quoted endToken _) ctx) =
+      swapContext ctx $ do
         pos <- getPosition
         hereData <- concat <$> rawLine `reluctantlyTill` do
                         linewhitespace `reluctantlyTill` string endToken
