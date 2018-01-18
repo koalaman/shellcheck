@@ -144,7 +144,6 @@ data Context =
 
 data HereDocContext =
         HereDocPending Token -- on linefeed, read this T_HereDoc
-        | HereDocBoundary -- but don't consider heredocs before this
     deriving (Show)
 
 data UserState = UserState {
@@ -193,30 +192,6 @@ addToHereDocMap id list = do
         hereDocMap = Map.insert id list map
     }
 
-withHereDocBoundary p = do
-    pushBoundary
-    do
-        v <- p
-        popBoundary
-        return v
-     <|> do
-        popBoundary
-        fail ""
-  where
-    pushBoundary = do
-        state <- getState
-        let docs = pendingHereDocs state
-        putState $ state {
-            pendingHereDocs = HereDocBoundary : docs
-        }
-    popBoundary = do
-        state <- getState
-        let docs = tail $ dropWhile (not . isHereDocBoundary) $
-                    pendingHereDocs state
-        putState $ state {
-            pendingHereDocs = docs
-        }
-
 addPendingHereDoc t = do
     state <- getState
     let docs = pendingHereDocs state
@@ -226,17 +201,13 @@ addPendingHereDoc t = do
 
 popPendingHereDocs = do
     state <- getState
-    let (pending, boundary) = break isHereDocBoundary $ pendingHereDocs state
+    let pending = pendingHereDocs state
     putState $ state {
-        pendingHereDocs = boundary
+        pendingHereDocs = []
     }
     return . map extract . reverse $ pendingHereDocs state
   where
     extract (HereDocPending t) = t
-
-isHereDocBoundary x = case x of
-    HereDocBoundary -> True
-    otherwise -> False
 
 getMap = positionMap <$> getState
 getParseNotes = parseNotes <$> getState
