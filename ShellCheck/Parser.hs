@@ -392,7 +392,7 @@ withAnnotations anns =
 readConditionContents single =
     readCondContents `attempting` lookAhead (do
                                 pos <- getPosition
-                                s <- many1 letter
+                                s <- readVariableName
                                 when (s `elem` commonCommands) $
                                     parseProblemAt pos WarningC 1014 "Use 'if cmd; then ..' to check exit code, or 'if [[ $(cmd) == .. ]]' to check output.")
 
