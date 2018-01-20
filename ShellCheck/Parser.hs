@@ -835,6 +835,7 @@ prop_readCondition16= isOk readCondition "[ foo \\< bar ]"
 prop_readCondition17= isOk readCondition "[[ ${file::1} = [-.\\|/\\\\] ]]"
 prop_readCondition18= isOk readCondition "[ ]"
 prop_readCondition19= isOk readCondition "[ '(' x \")\" ]"
+prop_readCondition20= isOk readCondition "[[ echo_rc -eq 0 ]]"
 readCondition = called "test expression" $ do
     opos <- getPosition
     id <- getNextId
