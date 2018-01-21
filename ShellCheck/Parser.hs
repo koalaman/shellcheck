@@ -2654,20 +2654,23 @@ prop_readShebang1 = isOk readShebang "#!/bin/sh\n"
 prop_readShebang2 = isWarning readShebang "!# /bin/sh\n"
 prop_readShebang3 = isNotOk readShebang "#shellcheck shell=/bin/sh\n"
 prop_readShebang4 = isWarning readShebang "! /bin/sh"
+prop_readShebang5 = isWarning readShebang "\n#!/bin/sh"
+prop_readShebang6 = isWarning readShebang " # Copyright \n!#/bin/bash"
+prop_readShebang7 = isNotOk readShebang "# Copyright \nfoo\n#!/bin/bash"
 readShebang = do
-    choice $ map try [
-        readCorrect,
-        readSwapped,
-        readTooManySpaces,
-        readMissingHash,
-        readMissingBang
-        ]
+    anyShebang <|> try readMissingBang <|> withHeader
     many linewhitespace
     str <- many $ noneOf "\r\n"
     optional carriageReturn
     optional linefeed
     return str
   where
+    anyShebang = choice $ map try [
+        readCorrect,
+        readSwapped,
+        readTooManySpaces,
+        readMissingHash
+        ]
     readCorrect = void $ string "#!"
 
     readSwapped = do
@@ -2705,10 +2708,21 @@ readShebang = do
         parseProblemAt pos ErrorC 1113
             "Use #!, not just #, for the shebang."
 
-
     ensurePathAhead = lookAhead $ do
         many linewhitespace
         char '/'
+
+    withHeader = try $ do
+        many1 headerLine
+        pos <- getPosition
+        anyShebang <*
+            parseProblemAt pos ErrorC 1128 "The shebang must be on the first line. Delete blanks and move comments."
+
+    headerLine = do
+        notFollowedBy2 anyShebang
+        many linewhitespace
+        optional readAnyComment
+        linefeed
 
 verifyEof = eof <|> choice [
         ifParsable g_Lparen $
