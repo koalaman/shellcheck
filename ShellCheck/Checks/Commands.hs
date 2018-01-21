@@ -89,6 +89,7 @@ commandChecks = [
     ,checkCatastrophicRm
     ,checkLetUsage
     ,checkMvArguments, checkCpArguments, checkLnArguments
+    ,checkFindRedirections
     ]
 
 buildCommandMap :: [CommandCheck] -> Map.Map CommandName (Token -> Analysis)
@@ -885,6 +886,24 @@ checkCpArguments = CommandCheck (Basename "cp") $ missingDestination f
 checkLnArguments = CommandCheck (Basename "ln") $ missingDestination f
   where
     f t = warn (getId t) 2226 "This ln has no destination. Check the arguments, or specify '.' explicitly."
+
+
+prop_checkFindRedirections1 = verify    checkFindRedirections "find . -exec echo {} > file \\;"
+prop_checkFindRedirections2 = verifyNot checkFindRedirections "find . -exec echo {} \\; > file"
+prop_checkFindRedirections3 = verifyNot checkFindRedirections "find . -execdir sh -c 'foo > file' \\;"
+checkFindRedirections = CommandCheck (Basename "find") f
+  where
+    f t = do
+        redirecting <- getClosestCommandM t
+        case redirecting of
+            Just (T_Redirecting _ redirs@(_:_) (T_SimpleCommand _ _ args@(_:_:_))) -> do
+                -- This assumes IDs are sequential, which is mostly but not always true.
+                let minRedir = minimum $ map getId redirs
+                let maxArg   = maximum $ map getId args
+                when (minRedir < maxArg) $
+                    warn minRedir 2227
+                        "Redirection applies to the find command itself. Rewrite to work per action (or move to end)."
+            _ -> return ()
 
 
 return []
