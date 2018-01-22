@@ -576,17 +576,19 @@ readConditionContents single =
           <|> return False
     readRegex = called "regex" $ do
         id <- getNextId
-        parts <- many1 (
-                readGroup <|>
-                readSingleQuoted <|>
-                readDoubleQuoted <|>
-                readDollarExpression <|>
-                readNormalLiteral "( " <|>
-                readPipeLiteral <|>
-                readGlobLiteral)
+        parts <- many1 readPart
         void spacing
         return $ T_NormalWord id parts
       where
+        readPart = choice [
+            readGroup,
+            readSingleQuoted,
+            readDoubleQuoted,
+            readDollarExpression,
+            readNormalLiteral "( ",
+            readPipeLiteral,
+            readGlobLiteral
+            ]
         readGlobLiteral = do
             id <- getNextId
             s <- extglobStart <|> oneOf "{}[]$"
@@ -594,7 +596,7 @@ readConditionContents single =
         readGroup = called "regex grouping" $ do
             id <- getNextId
             char '('
-            parts <- many (readGroup <|> readSingleQuoted <|> readDoubleQuoted <|> readDollarExpression <|> readRegexLiteral <|> readGlobLiteral)
+            parts <- many (readPart <|> readRegexLiteral)
             char ')'
             return $ T_NormalWord id parts
         readRegexLiteral = do
@@ -836,6 +838,8 @@ prop_readCondition17= isOk readCondition "[[ ${file::1} = [-.\\|/\\\\] ]]"
 prop_readCondition18= isOk readCondition "[ ]"
 prop_readCondition19= isOk readCondition "[ '(' x \")\" ]"
 prop_readCondition20= isOk readCondition "[[ echo_rc -eq 0 ]]"
+prop_readCondition21= isOk readCondition "[[ $1 =~ ^(a\\ b)$ ]]"
+prop_readCondition22= isOk readCondition "[[ $1 =~ \\.a\\.(\\.b\\.)\\.c\\. ]]"
 readCondition = called "test expression" $ do
     opos <- getPosition
     id <- getNextId
@@ -2679,7 +2683,7 @@ readShebang = do
         parseProblemAt pos ErrorC 1084
             "Use #!, not !#, for the shebang."
 
-    skipSpaces = liftM (not . null) $ many linewhitespace
+    skipSpaces = fmap (not . null) $ many linewhitespace
     readTooManySpaces = do
         startPos <- getPosition
         startSpaces <- skipSpaces
