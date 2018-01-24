@@ -482,6 +482,7 @@ checkInteractiveSu = CommandCheck (Basename "su") f
 prop_checkSshCmdStr1 = verify checkSshCommandString "ssh host \"echo $PS1\""
 prop_checkSshCmdStr2 = verifyNot checkSshCommandString "ssh host \"ls foo\""
 prop_checkSshCmdStr3 = verifyNot checkSshCommandString "ssh \"$host\""
+prop_checkSshCmdStr4 = verifyNot checkSshCommandString "ssh -i key \"$host\""
 checkSshCommandString = CommandCheck (Basename "ssh") (f . arguments)
   where
     nonOptions =
