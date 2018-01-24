@@ -485,11 +485,10 @@ prop_checkSshCmdStr3 = verifyNot checkSshCommandString "ssh \"$host\""
 prop_checkSshCmdStr4 = verifyNot checkSshCommandString "ssh -i key \"$host\""
 checkSshCommandString = CommandCheck (Basename "ssh") (f . arguments)
   where
-    nonOptions =
-        filter (\x -> not $ "-" `isPrefixOf` concat (oversimplify x))
+    isOption x = "-" `isPrefixOf` (concat $ oversimplify x)
     f args =
-        case nonOptions args of
-            (hostport:r@(_:_)) -> checkArg $ last r
+        case partition isOption args of
+            ([], hostport:r@(_:_)) -> checkArg $ last r
             _ -> return ()
     checkArg (T_NormalWord _ [T_DoubleQuoted id parts]) =
         case filter (not . isConstant) parts of
