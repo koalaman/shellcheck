@@ -1879,6 +1879,7 @@ prop_checkUnassignedReferences29= verifyNotTree checkUnassignedReferences "if [[
 prop_checkUnassignedReferences30= verifyNotTree checkUnassignedReferences "if [[ -v foo[3] ]]; then echo ${foo[3]}; fi"
 prop_checkUnassignedReferences31= verifyNotTree checkUnassignedReferences "X=1; if [[ -v foo[$X+42] ]]; then echo ${foo[$X+42]}; fi"
 prop_checkUnassignedReferences32= verifyNotTree checkUnassignedReferences "if [[ -v \"foo[1]\" ]]; then echo ${foo[@]}; fi"
+prop_checkUnassignedReferences33= verifyNotTree checkUnassignedReferences "f() { local -A foo; echo \"${foo[@]}\"; }"
 checkUnassignedReferences params t = warnings
   where
     (readMap, writeMap) = execState (mapM tally $ variableFlow params) (Map.empty, Map.empty)
