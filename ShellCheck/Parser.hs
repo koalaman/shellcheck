@@ -2582,11 +2582,14 @@ tryParseWordToken keyword t = try $ do
     str <- anycaseString keyword
 
     optional $ do
-        try . lookAhead $ char '['
-        parseProblem ErrorC 1069 "You need a space before the [."
-    optional $ do
-        try . lookAhead $ char '#'
-        parseProblem ErrorC 1099 "You need a space before the #."
+        c <- try . lookAhead $ anyChar
+        let warning code = parseProblem ErrorC code $ "You need a space before the " ++ [c] ++ "."
+        case c of
+            '[' -> warning 1069
+            '#' -> warning 1099
+            '!' -> warning 1129
+            ':' -> warning 1130
+            _ -> return ()
 
     lookAhead keywordSeparator
     when (str /= keyword) $
