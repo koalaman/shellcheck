@@ -587,13 +587,18 @@ checkSetAssignment = CommandCheck (Exactly "set") (f . arguments)
 prop_checkExportedExpansions1 = verify checkExportedExpansions "export $foo"
 prop_checkExportedExpansions2 = verify checkExportedExpansions "export \"$foo\""
 prop_checkExportedExpansions3 = verifyNot checkExportedExpansions "export foo"
+prop_checkExportedExpansions4 = verifyNot checkExportedExpansions "export ${foo?}"
 checkExportedExpansions = CommandCheck (Exactly "export") (check . arguments)
   where
     check = mapM_ checkForVariables
     checkForVariables f =
         case getWordParts f of
-            [t@(T_DollarBraced {})] ->
-                warn (getId t) 2163 "Exporting an expansion rather than a variable."
+            [t@(T_DollarBraced {})] -> potentially $ do
+                let contents = bracedString t
+                let name = getBracedReference contents
+                guard $ name == contents
+                return . warn (getId t) 2163 $
+                    "This does not export '" ++ name ++ "'. Remove $/${} for that, or use ${var?} to quiet."
             _ -> return ()
 
 
