@@ -2925,7 +2925,7 @@ parseShell env name contents = do
     first (ContextName pos str) = ParseNote pos pos ErrorC 1073 $
         "Couldn't parse this " ++ str ++ ". Fix to allow more checks."
     second (ContextName pos str) = ParseNote pos pos InfoC 1009 $
-        "The mentioned parser error was in this " ++ str ++ "."
+        "The mentioned syntax error was in this " ++ str ++ "."
 
 -- Go over all T_UnparsedIndex and reparse them as either arithmetic or text
 -- depending on declare -A statements.
