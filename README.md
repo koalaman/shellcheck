@@ -25,7 +25,7 @@ See [the gallery of bad code](README.md#user-content-gallery-of-bad-code) for ex
   - [In your editor](#in-your-editor)
   - [In your build or test suites](#in-your-build-or-test-suites)
 - [Installing](#installing)
-- [Travis CI Setup](#travis-ci-setup)
+- [Travis CI](#travis-ci)
 - [Compiling from source](#compiling-from-source)
   - [Installing Cabal](#installing-cabal)
   - [Compiling ShellCheck](#compiling-shellcheck)
@@ -157,20 +157,9 @@ Alternatively, get freshly built binaries for the latest commit here:
 
 or see the [storage bucket listing](https://shellcheck.storage.googleapis.com/index.html) for checksums and release builds.
 
-## Travis CI Setup
+## Travis CI
 
-If you want to use ShellCheck in Travis CI, you can most easily install it via `apt`:
-
-```yml
-language: bash
-addons:
-  apt:
-    sources:
-    - debian-sid    # Grab ShellCheck from the Debian repo
-    packages:
-    - shellcheck
-```
-
+Travis CI now integrated ShellCheck by default, you don't need to manually install it.
 
 ## Compiling from source
 
