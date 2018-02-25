@@ -837,7 +837,36 @@ isQuotedAlternativeReference t =
   where
     re = mkRegex "(^|\\]):?\\+"
 
+-- getOpts "erd:u:" will parse a SimpleCommand like
+--     read -re -d : -u 3 bar
+-- into
+--     Just [("r", -re), ("e", -re), ("d", :), ("u", 3), ("", bar)]
+-- where flags with arguments map to arguments, while others map to themselves.
+-- Any unrecognized flag will result in Nothing.
+getOpts :: String -> Token -> Maybe [(String, Token)]
+getOpts string cmd = process flags
+  where
+    flags = getAllFlags cmd
+    flagList (c:':':rest) = ([c], True) : flagList rest
+    flagList (c:rest) = ([c], False) : flagList rest
+    flagList [] = []
+    flagMap = Map.fromList $ ("", False) : flagList string
 
+    process [] = return []
+    process [(token, flag)] = do
+        takesArg <- Map.lookup flag flagMap
+        guard $ not takesArg
+        return [(flag, token)]
+    process ((token1, flag1):rest2@((token2, flag2):rest)) = do
+        takesArg <- Map.lookup flag1 flagMap
+        if takesArg
+            then do
+                guard $ flag2 == ""
+                more <- process rest
+                return $ (flag1, token2) : more
+            else do
+                more <- process rest2
+                return $ (flag1, token1) : more
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

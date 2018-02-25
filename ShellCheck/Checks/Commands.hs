@@ -90,6 +90,7 @@ commandChecks = [
     ,checkLetUsage
     ,checkMvArguments, checkCpArguments, checkLnArguments
     ,checkFindRedirections
+    ,checkReadExpansions
     ]
 
 buildCommandMap :: [CommandCheck] -> Map.Map CommandName (Token -> Analysis)
@@ -588,19 +589,47 @@ prop_checkExportedExpansions1 = verify checkExportedExpansions "export $foo"
 prop_checkExportedExpansions2 = verify checkExportedExpansions "export \"$foo\""
 prop_checkExportedExpansions3 = verifyNot checkExportedExpansions "export foo"
 prop_checkExportedExpansions4 = verifyNot checkExportedExpansions "export ${foo?}"
-checkExportedExpansions = CommandCheck (Exactly "export") (check . arguments)
+checkExportedExpansions = CommandCheck (Exactly "export") (mapM_ check . arguments)
   where
-    check = mapM_ checkForVariables
-    checkForVariables f =
-        case getWordParts f of
-            [t@(T_DollarBraced {})] -> potentially $ do
-                let contents = bracedString t
-                let name = getBracedReference contents
-                guard $ name == contents
-                return . warn (getId t) 2163 $
-                    "This does not export '" ++ name ++ "'. Remove $/${} for that, or use ${var?} to quiet."
-            _ -> return ()
+    check t = potentially $ do
+        var <- getSingleUnmodifiedVariable t
+        let name = bracedString var
+        return . warn (getId t) 2163 $
+            "This does not export '" ++ name ++ "'. Remove $/${} for that, or use ${var?} to quiet."
 
+prop_checkReadExpansions1 = verify checkReadExpansions "read $var"
+prop_checkReadExpansions2 = verify checkReadExpansions "read -r $var"
+prop_checkReadExpansions3 = verifyNot checkReadExpansions "read -p $var"
+prop_checkReadExpansions4 = verifyNot checkReadExpansions "read -rd $delim name"
+prop_checkReadExpansions5 = verify checkReadExpansions "read \"$var\""
+prop_checkReadExpansions6 = verify checkReadExpansions "read -a $var"
+prop_checkReadExpansions7 = verifyNot checkReadExpansions "read $1"
+prop_checkReadExpansions8 = verifyNot checkReadExpansions "read ${var?}"
+checkReadExpansions = CommandCheck (Exactly "read") check
+  where
+    options = getOpts "sreu:n:N:i:p:a:"
+    getVars cmd = fromMaybe [] $ do
+        opts <- options cmd
+        return . map snd $ filter (\(x,_) -> x == "" || x == "a") opts
+
+    check cmd = mapM_ warning $ getVars cmd
+    warning t = potentially $ do
+        var <- getSingleUnmodifiedVariable t
+        let name = bracedString var
+        guard $ isVariableName name   -- e.g. not $1
+        return . warn (getId t) 2229 $
+            "This does not read '" ++ name ++ "'. Remove $/${} for that, or use ${var?} to quiet."
+
+-- Return the single variable expansion that makes up this word, if any.
+-- e.g. $foo -> $foo, "$foo"'' -> $foo , "hello $name" -> Nothing
+getSingleUnmodifiedVariable :: Token -> Maybe Token
+getSingleUnmodifiedVariable word =
+    case getWordParts word of
+        [t@(T_DollarBraced {})] ->
+            let contents = bracedString t
+                name = getBracedReference contents
+            in guard (contents == name) >> return t
+        _ -> Nothing
 
 prop_checkAliasesUsesArgs1 = verify checkAliasesUsesArgs "alias a='cp $1 /a'"
 prop_checkAliasesUsesArgs2 = verifyNot checkAliasesUsesArgs "alias $1='foo'"
