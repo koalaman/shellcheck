@@ -8,9 +8,11 @@
 
 ### Fixed
 - Annotations intended for a command's here documents now work
+- Escaped characters inside groups in =~ regexes now parse
 
 ### Changed
 - SC1073: 'else if' is now parsed correctly and not like 'elif'
+- SC2163: 'export $name' can now be silenced with 'export ${name?}'
 
 ## v0.4.7 - 2017-12-08
 ### Added
