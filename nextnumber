@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # TODO: Find a less trashy way to get the next available error code
 if ! shopt -s globstar
 then
