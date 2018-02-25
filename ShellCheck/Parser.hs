@@ -25,7 +25,7 @@ import ShellCheck.ASTLib
 import ShellCheck.Data
 import ShellCheck.Interface
 
-import Control.Applicative ((<*))
+import Control.Applicative ((<*), (*>))
 import Control.Monad
 import Control.Monad.Identity
 import Control.Monad.Trans
