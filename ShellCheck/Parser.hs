@@ -1541,6 +1541,7 @@ prop_readDollarVariable = isOk readDollarVariable "$@"
 prop_readDollarVariable2 = isOk (readDollarVariable >> anyChar) "$?!"
 prop_readDollarVariable3 = isWarning (readDollarVariable >> anyChar) "$10"
 prop_readDollarVariable4 = isWarning (readDollarVariable >> string "[@]") "$arr[@]"
+prop_readDollarVariable5 = isWarning (readDollarVariable >> string "[f") "$arr[f"
 
 readDollarVariable = do
     id <- getNextId
@@ -1563,8 +1564,8 @@ readDollarVariable = do
         name <- readVariableName
         value <- wrap name
         return (T_DollarBraced id value) `attempting` do
-            lookAhead $ void (string "[@]") <|> void (string "[*]") <|> void readArrayIndex
-            parseNoteAt pos ErrorC 1087 "Braces are required when expanding arrays, as in ${array[idx]}."
+            lookAhead $ char '['
+            parseNoteAt pos ErrorC 1087 "Use braces when expanding arrays, e.g. ${array[idx]} (or ${var}[.. to quiet)."
 
     try $ char '$' >> (positional <|> special <|> regular)
 
