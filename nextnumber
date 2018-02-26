@@ -1,7 +1,10 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # TODO: Find a less trashy way to get the next available error code
-
-shopt -s globstar
+if ! shopt -s globstar
+then
+  echo "Error: This script depends on Bash 4." >&2
+  exit 1
+fi
 
 for i in 1 2
 do
