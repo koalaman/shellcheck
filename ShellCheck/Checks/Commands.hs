@@ -91,6 +91,7 @@ commandChecks = [
     ,checkMvArguments, checkCpArguments, checkLnArguments
     ,checkFindRedirections
     ,checkReadExpansions
+    ,checkWhich
     ]
 
 buildCommandMap :: [CommandCheck] -> Map.Map CommandName (Token -> Analysis)
@@ -939,6 +940,9 @@ checkFindRedirections = CommandCheck (Basename "find") f
                         "Redirection applies to the find command itself. Rewrite to work per action (or move to end)."
             _ -> return ()
 
+prop_checkWhich = verify checkWhich "which '.+'"
+checkWhich = CommandCheck (Basename "which") $
+    \t -> info (getId t) 2230 "which is non-standard. Use builtin 'command -v' instead."
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
