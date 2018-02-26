@@ -191,11 +191,9 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
     bashism (T_Glob id str) | "[^" `isInfixOf` str =
             warnMsg id "^ in place of ! in glob bracket expressions is"
 
-    bashism t@(TA_Expansion id _) | isBashism =
-        warnMsg id $ fromJust str ++ " is"
-      where
-        str = getLiteralString t
-        isBashism = isJust str && isBashVariable (fromJust str)
+    bashism t@(TA_Variable id str _) | isBashVariable str =
+        warnMsg id $ str ++ " is"
+
     bashism t@(T_DollarBraced id token) = do
         mapM_ check expansion
         when (isBashVariable var) $

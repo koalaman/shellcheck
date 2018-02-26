@@ -444,15 +444,12 @@ getModifiedVariables t =
         c@T_SimpleCommand {} ->
             getModifiedVariableCommand c
 
-        TA_Unary _ "++|" var -> maybeToList $ do
-            name <- getLiteralString var
-            return (t, t, name, DataString $ SourceFrom [t])
-        TA_Unary _ "|++" var -> maybeToList $ do
-            name <- getLiteralString var
-            return (t, t, name, DataString $ SourceFrom [t])
-        TA_Assignment _ op lhs rhs -> maybeToList $ do
+        TA_Unary _ "++|" v@(TA_Variable _ name _)  ->
+            [(t, v, name, DataString $ SourceFrom [v])]
+        TA_Unary _ "|++" v@(TA_Variable _ name _)  ->
+            [(t, v, name, DataString $ SourceFrom [v])]
+        TA_Assignment _ op (TA_Variable _ name _) rhs -> maybeToList $ do
             guard $ op `elem` ["=", "*=", "/=", "%=", "+=", "-=", "<<=", ">>=", "&=", "^=", "|="]
-            name <- getLiteralString lhs
             return (t, t, name, DataString $ SourceFrom [rhs])
 
         -- Count [[ -v foo ]] as an "assignment".
@@ -634,10 +631,10 @@ getReferencedVariables parents t =
                 map (\x -> (l, l, x)) (
                     getIndexReferences str
                     ++ getOffsetReferences (getBracedModifier str))
-        TA_Expansion id _ ->
+        TA_Variable id name _ ->
             if isArithmeticAssignment t
             then []
-            else getIfReference t t
+            else [(t, t, name)]
         T_Assignment id mode str _ word ->
             [(t, t, str) | mode == Append] ++ specialReferences str t word
 
@@ -664,7 +661,6 @@ getReferencedVariables parents t =
         else []
 
     literalizer t = case t of
-        TA_Index {} -> return ""  -- x[0] becomes a reference of x
         T_Glob _ s -> return s    -- Also when parsed as globs
         _ -> Nothing
 

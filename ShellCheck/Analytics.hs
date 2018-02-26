@@ -1141,12 +1141,10 @@ checkArithmeticDeref params t@(TA_Expansion _ [b@(T_DollarBraced id _)]) =
             T_Arithmetic {} -> return normalWarning
             T_DollarArithmetic {} -> return normalWarning
             T_ForArithmetic {} -> return normalWarning
-            TA_Index {} -> return indexWarning
             T_SimpleCommand {} -> return noWarning
             _ -> Nothing
 
     normalWarning = style id 2004 "$/${} is unnecessary on arithmetic variables."
-    indexWarning = style id 2149 "Remove $/${} for numeric index, or escape it for string."
     noWarning = return ()
 checkArithmeticDeref _ _ = return ()
 
@@ -1825,6 +1823,7 @@ prop_checkUnused34= verifyNotTree checkUnusedAssignments "foo=1; (( t = foo )); 
 prop_checkUnused35= verifyNotTree checkUnusedAssignments "a=foo; b=2; echo ${a:b}"
 prop_checkUnused36= verifyNotTree checkUnusedAssignments "if [[ -v foo ]]; then true; fi"
 prop_checkUnused37= verifyNotTree checkUnusedAssignments "fd=2; exec {fd}>&-"
+prop_checkUnused38= verifyTree checkUnusedAssignments "(( a=42 ))"
 checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
     flow = variableFlow params
@@ -1880,6 +1879,7 @@ prop_checkUnassignedReferences30= verifyNotTree checkUnassignedReferences "if [[
 prop_checkUnassignedReferences31= verifyNotTree checkUnassignedReferences "X=1; if [[ -v foo[$X+42] ]]; then echo ${foo[$X+42]}; fi"
 prop_checkUnassignedReferences32= verifyNotTree checkUnassignedReferences "if [[ -v \"foo[1]\" ]]; then echo ${foo[@]}; fi"
 prop_checkUnassignedReferences33= verifyNotTree checkUnassignedReferences "f() { local -A foo; echo \"${foo[@]}\"; }"
+prop_checkUnassignedReferences34= verifyNotTree checkUnassignedReferences "declare -A foo; (( foo[bar] ))"
 checkUnassignedReferences params t = warnings
   where
     (readMap, writeMap) = execState (mapM tally $ variableFlow params) (Map.empty, Map.empty)
@@ -2540,7 +2540,7 @@ checkLoopVariableReassignment params token =
             T_ForArithmetic _
                 (TA_Sequence _
                     [TA_Assignment _ "="
-                        (TA_Expansion _ [T_Literal _ var]) _])
+                        (TA_Variable _ var _ ) _])
                             _ _ _ -> return var
             _ -> fail "not loop"
 

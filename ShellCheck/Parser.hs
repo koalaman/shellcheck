@@ -697,31 +697,35 @@ readArithmeticContents =
             spacing1
             return (str, alt)
 
-
     readArrayIndex = do
         id <- getNextId
         char '['
-        middle <- readArithmeticContents
+        pos <- getPosition
+        middle <- readStringForParser readArithmeticContents
         char ']'
-        return $ TA_Index id middle
+        return $ T_UnparsedIndex id pos middle
 
     literal s = do
         id <- getNextId
         string s
         return $ T_Literal id s
 
-    readArithmeticLiteral =
-        readArrayIndex <|> literal "#"
+    readVariable = do
+        id <- getNextId
+        name <- readVariableName
+        indices <- many readArrayIndex
+        spacing
+        return $ TA_Variable id name indices
 
     readExpansion = do
         id <- getNextId
         pieces <- many1 $ choice [
-            readArithmeticLiteral,
             readSingleQuoted,
             readDoubleQuoted,
             readNormalDollar,
             readBraced,
             readUnquotedBackTicked,
+            literal "#",
             readNormalLiteral "+-*/=%^,]?:"
             ]
         spacing
@@ -734,7 +738,7 @@ readArithmeticContents =
         spacing
         return s
 
-    readArithTerm = readGroup <|> readExpansion
+    readArithTerm = readGroup <|> readVariable <|> readExpansion
 
     readSequence = do
         spacing
@@ -2819,10 +2823,7 @@ readScriptFile = do
 
     readUtf8Bom = called "Byte Order Mark" $ string "\xFEFF"
 
-readScript = do
-    script <- readScriptFile
-    reparseIndices script
-
+readScript = readScriptFile
 
 -- Interactively run a parser in ghci:
 -- debugParse readScript "echo 'hello world'"
@@ -2945,6 +2946,9 @@ reparseIndices root =
                 return $ T_Array id2 newWords
             x -> return x
         return $ T_Assignment id mode name newIndices newValue
+    f (TA_Variable id name indices) = do
+        newIndices <- mapM (fixAssignmentIndex name) indices
+        return $ TA_Variable id name newIndices
     f t = return t
 
     fixIndexElement name word =
@@ -2952,13 +2956,13 @@ reparseIndices root =
             T_IndexedElement id indices value -> do
                 new <- mapM (fixAssignmentIndex name) indices
                 return $ T_IndexedElement id new value
-            otherwise -> return word
+            _ -> return word
 
     fixAssignmentIndex name word =
         case word of
-            T_UnparsedIndex id pos src -> do
+            T_UnparsedIndex id pos src ->
                 parsed name pos src
-            otherwise -> return word
+            _ -> return word
 
     parsed name pos src =
         if isAssociative name
