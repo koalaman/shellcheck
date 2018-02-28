@@ -279,10 +279,11 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
             "typeset"
             ] ++ if not isDash then ["local", "type"] else []
         allowedFlags = Map.fromList [
-            ("read", if isDash then ["r", "p"] else ["r"]),
-            ("ulimit", ["f"]),
+            ("exec", []),
+            ("export", ["-p"]),
             ("printf", []),
-            ("exec", [])
+            ("read", if isDash then ["r", "p"] else ["r"]),
+            ("ulimit", ["f"])
             ]
 
     bashism _ = return ()
