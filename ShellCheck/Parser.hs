@@ -2826,11 +2826,31 @@ readScriptFile = do
 
 readScript = readScriptFile
 
--- Interactively run a parser in ghci:
--- debugParse readScript "echo 'hello world'"
+-- Interactively run a specific parser in ghci:
+-- debugParse readSimpleCommand "echo 'hello world'"
 debugParse p string = runIdentity $ do
     (res, _) <- runParser testEnvironment p "-" string
     return res
+
+-- Interactively run the complete parser in ghci:
+-- debugParseScript "#!/bin/bash\necho 'Hello World'\n"
+debugParseScript string =
+    result {
+        -- Remove the noisiest parts
+        prTokenPositions = Map.fromList [
+            (Id 0, Position {
+                posFile = "removed for clarity",
+                posLine = -1,
+                posColumn = -1
+            })]
+    }
+  where
+    result = runIdentity $
+        parseScript (mockedSystemInterface []) $ ParseSpec {
+            psFilename = "debug",
+            psScript = string,
+            psCheckSourced = False
+        }
 
 testEnvironment =
     Environment {
