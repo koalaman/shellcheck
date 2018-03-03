@@ -742,6 +742,7 @@ prop_checkStderrRedirect3 = verifyNot checkStderrRedirect "test 2>&1 > file | gr
 prop_checkStderrRedirect4 = verifyNot checkStderrRedirect "errors=$(test 2>&1 > file)"
 prop_checkStderrRedirect5 = verifyNot checkStderrRedirect "read < <(test 2>&1 > file)"
 prop_checkStderrRedirect6 = verify checkStderrRedirect "foo | bar 2>&1 > /dev/null"
+prop_checkStderrRedirect7 = verifyNot checkStderrRedirect "{ cmd > file; } 2>&1"
 checkStderrRedirect params redir@(T_Redirecting _ [
     T_FdRedirect id "2" (T_IoDuplicate _ (T_GREATAND _) "1"),
     T_FdRedirect _ _ (T_IoFile _ op _)
@@ -760,7 +761,7 @@ checkStderrRedirect params redir@(T_Redirecting _ [
     isCaptured = any usesOutput $ getPath (parentMap params) redir
 
     error = unless isCaptured $
-        err id 2069 "The order of the 2>&1 and the redirect matters. The 2>&1 has to be last."
+        warn id 2069 "To redirect stdout+stderr, 2>&1 must be last (or use '{ cmd > file; } 2>&1' to clarify)."
 
 checkStderrRedirect _ _ = return ()
 
