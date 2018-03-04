@@ -1594,7 +1594,7 @@ readDollarLonely = do
 prop_readHereDoc = isOk readScript "cat << foo\nlol\ncow\nfoo"
 prop_readHereDoc2 = isWarning readScript "cat <<- EOF\n  cow\n  EOF"
 prop_readHereDoc3 = isOk readScript "cat << foo\n$\"\nfoo"
-prop_readHereDoc4 = isOk readScript "cat << foo\n`\nfoo"
+prop_readHereDoc4 = isNotOk readScript "cat << foo\n`\nfoo"
 prop_readHereDoc5 = isOk readScript "cat <<- !foo\nbar\n!foo"
 prop_readHereDoc6 = isOk readScript "cat << foo\\ bar\ncow\nfoo bar"
 prop_readHereDoc7 = isOk readScript "cat << foo\n\\$(f ())\nfoo"
@@ -1664,7 +1664,6 @@ readPendingHereDocs = do
                     c | c `elem` ";&" ->
                         ppt 1121 "Add ;/& terminators (and other syntax) on the line with the <<, not here."
                     _ -> ppt 1122 "Nothing allowed after end token. To continue a command, put it on the line with the <<."
-            parsedData <- parseHereData quoted pos hereData
             list <- parseHereData quoted pos hereData
             addToHereDocMap id list
 
@@ -1682,7 +1681,7 @@ readPendingHereDocs = do
     parseHereData Unquoted startPos hereData =
         subParse startPos readHereData hereData
 
-    readHereData = many $ try doubleQuotedPart <|> readHereLiteral
+    readHereData = many $ doubleQuotedPart <|> readHereLiteral
 
     readHereLiteral = do
         id <- getNextId
