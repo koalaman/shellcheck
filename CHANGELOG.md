@@ -11,6 +11,8 @@
 - Annotations intended for a command's here documents now work
 - Escaped characters inside groups in =~ regexes now parse
 - Associative arrays are now respected in arithmetic contexts
+- SC1087 about `$var[@]` now correctly triggers on any index
+- Bad expansions in here documents are no longer ignored
 
 ### Changed
 - SC1073: 'else if' is now parsed correctly and not like 'elif'
