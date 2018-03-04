@@ -301,11 +301,14 @@ pushContext c = do
 parseProblemAtWithEnd start end level code msg = do
     irrelevant <- shouldIgnoreCode code
     unless irrelevant $
-        Ms.modify (\state -> state {
-            parseProblems = note:parseProblems state
-        })
+        addParseProblem note
   where
     note = ParseNote start end level code msg
+
+addParseProblem note =
+    Ms.modify (\state -> state {
+        parseProblems = note:parseProblems state
+    })
 
 parseProblemAt pos = parseProblemAtWithEnd pos pos
 
@@ -1146,6 +1149,7 @@ readBackTicked quoted = called "backtick expansion" $ do
          parseProblemAt pos ErrorC 1077
             "For command expansion, the tick should slant left (` vs ´). Use $(..) instead."
 
+-- Run a parser on a new input, such as for `..` or here documents.
 subParse pos parser input = do
     lastPosition <- getPosition
     lastInput <- getInput
@@ -2943,10 +2947,11 @@ parseShell env name contents = do
                 prTokenPositions = Map.empty,
                 prRoot = Nothing
             }
+
+notesForContext list = zipWith ($) [first, second] $ filter isName list
   where
     isName (ContextName _ _) = True
     isName _ = False
-    notesForContext list = zipWith ($) [first, second] $ filter isName list
     first (ContextName pos str) = ParseNote pos pos ErrorC 1073 $
         "Couldn't parse this " ++ str ++ ". Fix to allow more checks."
     second (ContextName pos str) = ParseNote pos pos InfoC 1009 $
@@ -3020,6 +3025,36 @@ parseScript sys spec =
         checkSourced = psCheckSourced spec
     }
 
+-- Same as 'try' but emit syntax errors if the parse fails.
+tryWithErrors :: Monad m => SCParser m v -> SCParser m v
+tryWithErrors parser = do
+    userstate <- getState
+    oldContext <- getCurrentContexts
+    input <- getInput
+    pos <- getPosition
+    result <- lift $ runParserT (setPosition pos >> getResult parser) userstate (sourceName pos) input
+    case result of
+        Right (result, endPos, endInput, endState) -> do
+            -- 'many' objects if we don't consume anything at all, so read a dummy value
+            void anyChar <|> eof
+            putState endState
+            setPosition endPos
+            setInput endInput
+            return result
+
+        Left err -> do
+            newContext <- getCurrentContexts
+            addParseProblem $ makeErrorFor err
+            mapM_ addParseProblem $ notesForContext newContext
+            setCurrentContexts oldContext
+            fail ""
+  where
+    getResult p = do
+        result <- p
+        endPos <- getPosition
+        endInput <- getInput
+        endState <- getState
+        return (result, endPos, endInput, endState)
 
 return []
 runTests = $quickCheckAll
