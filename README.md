@@ -127,10 +127,6 @@ On OS X with homebrew:
 
     brew install shellcheck
 
-On OS X with MacPorts:
-
-    port install shellcheck
-
 On openSUSE
 
     zypper in ShellCheck
