@@ -31,6 +31,12 @@ Extra-Source-Files:
     -- tests
     test/shellcheck.hs
 
+custom-setup
+  setup-depends:
+    base    >= 4    && <5,
+    process >= 1.0  && <1.7,
+    Cabal   >= 1.10 && <2.3
+
 source-repository head
     type: git
     location: git://github.com/koalaman/shellcheck.git
@@ -38,7 +44,7 @@ source-repository head
 library
     build-depends:
       base >= 4 && < 5,
-      containers,
+      containers >= 0.5,
       directory,
       json,
       mtl >= 2.2.1,
@@ -73,9 +79,9 @@ executable shellcheck
       base >= 4 && < 5,
       containers,
       directory,
-      json,
+      json >= 0.3.6,
       mtl >= 2.2.1,
-      parsec,
+      parsec >= 3.0,
       regex-tdfa,
       QuickCheck >= 2.7.4
     main-is: shellcheck.hs
