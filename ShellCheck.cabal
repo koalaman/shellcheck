@@ -42,6 +42,7 @@ source-repository head
     location: git://github.com/koalaman/shellcheck.git
 
 library
+    hs-source-dirs: src
     build-depends:
       base >= 4 && < 5,
       containers >= 0.5,
@@ -77,6 +78,7 @@ library
 executable shellcheck
     build-depends:
       base >= 4 && < 5,
+      ShellCheck, 
       containers,
       directory,
       json >= 0.3.6,
@@ -90,6 +92,7 @@ test-suite test-shellcheck
     type: exitcode-stdio-1.0
     build-depends:
       base >= 4 && < 5,
+      ShellCheck, 
       containers,
       directory,
       json,
