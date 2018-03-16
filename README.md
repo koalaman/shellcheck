@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/koalaman/shellcheck.svg?branch=master)](https://travis-ci.org/koalaman/shellcheck)
+
 # ShellCheck - A shell script static analysis tool
 
 ShellCheck is a GPLv3 tool that gives warnings and suggestions for bash/sh shell scripts:
@@ -99,7 +101,7 @@ On systems with Stack (installs to `~/.local/bin`):
 
     stack update
     stack install ShellCheck
-    
+
 On Debian based distros:
 
     apt-get install shellcheck
