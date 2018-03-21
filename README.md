@@ -157,7 +157,19 @@ or see the [storage bucket listing](https://shellcheck.storage.googleapis.com/in
 
 ## Travis CI
 
-Travis CI now integrated ShellCheck by default, you don't need to manually install it.
+Travis CI has now integrated ShellCheck by default, so you don't need to manually install it.
+
+However, if you want the _latest_ version you may have to still install it yourself:
+
+    install:
+
+      # Install latest version of shellcheck.
+      - wget https://storage.googleapis.com/shellcheck/shellcheck-latest.linux.x86_64.tar.xz
+      - tar --xz -xvf shellcheck-latest.linux.x86_64.tar.xz
+      - shellcheck-latest/shellcheck --version
+
+    script:
+      - shellcheck-latest/shellcheck *.sh
 
 ## Compiling from source
 
