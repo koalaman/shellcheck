@@ -15,28 +15,27 @@ before_install:
 
 script:
   - mkdir deploy
-  # Windows .exe
-  - docker pull koalaman/winghc
-  - docker run --user="$UID" --rm -v "$PWD:/appdata" koalaman/winghc cuib
-  - for tag in $TAGS; do cp "dist/build/ShellCheck/shellcheck.exe" "deploy/shellcheck-$tag.exe"; done
-  - rm -rf dist || true
-  # Linux static executable
-  - docker pull koalaman/scbuilder
-  - docker run --user="$UID" --rm -v "$PWD:/mnt" koalaman/scbuilder
-  - for tag in $TAGS; do cp "shellcheck" "deploy/shellcheck-$tag.linux"; done
-  - ./shellcheck --version
-  - rm -rf dist || true
   # Linux Docker image
   - name="$DOCKER_BASE"
   - DOCKER_BUILDS="$DOCKER_BUILDS $name"
   - docker build -t "$name:current" .
   - docker run "$name:current" --version
+  # Copy static executable from docker image
+  - id=$(docker create "$name:current")
+  - docker cp "$id:/bin/shellcheck" "shellcheck"
+  - docker rm "$id"
+  - for tag in $TAGS; do cp "shellcheck" "deploy/shellcheck-$tag.linux"; done
   # Linux Alpine based Docker image
   - name="$DOCKER_BASE-alpine"
   - DOCKER_BUILDS="$DOCKER_BUILDS $name"
-  - sed -e 's/^FROM .*/FROM alpine:latest/' -e '/WORKDIR/d' -e '/ENTRYPOINT/d' Dockerfile > Dockerfile.alpine
+  - sed -e '/DELETE-MARKER/,$d' Dockerfile > Dockerfile.alpine
   - docker build -f Dockerfile.alpine -t "$name:current" .
   - docker run "$name:current" sh -c 'shellcheck --version'
+  # Windows .exe
+  - docker pull koalaman/winghc
+  - docker run --user="$UID" --rm -v "$PWD:/appdata" koalaman/winghc cuib
+  - for tag in $TAGS; do cp "dist/build/ShellCheck/shellcheck.exe" "deploy/shellcheck-$tag.exe"; done
+  - rm -rf dist || true
   # Misc packaging
   - ./.prepare_deploy
 
