@@ -25,12 +25,14 @@ RUN mkdir -p /out/bin && \
 FROM alpine:latest
 LABEL maintainer="Vidar Holen <vidar@vidarholen.net>"
 COPY --from=build /out /
+WORKDIR /mnt
+ENTRYPOINT ["/bin/shellcheck"]
 
 # DELETE-MARKER (Remove everything below to keep the alpine image)
 
 # Resulting ShellCheck image
 FROM scratch
 LABEL maintainer="Vidar Holen <vidar@vidarholen.net>"
-WORKDIR /
 COPY --from=build /out /
+WORKDIR /mnt
 ENTRYPOINT ["/bin/shellcheck"]
