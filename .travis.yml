@@ -20,6 +20,8 @@ script:
   - DOCKER_BUILDS="$DOCKER_BUILDS $name"
   - docker build -t "$name:current" .
   - docker run "$name:current" --version
+  - printf '%s\n' "#!/bin/sh" "echo 'hello world'" > myscript
+  - docker run -v "$PWD:/mnt" "$name:current" myscript
   # Copy static executable from docker image
   - id=$(docker create "$name:current")
   - docker cp "$id:/bin/shellcheck" "shellcheck"

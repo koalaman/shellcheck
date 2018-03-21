@@ -31,6 +31,6 @@ COPY --from=build /out /
 # Resulting ShellCheck image
 FROM scratch
 LABEL maintainer="Vidar Holen <vidar@vidarholen.net>"
-WORKDIR /
+WORKDIR /mnt
 COPY --from=build /out /
 ENTRYPOINT ["/bin/shellcheck"]
