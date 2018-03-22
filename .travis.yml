@@ -10,8 +10,7 @@ before_install:
   - DOCKER_BUILDS=""
   - TAGS=""
   - test "$TRAVIS_BRANCH" = master && TAGS="$TAGS latest" || true
-  - test -n "$TRAVIS_TAG"          && TAGS="$TAGS $TRAVIS_TAG" || true
-  - test "$TRAVIS_BRANCH" = master && test -n "$TRAVIS_TAG" && TAGS="$TAGS stable" || true
+  - test -n "$TRAVIS_TAG"          && TAGS="$TAGS stable $TRAVIS_TAG" || true
 
 script:
   - mkdir deploy
