@@ -142,34 +142,36 @@ On Solus:
 From Docker Hub:
 
 ```sh
-docker pull koalaman/shellcheck:latest  # Or  :v0.4.6  for a release version
+docker pull koalaman/shellcheck:stable  # Or :v0.4.7 for that version, or :latest for daily builds
 docker run -v "$PWD:/mnt" koalaman/shellcheck myscript
 ```
 
-or use `koalaman/shellcheck-alpine` if you want a larger Alpine Linux based image to extend.
+or use `koalaman/shellcheck-alpine` if you want a larger Alpine Linux based image to extend. It works exactly like a regular Alpine image, but has shellcheck preinstalled.
 
-Alternatively, get freshly built binaries for the latest commit here:
+Alternatively, you can download pre-compiled binaries for the latest release here:
 
-* [Linux, x86_64](https://storage.googleapis.com/shellcheck/shellcheck-latest.linux.x86_64.tar.xz) (statically linked)
-* [Windows, x86](https://storage.googleapis.com/shellcheck/shellcheck-latest.zip)
+* [Linux, x86_64](https://storage.googleapis.com/shellcheck/shellcheck-stable.linux.x86_64.tar.xz) (statically linked)
+* [Windows, x86](https://storage.googleapis.com/shellcheck/shellcheck-stable.zip)
 
-or see the [storage bucket listing](https://shellcheck.storage.googleapis.com/index.html) for checksums and release builds.
+or see the [storage bucket listing](https://shellcheck.storage.googleapis.com/index.html) for checksums, older versions and the latest daily builds.
 
 ## Travis CI
 
 Travis CI has now integrated ShellCheck by default, so you don't need to manually install it.
 
-However, if you want the _latest_ version you may have to still install it yourself:
+If you still want to do so in order to upgrade at your leisure or ensure the latest release:
 
     install:
 
-      # Install latest version of shellcheck.
-      - wget https://storage.googleapis.com/shellcheck/shellcheck-latest.linux.x86_64.tar.xz
-      - tar --xz -xvf shellcheck-latest.linux.x86_64.tar.xz
-      - shellcheck-latest/shellcheck --version
+      # Install a custom version of shellcheck instead of Travis CI's default
+      - scversion="stable" # or "v0.4.7", or "latest"
+      - wget "https://storage.googleapis.com/shellcheck/shellcheck-$scversion.linux.x86_64.tar.xz"
+      - tar --xz -xvf "shellcheck-$scversion.linux.x86_64.tar.xz"
+      - shellcheck() { "shellcheck-$scversion/shellcheck" "$@"; }
+      - shellcheck --version
 
     script:
-      - shellcheck-latest/shellcheck *.sh
+      - shellcheck *.sh
 
 ## Compiling from source
 
