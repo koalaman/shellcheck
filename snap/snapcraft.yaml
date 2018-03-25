@@ -31,6 +31,7 @@ parts:
       - cabal-install
     build: |
       cabal sandbox init
+      cabal update
       cabal install -j
     install: |
       install -d $SNAPCRAFT_PART_INSTALL/usr/bin
