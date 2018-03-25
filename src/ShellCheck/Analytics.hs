@@ -166,6 +166,7 @@ nodeChecks = [
     ,checkFlagAsCommand
     ,checkEmptyCondition
     ,checkPipeToNowhere
+    ,checkForLoopGlobVariables
     ]
 
 
@@ -2907,6 +2908,20 @@ checkUseBeforeDefinition _ t =
             if null list
             then [x]
             else concatMap recursiveSequences list
+
+prop_checkForLoopGlobVariables1 = verify checkForLoopGlobVariables "for i in $var/*.txt; do true; done"
+prop_checkForLoopGlobVariables2 = verifyNot checkForLoopGlobVariables "for i in \"$var\"/*.txt; do true; done"
+prop_checkForLoopGlobVariables3 = verifyNot checkForLoopGlobVariables "for i in $var; do true; done"
+checkForLoopGlobVariables _ t =
+    case t of
+        T_ForIn _ _ words _ -> mapM_ check words
+        _ -> return ()
+  where
+    check (T_NormalWord _ parts) =
+        when (any isGlob parts) $
+            mapM_ suggest $ filter isQuoteableExpansion parts
+    suggest t = info (getId t) 2231
+        "Quote expansions in this for loop glob to prevent wordsplitting, e.g. \"$dir\"/*.txt ."
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

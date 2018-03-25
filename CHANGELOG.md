@@ -1,5 +1,6 @@
 ## Latest - ???
 ### Added
+- SC2231: Suggest quoting expansions in for loop globs
 - SC2229: Warn about 'read $var'
 - SC2227: Warn about redirections in the middle of 'find' commands
 - SC2224,SC2225,SC2226: Warn when using mv/cp/ln without a destination
