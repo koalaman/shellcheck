@@ -277,7 +277,7 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
             "let", "caller", "builtin", "complete", "compgen", "declare", "dirs", "disown",
             "enable", "mapfile", "readarray", "pushd", "popd", "shopt", "suspend",
             "typeset"
-            ] ++ if not isDash then ["local", "type"] else []
+            ] ++ if not isDash then ["local"] else []
         allowedFlags = Map.fromList [
             ("exec", []),
             ("export", ["-p"]),
