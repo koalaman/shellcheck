@@ -18,6 +18,7 @@
 ### Changed
 - SC1073: 'else if' is now parsed correctly and not like 'elif'
 - SC2163: 'export $name' can now be silenced with 'export ${name?}'
+- SC2183: Now warns when printf arg count is not a multiple of format count
 
 ## v0.4.7 - 2017-12-08
 ### Added

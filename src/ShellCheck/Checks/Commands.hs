@@ -511,6 +511,8 @@ prop_checkPrintfVar8 = verifyNot checkPrintfVar "printf '%s %s %s' \"${var[@]}\"
 prop_checkPrintfVar9 = verifyNot checkPrintfVar "printf '%s %s %s\\n' *.png"
 prop_checkPrintfVar10= verifyNot checkPrintfVar "printf '%s %s %s' foo bar baz"
 prop_checkPrintfVar11= verifyNot checkPrintfVar "printf '%(%s%s)T' -1"
+prop_checkPrintfVar12= verify checkPrintfVar "printf '%s %s\\n' 1 2 3"
+prop_checkPrintfVar13= verifyNot checkPrintfVar "printf '%s %s\\n' 1 2 3 4"
 checkPrintfVar = CommandCheck (Exactly "printf") (f . arguments) where
     f (doubledash:rest) | getLiteralString doubledash == Just "--" = f rest
     f (dashv:var:rest) | getLiteralString dashv == Just "-v" = f rest
@@ -536,7 +538,7 @@ checkPrintfVar = CommandCheck (Exactly "printf") (f . arguments) where
                         "This printf format string has no variables. Other arguments are ignored."
 
                 when (vars > 0
-                        && length more < vars
+                        && ((length more) `mod` vars /= 0 || null more)
                         && all (not . mayBecomeMultipleArgs) more) $
                     warn (getId format) 2183 $
                         "This format string has " ++ show vars ++ " variables, but is passed " ++ show (length more) ++ " arguments."
