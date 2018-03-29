@@ -16,12 +16,13 @@ description: |
     advanced user's otherwise working script to fail under future
     circumstances.
 version: git
-grade: stable
-confinement: classic
+grade: devel
+confinement: strict
 
 apps:
   shellcheck:
     command: usr/bin/shellcheck
+    plugs: [home]
 
 parts:
   shellcheck:
