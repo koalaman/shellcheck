@@ -139,6 +139,10 @@ On Solus:
 
     eopkg install shellcheck
 
+From Snap Store:
+
+    snap install --channel=edge shellcheck
+
 From Docker Hub:
 
 ```sh
