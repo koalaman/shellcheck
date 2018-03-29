@@ -22,7 +22,7 @@ confinement: strict
 apps:
   shellcheck:
     command: usr/bin/shellcheck
-    plugs: [home]
+    plugs: [home, removable-media]
 
 parts:
   shellcheck:
