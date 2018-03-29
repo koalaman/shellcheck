@@ -15,6 +15,13 @@ description: |
   - To point out subtle caveats, corner cases and pitfalls that may cause an
     advanced user's otherwise working script to fail under future
     circumstances.
+
+  By default ShellCheck can only check non-hidden files under /home, to make 
+  ShellCheck be able to check files under /media and /run/media you must
+  connect it to the `removable-media` interface manually:
+
+      # snap connect shellcheck:removable-media
+  
 version: git
 grade: devel
 confinement: strict
