@@ -44,7 +44,9 @@ source-repository head
 library
     hs-source-dirs: src
     build-depends:
-      base >= 4 && < 5,
+      -- GHC 7.6.3 (base 4.6.0.1) is buggy (#1131, #1119) in optimized mode.
+      -- Just disable that version entirely to fail fast.
+      base > 4.6.0.1 && < 5,
       containers >= 0.5,
       directory,
       json,
