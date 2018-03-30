@@ -815,6 +815,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
                 ,"xprop"
                 ,"alias"
                 ,"sudo" -- covering "sudo sh" and such
+                ,"docker" -- like above
                 ,"dpkg-query"
                 ,"jq"  -- could also check that user provides --arg
                 ]
