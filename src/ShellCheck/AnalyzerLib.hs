@@ -466,7 +466,7 @@ getModifiedVariables t =
                     _          -> Nothing
 
             guard . not . null $ str
-            return (t, token, str, DataString $ SourceChecked)
+            return (t, token, str, DataString SourceChecked)
 
         T_DollarBraced _ l -> maybeToList $ do
             let string = bracedString t
@@ -691,9 +691,8 @@ isCommand token str = isCommandMatch token (\cmd -> cmd  == str || ('/' : str) `
 -- Compare a command to a literal. Like above, but checks full path.
 isUnqualifiedCommand token str = isCommandMatch token (== str)
 
-isCommandMatch token matcher = fromMaybe False $ do
-    cmd <- getCommandName token
-    return $ matcher cmd
+isCommandMatch token matcher = fromMaybe False $
+    fmap matcher (getCommandName token)
 
 -- Does this regex look like it was intended as a glob?
 -- True:  *foo*
