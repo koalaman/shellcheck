@@ -43,6 +43,9 @@ source-repository head
 
 library
     hs-source-dirs: src
+    if impl(ghc < 8.0)
+      build-depends:
+        semigroups
     build-depends:
       -- GHC 7.6.3 (base 4.6.0.1) is buggy (#1131, #1119) in optimized mode.
       -- Just disable that version entirely to fail fast.
@@ -78,6 +81,9 @@ library
       Paths_ShellCheck
 
 executable shellcheck
+    if impl(ghc < 8.0)
+      build-depends:
+        semigroups
     build-depends:
       base >= 4 && < 5,
       ShellCheck, 

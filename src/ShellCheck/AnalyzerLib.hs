@@ -17,28 +17,30 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TemplateHaskell  #-}
 module ShellCheck.AnalyzerLib where
-import ShellCheck.AST
-import ShellCheck.ASTLib
-import ShellCheck.Data
-import ShellCheck.Interface
-import ShellCheck.Parser
-import ShellCheck.Regex
+import           ShellCheck.AST
+import           ShellCheck.ASTLib
+import           ShellCheck.Data
+import           ShellCheck.Interface
+import           ShellCheck.Parser
+import           ShellCheck.Regex
 
-import Control.Arrow (first)
-import Control.Monad.Identity
-import Control.Monad.RWS
-import Control.Monad.State
-import Control.Monad.Writer
-import Data.Char
-import Data.List
-import Data.Maybe
-import qualified Data.Map as Map
+import           Control.Arrow          (first)
+import           Control.Monad.Identity
+import           Control.Monad.RWS
+import           Control.Monad.State
+import           Control.Monad.Writer
+import           Data.Char
+import           Data.List
+import qualified Data.Map               as Map
+import           Data.Maybe
+import           Data.Semigroup
 
-import Test.QuickCheck.All (forAllProperties)
-import Test.QuickCheck.Test (quickCheckWithResult, stdArgs, maxSuccess)
+import           Test.QuickCheck.All    (forAllProperties)
+import           Test.QuickCheck.Test   (maxSuccess, quickCheckWithResult,
+                                         stdArgs)
 
 type Analysis = AnalyzerM ()
 type AnalyzerM a = RWS Parameters [TokenComment] Cache a
@@ -47,7 +49,7 @@ nullCheck = const $ return ()
 
 data Checker = Checker {
     perScript :: Root -> Analysis,
-    perToken :: Token -> Analysis
+    perToken  :: Token -> Analysis
 }
 
 runChecker :: Parameters -> Checker -> [TokenComment]
@@ -57,28 +59,30 @@ runChecker params checker = notes
         check = perScript checker `composeAnalyzers` (\(Root x) -> void $ doAnalysis (perToken checker) x)
         notes = snd $ evalRWS (check $ Root root) params Cache
 
+instance Semigroup Checker where
+    (<>) x y = Checker {
+        perScript = perScript x `composeAnalyzers` perScript y,
+        perToken = perToken x `composeAnalyzers` perToken y
+        }
+
 instance Monoid Checker where
     mempty = Checker {
         perScript = nullCheck,
         perToken = nullCheck
         }
-    mappend x y = Checker {
-        perScript = perScript x `composeAnalyzers` perScript y,
-        perToken = perToken x `composeAnalyzers` perToken y
-        }
-
+    mappend = (Data.Semigroup.<>)
 
 composeAnalyzers :: (a -> Analysis) -> (a -> Analysis) -> a -> Analysis
 composeAnalyzers f g x = f x >> g x
 
 data Parameters = Parameters {
-    hasLastpipe :: Bool,           -- Whether this script has the 'lastpipe' option set/default.
-    hasSetE     :: Bool,           -- Whether this script has 'set -e' anywhere.
-    variableFlow :: [StackData],   -- A linear (bad) analysis of data flow
-    parentMap :: Map.Map Id Token, -- A map from Id to parent Token
-    shellType :: Shell,            -- The shell type, such as Bash or Ksh
+    hasLastpipe        :: Bool,           -- Whether this script has the 'lastpipe' option set/default.
+    hasSetE            :: Bool,           -- Whether this script has 'set -e' anywhere.
+    variableFlow       :: [StackData],   -- A linear (bad) analysis of data flow
+    parentMap          :: Map.Map Id Token, -- A map from Id to parent Token
+    shellType          :: Shell,            -- The shell type, such as Bash or Ksh
     shellTypeSpecified :: Bool,    -- True if shell type was forced via flags
-    rootNode :: Token              -- The root node of the AST
+    rootNode           :: Token              -- The root node of the AST
     }
 
 -- TODO: Cache results of common AST ops here
@@ -151,8 +155,8 @@ makeParameters spec =
             case shellType params of
                 Bash -> containsLastpipe root
                 Dash -> False
-                Sh -> False
-                Ksh -> True,
+                Sh   -> False
+                Ksh  -> True,
 
         shellTypeSpecified = isJust $ asShellType spec,
         parentMap = getParentTree root,
@@ -205,7 +209,7 @@ determineShell t = fromMaybe Bash $ do
     forAnnotation t =
         case t of
             (ShellOverride s) -> return s
-            _ -> fail ""
+            _                 -> fail ""
     getCandidates :: Token -> [Maybe String]
     getCandidates t@T_Script {} = [Just $ fromShebang t]
     getCandidates (T_Annotation _ annotations s) =
@@ -233,7 +237,7 @@ getParentTree t =
     pre t = modify (first ((:) t))
     post t = do
         (_:rest, map) <- get
-        case rest of [] -> put (rest, map)
+        case rest of []    -> put (rest, map)
                      (x:_) -> put (rest, Map.insert (getId t) x map)
 
 -- Given a root node, make a map from Id to Token
@@ -264,27 +268,27 @@ isQuoteFreeNode strict tree t =
         case t of
             T_Assignment {} -> return True
             T_FdRedirect {} -> return True
-            _ -> Nothing
+            _               -> Nothing
 
     -- Are any subnodes inherently self-quoting?
     isQuoteFreeContext t =
         case t of
-            TC_Nullary _ DoubleBracket _ -> return True
-            TC_Unary _ DoubleBracket _ _ -> return True
+            TC_Nullary _ DoubleBracket _    -> return True
+            TC_Unary _ DoubleBracket _ _    -> return True
             TC_Binary _ DoubleBracket _ _ _ -> return True
-            TA_Sequence {} -> return True
-            T_Arithmetic {} -> return True
-            T_Assignment {} -> return True
-            T_Redirecting {} -> return False
-            T_DoubleQuoted _ _ -> return True
-            T_DollarDoubleQuoted _ _ -> return True
-            T_CaseExpression {} -> return True
-            T_HereDoc {} -> return True
-            T_DollarBraced {} -> return True
+            TA_Sequence {}                  -> return True
+            T_Arithmetic {}                 -> return True
+            T_Assignment {}                 -> return True
+            T_Redirecting {}                -> return False
+            T_DoubleQuoted _ _              -> return True
+            T_DollarDoubleQuoted _ _        -> return True
+            T_CaseExpression {}             -> return True
+            T_HereDoc {}                    -> return True
+            T_DollarBraced {}               -> return True
             -- When non-strict, pragmatically assume it's desirable to split here
-            T_ForIn {} -> return (not strict)
-            T_SelectIn {} -> return (not strict)
-            _ -> Nothing
+            T_ForIn {}                      -> return (not strict)
+            T_SelectIn {}                   -> return (not strict)
+            _                               -> Nothing
 
 -- Check if a token is a parameter to a certain command by name:
 -- Example: isParamTo (parentMap params) "sed" t
@@ -293,16 +297,16 @@ isParamTo tree cmd =
     go
   where
     go x = case Map.lookup (getId x) tree of
-                Nothing -> False
+                Nothing     -> False
                 Just parent -> check parent
     check t =
         case t of
             T_SingleQuoted _ _ -> go t
             T_DoubleQuoted _ _ -> go t
-            T_NormalWord _ _ -> go t
+            T_NormalWord _ _   -> go t
             T_SimpleCommand {} -> isCommand t cmd
-            T_Redirecting {} -> isCommand t cmd
-            _ -> False
+            T_Redirecting {}   -> isCommand t cmd
+            _                  -> False
 
 -- Get the parent command (T_Redirecting) of a Token, if any.
 getClosestCommand :: Map.Map Id Token -> Token -> Maybe Token
@@ -312,8 +316,8 @@ getClosestCommand tree t =
     findCommand t =
         case t of
             T_Redirecting {} -> return True
-            T_Script {} -> return False
-            _ -> Nothing
+            T_Script {}      -> return False
+            _                -> Nothing
 
 -- Like above, if koala_man knew Haskell when starting this project.
 getClosestCommandM t = do
@@ -334,7 +338,7 @@ usedAsCommandName tree token = go (getId token) (tail $ getPath tree token)
 -- A list of the element and all its parents up to the root node.
 getPath tree t = t :
     case Map.lookup (getId t) tree of
-        Nothing -> []
+        Nothing     -> []
         Just parent -> getPath tree parent
 
 -- Version of the above taking the map from the current context
@@ -360,9 +364,9 @@ findFirst p l =
         [] -> Nothing
         (x:xs) ->
             case p x of
-                Just True -> return x
+                Just True  -> return x
                 Just False -> Nothing
-                Nothing -> findFirst p xs
+                Nothing    -> findFirst p xs
 
 -- Check whether a word is entirely output from a single command
 tokenIsJustCommandOutput t = case t of
@@ -373,7 +377,7 @@ tokenIsJustCommandOutput t = case t of
     _ -> False
   where
     check [x] = not $ isOnlyRedirection x
-    check _ = False
+    check _   = False
 
 -- TODO: Replace this with a proper Control Flow Graph
 getVariableFlow params t =
@@ -393,9 +397,9 @@ getVariableFlow params t =
             unless (assignFirst t) $ setWritten t
             when (scopeType /= NoneScope) $ modify (StackScopeEnd:)
 
-    assignFirst T_ForIn {} = True
+    assignFirst T_ForIn {}    = True
     assignFirst T_SelectIn {} = True
-    assignFirst _ = False
+    assignFirst _             = False
 
     setRead t =
         let read    = getReferencedVariables (parentMap params) t
@@ -423,7 +427,7 @@ leadType params t =
         parent <- Map.lookup (getId t) (parentMap params)
         case parent of
             T_Pipeline {} -> return parent
-            _ -> Nothing
+            _             -> Nothing
 
     causesSubshell = do
         (T_Pipeline _ _ list) <- parentPipeline
@@ -459,7 +463,7 @@ getModifiedVariables t =
                     flip getLiteralStringExt token $ \x ->
                 case x of
                     T_Glob _ s -> return s -- Unquoted index
-                    _ -> Nothing
+                    _          -> Nothing
 
             guard . not . null $ str
             return (t, token, str, DataString $ SourceChecked)
@@ -486,7 +490,7 @@ isClosingFileOp op =
     case op of
         T_IoDuplicate _ (T_GREATAND _) "-" -> True
         T_IoDuplicate _ (T_LESSAND  _) "-" -> True
-        _ -> False
+        _                                  -> False
 
 
 -- Consider 'export/declare -x' a reference, since it makes the var available
@@ -524,7 +528,7 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal 
         "getopts" ->
             case rest of
                 opts:var:_ -> maybeToList $ getLiteral var
-                _ -> []
+                _          -> []
 
         "let" -> concatMap letParamToLiteral rest
 
@@ -588,9 +592,9 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal 
     getSetParams (t:rest) =
         let s = getLiteralString t in
             case s of
-                Just "--" -> return rest
+                Just "--"    -> return rest
                 Just ('-':_) -> getSetParams rest
-                _ -> return (t:fromMaybe [] (getSetParams rest))
+                _            -> return (t:fromMaybe [] (getSetParams rest))
     getSetParams [] = Nothing
 
     getPrintfVariable list = f $ map (\x -> (x, getLiteralString x)) list
@@ -662,7 +666,7 @@ getReferencedVariables parents t =
 
     literalizer t = case t of
         T_Glob _ s -> return s    -- Also when parsed as globs
-        _ -> Nothing
+        _          -> Nothing
 
     getIfReference context token = maybeToList $ do
             str <- getLiteralStringExt literalizer token
@@ -674,7 +678,7 @@ getReferencedVariables parents t =
 
     isArithmeticAssignment t = case getPath parents t of
         this: TA_Assignment _ "=" lhs _ :_ -> lhs == t
-        _ -> False
+        _                                  -> False
 
 dataTypeFrom defaultType v = (case v of T_Array {} -> DataArray; _ -> defaultType) $ SourceFrom [v]
 
@@ -697,7 +701,7 @@ isCommandMatch token matcher = fromMaybe False $ do
 isConfusedGlobRegex :: String -> Bool
 isConfusedGlobRegex ('*':_) = True
 isConfusedGlobRegex [x,'*'] | x /= '\\' = True
-isConfusedGlobRegex _ = False
+isConfusedGlobRegex _       = False
 
 isVariableStartChar x = x == '_' || isAsciiLower x || isAsciiUpper x
 isVariableChar x = isVariableStartChar x || isDigit x
@@ -707,7 +711,7 @@ prop_isVariableName1 = isVariableName "_fo123"
 prop_isVariableName2 = not $ isVariableName "4"
 prop_isVariableName3 = not $ isVariableName "test: "
 isVariableName (x:r) = isVariableStartChar x && all isVariableChar r
-isVariableName _ = False
+isVariableName _     = False
 
 getVariablesFromLiteralToken token =
     getVariablesFromLiteral (fromJust $ getLiteralStringExt (const $ return " ") token)
@@ -740,7 +744,7 @@ getBracedReference s = fromMaybe s $
   where
     noPrefix = dropPrefix s
     dropPrefix (c:rest) = if c `elem` "!#" then rest else c:rest
-    dropPrefix "" = ""
+    dropPrefix ""       = ""
     takeName s = do
         let name = takeWhile isVariableChar s
         guard . not $ null name
@@ -765,12 +769,12 @@ getBracedModifier s = fromMaybe "" . listToMaybe $ do
     a <- dropModifier s
     dropPrefix var a
   where
-    dropPrefix [] t = return t
+    dropPrefix [] t        = return t
     dropPrefix (a:b) (c:d) | a == c = dropPrefix b d
-    dropPrefix _ _ = []
+    dropPrefix _ _         = []
 
     dropModifier (c:rest) | c `elem` "#!" = [rest, c:rest]
-    dropModifier x = [x]
+    dropModifier x        = [x]
 
 -- Useful generic functions.
 
@@ -785,12 +789,12 @@ potentially = fromMaybe (return ())
 
 -- Get element 0 or a default. Like `head` but safe.
 headOrDefault _ (a:_) = a
-headOrDefault def _ = def
+headOrDefault def _   = def
 
 --- Get element n of a list, or Nothing. Like `!!` but safe.
 (!!!) list i =
     case drop i list of
-        [] -> Nothing
+        []    -> Nothing
         (r:_) -> Just r
 
 -- Run a command if the shell is in the given list
@@ -811,7 +815,7 @@ filterByAnnotation asSpec params =
         any hasNum anns
       where
         hasNum (DisableComment ts) = num == ts
-        hasNum _ = False
+        hasNum _                   = False
     shouldIgnoreFor _ T_Include {} = not $ asCheckSourced asSpec
     shouldIgnoreFor _ _ = False
     parents = parentMap params
@@ -821,7 +825,7 @@ filterByAnnotation asSpec params =
 isCountingReference (T_DollarBraced id token) =
     case concat $ oversimplify token of
         '#':_ -> True
-        _ -> False
+        _     -> False
 isCountingReference _ = False
 
 -- FIXME: doesn't handle ${a:+$var} vs ${a:+"$var"}
@@ -844,8 +848,8 @@ getOpts string cmd = process flags
   where
     flags = getAllFlags cmd
     flagList (c:':':rest) = ([c], True) : flagList rest
-    flagList (c:rest) = ([c], False) : flagList rest
-    flagList [] = []
+    flagList (c:rest)     = ([c], False) : flagList rest
+    flagList []           = []
     flagMap = Map.fromList $ ("", False) : flagList string
 
     process [] = return []
