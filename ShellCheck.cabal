@@ -86,8 +86,8 @@ executable shellcheck
       json >= 0.3.6,
       mtl >= 2.2.1,
       parsec >= 3.0,
-      regex-tdfa,
-      QuickCheck >= 2.7.4
+      QuickCheck >= 2.7.4,
+      regex-tdfa
     main-is: shellcheck.hs
 
 test-suite test-shellcheck
@@ -100,7 +100,7 @@ test-suite test-shellcheck
       json,
       mtl >= 2.2.1,
       parsec,
-      regex-tdfa,
-      QuickCheck >= 2.7.4
+      QuickCheck >= 2.7.4,
+      regex-tdfa
     main-is: test/shellcheck.hs
 

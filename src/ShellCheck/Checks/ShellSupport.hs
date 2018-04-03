@@ -19,9 +19,7 @@
 -}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleContexts #-}
-module ShellCheck.Checks.ShellSupport (checker
-    , ShellCheck.Checks.ShellSupport.runTests
-) where
+module ShellCheck.Checks.ShellSupport (checker , ShellCheck.Checks.ShellSupport.runTests) where
 
 import ShellCheck.AST
 import ShellCheck.ASTLib

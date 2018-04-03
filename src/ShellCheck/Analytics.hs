@@ -17,7 +17,8 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -}
-{-# LANGUAGE TemplateHaskell, FlexibleContexts #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE FlexibleContexts #-}
 module ShellCheck.Analytics (runAnalytics, ShellCheck.Analytics.runTests) where
 
 import ShellCheck.AST

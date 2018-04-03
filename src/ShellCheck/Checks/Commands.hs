@@ -21,9 +21,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 -- This module contains checks that examine specific commands by name.
-module ShellCheck.Checks.Commands (checker
-    , ShellCheck.Checks.Commands.runTests
-) where
+module ShellCheck.Checks.Commands (checker , ShellCheck.Checks.Commands.runTests) where
 
 import ShellCheck.AST
 import ShellCheck.ASTLib

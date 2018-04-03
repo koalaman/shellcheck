@@ -14,6 +14,8 @@ before_install:
 
 script:
   - mkdir deploy
+  # Remove all tests to reduce binary size
+  - ./striptests
   # Linux Docker image
   - name="$DOCKER_BASE"
   - DOCKER_BUILDS="$DOCKER_BUILDS $name"
@@ -25,6 +27,8 @@ script:
   - id=$(docker create "$name:current")
   - docker cp "$id:/bin/shellcheck" "shellcheck"
   - docker rm "$id"
+  - ls -l shellcheck
+  - ./shellcheck myscript
   - for tag in $TAGS; do cp "shellcheck" "deploy/shellcheck-$tag.linux"; done
   # Linux Alpine based Docker image
   - name="$DOCKER_BASE-alpine"
