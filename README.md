@@ -138,6 +138,10 @@ Or use OneClickInstall - https://software.opensuse.org/package/ShellCheck
 On Solus:
 
     eopkg install shellcheck
+    
+On Windows (via [scoop](http://scoop.sh)):
+
+    scoop install shellcheck
 
 From Snap Store:
 
