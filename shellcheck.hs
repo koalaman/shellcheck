@@ -17,35 +17,36 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -}
-import ShellCheck.Data
-import ShellCheck.Checker
-import ShellCheck.Interface
-import ShellCheck.Regex
+import           ShellCheck.Checker
+import           ShellCheck.Data
+import           ShellCheck.Interface
+import           ShellCheck.Regex
 
-import ShellCheck.Formatter.Format
 import qualified ShellCheck.Formatter.CheckStyle
+import           ShellCheck.Formatter.Format
 import qualified ShellCheck.Formatter.GCC
 import qualified ShellCheck.Formatter.JSON
 import qualified ShellCheck.Formatter.TTY
 
-import Control.Exception
-import Control.Monad
-import Control.Monad.Except
-import Data.Bits
-import Data.Char
-import Data.Either
-import Data.Functor
-import Data.IORef
-import Data.List
-import qualified Data.Map as Map
-import Data.Maybe
-import Data.Monoid
-import Prelude hiding (catch)
-import System.Console.GetOpt
-import System.Directory
-import System.Environment
-import System.Exit
-import System.IO
+import           Control.Exception
+import           Control.Monad
+import           Control.Monad.Except
+import           Data.Bits
+import           Data.Char
+import           Data.Either
+import           Data.Functor
+import           Data.IORef
+import           Data.List
+import qualified Data.Map                        as Map
+import           Data.Maybe
+import           Data.Monoid
+import           Data.Semigroup                  (Semigroup (..))
+import           Prelude                         hiding (catch)
+import           System.Console.GetOpt
+import           System.Directory
+import           System.Environment
+import           System.Exit
+import           System.IO
 
 data Flag = Flag String String
 data Status =
@@ -56,13 +57,16 @@ data Status =
     | RuntimeException
   deriving (Ord, Eq, Show)
 
+instance Semigroup Status where
+    (<>) = max
+
 instance Monoid Status where
     mempty = NoProblems
-    mappend = max
+    mappend = (Data.Semigroup.<>)
 
 data Options = Options {
-    checkSpec :: CheckSpec,
-    externalSources :: Bool,
+    checkSpec        :: CheckSpec,
+    externalSources  :: Bool,
     formatterOptions :: FormatterOptions
 }
 
@@ -117,9 +121,9 @@ formatList = intercalate ", " names
   where
     names = Map.keys $ formats (formatterOptions defaultOptions)
 
-getOption [] _ = Nothing
+getOption [] _                  = Nothing
 getOption (Flag var val:_) name | name == var = return val
-getOption (_:rest) flag = getOption rest flag
+getOption (_:rest) flag         = getOption rest flag
 
 getOptions options name =
     map (\(Flag _ val) -> val) . filter (\(Flag var _) -> var == name) $ options
@@ -159,10 +163,10 @@ main = do
 
 statusToCode status =
     case status of
-        NoProblems -> ExitSuccess
-        SomeProblems -> ExitFailure 1
-        SyntaxFailure -> ExitFailure 3
-        SupportFailure -> ExitFailure 4
+        NoProblems       -> ExitSuccess
+        SomeProblems     -> ExitFailure 1
+        SyntaxFailure    -> ExitFailure 3
+        SupportFailure   -> ExitFailure 4
         RuntimeException -> ExitFailure 2
 
 process :: [Flag] -> [FilePath] -> ExceptT Status IO Status
@@ -203,7 +207,7 @@ runFormatter sys format options files = do
 
     process :: FilePath -> IO Status
     process filename = do
-        input <- (siReadFile sys) filename
+        input <- siReadFile sys filename
         either (reportFailure filename) check input
       where
         check contents = do
@@ -220,10 +224,10 @@ runFormatter sys format options files = do
 
 parseColorOption colorOption =
     case colorOption of
-        "auto" -> ColorAuto
+        "auto"   -> ColorAuto
         "always" -> ColorAlways
-        "never" -> ColorNever
-        _ -> error $ "Bad value for --color `" ++ colorOption ++ "'"
+        "never"  -> ColorNever
+        _        -> error $ "Bad value for --color `" ++ colorOption ++ "'"
 
 parseOption flag options =
     case flag of
@@ -292,7 +296,7 @@ ioInterface options files = do
     get cache inputs file = do
         map <- readIORef cache
         case Map.lookup file map of
-            Just x -> return $ Right x
+            Just x  -> return $ Right x
             Nothing -> fetch cache inputs file
 
     fetch cache inputs file = do
@@ -355,7 +359,7 @@ decodeString = decode
         in
             case next of
                 Just (n, remainder) -> chr n : decode remainder
-                Nothing -> c : decode rest
+                Nothing             -> c : decode rest
 
     construct x 0 rest = do
         guard $ x <= 0x10FFFF
