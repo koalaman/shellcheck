@@ -29,7 +29,7 @@ detestify() {
     }
 
     /LANGUAGE TemplateHaskell/ { next; }
-    /^import Test\./ { next; }
+    /^import.*Test\./ { next; }
 
     /^module/ {
       sub(/,[^,)]*runTests/, "");

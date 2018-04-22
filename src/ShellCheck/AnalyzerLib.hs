@@ -39,8 +39,7 @@ import           Data.Maybe
 import           Data.Semigroup
 
 import           Test.QuickCheck.All    (forAllProperties)
-import           Test.QuickCheck.Test   (maxSuccess, quickCheckWithResult,
-                                         stdArgs)
+import           Test.QuickCheck.Test   (maxSuccess, quickCheckWithResult, stdArgs)
 
 type Analysis = AnalyzerM ()
 type AnalyzerM a = RWS Parameters [TokenComment] Cache a
