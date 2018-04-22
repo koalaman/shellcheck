@@ -125,6 +125,10 @@ On Fedora based distros:
 
     dnf install ShellCheck
 
+On FreeBSD:
+
+    pkg install hs-ShellCheck
+
 On OS X with homebrew:
 
     brew install shellcheck
