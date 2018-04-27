@@ -1,5 +1,6 @@
 ## Latest - ???
 ### Added
+- SC2232: Warn about invalid arguments to sudo
 - SC2231: Suggest quoting expansions in for loop globs
 - SC2229: Warn about 'read $var'
 - SC2227: Warn about redirections in the middle of 'find' commands
