@@ -1884,6 +1884,7 @@ prop_checkUnassignedReferences31= verifyNotTree checkUnassignedReferences "X=1; 
 prop_checkUnassignedReferences32= verifyNotTree checkUnassignedReferences "if [[ -v \"foo[1]\" ]]; then echo ${foo[@]}; fi"
 prop_checkUnassignedReferences33= verifyNotTree checkUnassignedReferences "f() { local -A foo; echo \"${foo[@]}\"; }"
 prop_checkUnassignedReferences34= verifyNotTree checkUnassignedReferences "declare -A foo; (( foo[bar] ))"
+prop_checkUnassignedReferences35= verifyNotTree checkUnassignedReferences "echo ${arr[foo-bar]:?fail}"
 checkUnassignedReferences params t = warnings
   where
     (readMap, writeMap) = execState (mapM tally $ variableFlow params) (Map.empty, Map.empty)
@@ -1943,11 +1944,13 @@ checkUnassignedReferences params t = warnings
         isArray _ = False
 
     isGuarded (T_DollarBraced _ v) =
-        any (`isPrefixOf` rest) ["-", ":-", "?", ":?"]
+        rest `matches` guardRegex
       where
         name = concat $ oversimplify v
         rest = dropWhile isVariableChar $ dropWhile (`elem` "#!") name
     isGuarded _ = False
+    --  :? or :- with optional array index and colon
+    guardRegex = mkRegex "^(\\[.*\\])?:?[-?]"
 
     match var candidate =
         if var /= candidate && map toLower var == map toLower candidate
