@@ -1831,21 +1831,22 @@ prop_readSimpleCommand8 = isWarning readSimpleCommand "// Lol"
 prop_readSimpleCommand9 = isWarning readSimpleCommand "/* Lolbert */"
 prop_readSimpleCommand10 = isWarning readSimpleCommand "/**** Lolbert */"
 prop_readSimpleCommand11 = isOk readSimpleCommand "/\\* foo"
+prop_readSimpleCommand12 = isWarning readSimpleCommand "elsif foo"
+prop_readSimpleCommand13 = isWarning readSimpleCommand "ElseIf foo"
+prop_readSimpleCommand14 = isWarning readSimpleCommand "elseif[$i==2]"
 readSimpleCommand = called "simple command" $ do
-    pos <- getPosition
     id1 <- getNextId
     id2 <- getNextId
     prefix <- option [] readCmdPrefix
     skipAnnotationAndWarn
-    cmd <- option Nothing $ do { f <- readCmdName; return $ Just f; }
+    pos <- getPosition
+    cmd <- option Nothing $ Just <$> readCmdName
     when (null prefix && isNothing cmd) $ fail "Expected a command"
-
-    when (cStyleComment cmd) $
-        parseProblemAt pos ErrorC 1127 "Was this intended as a comment? Use # in sh."
 
     case cmd of
       Nothing -> return $ makeSimpleCommand id1 id2 prefix [] []
       Just cmd -> do
+            validateCommand pos cmd
             suffix <- option [] $ getParser readCmdSuffix cmd [
                         (["declare", "export", "local", "readonly", "typeset"], readModifierSuffix),
                         (["time"], readTimeSuffix),
@@ -1868,11 +1869,20 @@ readSimpleCommand = called "simple command" $ do
 
     cStyleComment cmd =
         case cmd of
-            Just (T_NormalWord _ [T_Literal _ "//"]) -> True
-            Just (T_NormalWord _ (T_Literal _ "/" : T_Glob _ "*" :_)) -> True
             _ -> False
 
+    validateCommand pos cmd =
+        case cmd of
+            (T_NormalWord _ [T_Literal _ "//"]) -> commentWarning pos
+            (T_NormalWord _ (T_Literal _ "/" : T_Glob _ "*" :_)) -> commentWarning pos
+            (T_NormalWord _ (T_Literal _ str:_)) -> do
+                let cmd = map toLower $ takeWhile isAlpha str
+                when (cmd `elem` ["elsif", "elseif"]) $
+                    parseProblemAt pos ErrorC 1131 "Use 'elif' to start another branch."
+            _ -> return ()
 
+    commentWarning pos =
+        parseProblemAt pos ErrorC 1127 "Was this intended as a comment? Use # in sh."
 
 readSource :: Monad m => SourcePos -> Token -> SCParser m Token
 readSource pos t@(T_Redirecting _ _ (T_SimpleCommand _ _ (cmd:file:_))) = do

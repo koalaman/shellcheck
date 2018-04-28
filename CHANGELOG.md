@@ -5,6 +5,7 @@
 - SC2227: Warn about redirections in the middle of 'find' commands
 - SC2224,SC2225,SC2226: Warn when using mv/cp/ln without a destination
 - SC2223: Quote warning specific to `: ${var=value}`
+- SC1131: Warn when using `elseif` or `elsif`
 - SC1128: Warn about blanks/comments before shebang
 - SC1127: Warn about C-style comments
 
