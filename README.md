@@ -301,6 +301,7 @@ alias archive='mv $1 /backup'     # Defining aliases with arguments
 tr -cd '[a-zA-Z0-9]'              # [] around ranges in tr
 exec foo; echo "Done!"            # Misused 'exec'
 find -name \*.bak -o -name \*~ -delete  # Implicit precedence in find
+# find . -exec foo > bar \;       # Redirections in find
 f() { whoami; }; sudo f           # External use of internal functions
 ```
 
@@ -316,9 +317,13 @@ var$n="Hello"                     # Wrong indirect assignment
 echo ${var$n}                     # Wrong indirect reference
 var=(1, 2, 3)                     # Comma separated arrays
 array=( [index] = value )         # Incorrect index initialization
+echo $var[14]                     # Missing {} in array references
 echo "Argument 10 is $10"         # Positional parameter misreference
 if $(myfunction); then ..; fi     # Wrapping commands in $()
 else if othercondition; then ..   # Using 'else if'
+f; f() { echo "hello world; }     # Using function before definition
+[ false ]                         # 'false' being true
+if ( -f file )                    # Using (..) instead of test
 ```
 
 ### Style
@@ -349,6 +354,8 @@ printf "%s\n" "Arguments: $@."    # Concatenating strings and arrays
 var=World; echo "Hello " var      # Unused lowercase variables
 echo "Hello $name"                # Unassigned lowercase variables
 cmd | read bar; echo $bar         # Assignments in subshells
+cat foo | cp bar                  # Piping to commands that don't read
+printf '%s: %s\n' foo             # Mismatches in printf argument count
 ```
 
 ### Robustness
@@ -362,6 +369,7 @@ find . -exec sh -c 'a && b {}' \; # Find -exec shell injection
 printf "Hello $name"             # Variables in printf format
 for f in $(ls *.txt); do         # Iterating over ls output
 export MYVAR=$(cmd)              # Masked exit codes
+case $version in 2.*) :;; 2.6.*) # Shadowed case branches
 ```
 
 ### Portability
@@ -396,6 +404,7 @@ var=42 echo $var                  # Expansion of inlined environment
 echo $((n/180*100))               # Unnecessary loss of precision
 ls *[:digit:].txt                 # Bad character class globs
 sed 's/foo/bar/' file > file      # Redirecting to input
+while getopts "a" f; do case $f in "b") # Unhandled getopts flags
 ```
 
 ## Testimonials
@@ -430,6 +439,6 @@ The contributor retains the copyright.
 
 ShellCheck is licensed under the GNU General Public License, v3. A copy of this license is included in the file [LICENSE](LICENSE).
 
-Copyright 2012-2015, Vidar 'koala_man' Holen and contributors.
+Copyright 2012-2018, Vidar 'koala_man' Holen and contributors.
 
 Happy ShellChecking!
