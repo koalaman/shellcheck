@@ -121,6 +121,7 @@ nodeChecks = [
     ,checkTestRedirects
     ,checkIndirectExpansion
     ,checkSudoRedirect
+    ,checkSudoArgs
     ,checkPS1Assignments
     ,checkBackticks
     ,checkInexplicablyUnquoted
@@ -1305,6 +1306,22 @@ checkSudoRedirect _ (T_Redirecting _ redirs cmd) | cmd `isCommand` "sudo" =
     warnAbout _ = return ()
     special file = concat (oversimplify file) == "/dev/null"
 checkSudoRedirect _ _ = return ()
+
+prop_checkSudoArgs1 = verify checkSudoArgs "sudo cd /root"
+prop_checkSudoArgs2 = verify checkSudoArgs "sudo export x=3"
+prop_checkSudoArgs3 = verifyNot checkSudoArgs "sudo ls /usr/local/protected"
+prop_checkSudoArgs4 = verifyNot checkSudoArgs "sudo ls && export x=3"
+prop_checkSudoArgs5 = verifyNot checkSudoArgs "sudo echo ls"
+checkSudoArgs _ t@(T_SimpleCommand _ _ (_:rest))
+    | t `isCommand` "sudo" = checkArgs args
+    where checkArgs (x:xs)
+              | x `elem` prohibitedArguments = warn (getId t) 2232 $ "Can't use sudo with " ++ x
+              | x `elem` commonCommands = return ()
+              | otherwise = checkArgs xs
+          checkArgs [] = return ()
+          args = map onlyLiteralString $ concat $ map getWordParts rest
+          prohibitedArguments = ["cd", "export"]
+checkSudoArgs _ _ = return ()
 
 prop_checkPS11 = verify checkPS1Assignments "PS1='\\033[1;35m\\$ '"
 prop_checkPS11a= verify checkPS1Assignments "export PS1='\\033[1;35m\\$ '"
