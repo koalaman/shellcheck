@@ -835,16 +835,18 @@ isQuotedAlternativeReference t =
   where
     re = mkRegex "(^|\\]):?\\+"
 
--- getOpts "erd:u:" will parse a SimpleCommand like
+-- getGnuOpts "erd:u:" will parse a SimpleCommand like
 --     read -re -d : -u 3 bar
 -- into
 --     Just [("r", -re), ("e", -re), ("d", :), ("u", 3), ("", bar)]
 -- where flags with arguments map to arguments, while others map to themselves.
 -- Any unrecognized flag will result in Nothing.
-getOpts :: String -> Token -> Maybe [(String, Token)]
-getOpts string cmd = process flags
+getGnuOpts = getOpts getAllFlags
+getBsdOpts = getOpts getLeadingFlags
+getOpts :: (Token -> [(Token, String)]) -> String -> Token -> Maybe [(String, Token)]
+getOpts flagTokenizer string cmd = process flags
   where
-    flags = getAllFlags cmd
+    flags = flagTokenizer cmd
     flagList (c:':':rest) = ([c], True) : flagList rest
     flagList (c:rest)     = ([c], False) : flagList rest
     flagList []           = []

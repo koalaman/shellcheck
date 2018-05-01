@@ -120,8 +120,6 @@ nodeChecks = [
     ,checkGlobbedRegex
     ,checkTestRedirects
     ,checkIndirectExpansion
-    ,checkSudoRedirect
-    ,checkSudoArgs
     ,checkPS1Assignments
     ,checkBackticks
     ,checkInexplicablyUnquoted
@@ -1279,49 +1277,6 @@ checkTestRedirects _ (T_Redirecting id redirs cmd) | cmd `isCommand` "test" =
             T_Less _ -> True
             _ -> False
 checkTestRedirects _ _ = return ()
-
-prop_checkSudoRedirect1 = verify checkSudoRedirect "sudo echo 3 > /proc/file"
-prop_checkSudoRedirect2 = verify checkSudoRedirect "sudo cmd < input"
-prop_checkSudoRedirect3 = verify checkSudoRedirect "sudo cmd >> file"
-prop_checkSudoRedirect4 = verify checkSudoRedirect "sudo cmd &> file"
-prop_checkSudoRedirect5 = verifyNot checkSudoRedirect "sudo cmd 2>&1"
-prop_checkSudoRedirect6 = verifyNot checkSudoRedirect "sudo cmd 2> log"
-prop_checkSudoRedirect7 = verifyNot checkSudoRedirect "sudo cmd > /dev/null 2>&1"
-checkSudoRedirect _ (T_Redirecting _ redirs cmd) | cmd `isCommand` "sudo" =
-    mapM_ warnAbout redirs
-  where
-    warnAbout (T_FdRedirect _ s (T_IoFile id op file))
-        | (s == "" || s == "&") && not (special file) =
-        case op of
-            T_Less _ ->
-              info (getId op) 2024
-                "sudo doesn't affect redirects. Use sudo cat file | .."
-            T_Greater _ ->
-              warn (getId op) 2024
-                "sudo doesn't affect redirects. Use ..| sudo tee file"
-            T_DGREAT _ ->
-              warn (getId op) 2024
-                "sudo doesn't affect redirects. Use .. | sudo tee -a file"
-            _ -> return ()
-    warnAbout _ = return ()
-    special file = concat (oversimplify file) == "/dev/null"
-checkSudoRedirect _ _ = return ()
-
-prop_checkSudoArgs1 = verify checkSudoArgs "sudo cd /root"
-prop_checkSudoArgs2 = verify checkSudoArgs "sudo export x=3"
-prop_checkSudoArgs3 = verifyNot checkSudoArgs "sudo ls /usr/local/protected"
-prop_checkSudoArgs4 = verifyNot checkSudoArgs "sudo ls && export x=3"
-prop_checkSudoArgs5 = verifyNot checkSudoArgs "sudo echo ls"
-checkSudoArgs _ t@(T_SimpleCommand _ _ (_:rest))
-    | t `isCommand` "sudo" = checkArgs args
-    where checkArgs (x:xs)
-              | x `elem` prohibitedArguments = warn (getId t) 2232 $ "Can't use sudo with " ++ x
-              | x `elem` commonCommands = return ()
-              | otherwise = checkArgs xs
-          checkArgs [] = return ()
-          args = map onlyLiteralString $ concat $ map getWordParts rest
-          prohibitedArguments = ["cd", "export"]
-checkSudoArgs _ _ = return ()
 
 prop_checkPS11 = verify checkPS1Assignments "PS1='\\033[1;35m\\$ '"
 prop_checkPS11a= verify checkPS1Assignments "export PS1='\\033[1;35m\\$ '"

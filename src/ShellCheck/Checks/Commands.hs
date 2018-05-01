@@ -90,6 +90,8 @@ commandChecks = [
     ,checkFindRedirections
     ,checkReadExpansions
     ,checkWhich
+    ,checkSudoRedirect
+    ,checkSudoArgs
     ]
 
 buildCommandMap :: [CommandCheck] -> Map.Map CommandName (Token -> Analysis)
@@ -608,7 +610,7 @@ prop_checkReadExpansions7 = verifyNot checkReadExpansions "read $1"
 prop_checkReadExpansions8 = verifyNot checkReadExpansions "read ${var?}"
 checkReadExpansions = CommandCheck (Exactly "read") check
   where
-    options = getOpts "sreu:n:N:i:p:a:"
+    options = getGnuOpts "sreu:n:N:i:p:a:"
     getVars cmd = fromMaybe [] $ do
         opts <- options cmd
         return . map snd $ filter (\(x,_) -> x == "" || x == "a") opts
@@ -943,6 +945,56 @@ checkFindRedirections = CommandCheck (Basename "find") f
 prop_checkWhich = verify checkWhich "which '.+'"
 checkWhich = CommandCheck (Basename "which") $
     \t -> info (getId t) 2230 "which is non-standard. Use builtin 'command -v' instead."
+
+prop_checkSudoRedirect1 = verify checkSudoRedirect "sudo echo 3 > /proc/file"
+prop_checkSudoRedirect2 = verify checkSudoRedirect "sudo cmd < input"
+prop_checkSudoRedirect3 = verify checkSudoRedirect "sudo cmd >> file"
+prop_checkSudoRedirect4 = verify checkSudoRedirect "sudo cmd &> file"
+prop_checkSudoRedirect5 = verifyNot checkSudoRedirect "sudo cmd 2>&1"
+prop_checkSudoRedirect6 = verifyNot checkSudoRedirect "sudo cmd 2> log"
+prop_checkSudoRedirect7 = verifyNot checkSudoRedirect "sudo cmd > /dev/null 2>&1"
+checkSudoRedirect = CommandCheck (Basename "sudo") f
+  where
+    f t = do
+        t_redir <- getClosestCommandM t
+        case t_redir of
+            Just (T_Redirecting _ redirs _) ->
+                mapM_ warnAbout redirs
+    warnAbout (T_FdRedirect _ s (T_IoFile id op file))
+        | (s == "" || s == "&") && not (special file) =
+        case op of
+            T_Less _ ->
+              info (getId op) 2024
+                "sudo doesn't affect redirects. Use sudo cat file | .."
+            T_Greater _ ->
+              warn (getId op) 2024
+                "sudo doesn't affect redirects. Use ..| sudo tee file"
+            T_DGREAT _ ->
+              warn (getId op) 2024
+                "sudo doesn't affect redirects. Use .. | sudo tee -a file"
+            _ -> return ()
+    warnAbout _ = return ()
+    special file = concat (oversimplify file) == "/dev/null"
+
+prop_checkSudoArgs1 = verify checkSudoArgs "sudo cd /root"
+prop_checkSudoArgs2 = verify checkSudoArgs "sudo export x=3"
+prop_checkSudoArgs3 = verifyNot checkSudoArgs "sudo ls /usr/local/protected"
+prop_checkSudoArgs4 = verifyNot checkSudoArgs "sudo ls && export x=3"
+prop_checkSudoArgs5 = verifyNot checkSudoArgs "sudo echo ls"
+prop_checkSudoArgs6 = verifyNot checkSudoArgs "sudo -n -u export ls"
+prop_checkSudoArgs7 = verifyNot checkSudoArgs "sudo docker export foo"
+checkSudoArgs = CommandCheck (Basename "sudo") f
+  where
+    f t = potentially $ do
+        opts <- parseOpts t
+        let nonFlags = map snd $ filter (\(flag, _) -> flag == "") opts
+        commandArg <- nonFlags !!! 0
+        command <- getLiteralString commandArg
+        guard $ command `elem` builtins
+        return $ warn (getId t) 2232 $ "Can't use sudo with builtins like " ++ command ++ ". Did you want sudo sh -c .. instead?"
+    builtins = [ "cd", "eval", "export", "history", "read", "source", "wait" ]
+    -- This mess is why ShellCheck prefers not to know.
+    parseOpts = getBsdOpts "vAknSbEHPa:g:h:p:u:c:T:r:"
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
