@@ -2558,9 +2558,12 @@ prop_checkReturnAgainstZero6 = verifyNot checkReturnAgainstZero "[[ $R -eq 0 ]]"
 prop_checkReturnAgainstZero7 = verify checkReturnAgainstZero "(( $? == 0 ))"
 prop_checkReturnAgainstZero8 = verify checkReturnAgainstZero "(( $? ))"
 prop_checkReturnAgainstZero9 = verify checkReturnAgainstZero "(( ! $? ))"
-checkReturnAgainstZero _ token =
+prop_checkReturnAgainstZero10 = verifyNot checkReturnAgainstZero "[[ $? -eq 0 || $? -eq 2 ]]"
+prop_checkReturnAgainstZero11 = verify checkReturnAgainstZero "[[ 1 -eq 2 || $? -eq 0 ]]"
+prop_checkReturnAgainstZero12 = verify checkReturnAgainstZero "[[ $? -eq 0 || 1 -eq 2 ]]"
+checkReturnAgainstZero params token =
     case token of
-        TC_Binary id _ _ lhs rhs -> check lhs rhs
+        TC_Binary id _ _ lhs rhs -> check_parent id lhs rhs
         TA_Binary id _ lhs rhs -> check lhs rhs
         TA_Unary id _ exp ->
             when (isExitCode exp) $ message (getId exp)
@@ -2568,6 +2571,13 @@ checkReturnAgainstZero _ token =
             when (isExitCode exp) $ message (getId exp)
         _ -> return ()
   where
+    check_parent id lhs rhs =
+        case Map.lookup id (parentMap params) of
+            Just (TC_Or id _ _ (TC_Binary _ _ _ l1 r1) (TC_Binary _ _ _ l2 r2)) ->
+                -- if both braches are exit code checks
+                unless (any isExitCode [l1, r1] && any isExitCode [l2, r2]) $
+                    check l1 r1 >> check l2 r2
+            _ ->  check lhs rhs
     check lhs rhs =
         if isZero rhs && isExitCode lhs
         then message (getId lhs)
