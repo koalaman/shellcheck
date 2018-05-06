@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-
     Copyright 2012-2015 Vidar Holen
 
@@ -22,10 +23,11 @@ module ShellCheck.Formatter.JSON (format) where
 import ShellCheck.Interface
 import ShellCheck.Formatter.Format
 
+import Data.Aeson
 import Data.IORef
 import GHC.Exts
 import System.IO
-import Text.JSON
+import qualified Data.ByteString.Lazy.Char8 as BL
 
 format = do
     ref <- newIORef []
@@ -36,19 +38,30 @@ format = do
         footer = finish ref
     }
 
-instance JSON (PositionedComment) where
-  showJSON comment@(PositionedComment start end (Comment level code string)) = makeObj [
-      ("file", showJSON $ posFile start),
-      ("line", showJSON $ posLine start),
-      ("endLine", showJSON $ posLine end),
-      ("column", showJSON $ posColumn start),
-      ("endColumn", showJSON $ posColumn end),
-      ("level", showJSON $ severityText comment),
-      ("code", showJSON code),
-      ("message", showJSON string)
-      ]
+instance ToJSON (PositionedComment) where
+  toJSON comment@(PositionedComment start end (Comment level code string)) =
+    object [
+      "file" .= posFile start,
+      "line" .= posLine start,
+      "endLine" .= posLine end,
+      "column" .= posColumn start,
+      "endColumn" .= posColumn end,
+      "level" .= severityText comment,
+      "code" .= code,
+      "message" .= string
+    ]
 
-  readJSON = undefined
+  toEncoding comment@(PositionedComment start end (Comment level code string)) =
+    pairs (
+         "file" .= posFile start
+      <> "line" .= posLine start
+      <> "endLine" .= posLine end
+      <> "column" .= posColumn start
+      <> "endColumn" .= posColumn end
+      <> "level" .= severityText comment
+      <> "code" .= code
+      <> "message" .= string
+    )
 
 outputError file msg = hPutStrLn stderr $ file ++ ": " ++ msg
 collectResult ref result _ =
@@ -56,5 +69,5 @@ collectResult ref result _ =
 
 finish ref = do
     list <- readIORef ref
-    putStrLn $ encodeStrict list
+    BL.putStrLn $ encode list
 
