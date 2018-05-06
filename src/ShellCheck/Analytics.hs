@@ -788,6 +788,7 @@ prop_checkSingleQuotedVariables11= verifyNot checkSingleQuotedVariables "sed '${
 prop_checkSingleQuotedVariables12= verifyNot checkSingleQuotedVariables "eval 'echo $1'"
 prop_checkSingleQuotedVariables13= verifyNot checkSingleQuotedVariables "busybox awk '{print $1}'"
 prop_checkSingleQuotedVariables14= verifyNot checkSingleQuotedVariables "[ -v 'bar[$foo]' ]"
+prop_checkSingleQuotedVariables15 = verifyNot checkSingleQuotedVariables "rename 's/(.)a/$1/g' *"
 checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
     when (s `matches` re) $
         if "sed" == commandName
@@ -818,6 +819,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
                 ,"docker" -- like above
                 ,"dpkg-query"
                 ,"jq"  -- could also check that user provides --arg
+                ,"rename"
                 ]
             || "awk" `isSuffixOf` commandName
             || "perl" `isPrefixOf` commandName
