@@ -1817,7 +1817,7 @@ checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
 
     warnFor (name, token) =
         warn (getId token) 2034 $
-            name ++ " appears unused. Verify it or export it."
+            name ++ " appears unused. Verify use (or export if used externally)."
 
     stripSuffix = takeWhile isVariableChar
     defaultMap = Map.fromList $ zip internalVariables $ repeat ()
