@@ -573,6 +573,7 @@ prop_checkRedirectToSame4 = verifyNot checkRedirectToSame "foo /dev/null > /dev/
 prop_checkRedirectToSame5 = verifyNot checkRedirectToSame "foo > bar 2> bar"
 prop_checkRedirectToSame6 = verifyNot checkRedirectToSame "echo foo > foo"
 prop_checkRedirectToSame7 = verifyNot checkRedirectToSame "sed 's/foo/bar/g' file | sponge file"
+prop_checkRedirectToSame8 = verifyNot checkRedirectToSame "while read -r line; do _=\"$fname\"; done <\"$fname\""
 checkRedirectToSame params s@(T_Pipeline _ _ list) =
     mapM_ (\l -> (mapM_ (\x -> doAnalysis (checkOccurrences x) l) (getAllRedirs list))) list
   where
@@ -583,7 +584,8 @@ checkRedirectToSame params s@(T_Pipeline _ _ list) =
                 && x == y
                 && not (isOutput t && isOutput u)
                 && not (special t)
-                && not (any isHarmlessCommand [t,u])) $ do
+                && not (any isHarmlessCommand [t,u])
+                && not (any containsAssignment [u])) $ do
             addComment $ note newId
             addComment $ note exceptId
     checkOccurrences _ _ = return ()
@@ -610,6 +612,9 @@ checkRedirectToSame params s@(T_Pipeline _ _ list) =
         cmd <- getClosestCommand (parentMap params) arg
         name <- getCommandBasename cmd
         return $ name `elem` ["echo", "printf", "sponge"]
+    containsAssignment arg = fromMaybe False $ do
+        cmd <- getClosestCommand (parentMap params) arg
+        return $ isAssignment cmd
 
 checkRedirectToSame _ _ = return ()
 
