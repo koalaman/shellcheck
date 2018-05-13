@@ -573,6 +573,7 @@ prop_checkRedirectToSame4 = verifyNot checkRedirectToSame "foo /dev/null > /dev/
 prop_checkRedirectToSame5 = verifyNot checkRedirectToSame "foo > bar 2> bar"
 prop_checkRedirectToSame6 = verifyNot checkRedirectToSame "echo foo > foo"
 prop_checkRedirectToSame7 = verifyNot checkRedirectToSame "sed 's/foo/bar/g' file | sponge file"
+prop_checkRedirectToSame8 = verifyNot checkRedirectToSame "while read -r line; do _=\"$fname\"; done <\"$fname\""
 checkRedirectToSame params s@(T_Pipeline _ _ list) =
     mapM_ (\l -> (mapM_ (\x -> doAnalysis (checkOccurrences x) l) (getAllRedirs list))) list
   where
@@ -583,7 +584,8 @@ checkRedirectToSame params s@(T_Pipeline _ _ list) =
                 && x == y
                 && not (isOutput t && isOutput u)
                 && not (special t)
-                && not (any isHarmlessCommand [t,u])) $ do
+                && not (any isHarmlessCommand [t,u])
+                && not (any containsAssignment [u])) $ do
             addComment $ note newId
             addComment $ note exceptId
     checkOccurrences _ _ = return ()
@@ -610,6 +612,9 @@ checkRedirectToSame params s@(T_Pipeline _ _ list) =
         cmd <- getClosestCommand (parentMap params) arg
         name <- getCommandBasename cmd
         return $ name `elem` ["echo", "printf", "sponge"]
+    containsAssignment arg = fromMaybe False $ do
+        cmd <- getClosestCommand (parentMap params) arg
+        return $ isAssignment cmd
 
 checkRedirectToSame _ _ = return ()
 
@@ -788,7 +793,10 @@ prop_checkSingleQuotedVariables11= verifyNot checkSingleQuotedVariables "sed '${
 prop_checkSingleQuotedVariables12= verifyNot checkSingleQuotedVariables "eval 'echo $1'"
 prop_checkSingleQuotedVariables13= verifyNot checkSingleQuotedVariables "busybox awk '{print $1}'"
 prop_checkSingleQuotedVariables14= verifyNot checkSingleQuotedVariables "[ -v 'bar[$foo]' ]"
-prop_checkSingleQuotedVariables15 = verifyNot checkSingleQuotedVariables "rename 's/(.)a/$1/g' *"
+prop_checkSingleQuotedVariables15= verifyNot checkSingleQuotedVariables "git filter-branch 'test $GIT_COMMIT'"
+prop_checkSingleQuotedVariables16= verify checkSingleQuotedVariables "git '$a'"
+prop_checkSingleQuotedVariables17= verifyNot checkSingleQuotedVariables "rename 's/(.)a/$1/g' *"
+
 checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
     when (s `matches` re) $
         if "sed" == commandName
@@ -801,7 +809,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
     commandName = fromMaybe "" $ do
         cmd <- getClosestCommand parents t
         name <- getCommandBasename cmd
-        return $ if name == "find" then getFindCommand cmd else name
+        return $ if name == "find" then getFindCommand cmd else if name == "git" then getGitCommand cmd else name
 
     isProbablyOk =
             any isOkAssignment (take 3 $ getPath parents t)
@@ -820,6 +828,8 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
                 ,"dpkg-query"
                 ,"jq"  -- could also check that user provides --arg
                 ,"rename"
+                ,"unset"
+                ,"git filter-branch"
                 ]
             || "awk" `isSuffixOf` commandName
             || "perl" `isPrefixOf` commandName
@@ -843,6 +853,12 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
             _ -> "find"
     getFindCommand (T_Redirecting _ _ cmd) = getFindCommand cmd
     getFindCommand _ = "find"
+    getGitCommand (T_SimpleCommand _ _ words) =
+        case map getLiteralString words of
+            Just "git":Just "filter-branch":_ -> "git filter-branch"
+            _ -> "git"
+    getGitCommand (T_Redirecting _ _ cmd) = getGitCommand cmd
+    getGitCommand _ = "git"
 checkSingleQuotedVariables _ _ = return ()
 
 
@@ -1403,6 +1419,7 @@ prop_checkSpuriousExec4 = verifyNot checkSpuriousExec "if a; then exec b; fi"
 prop_checkSpuriousExec5 = verifyNot checkSpuriousExec "exec > file; cmd"
 prop_checkSpuriousExec6 = verify checkSpuriousExec "exec foo > file; cmd"
 prop_checkSpuriousExec7 = verifyNot checkSpuriousExec "exec file; echo failed; exit 3"
+prop_checkSpuriousExec8 = verifyNot checkSpuriousExec "exec {origout}>&1- >tmp.log 2>&1; bar"
 checkSpuriousExec _ = doLists
   where
     doLists (T_Script _ _ cmds) = doList cmds
@@ -1802,6 +1819,7 @@ prop_checkUnused35= verifyNotTree checkUnusedAssignments "a=foo; b=2; echo ${a:b
 prop_checkUnused36= verifyNotTree checkUnusedAssignments "if [[ -v foo ]]; then true; fi"
 prop_checkUnused37= verifyNotTree checkUnusedAssignments "fd=2; exec {fd}>&-"
 prop_checkUnused38= verifyTree checkUnusedAssignments "(( a=42 ))"
+prop_checkUnused39= verifyNotTree checkUnusedAssignments "declare -x -f foo"
 checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
     flow = variableFlow params
@@ -1819,7 +1837,7 @@ checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
 
     warnFor (name, token) =
         warn (getId token) 2034 $
-            name ++ " appears unused. Verify it or export it."
+            name ++ " appears unused. Verify use (or export if used externally)."
 
     stripSuffix = takeWhile isVariableChar
     defaultMap = Map.fromList $ zip internalVariables $ repeat ()

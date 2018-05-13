@@ -1,1 +1,1 @@
-:set -idist/build/autogen
+:set -idist/build/autogen -isrc
