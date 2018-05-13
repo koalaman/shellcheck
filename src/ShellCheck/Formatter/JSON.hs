@@ -25,6 +25,7 @@ import ShellCheck.Formatter.Format
 
 import Data.Aeson
 import Data.IORef
+import Data.Monoid
 import GHC.Exts
 import System.IO
 import qualified Data.ByteString.Lazy.Char8 as BL
