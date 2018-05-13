@@ -1223,12 +1223,6 @@ doubleQuotedPart = readDoubleLiteral <|> readDoubleQuotedDollar <|> readQuotedBa
             "This is a unicode quote. Delete and retype it (or ignore/singlequote for literal)."
         return $ T_Literal id [c]
 
-readDoubleQuotedLiteral = do
-    doubleQuote
-    x <- readDoubleLiteral
-    doubleQuote
-    return x
-
 readDoubleLiteral = do
     id <- getNextId
     s <- many1 readDoubleLiteralPart
