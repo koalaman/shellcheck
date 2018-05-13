@@ -788,6 +788,8 @@ prop_checkSingleQuotedVariables11= verifyNot checkSingleQuotedVariables "sed '${
 prop_checkSingleQuotedVariables12= verifyNot checkSingleQuotedVariables "eval 'echo $1'"
 prop_checkSingleQuotedVariables13= verifyNot checkSingleQuotedVariables "busybox awk '{print $1}'"
 prop_checkSingleQuotedVariables14= verifyNot checkSingleQuotedVariables "[ -v 'bar[$foo]' ]"
+prop_checkSingleQuotedVariables15= verifyNot checkSingleQuotedVariables "git filter-branch 'test $GIT_COMMIT'"
+prop_checkSingleQuotedVariables16= verify checkSingleQuotedVariables "git '$a'"
 checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
     when (s `matches` re) $
         if "sed" == commandName
@@ -800,7 +802,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
     commandName = fromMaybe "" $ do
         cmd <- getClosestCommand parents t
         name <- getCommandBasename cmd
-        return $ if name == "find" then getFindCommand cmd else name
+        return $ if name == "find" then getFindCommand cmd else if name == "git" then getGitCommand cmd else name
 
     isProbablyOk =
             any isOkAssignment (take 3 $ getPath parents t)
@@ -818,6 +820,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
                 ,"docker" -- like above
                 ,"dpkg-query"
                 ,"jq"  -- could also check that user provides --arg
+                ,"git filter-branch"
                 ]
             || "awk" `isSuffixOf` commandName
             || "perl" `isPrefixOf` commandName
@@ -841,6 +844,12 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
             _ -> "find"
     getFindCommand (T_Redirecting _ _ cmd) = getFindCommand cmd
     getFindCommand _ = "find"
+    getGitCommand (T_SimpleCommand _ _ words) =
+        case map getLiteralString words of
+            Just "git":Just "filter-branch":_ -> "git filter-branch"
+            _ -> "git"
+    getGitCommand (T_Redirecting _ _ cmd) = getGitCommand cmd
+    getGitCommand _ = "git"
 checkSingleQuotedVariables _ _ = return ()
 
 
