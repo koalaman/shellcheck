@@ -1401,6 +1401,7 @@ prop_checkSpuriousExec4 = verifyNot checkSpuriousExec "if a; then exec b; fi"
 prop_checkSpuriousExec5 = verifyNot checkSpuriousExec "exec > file; cmd"
 prop_checkSpuriousExec6 = verify checkSpuriousExec "exec foo > file; cmd"
 prop_checkSpuriousExec7 = verifyNot checkSpuriousExec "exec file; echo failed; exit 3"
+prop_checkSpuriousExec8 = verifyNot checkSpuriousExec "exec {origout}>&1- >tmp.log 2>&1; bar"
 checkSpuriousExec _ = doLists
   where
     doLists (T_Script _ _ cmds) = doList cmds

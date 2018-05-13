@@ -1716,8 +1716,15 @@ readIoFileOp = choice [g_DGREAT, g_LESSGREAT, g_GREATAND, g_LESSAND, g_CLOBBER, 
 readIoDuplicate = try $ do
     id <- getNextId
     op <- g_GREATAND <|> g_LESSAND
-    target <- readIoVariable <|> many1 digit <|> string "-"
+    target <- readIoVariable <|> digitsAndOrDash
     return $ T_IoDuplicate id op target
+  where
+    -- either digits with optional dash, or a required dash
+    digitsAndOrDash = do
+        str <- many digit
+        dash <- (if null str then id else option "") $ string "-"
+        return $ str ++ dash
+
 
 prop_readIoFile = isOk readIoFile ">> \"$(date +%YYmmDD)\""
 readIoFile = called "redirection" $ do
@@ -1744,6 +1751,7 @@ prop_readIoRedirect3 = isOk readIoRedirect "4>&-"
 prop_readIoRedirect4 = isOk readIoRedirect "&> lol"
 prop_readIoRedirect5 = isOk readIoRedirect "{foo}>&2"
 prop_readIoRedirect6 = isOk readIoRedirect "{foo}<&-"
+prop_readIoRedirect7 = isOk readIoRedirect "{foo}>&1-"
 readIoRedirect = do
     id <- getNextId
     n <- readIoSource
