@@ -795,6 +795,8 @@ prop_checkSingleQuotedVariables13= verifyNot checkSingleQuotedVariables "busybox
 prop_checkSingleQuotedVariables14= verifyNot checkSingleQuotedVariables "[ -v 'bar[$foo]' ]"
 prop_checkSingleQuotedVariables15= verifyNot checkSingleQuotedVariables "git filter-branch 'test $GIT_COMMIT'"
 prop_checkSingleQuotedVariables16= verify checkSingleQuotedVariables "git '$a'"
+prop_checkSingleQuotedVariables17= verifyNot checkSingleQuotedVariables "rename 's/(.)a/$1/g' *"
+
 checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
     when (s `matches` re) $
         if "sed" == commandName
@@ -825,6 +827,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
                 ,"docker" -- like above
                 ,"dpkg-query"
                 ,"jq"  -- could also check that user provides --arg
+                ,"rename"
                 ,"unset"
                 ,"git filter-branch"
                 ]
