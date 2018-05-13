@@ -498,7 +498,9 @@ getReferencedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Litera
         "export" -> if "f" `elem` flags
             then []
             else concatMap getReference rest
-        "declare" -> if any (`elem` flags) ["x", "p"]
+        "declare" -> if
+                any (`elem` flags) ["x", "p"] &&
+                    (not $ any (`elem` flags) ["f", "F"])
             then concatMap getReference rest
             else []
         "readonly" ->

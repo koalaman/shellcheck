@@ -1800,6 +1800,7 @@ prop_checkUnused35= verifyNotTree checkUnusedAssignments "a=foo; b=2; echo ${a:b
 prop_checkUnused36= verifyNotTree checkUnusedAssignments "if [[ -v foo ]]; then true; fi"
 prop_checkUnused37= verifyNotTree checkUnusedAssignments "fd=2; exec {fd}>&-"
 prop_checkUnused38= verifyTree checkUnusedAssignments "(( a=42 ))"
+prop_checkUnused39= verifyNotTree checkUnusedAssignments "declare -x -f foo"
 checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
     flow = variableFlow params
