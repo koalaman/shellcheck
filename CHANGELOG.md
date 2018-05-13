@@ -16,6 +16,7 @@
 - Associative arrays are now respected in arithmetic contexts
 - SC1087 about `$var[@]` now correctly triggers on any index
 - Bad expansions in here documents are no longer ignored
+- FD move operations like {fd}>1- now parse correctly
 
 ### Changed
 - SC1073: 'else if' is now parsed correctly and not like 'elif'
