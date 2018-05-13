@@ -825,6 +825,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
                 ,"docker" -- like above
                 ,"dpkg-query"
                 ,"jq"  -- could also check that user provides --arg
+                ,"unset"
                 ,"git filter-branch"
                 ]
             || "awk" `isSuffixOf` commandName
