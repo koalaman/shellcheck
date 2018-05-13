@@ -513,6 +513,8 @@ prop_checkPrintfVar10= verifyNot checkPrintfVar "printf '%s %s %s' foo bar baz"
 prop_checkPrintfVar11= verifyNot checkPrintfVar "printf '%(%s%s)T' -1"
 prop_checkPrintfVar12= verify checkPrintfVar "printf '%s %s\\n' 1 2 3"
 prop_checkPrintfVar13= verifyNot checkPrintfVar "printf '%s %s\\n' 1 2 3 4"
+prop_checkPrintfVar14= verify checkPrintfVar "printf '%*s\\n' 1"
+prop_checkPrintfVar15= verifyNot checkPrintfVar "printf '%*s\\n' 1 2"
 checkPrintfVar = CommandCheck (Exactly "printf") (f . arguments) where
     f (doubledash:rest) | getLiteralString doubledash == Just "--" = f rest
     f (dashv:var:rest) | getLiteralString dashv == Just "-v" = f rest
@@ -523,6 +525,7 @@ checkPrintfVar = CommandCheck (Exactly "printf") (f . arguments) where
         case string of
             '%':'%':rest -> countFormats rest
             '%':'(':rest -> 1 + countFormats (dropWhile (/= ')') rest)
+            '%':'*':rest -> 2 + countFormats rest -- width is specified as an argument
             '%':rest -> 1 + countFormats rest
             _:rest -> countFormats rest
             [] -> 0
