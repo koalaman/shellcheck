@@ -622,12 +622,17 @@ getIndexReferences s = fromMaybe [] $ do
   where
     re = mkRegex "(\\[.*\\])"
 
+prop_getOffsetReferences1 = getOffsetReferences ":bar" == ["bar"]
+prop_getOffsetReferences2 = getOffsetReferences ":bar:baz" == ["bar", "baz"]
+prop_getOffsetReferences3 = getOffsetReferences "[foo]:bar" == ["bar"]
+prop_getOffsetReferences4 = getOffsetReferences "[foo]:bar:baz" == ["bar", "baz"]
 getOffsetReferences mods = fromMaybe [] $ do
+-- if mods start with [, then drop until ]
     match <- matchRegex re mods
-    offsets <- match !!! 0
+    offsets <- match !!! 1
     return $ matchAllStrings variableNameRegex offsets
   where
-    re = mkRegex "^ *:([^-=?+].*)"
+    re = mkRegex "^(\\[.+\\])? *:([^-=?+].*)"
 
 getReferencedVariables parents t =
     case t of
