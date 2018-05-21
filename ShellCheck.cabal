@@ -49,10 +49,11 @@ library
     build-depends:
       -- GHC 7.6.3 (base 4.6.0.1) is buggy (#1131, #1119) in optimized mode.
       -- Just disable that version entirely to fail fast.
+      aeson,
       base > 4.6.0.1 && < 5,
+      bytestring,
       containers >= 0.5,
       directory,
-      json,
       mtl >= 2.2.1,
       parsec,
       regex-tdfa,
@@ -85,11 +86,12 @@ executable shellcheck
       build-depends:
         semigroups
     build-depends:
+      aeson,
       base >= 4 && < 5,
-      ShellCheck, 
+      bytestring,
+      ShellCheck,
       containers,
       directory,
-      json >= 0.3.6,
       mtl >= 2.2.1,
       parsec >= 3.0,
       QuickCheck >= 2.7.4,
@@ -99,11 +101,12 @@ executable shellcheck
 test-suite test-shellcheck
     type: exitcode-stdio-1.0
     build-depends:
+      aeson,
       base >= 4 && < 5,
-      ShellCheck, 
+      bytestring,
+      ShellCheck,
       containers,
       directory,
-      json,
       mtl >= 2.2.1,
       parsec,
       QuickCheck >= 2.7.4,
