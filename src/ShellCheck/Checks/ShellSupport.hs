@@ -283,7 +283,10 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
             ("read", if isDash then ["r", "p"] else ["r"]),
             ("ulimit", ["f"])
             ]
-
+    bashism t@(T_SourceCommand id src _) =
+        let name = fromMaybe "" $ getCommandName src
+        in do
+            when (name == "source") $ warnMsg id "'source' in place of '.' is"
     bashism _ = return ()
 
     varChars="_0-9a-zA-Z"
