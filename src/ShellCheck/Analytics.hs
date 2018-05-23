@@ -167,6 +167,7 @@ nodeChecks = [
     ,checkEmptyCondition
     ,checkPipeToNowhere
     ,checkForLoopGlobVariables
+    ,checkSubshelledTests
     ]
 
 
@@ -2920,6 +2921,64 @@ checkForLoopGlobVariables _ t =
             mapM_ suggest $ filter isQuoteableExpansion parts
     suggest t = info (getId t) 2231
         "Quote expansions in this for loop glob to prevent wordsplitting, e.g. \"$dir\"/*.txt ."
+
+prop_checkSubshelledTests1 = verify checkSubshelledTests "a && ( [ b ] || ! [ c ] )"
+prop_checkSubshelledTests2 = verify checkSubshelledTests "( [ a ] )"
+prop_checkSubshelledTests3 = verify checkSubshelledTests "( [ a ] && [ b ] || test c )"
+checkSubshelledTests params t =
+    case t of
+        T_Subshell id list | isSubshelledTest t ->
+            case () of
+                -- Special case for if (test) and while (test)
+                _ | isCompoundCondition (getPath (parentMap params) t) ->
+                    style id 2233 "Remove superfluous (..) around condition."
+
+                -- Special case for ([ x ])
+                _ | isSingleTest list ->
+                    style id 2234 "Remove superfluous (..) around test command."
+
+                -- General case for ([ x ] || [ y ] && etc)
+                _ -> style id 2235 "Use { ..; } instead of (..) to avoid subshell overhead."
+        _ -> return ()
+  where
+
+    isSingleTest cmds =
+        case cmds of
+            [c] | isTestCommand c -> True
+            _ -> False
+
+    isSubshelledTest t =
+        case t of
+            T_Subshell _ list -> all isSubshelledTest list
+            T_AndIf _ a b -> isSubshelledTest a && isSubshelledTest b
+            T_OrIf  _ a b -> isSubshelledTest a && isSubshelledTest b
+            T_Annotation _ _ t -> isSubshelledTest t
+            _ -> isTestCommand t
+
+    isTestCommand t =
+        case t of
+            T_Banged _ t -> isTestCommand t
+            T_Pipeline _ [] [T_Redirecting _ _ T_Condition {}] -> True
+            T_Pipeline _ [] [T_Redirecting _ _ cmd] -> cmd `isCommand` "test"
+            _ -> False
+
+    -- Check if a T_Subshell is used as a condition, e.g. if ( test )
+    -- This technically also triggers for `if true; then ( test ); fi`
+    -- but it's still a valid suggestion.
+    isCompoundCondition chain =
+        case dropWhile skippable (drop 1 chain) of
+            T_IfExpression {}    : _ -> True
+            T_WhileExpression {} : _ -> True
+            T_UntilExpression {} : _ -> True
+            _ -> False
+
+    -- Skip any parent of a T_Subshell until we reach something interesting
+    skippable t =
+        case t of
+            T_Redirecting _ [] _ -> True
+            T_Pipeline _ [] _ -> True
+            T_Annotation {} -> True
+            _ -> False
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

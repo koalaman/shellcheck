@@ -1,5 +1,6 @@
 ## Latest - ???
 ### Added
+- SC2233/SC2234/SC2235: Suggest removing or replacing (..) around tests
 - SC2232: Warn about invalid arguments to sudo
 - SC2231: Suggest quoting expansions in for loop globs
 - SC2229: Warn about 'read $var'
