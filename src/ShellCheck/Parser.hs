@@ -1922,7 +1922,7 @@ readSource pos t@(T_Redirecting _ _ (T_SimpleCommand _ _ (cmd:file:_))) = do
 
                         let included = do
                             src <- subRead filename script
-                            return $ T_Include id t src
+                            return $ T_SourceCommand id t (T_Include id src)
 
                         let failed = do
                             parseNoteAt pos WarningC 1094

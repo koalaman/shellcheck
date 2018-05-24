@@ -134,7 +134,8 @@ data Token =
     | T_Pipe Id String
     | T_CoProc Id (Maybe String) Token
     | T_CoProcBody Id Token
-    | T_Include Id Token Token -- . & source: SimpleCommand T_Script
+    | T_Include Id Token
+    | T_SourceCommand Id Token Token
     deriving (Show)
 
 data Annotation =
@@ -270,7 +271,8 @@ analyze f g i =
     delve (T_Annotation id anns t) = d1 t $ T_Annotation id anns
     delve (T_CoProc id var body) = d1 body $ T_CoProc id var
     delve (T_CoProcBody id t) = d1 t $ T_CoProcBody id
-    delve (T_Include id includer script) = d2 includer script $ T_Include id
+    delve (T_Include id script) = d1 script $ T_Include id
+    delve (T_SourceCommand id includer t_include) = d2 includer t_include $ T_SourceCommand id
     delve t = return t
 
 getId :: Token -> Id
@@ -370,7 +372,8 @@ getId t = case t of
         T_Pipe id _ -> id
         T_CoProc id _ _ -> id
         T_CoProcBody id _ -> id
-        T_Include id _ _ -> id
+        T_Include id _ -> id
+        T_SourceCommand id _ _ -> id
         T_UnparsedIndex id _ _ -> id
         TC_Empty id _ -> id
         TA_Variable id _ _ -> id
