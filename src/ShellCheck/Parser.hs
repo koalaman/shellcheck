@@ -1918,11 +1918,12 @@ readSource pos t@(T_Redirecting _ _ (T_SimpleCommand _ _ (cmd:file:_))) = do
                             "Not following: " ++ err
                         return t
                     Right script -> do
-                        id <- getNextIdAt pos
+                        id1 <- getNextIdAt pos
+                        id2 <- getNextIdAt pos
 
                         let included = do
                             src <- subRead filename script
-                            return $ T_SourceCommand id t (T_Include id src)
+                            return $ T_SourceCommand id1 t (T_Include id2 src)
 
                         let failed = do
                             parseNoteAt pos WarningC 1094

@@ -194,5 +194,9 @@ prop_filewideAnnotationBase2 = [2086, 2181] == check "true\n[ $? == 0 ] && echo 
 prop_filewideAnnotation8 = null $
     check "# Disable $? warning\n#shellcheck disable=SC2181\n# Disable quoting warning\n#shellcheck disable=2086\ntrue\n[ $? == 0 ] && echo $1"
 
+prop_sourcePartOfOriginalScript = -- #1181: -x disabled posix warning for 'source'
+    2039 `elem` checkWithIncludes [("./saywhat.sh", "echo foo")] "#!/bin/sh\nsource ./saywhat.sh"
+
+
 return []
 runTests = $quickCheckAll
