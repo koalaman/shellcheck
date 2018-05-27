@@ -20,6 +20,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MultiWayIf #-}
 module ShellCheck.Parser (parseScript, runTests) where
 
 import ShellCheck.AST
@@ -1588,7 +1589,7 @@ readDollarLonely = do
     return $ T_Literal id "$"
 
 prop_readHereDoc = isOk readScript "cat << foo\nlol\ncow\nfoo"
-prop_readHereDoc2 = isWarning readScript "cat <<- EOF\n  cow\n  EOF"
+prop_readHereDoc2 = isNotOk readScript "cat <<- EOF\n  cow\n  EOF"
 prop_readHereDoc3 = isOk readScript "cat << foo\n$\"\nfoo"
 prop_readHereDoc4 = isNotOk readScript "cat << foo\n`\nfoo"
 prop_readHereDoc5 = isOk readScript "cat <<- !foo\nbar\n!foo"
@@ -1601,11 +1602,13 @@ prop_readHereDoc11= isOk readScript "cat << foo $(\nfoo\n)lol\nfoo\n"
 prop_readHereDoc12= isOk readScript "cat << foo|cat\nbar\nfoo"
 prop_readHereDoc13= isOk readScript "cat <<'#!'\nHello World\n#!\necho Done"
 prop_readHereDoc14= isWarning readScript "cat << foo\nbar\nfoo \n"
-prop_readHereDoc15= isWarning readScript "cat <<foo\nbar\nfoo bar\n"
+prop_readHereDoc15= isWarning readScript "cat <<foo\nbar\nfoo bar\nfoo"
 prop_readHereDoc16= isOk readScript "cat <<- ' foo'\nbar\n foo\n"
-prop_readHereDoc17= isWarning readScript "cat <<- ' foo'\nbar\n  foo\n"
+prop_readHereDoc17= isWarning readScript "cat <<- ' foo'\nbar\n  foo\n foo\n"
 prop_readHereDoc18= isWarning readScript "cat << foo\nLoose \\t\nfoo"
 prop_readHereDoc19= isOk readScript "# shellcheck disable=SC1117\ncat << foo\nLoose \\t\nfoo"
+prop_readHereDoc20= isWarning readScript "cat << foo\n  foo\n()\nfoo\n"
+prop_readHereDoc21= isOk readScript "# shellcheck disable=SC1039\ncat << foo\n  foo\n()\nfoo\n"
 readHereDoc = called "here document" $ do
     fid <- getNextId
     pos <- getPosition
@@ -1638,37 +1641,95 @@ readPendingHereDocs = do
     mapM_ readDoc docs
   where
     readDoc (HereDocPending (T_HereDoc id dashed quoted endToken _) ctx) =
-      swapContext ctx $ do
-        pos <- getPosition
-        hereData <- concat <$> rawLine `reluctantlyTill` do
-                        linewhitespace `reluctantlyTill` string endToken
-                        string endToken
-                        void linewhitespace <|> void (oneOf "\n;&#)") <|> eof
-        do
-            spaces <- linewhitespace `reluctantlyTill` string endToken
-            verifyHereDoc dashed quoted spaces hereData
-            string endToken
-            trailingPos <- getPosition
-            trailers <- lookAhead $ many (noneOf "\n")
-            let ppt = parseProblemAt trailingPos ErrorC
-            unless (null trailers) $
-                if all isSpace trailers
-                then ppt 1118 "Delete whitespace after the here-doc end token."
-                else case (head $ dropWhile isSpace trailers) of
-                    ')' -> ppt 1119 $ "Add a linefeed between end token and terminating ')'."
-                    '#' -> ppt 1120 "No comments allowed after here-doc token. Comment the next line instead."
-                    c | c `elem` ";&" ->
-                        ppt 1121 "Add ;/& terminators (and other syntax) on the line with the <<, not here."
-                    _ -> ppt 1122 "Nothing allowed after end token. To continue a command, put it on the line with the <<."
-            list <- parseHereData quoted pos hereData
-            addToHereDocMap id list
+      swapContext ctx $
+      do
+        docPos <- getPosition
+        tokenPos <- Map.findWithDefault (error "Missing ID") id <$> getMap
+        (terminated, wasWarned, lines) <- readDocLines dashed endToken
+        let hereData = unlines lines
+        unless terminated $ do
+            unless wasWarned $
+                debugHereDoc tokenPos endToken hereData
+            fail "Here document was not correctly terminated"
+        list <- parseHereData quoted docPos hereData
+        addToHereDocMap id list
 
-         `attempting` (eof >> debugHereDoc pos endToken hereData)
+    -- Read the lines making up the here doc. Returns (IsTerminated, Lines)
+    readDocLines :: Monad m => Dashed -> String -> SCParser m (Bool, Bool, [String])
+    readDocLines dashed endToken = do
+        pos <- getPosition
+        str <- rawLine
+        isEof <- option False (eof >> return True)
+        (isEnd, wasWarned) <- subParse pos checkEnd str
+        if
+            | isEnd -> return (True, wasWarned, [])
+            | isEof -> return (False, wasWarned, [str])
+            | True -> do
+                (ok, previousWarning, rest) <- readDocLines dashed endToken
+                return (ok, wasWarned || previousWarning, str:rest)
+      where
+        -- Check if this is the actual end, or a plausible false end
+        checkEnd = option (False, False) $ try $ do
+            -- Match what's basically '^( *)token( *)(.*)$'
+            leadingSpacePos <- getPosition
+            leadingSpace <- linewhitespace `reluctantlyTill` string endToken
+            string endToken
+            trailingSpacePos <- getPosition
+            trailingSpace <- many linewhitespace
+            trailerPos <- getPosition
+            trailer <- many anyChar
+
+            let leadingSpacesAreTabs = all (== '\t') leadingSpace
+            let thereIsNoTrailer = null trailingSpace && null trailer
+            let leaderIsOk = null leadingSpace
+                    || dashed == Dashed && leadingSpacesAreTabs
+            let trailerStart = if null trailer then '\0' else head trailer
+            let hasTrailingSpace = not $ null trailingSpace
+            let hasTrailer = not $ null trailer
+            let ppt = parseProblemAt trailerPos ErrorC
+
+            if leaderIsOk && thereIsNoTrailer
+              then return (True, False)
+              else do
+                let foundCause = return (False, True)
+                let skipLine = return (False, False)
+                -- This may be intended as an end token. Debug why it isn't.
+                if
+                    | trailerStart == ')' -> do
+                        ppt 1119 $ "Add a linefeed between end token and terminating ')'."
+                        foundCause
+                    | trailerStart == '#' -> do
+                        ppt 1120 "No comments allowed after here-doc token. Comment the next line instead."
+                        foundCause
+                    | trailerStart `elem` ";>|&" -> do
+                        ppt 1121 "Add ;/& terminators (and other syntax) on the line with the <<, not here."
+                        foundCause
+                    | hasTrailingSpace && hasTrailer -> do
+                        ppt 1122 "Nothing allowed after end token. To continue a command, put it on the line with the <<."
+                        foundCause
+                    | leaderIsOk && hasTrailingSpace && not hasTrailer -> do
+                        parseProblemAt trailingSpacePos ErrorC 1118 "Delete whitespace after the here-doc end token."
+                        -- Parse as if it's the actual end token. Will koala_man regret this once again?
+                        return (True, True)
+                    | not hasTrailingSpace && hasTrailer ->
+                        -- The end token is just a prefix
+                        skipLine
+                    | hasTrailer ->
+                        error "ShellCheck bug, please report (here doc trailer)."
+
+                    -- The following cases assume no trailing text:
+                    | dashed == Undashed && (not $ null leadingSpace) -> do
+                        parseProblemAt leadingSpacePos ErrorC 1039 "Remove indentation before end token (or use <<- and indent with tabs)."
+                        foundCause
+                    | dashed == Dashed && not leadingSpacesAreTabs -> do
+                        parseProblemAt leadingSpacePos ErrorC 1040 "When using <<-, you can only indent with tabs."
+                        foundCause
+                    | True -> skipLine
 
     rawLine = do
         c <- many $ noneOf "\n"
         void (char '\n') <|> eof
-        return $ c ++ "\n"
+        return c
 
     parseHereData Quoted startPos hereData = do
         id <- getNextIdAt startPos
@@ -1683,13 +1744,6 @@ readPendingHereDocs = do
         id <- getNextId
         chars <- many1 $ noneOf "`$\\"
         return $ T_Literal id chars
-
-    verifyHereDoc dashed quoted spacing hereInfo = do
-        when (dashed == Undashed && spacing /= "") $
-            parseNote ErrorC 1039 "Remove indentation before end token (or use <<- and indent with tabs)."
-        when (dashed == Dashed && filter (/= '\t') spacing /= "" ) $
-            parseNote ErrorC 1040 "When using <<-, you can only indent with tabs."
-        return ()
 
     debugHereDoc pos endToken doc
         | endToken `isInfixOf` doc =
