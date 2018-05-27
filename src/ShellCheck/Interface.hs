@@ -61,8 +61,7 @@ data ParseSpec = ParseSpec {
 
 data ParseResult = ParseResult {
     prComments :: [PositionedComment],
-    prTokenPositions :: Map.Map Id Position,
-    prTokenEndPositions :: Map.Map Id Position,
+    prTokenPositions :: Map.Map Id (Position, Maybe Position),
     prRoot :: Maybe Token
 } deriving (Show, Eq)
 

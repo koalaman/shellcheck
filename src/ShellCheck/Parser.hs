@@ -136,15 +136,14 @@ almostSpace =
         char c
         return ' '
 
-withNextId :: Monad m => ParsecT s UserState (SCBase m) (Id -> b) -> ParsecT s UserState (SCBase m) b
+withNextId :: Monad m => SCParser m (Id -> b) -> SCParser m b
 withNextId p = do
     start <- getPosition
     id <- createId
-    setStartPos id start
     fn <- p
     let t = fn id
     end <- getPosition
-    setEndPos id end
+    setPos id start end
     return t
   where
     createId = do
@@ -155,17 +154,11 @@ withNextId p = do
         }
         return id
       where incId (Id n) = Id $ n+1
-    setStartPos id sourcepos = do
+    setPos id start end = do
       state <- getState
-      let newMap = Map.insert id sourcepos (positionMap state)
+      let newMap = Map.insert id (start, Just end) (positionMap state)
       putState $ state {
           positionMap = newMap
-      }
-    setEndPos id sourcepos = do
-      state <- getState
-      let newMap = Map.insert id sourcepos (positionEndMap state)
-      putState $ state {
-          positionEndMap = newMap
       }
 
 --------- Message/position annotation on top of user state
@@ -183,8 +176,7 @@ data HereDocContext =
 
 data UserState = UserState {
     lastId :: Id,
-    positionMap :: Map.Map Id SourcePos,
-    positionEndMap :: Map.Map Id SourcePos,
+    positionMap :: Map.Map Id (SourcePos, Maybe SourcePos),
     parseNotes :: [ParseNote],
     hereDocMap :: Map.Map Id [Token],
     pendingHereDocs :: [HereDocContext]
@@ -192,7 +184,6 @@ data UserState = UserState {
 initialUserState = UserState {
     lastId = Id $ -1,
     positionMap = Map.empty,
-    positionEndMap = Map.empty,
     parseNotes = [],
     hereDocMap = Map.empty,
     pendingHereDocs = []
@@ -210,7 +201,7 @@ getLastId = lastId <$> getState
 getNextIdAt sourcepos = do
     state <- getState
     let newId = incId (lastId state)
-    let newMap = Map.insert newId sourcepos (positionMap state)
+    let newMap = Map.insert newId (sourcepos, Just sourcepos) (positionMap state)
     putState $ state {
         lastId = newId,
         positionMap = newMap
@@ -354,7 +345,7 @@ parseProblemAt pos = parseProblemAtWithEnd pos pos
 parseProblemAtId :: Monad m => Id -> Severity -> Integer -> String -> SCParser m ()
 parseProblemAtId id level code msg = do
     map <- getMap
-    let pos = Map.findWithDefault
+    let (pos, _) = Map.findWithDefault
                 (error "Internal error (no position for id). Please report.") id map
     parseProblemAt pos level code msg
 
@@ -1579,18 +1570,16 @@ prop_readDollarVariable3 = isWarning (readDollarVariable >> anyChar) "$10"
 prop_readDollarVariable4 = isWarning (readDollarVariable >> string "[@]") "$arr[@]"
 prop_readDollarVariable5 = isWarning (readDollarVariable >> string "[f") "$arr[f"
 
-readDollarVariable :: Monad m => ParsecT String UserState (SCBase m) Token
+readDollarVariable :: Monad m => SCParser m Token
 readDollarVariable = withNextId $ do
     pos <- getPosition
 
-    let
-      singleCharred p = do
+    let singleCharred p = do
         n <- p
         value <- wrap [n]
         return $ \id -> (T_DollarBraced id value)
 
-    let
-      positional = do
+    let positional = do
         value <- singleCharred digit
         return value `attempting` do
             lookAhead digit
@@ -1679,7 +1668,7 @@ readPendingHereDocs = do
       swapContext ctx $
       do
         docPos <- getPosition
-        tokenPos <- Map.findWithDefault (error "Missing ID") id <$> getMap
+        (tokenPos, _) <- Map.findWithDefault (error "Missing ID") id <$> getMap
         (terminated, wasWarned, lines) <- readDocLines dashed endToken
         let hereData = unlines lines
         unless terminated $ do
@@ -2945,11 +2934,15 @@ debugParseScript string =
     result {
         -- Remove the noisiest parts
         prTokenPositions = Map.fromList [
-            (Id 0, Position {
+            (Id 0, (Position {
                 posFile = "removed for clarity",
                 posLine = -1,
                 posColumn = -1
-            })]
+            }, Just Position {
+                posFile = "removed for clarity",
+                posLine = -1,
+                posColumn = -1
+            }))]
     }
   where
     result = runIdentity $
@@ -3036,8 +3029,7 @@ parseShell env name contents = do
         Right (script, userstate) ->
             return ParseResult {
                 prComments = map toPositionedComment $ nub $ parseNotes userstate ++ parseProblems state,
-                prTokenPositions = Map.map posToPos (positionMap userstate),
-                prTokenEndPositions = Map.map posToPos (positionEndMap userstate),
+                prTokenPositions = Map.map startEndPosToPos (positionMap userstate),
                 prRoot = Just $
                     reattachHereDocs script (hereDocMap userstate)
             }
@@ -3049,7 +3041,6 @@ parseShell env name contents = do
                         ++ [makeErrorFor err]
                         ++ parseProblems state,
                 prTokenPositions = Map.empty,
-                prTokenEndPositions = Map.empty,
                 prRoot = Nothing
             }
 
@@ -3118,6 +3109,9 @@ posToPos sp = Position {
     posLine = fromIntegral $ sourceLine sp,
     posColumn = fromIntegral $ sourceColumn sp
 }
+
+startEndPosToPos :: (SourcePos, Maybe SourcePos) -> (Position, Maybe Position)
+startEndPosToPos (s, me) = (posToPos s, fmap posToPos me)
 
 -- TODO: Clean up crusty old code that this is layered on top of
 parseScript :: Monad m =>
