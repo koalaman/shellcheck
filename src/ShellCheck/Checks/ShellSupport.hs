@@ -134,6 +134,8 @@ prop_checkBashisms51= verifyNot checkBashisms "#!/bin/sh\ncmd 2>&1"
 prop_checkBashisms52= verifyNot checkBashisms "#!/bin/sh\ncmd >&2"
 prop_checkBashisms53= verifyNot checkBashisms "#!/bin/sh\nprintf -- -f\n"
 prop_checkBashisms54= verify checkBashisms "#!/bin/sh\nfoo+=bar"
+prop_checkBashisms55= verify checkBashisms "#!/bin/sh\necho ${@%foo}"
+prop_checkBashisms56= verifyNot checkBashisms "#!/bin/sh\necho ${##}"
 checkBashisms = ForShell [Sh, Dash] $ \t -> do
     params <- ask
     kludge params t
@@ -295,8 +297,9 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
         (re $ "^[" ++ varChars ++ "]+\\[.*\\]$", "array references are"),
         (re $ "^![" ++ varChars ++ "]+\\[[*@]]$", "array key expansion is"),
         (re $ "^![" ++ varChars ++ "]+[*@]$", "name matching prefixes are"),
-        (re $ "^[" ++ varChars ++ "]+:[^-=?+]", "string indexing is"),
-        (re $ "^[" ++ varChars ++ "]+(\\[.*\\])?/", "string replacement is")
+        (re $ "^[" ++ varChars ++ "*@]+:[^-=?+]", "string indexing is"),
+        (re $ "^([*@][%#]|#[@*])", "string operations on $@/$* are"),
+        (re $ "^[" ++ varChars ++ "*@]+(\\[.*\\])?/", "string replacement is")
         ]
     bashVars = [
         "LINENO", "OSTYPE", "MACHTYPE", "HOSTTYPE", "HOSTNAME",
