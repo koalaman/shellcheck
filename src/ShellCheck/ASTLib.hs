@@ -261,7 +261,7 @@ getCommand t =
 getCommandName t = do
     (T_SimpleCommand _ _ (w:rest)) <- getCommand t
     s <- getLiteralString w
-    if "busybox" `isSuffixOf` s
+    if "busybox" `isSuffixOf` s || "builtin" == s
         then
             case rest of
                 (applet:_) -> getLiteralString applet

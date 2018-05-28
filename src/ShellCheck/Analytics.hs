@@ -2483,6 +2483,7 @@ prop_checkUncheckedCd5 = verifyTree checkUncheckedCdPushdPopd "if true; then cd 
 prop_checkUncheckedCd6 = verifyNotTree checkUncheckedCdPushdPopd "cd .."
 prop_checkUncheckedCd7 = verifyNotTree checkUncheckedCdPushdPopd "#!/bin/bash -e\ncd foo\nrm bar"
 prop_checkUncheckedCd8 = verifyNotTree checkUncheckedCdPushdPopd "set -o errexit; cd foo; rm bar"
+prop_checkUncheckedCd9 = verifyTree checkUncheckedCdPushdPopd "builtin cd ~/src; rm -r foo"
 prop_checkUncheckedPushd1 = verifyTree checkUncheckedCdPushdPopd "pushd ~/src; rm -r foo"
 prop_checkUncheckedPushd2 = verifyNotTree checkUncheckedCdPushdPopd "pushd ~/src || exit; rm -r foo"
 prop_checkUncheckedPushd3 = verifyNotTree checkUncheckedCdPushdPopd "set -e; pushd ~/src; rm -r foo"
