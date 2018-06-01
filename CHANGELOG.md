@@ -1,11 +1,11 @@
-## Latest - ???
+## v0.5.0 - 2018-05-31
 ### Added
 - SC2233/SC2234/SC2235: Suggest removing or replacing (..) around tests
 - SC2232: Warn about invalid arguments to sudo
 - SC2231: Suggest quoting expansions in for loop globs
 - SC2229: Warn about 'read $var'
 - SC2227: Warn about redirections in the middle of 'find' commands
-- SC2224,SC2225,SC2226: Warn when using mv/cp/ln without a destination
+- SC2224/SC2225/SC2226: Warn when using mv/cp/ln without a destination
 - SC2223: Quote warning specific to `: ${var=value}`
 - SC1131: Warn when using `elseif` or `elsif`
 - SC1128: Warn about blanks/comments before shebang
