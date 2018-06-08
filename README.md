@@ -4,7 +4,7 @@
 
 ShellCheck is a GPLv3 tool that gives warnings and suggestions for bash/sh shell scripts:
 
-![Screenshot of a terminal showing problematic shell script lines highlighted](doc/terminal.png).
+![Screenshot of a terminal showing problematic shell script lines highlighted](doc/terminal.png)
 
 The goals of ShellCheck are
 
