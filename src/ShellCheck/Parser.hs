@@ -188,6 +188,16 @@ getNextId = do
     pos <- getPosition
     getNextIdAt pos
 
+endPosOfStartId s = do
+    endPos <- getPosition
+    state <- getState
+    let setEndPos (start, _) = Just (start, Just endPos)
+    let newMap = Map.update setEndPos s (positionMap state)
+    putState $ state {
+        lastId = s,
+        positionMap = newMap
+    }
+
 addToHereDocMap id list = do
     state <- getState
     let map = hereDocMap state
