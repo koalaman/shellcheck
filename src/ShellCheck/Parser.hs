@@ -1562,6 +1562,7 @@ readDollarVariable = do
     let singleCharred p = do
         n <- p
         value <- wrap [n]
+        endPosOfStartId id
         return $ (T_DollarBraced id value)
 
     let positional = do
@@ -1575,6 +1576,7 @@ readDollarVariable = do
     let regular = do
         name <- readVariableName
         value <- wrap name
+        endPosOfStartId id
         return (T_DollarBraced id value) `attempting` do
             lookAhead $ char '['
             parseNoteAt pos ErrorC 1087 "Use braces when expanding arrays, e.g. ${array[idx]} (or ${var}[.. to quiet)."
