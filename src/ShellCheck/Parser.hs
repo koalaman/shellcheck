@@ -1097,6 +1097,7 @@ readSingleQuoted = called "single quoted string" $ do
             when ('\n' `elem` string && not ("\n" `isPrefixOf` string)) $
                 suggestForgotClosingQuote startPos endPos "single quoted string"
 
+    endPosOfStartId id
     return (T_SingleQuoted id string)
 
 readSingleQuotedLiteral = do
