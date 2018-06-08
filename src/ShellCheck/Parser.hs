@@ -1536,6 +1536,7 @@ readDollarBraced = called "parameter expansion" $ do
     try (string "${")
     word <- readDollarBracedWord
     char '}'
+    endPosOfStartId id
     return $ T_DollarBraced id word
 
 prop_readDollarExpansion1= isOk readDollarExpansion "$(echo foo; ls\n)"
