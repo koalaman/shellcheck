@@ -136,31 +136,6 @@ almostSpace =
         char c
         return ' '
 
-withNextId :: Monad m => SCParser m (Id -> b) -> SCParser m b
-withNextId p = do
-    start <- getPosition
-    id <- createId
-    fn <- p
-    let t = fn id
-    end <- getPosition
-    setPos id start end
-    return t
-  where
-    createId = do
-        state <- getState
-        let id = incId (lastId state)
-        putState $ state {
-            lastId = id
-        }
-        return id
-      where incId (Id n) = Id $ n+1
-    setPos id start end = do
-      state <- getState
-      let newMap = Map.insert id (start, Just end) (positionMap state)
-      putState $ state {
-          positionMap = newMap
-      }
-
 --------- Message/position annotation on top of user state
 data Note = Note Id Severity Code String deriving (Show, Eq)
 data ParseNote = ParseNote SourcePos SourcePos Severity Code String deriving (Show, Eq)
@@ -197,7 +172,6 @@ noteToParseNote map (Note id severity code message) =
 
 getLastId = lastId <$> getState
 
--- Deprecated by withNextId
 getNextIdAt sourcepos = do
     state <- getState
     let newId = incId (lastId state)
@@ -209,7 +183,6 @@ getNextIdAt sourcepos = do
     return newId
   where incId (Id n) = Id $ n+1
 
--- Deprecated by withNextId
 getNextId :: Monad m => SCParser m Id
 getNextId = do
     pos <- getPosition
@@ -1217,7 +1190,8 @@ prop_readDoubleQuoted7 = isOk readSimpleCommand "echo \"${ ls;}bar\""
 prop_readDoubleQuoted8 = isWarning readDoubleQuoted "\"\x201Chello\x201D\""
 prop_readDoubleQuoted9 = isWarning readDoubleQuoted "\"foo\\n\""
 prop_readDoubleQuoted10 = isOk readDoubleQuoted "\"foo\\\\n\""
-readDoubleQuoted = called "double quoted string" $ withNextId $ do
+readDoubleQuoted = called "double quoted string" $ do
+    id <- getNextId
     startPos <- getPosition
     doubleQuote
     x <- many doubleQuotedPart
@@ -1227,7 +1201,7 @@ readDoubleQuoted = called "double quoted string" $ withNextId $ do
         try . lookAhead $ suspectCharAfterQuotes <|> oneOf "$\""
         when (any hasLineFeed x && not (startsWithLineFeed x)) $
             suggestForgotClosingQuote startPos endPos "double quoted string"
-    return $ \id -> T_DoubleQuoted id x
+    return $ T_DoubleQuoted id x
   where
     startsWithLineFeed (T_Literal _ ('\n':_):_) = True
     startsWithLineFeed _ = False
@@ -1571,13 +1545,14 @@ prop_readDollarVariable4 = isWarning (readDollarVariable >> string "[@]") "$arr[
 prop_readDollarVariable5 = isWarning (readDollarVariable >> string "[f") "$arr[f"
 
 readDollarVariable :: Monad m => SCParser m Token
-readDollarVariable = withNextId $ do
+readDollarVariable = do
+    id <- getNextId
     pos <- getPosition
 
     let singleCharred p = do
         n <- p
         value <- wrap [n]
-        return $ \id -> (T_DollarBraced id value)
+        return $ (T_DollarBraced id value)
 
     let positional = do
         value <- singleCharred digit
@@ -1590,15 +1565,17 @@ readDollarVariable = withNextId $ do
     let regular = do
         name <- readVariableName
         value <- wrap name
-        return (\id -> (T_DollarBraced id value)) `attempting` do
+        return (T_DollarBraced id value) `attempting` do
             lookAhead $ char '['
             parseNoteAt pos ErrorC 1087 "Use braces when expanding arrays, e.g. ${array[idx]} (or ${var}[.. to quiet)."
 
     try $ char '$' >> (positional <|> special <|> regular)
 
   where
-    wrap s = withNextId $ withNextId $ do
-        return $ \x y -> T_NormalWord x [T_Literal y s]
+    wrap s = do
+        x <- getNextId
+        y <- getNextId
+        return $ T_NormalWord x [T_Literal y s]
 
 readVariableName = do
     f <- variableStart
