@@ -23,6 +23,7 @@ import ShellCheck.AST
 
 import Control.Monad.Writer
 import Control.Monad
+import Data.Char
 import Data.Functor
 import Data.List
 import Data.Maybe
@@ -226,7 +227,42 @@ getLiteralStringExt more = g
     g (T_SingleQuoted _ s) = return s
     g (T_Literal _ s) = return s
     g (T_ParamSubSpecialChar _ s) = return s
+    g (T_DollarSingleQuoted _ s) = return $ decodeEscapes s
     g x = more x
+
+    -- Bash style $'..' decoding
+    decodeEscapes ('\\':c:cs) =
+        case c of
+            'a' -> '\a' : rest
+            'b' -> '\b' : rest
+            'e' -> '\x1B' : rest
+            'f' -> '\f' : rest
+            'n' -> '\n' : rest
+            'r' -> '\r' : rest
+            't' -> '\t' : rest
+            'v' -> '\v' : rest
+            '\'' -> '\'' : rest
+            '"' -> '"' : rest
+            '\\' -> '\\' : rest
+            'x' ->
+                case cs of
+                    (x:y:more) ->
+                        if isHexDigit x && isHexDigit y
+                        then chr (16*(digitToInt x) + (digitToInt y)) : rest
+                        else '\\':c:rest
+            _ | isOctDigit c ->
+                let digits = take 3 $ takeWhile isOctDigit (c:cs)
+                    num = parseOct digits
+                in (if num < 256 then chr num else '?') : rest
+            _ -> '\\' : c : rest
+      where
+        rest = decodeEscapes cs
+        parseOct = f 0
+          where
+            f n "" = n
+            f n (c:rest) = f (n * 8 + digitToInt c) rest
+    decodeEscapes (c:cs) = c : decodeEscapes cs
+    decodeEscapes [] = []
 
 -- Is this token a string literal?
 isLiteral t = isJust $ getLiteralString t

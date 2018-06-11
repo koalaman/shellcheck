@@ -515,6 +515,7 @@ prop_checkPrintfVar12= verify checkPrintfVar "printf '%s %s\\n' 1 2 3"
 prop_checkPrintfVar13= verifyNot checkPrintfVar "printf '%s %s\\n' 1 2 3 4"
 prop_checkPrintfVar14= verify checkPrintfVar "printf '%*s\\n' 1"
 prop_checkPrintfVar15= verifyNot checkPrintfVar "printf '%*s\\n' 1 2"
+prop_checkPrintfVar16= verifyNot checkPrintfVar "printf $'string'"
 checkPrintfVar = CommandCheck (Exactly "printf") (f . arguments) where
     f (doubledash:rest) | getLiteralString doubledash == Just "--" = f rest
     f (dashv:var:rest) | getLiteralString dashv == Just "-v" = f rest
