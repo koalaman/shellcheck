@@ -185,8 +185,9 @@ getNextIdAt sourcepos = do
 
 getNextId :: Monad m => SCParser m Id
 getNextId = do
-    pos <- getPosition
-    getNextIdAt pos
+    start <- startSpan
+    id <- endSpan start
+    return id
 
 data IncompleteInterval = IncompleteInterval SourcePos
 
@@ -202,11 +203,6 @@ endSpan (IncompleteInterval start) = do
         lastId = id,
         positionMap = newMap
     }
-    return id
-
-zeroWidthSpan = do
-    start <- startSpan
-    id <- endSpan start
     return id
 
 addToHereDocMap id list = do
