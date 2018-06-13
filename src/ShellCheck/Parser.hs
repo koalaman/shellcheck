@@ -209,16 +209,6 @@ zeroWidthSpan = do
     id <- endSpan start
     return id
 
-endPosOfStartId s = do
-    endPos <- getPosition
-    state <- getState
-    let setEndPos (start, _) = Just (start, Just endPos)
-    let newMap = Map.update setEndPos s (positionMap state)
-    putState $ state {
-        lastId = s,
-        positionMap = newMap
-    }
-
 addToHereDocMap id list = do
     state <- getState
     let map = hereDocMap state
@@ -1100,7 +1090,7 @@ prop_readSingleQuoted6 = isOk readSimpleCommand "foo='bar cow 'arg"
 prop_readSingleQuoted7 = isOk readSingleQuoted "'foo\x201C\&bar'"
 prop_readSingleQuoted8 = isWarning readSingleQuoted "'foo\x2018\&bar'"
 readSingleQuoted = called "single quoted string" $ do
-    id <- getNextId
+    start <- startSpan
     startPos <- getPosition
     singleQuote
     s <- many readSingleQuotedPart
@@ -1118,7 +1108,7 @@ readSingleQuoted = called "single quoted string" $ do
             when ('\n' `elem` string && not ("\n" `isPrefixOf` string)) $
                 suggestForgotClosingQuote startPos endPos "single quoted string"
 
-    endPosOfStartId id
+    id <- endSpan start
     return (T_SingleQuoted id string)
 
 readSingleQuotedLiteral = do
@@ -1554,11 +1544,11 @@ prop_readDollarBraced2 = isOk readDollarBraced "${foo/'{cow}'}"
 prop_readDollarBraced3 = isOk readDollarBraced "${foo%%$(echo cow\\})}"
 prop_readDollarBraced4 = isOk readDollarBraced "${foo#\\}}"
 readDollarBraced = called "parameter expansion" $ do
-    id <- getNextId
+    start <- startSpan
     try (string "${")
     word <- readDollarBracedWord
     char '}'
-    endPosOfStartId id
+    id <- endSpan start
     return $ T_DollarBraced id word
 
 prop_readDollarExpansion1= isOk readDollarExpansion "$(echo foo; ls\n)"
@@ -1579,13 +1569,13 @@ prop_readDollarVariable5 = isWarning (readDollarVariable >> string "[f") "$arr[f
 
 readDollarVariable :: Monad m => SCParser m Token
 readDollarVariable = do
-    id <- getNextId
+    start <- startSpan
     pos <- getPosition
 
     let singleCharred p = do
         n <- p
         value <- wrap [n]
-        endPosOfStartId id
+        id <- endSpan start
         return $ (T_DollarBraced id value)
 
     let positional = do
@@ -1599,7 +1589,7 @@ readDollarVariable = do
     let regular = do
         name <- readVariableName
         value <- wrap name
-        endPosOfStartId id
+        id <- endSpan start
         return (T_DollarBraced id value) `attempting` do
             lookAhead $ char '['
             parseNoteAt pos ErrorC 1087 "Use braces when expanding arrays, e.g. ${array[idx]} (or ${var}[.. to quiet)."
