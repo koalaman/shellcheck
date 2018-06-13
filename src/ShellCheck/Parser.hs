@@ -151,7 +151,7 @@ data HereDocContext =
 
 data UserState = UserState {
     lastId :: Id,
-    positionMap :: Map.Map Id (SourcePos, Maybe SourcePos),
+    positionMap :: Map.Map Id (SourcePos, SourcePos),
     parseNotes :: [ParseNote],
     hereDocMap :: Map.Map Id [Token],
     pendingHereDocs :: [HereDocContext]
@@ -175,7 +175,7 @@ getLastId = lastId <$> getState
 getNextIdAt sourcepos = do
     state <- getState
     let newId = incId (lastId state)
-    let newMap = Map.insert newId (sourcepos, Just sourcepos) (positionMap state)
+    let newMap = Map.insert newId (sourcepos, sourcepos) (positionMap state)
     putState $ state {
         lastId = newId,
         positionMap = newMap
@@ -197,7 +197,7 @@ endSpan (IncompleteInterval start) = do
     id <- getNextIdAt start
     endPos <- getPosition
     state <- getState
-    let setEndPos (start, _) = Just (start, Just endPos)
+    let setEndPos (start, _) = Just (start, endPos)
     let newMap = Map.update setEndPos id (positionMap state)
     putState $ state {
         lastId = id,
@@ -335,9 +335,9 @@ parseProblemAt pos = parseProblemAtWithEnd pos pos
 parseProblemAtId :: Monad m => Id -> Severity -> Integer -> String -> SCParser m ()
 parseProblemAtId id level code msg = do
     map <- getMap
-    let (pos, _) = Map.findWithDefault
+    let (start, end) = Map.findWithDefault
                 (error "Internal error (no position for id). Please report.") id map
-    parseProblemAt pos level code msg
+    parseProblemAtWithEnd start end level code msg
 
 -- Store non-parse problems inside
 
@@ -2936,7 +2936,7 @@ debugParseScript string =
                 posFile = "removed for clarity",
                 posLine = -1,
                 posColumn = -1
-            }, Just Position {
+            }, Position {
                 posFile = "removed for clarity",
                 posLine = -1,
                 posColumn = -1
@@ -3108,8 +3108,8 @@ posToPos sp = Position {
     posColumn = fromIntegral $ sourceColumn sp
 }
 
-startEndPosToPos :: (SourcePos, Maybe SourcePos) -> (Position, Maybe Position)
-startEndPosToPos (s, me) = (posToPos s, fmap posToPos me)
+startEndPosToPos :: (SourcePos, SourcePos) -> (Position, Position)
+startEndPosToPos (s, e) = (posToPos s, posToPos e)
 
 -- TODO: Clean up crusty old code that this is layered on top of
 parseScript :: Monad m =>

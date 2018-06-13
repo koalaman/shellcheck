@@ -39,13 +39,10 @@ import Control.Monad
 import Test.QuickCheck.All
 
 tokenToPosition startMap (TokenComment id c) = fromMaybe fail $ do
-    position <- maybePosition
-    endPosition <- maybeEndPosition <|> maybePosition
-    return $ PositionedComment position endPosition c
+    span <- Map.lookup id startMap
+    return $ PositionedComment (fst span) (snd span) c
   where
     fail = error "Internal shellcheck error: id doesn't exist. Please report!"
-    maybePosition = fmap fst $ Map.lookup id startMap
-    maybeEndPosition = join $ fmap snd $ Map.lookup id startMap
 
 checkScript :: Monad m => SystemInterface m -> CheckSpec -> m CheckResult
 checkScript sys spec = do
