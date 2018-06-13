@@ -188,6 +188,27 @@ getNextId = do
     pos <- getPosition
     getNextIdAt pos
 
+data IncompleteInterval = IncompleteInterval SourcePos
+
+startSpan = IncompleteInterval <$> getPosition
+
+endSpan (IncompleteInterval start) = do
+    id <- getNextIdAt start
+    endPos <- getPosition
+    state <- getState
+    let setEndPos (start, _) = Just (start, Just endPos)
+    let newMap = Map.update setEndPos id (positionMap state)
+    putState $ state {
+        lastId = id,
+        positionMap = newMap
+    }
+    return id
+
+zeroWidthSpan = do
+    start <- startSpan
+    id <- endSpan start
+    return id
+
 endPosOfStartId s = do
     endPos <- getPosition
     state <- getState
