@@ -29,7 +29,6 @@ import Data.Functor
 import Data.List
 import Data.Maybe
 import Data.Ord
-import Control.Applicative
 import Control.Monad.Identity
 import qualified Data.Map as Map
 import qualified System.IO
