@@ -2501,6 +2501,7 @@ prop_checkUncheckedPopd5 = verifyTree checkUncheckedCdPushdPopd "if true; then p
 prop_checkUncheckedPopd6 = verifyTree checkUncheckedCdPushdPopd "popd"
 prop_checkUncheckedPopd7 = verifyNotTree checkUncheckedCdPushdPopd "#!/bin/bash -e\npopd\nrm bar"
 prop_checkUncheckedPopd8 = verifyNotTree checkUncheckedCdPushdPopd "set -o errexit; popd; rm bar"
+prop_checkUncheckedPopd9 = verifyNotTree checkUncheckedCdPushdPopd "popd -n foo"
 
 checkUncheckedCdPushdPopd params root =
     if hasSetE params then
@@ -2510,7 +2511,7 @@ checkUncheckedCdPushdPopd params root =
     checkElement t@T_SimpleCommand {} =
         when(name t `elem` ["cd", "pushd", "popd"]
             && not (isSafeDir t)
-            && not (name t == "pushd" && ("n" `elem` map snd (getAllFlags t)))
+            && not (name t `elem` ["pushd", "popd"] && ("n" `elem` map snd (getAllFlags t)))
             && not (isCondition $ getPath (parentMap params) t)) $
                 warn (getId t) 2164 "Use 'cd ... || exit' or 'cd ... || return' in case cd fails."
     checkElement _ = return ()
