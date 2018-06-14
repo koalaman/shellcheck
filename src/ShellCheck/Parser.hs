@@ -151,7 +151,7 @@ data HereDocContext =
 
 data UserState = UserState {
     lastId :: Id,
-    positionMap :: Map.Map Id SourcePos,
+    positionMap :: Map.Map Id (SourcePos, SourcePos),
     parseNotes :: [ParseNote],
     hereDocMap :: Map.Map Id [Token],
     pendingHereDocs :: [HereDocContext]
@@ -175,7 +175,7 @@ getLastId = lastId <$> getState
 getNextIdAt sourcepos = do
     state <- getState
     let newId = incId (lastId state)
-    let newMap = Map.insert newId sourcepos (positionMap state)
+    let newMap = Map.insert newId (sourcepos, sourcepos) (positionMap state)
     putState $ state {
         lastId = newId,
         positionMap = newMap
@@ -185,8 +185,25 @@ getNextIdAt sourcepos = do
 
 getNextId :: Monad m => SCParser m Id
 getNextId = do
-    pos <- getPosition
-    getNextIdAt pos
+    start <- startSpan
+    id <- endSpan start
+    return id
+
+data IncompleteInterval = IncompleteInterval SourcePos
+
+startSpan = IncompleteInterval <$> getPosition
+
+endSpan (IncompleteInterval start) = do
+    id <- getNextIdAt start
+    endPos <- getPosition
+    state <- getState
+    let setEndPos (start, _) = Just (start, endPos)
+    let newMap = Map.update setEndPos id (positionMap state)
+    putState $ state {
+        lastId = id,
+        positionMap = newMap
+    }
+    return id
 
 addToHereDocMap id list = do
     state <- getState
@@ -318,9 +335,9 @@ parseProblemAt pos = parseProblemAtWithEnd pos pos
 parseProblemAtId :: Monad m => Id -> Severity -> Integer -> String -> SCParser m ()
 parseProblemAtId id level code msg = do
     map <- getMap
-    let pos = Map.findWithDefault
+    let (start, end) = Map.findWithDefault
                 (error "Internal error (no position for id). Please report.") id map
-    parseProblemAt pos level code msg
+    parseProblemAtWithEnd start end level code msg
 
 -- Store non-parse problems inside
 
@@ -1069,7 +1086,7 @@ prop_readSingleQuoted6 = isOk readSimpleCommand "foo='bar cow 'arg"
 prop_readSingleQuoted7 = isOk readSingleQuoted "'foo\x201C\&bar'"
 prop_readSingleQuoted8 = isWarning readSingleQuoted "'foo\x2018\&bar'"
 readSingleQuoted = called "single quoted string" $ do
-    id <- getNextId
+    start <- startSpan
     startPos <- getPosition
     singleQuote
     s <- many readSingleQuotedPart
@@ -1087,6 +1104,7 @@ readSingleQuoted = called "single quoted string" $ do
             when ('\n' `elem` string && not ("\n" `isPrefixOf` string)) $
                 suggestForgotClosingQuote startPos endPos "single quoted string"
 
+    id <- endSpan start
     return (T_SingleQuoted id string)
 
 readSingleQuotedLiteral = do
@@ -1522,10 +1540,11 @@ prop_readDollarBraced2 = isOk readDollarBraced "${foo/'{cow}'}"
 prop_readDollarBraced3 = isOk readDollarBraced "${foo%%$(echo cow\\})}"
 prop_readDollarBraced4 = isOk readDollarBraced "${foo#\\}}"
 readDollarBraced = called "parameter expansion" $ do
-    id <- getNextId
+    start <- startSpan
     try (string "${")
     word <- readDollarBracedWord
     char '}'
+    id <- endSpan start
     return $ T_DollarBraced id word
 
 prop_readDollarExpansion1= isOk readDollarExpansion "$(echo foo; ls\n)"
@@ -1544,14 +1563,16 @@ prop_readDollarVariable3 = isWarning (readDollarVariable >> anyChar) "$10"
 prop_readDollarVariable4 = isWarning (readDollarVariable >> string "[@]") "$arr[@]"
 prop_readDollarVariable5 = isWarning (readDollarVariable >> string "[f") "$arr[f"
 
+readDollarVariable :: Monad m => SCParser m Token
 readDollarVariable = do
-    id <- getNextId
+    start <- startSpan
     pos <- getPosition
 
     let singleCharred p = do
         n <- p
         value <- wrap [n]
-        return (T_DollarBraced id value)
+        id <- endSpan start
+        return $ (T_DollarBraced id value)
 
     let positional = do
         value <- singleCharred digit
@@ -1564,6 +1585,7 @@ readDollarVariable = do
     let regular = do
         name <- readVariableName
         value <- wrap name
+        id <- endSpan start
         return (T_DollarBraced id value) `attempting` do
             lookAhead $ char '['
             parseNoteAt pos ErrorC 1087 "Use braces when expanding arrays, e.g. ${array[idx]} (or ${var}[.. to quiet)."
@@ -1644,7 +1666,7 @@ readPendingHereDocs = do
       swapContext ctx $
       do
         docPos <- getPosition
-        tokenPos <- Map.findWithDefault (error "Missing ID") id <$> getMap
+        (tokenPos, _) <- Map.findWithDefault (error "Missing ID") id <$> getMap
         (terminated, wasWarned, lines) <- readDocLines dashed endToken
         let hereData = unlines lines
         unless terminated $ do
@@ -2910,11 +2932,15 @@ debugParseScript string =
     result {
         -- Remove the noisiest parts
         prTokenPositions = Map.fromList [
-            (Id 0, Position {
+            (Id 0, (Position {
                 posFile = "removed for clarity",
                 posLine = -1,
                 posColumn = -1
-            })]
+            }, Position {
+                posFile = "removed for clarity",
+                posLine = -1,
+                posColumn = -1
+            }))]
     }
   where
     result = runIdentity $
@@ -3001,7 +3027,7 @@ parseShell env name contents = do
         Right (script, userstate) ->
             return ParseResult {
                 prComments = map toPositionedComment $ nub $ parseNotes userstate ++ parseProblems state,
-                prTokenPositions = Map.map posToPos (positionMap userstate),
+                prTokenPositions = Map.map startEndPosToPos (positionMap userstate),
                 prRoot = Just $
                     reattachHereDocs script (hereDocMap userstate)
             }
@@ -3081,6 +3107,9 @@ posToPos sp = Position {
     posLine = fromIntegral $ sourceLine sp,
     posColumn = fromIntegral $ sourceColumn sp
 }
+
+startEndPosToPos :: (SourcePos, SourcePos) -> (Position, Position)
+startEndPosToPos (s, e) = (posToPos s, posToPos e)
 
 -- TODO: Clean up crusty old code that this is layered on top of
 parseScript :: Monad m =>

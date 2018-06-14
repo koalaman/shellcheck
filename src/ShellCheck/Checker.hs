@@ -37,9 +37,9 @@ import Control.Monad
 
 import Test.QuickCheck.All
 
-tokenToPosition map (TokenComment id c) = fromMaybe fail $ do
-    position <- Map.lookup id map
-    return $ PositionedComment position position c
+tokenToPosition startMap (TokenComment id c) = fromMaybe fail $ do
+    span <- Map.lookup id startMap
+    return $ PositionedComment (fst span) (snd span) c
   where
     fail = error "Internal shellcheck error: id doesn't exist. Please report!"
 
