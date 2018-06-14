@@ -137,12 +137,6 @@ split char str =
         else split' rest (a:element)
     split' [] element = [reverse element]
 
-getExclusions options =
-    let elements = concatMap (split ',') $ getOptions options "exclude"
-        clean = dropWhile (not . isDigit)
-    in
-        map (Prelude.read . clean) elements :: [Int]
-
 toStatus = fmap (either id id) . runExceptT
 
 getEnvArgs = do
@@ -241,7 +235,7 @@ parseOption flag options =
                         }
 
         Flag "exclude" str -> do
-            new <- mapM parseNum $ split ',' str
+            new <- mapM parseNum $ filter (not . null) $ split ',' str
             let old = csExcludedWarnings . checkSpec $ options
             return options {
                 checkSpec = (checkSpec options) {
