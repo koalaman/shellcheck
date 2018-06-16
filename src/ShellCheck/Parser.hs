@@ -1848,16 +1848,23 @@ prop_readSeparator1 = isWarning readScript "a &; b"
 prop_readSeparator2 = isOk readScript "a & b"
 prop_readSeparator3 = isWarning readScript "a &amp; b"
 prop_readSeparator4 = isWarning readScript "a &gt; file; b"
+prop_readSeparator5 = isWarning readScript "curl https://example.com/?foo=moo&bar=cow"
 readSeparatorOp = do
     notFollowedBy2 (void g_AND_IF <|> void readCaseSeparator)
     notFollowedBy2 (string "&>")
     f <- try (do
                     pos <- getPosition
                     char '&'
-                    optional $ do
-                        s <- lookAhead . choice . map (try . string) $
-                            ["amp;", "gt;", "lt;"]
-                        parseProblemAt pos ErrorC 1109 "This is an unquoted HTML entity. Replace with corresponding character."
+                    optional $ choice [
+                        do
+                            s <- lookAhead . choice . map (try . string) $
+                                ["amp;", "gt;", "lt;"]
+                            parseProblemAt pos ErrorC 1109 "This is an unquoted HTML entity. Replace with corresponding character.",
+
+                        do
+                            try . lookAhead $ variableStart
+                            parseProblemAt pos WarningC 1132 "This & terminates the command. Escape it or add space after & to silence."
+                      ]
 
                     spacing
                     pos <- getPosition
