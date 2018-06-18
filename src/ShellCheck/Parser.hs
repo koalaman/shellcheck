@@ -2682,8 +2682,8 @@ readAssignmentWordExt lenient = try $ do
     indices <- many readArrayIndex
     hasLeftSpace <- fmap (not . null) spacing
     pos <- getPosition
-    op <- readAssignmentOp
     id <- endSpan start
+    op <- readAssignmentOp
     hasRightSpace <- fmap (not . null) spacing
     isEndOfCommand <- fmap isJust $ optionMaybe (try . lookAhead $ (void (oneOf "\r\n;&|)") <|> eof))
     if not hasLeftSpace && (hasRightSpace || isEndOfCommand)

@@ -396,7 +396,7 @@ checkPipePitfalls _ (T_Pipeline id _ commands) = do
             mapM_ (f . (\ n -> take (length l) $ drop n commands)) indices
             return . not . null $ indices
     for' l f = for l (first f)
-    first func (x:_) = func (getId x)
+    first func (x:_) = func (getId $ getCommandTokenOrThis x)
     first _ _ = return ()
     hasShortParameter char = any (\x -> "-" `isPrefixOf` x && char `elem` x)
     hasParameter string =
@@ -2472,7 +2472,7 @@ prop_checkReadWithoutR1 = verify checkReadWithoutR "read -a foo"
 prop_checkReadWithoutR2 = verifyNot checkReadWithoutR "read -ar foo"
 checkReadWithoutR _ t@T_SimpleCommand {} | t `isUnqualifiedCommand` "read" =
     unless ("r" `elem` map snd (getAllFlags t)) $
-        info (getId t) 2162 "read without -r will mangle backslashes."
+        info (getId $ getCommandTokenOrThis t) 2162 "read without -r will mangle backslashes."
 checkReadWithoutR _ _ = return ()
 
 prop_checkUncheckedCd1 = verifyTree checkUncheckedCdPushdPopd "cd ~/src; rm -r foo"

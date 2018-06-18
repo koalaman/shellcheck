@@ -183,7 +183,7 @@ prop_checkNeedlessExpr4 = verifyNot checkNeedlessExpr "foo=$(expr foo \\< regex)
 checkNeedlessExpr = CommandCheck (Basename "expr") f where
     f t =
         when (all (`notElem` exceptions) (words $ arguments t)) $
-            style (getId t) 2003
+            style (getId $ getCommandTokenOrThis t) 2003
                 "expr is antiquated. Consider rewriting this using $((..)), ${} or [[ ]]."
     -- These operators are hard to replicate in POSIX
     exceptions = [ ":", "<", ">", "<=", ">=" ]
@@ -741,20 +741,20 @@ checkLocalScope = CommandCheck (Exactly "local") $ \t ->
     whenShell [Bash, Dash] $ do -- Ksh allows it, Sh doesn't support local
         path <- getPathM t
         unless (any isFunction path) $
-            err (getId t) 2168 "'local' is only valid in functions."
+            err (getId $ getCommandTokenOrThis t) 2168 "'local' is only valid in functions."
 
 prop_checkDeprecatedTempfile1 = verify checkDeprecatedTempfile "var=$(tempfile)"
 prop_checkDeprecatedTempfile2 = verifyNot checkDeprecatedTempfile "tempfile=$(mktemp)"
 checkDeprecatedTempfile = CommandCheck (Basename "tempfile") $
-    \t -> warn (getId t) 2186 "tempfile is deprecated. Use mktemp instead."
+    \t -> warn (getId $ getCommandTokenOrThis t) 2186 "tempfile is deprecated. Use mktemp instead."
 
 prop_checkDeprecatedEgrep = verify checkDeprecatedEgrep "egrep '.+'"
 checkDeprecatedEgrep = CommandCheck (Basename "egrep") $
-    \t -> info (getId t) 2196 "egrep is non-standard and deprecated. Use grep -E instead."
+    \t -> info (getId $ getCommandTokenOrThis t) 2196 "egrep is non-standard and deprecated. Use grep -E instead."
 
 prop_checkDeprecatedFgrep = verify checkDeprecatedFgrep "fgrep '*' files"
 checkDeprecatedFgrep = CommandCheck (Basename "fgrep") $
-    \t -> info (getId t) 2197 "fgrep is non-standard and deprecated. Use grep -F instead."
+    \t -> info (getId $ getCommandTokenOrThis t) 2197 "fgrep is non-standard and deprecated. Use grep -F instead."
 
 prop_checkWhileGetoptsCase1 = verify checkWhileGetoptsCase "while getopts 'a:b' x; do case $x in a) foo;; esac; done"
 prop_checkWhileGetoptsCase2 = verify checkWhileGetoptsCase "while getopts 'a:' x; do case $x in a) foo;; b) bar;; esac; done"
@@ -948,7 +948,7 @@ checkFindRedirections = CommandCheck (Basename "find") f
 
 prop_checkWhich = verify checkWhich "which '.+'"
 checkWhich = CommandCheck (Basename "which") $
-    \t -> info (getId t) 2230 "which is non-standard. Use builtin 'command -v' instead."
+    \t -> info (getId $ getCommandTokenOrThis t) 2230 "which is non-standard. Use builtin 'command -v' instead."
 
 prop_checkSudoRedirect1 = verify checkSudoRedirect "sudo echo 3 > /proc/file"
 prop_checkSudoRedirect2 = verify checkSudoRedirect "sudo cmd < input"

@@ -293,17 +293,27 @@ getCommand t =
         T_Annotation _ _ t -> getCommand t
         _ -> Nothing
 
--- Maybe get the command name of a token representing a command
-getCommandName t = do
+-- Maybe get the command name string of a token representing a command
+getCommandName :: Token -> Maybe String
+getCommandName = fst . getCommandNameAndToken
+
+-- Get the command name token from a command, i.e.
+-- the token representing 'ls' in 'ls -la 2> foo'.
+-- If it can't be determined, return the original token.
+getCommandTokenOrThis = snd . getCommandNameAndToken
+
+getCommandNameAndToken :: Token -> (Maybe String, Token)
+getCommandNameAndToken t = fromMaybe (Nothing, t) $ do
     (T_SimpleCommand _ _ (w:rest)) <- getCommand t
     s <- getLiteralString w
     if "busybox" `isSuffixOf` s || "builtin" == s
         then
             case rest of
-                (applet:_) -> getLiteralString applet
-                _ -> return s
+                (applet:_) -> return (getLiteralString applet, applet)
+                _ -> return (Just s, w)
         else
-            return s
+            return (Just s, w)
+
 
 -- If a command substitution is a single command, get its name.
 --  $(date +%s) = Just "date"
