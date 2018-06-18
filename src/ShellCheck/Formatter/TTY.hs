@@ -78,7 +78,14 @@ outputForFile color sys comments = do
 cuteIndent :: PositionedComment -> String
 cuteIndent comment =
     replicate (fromIntegral $ colNo comment - 1) ' ' ++
-        "^-- " ++ code (codeNo comment) ++ ": " ++ messageText comment
+        makeArrow ++ " " ++ code (codeNo comment) ++ ": " ++ messageText comment
+  where
+    arrow n = '^' : replicate (fromIntegral $ n-2) '-' ++ "^"
+    makeArrow =
+        let sameLine = lineNo comment == endLineNo comment
+            delta = endColNo comment - colNo comment
+        in
+            if sameLine && delta > 2 && delta < 32 then arrow delta else "^--"
 
 code code = "SC" ++ show code
 
