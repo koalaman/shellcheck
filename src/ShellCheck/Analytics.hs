@@ -1879,6 +1879,8 @@ prop_checkUnassignedReferences32= verifyNotTree checkUnassignedReferences "if [[
 prop_checkUnassignedReferences33= verifyNotTree checkUnassignedReferences "f() { local -A foo; echo \"${foo[@]}\"; }"
 prop_checkUnassignedReferences34= verifyNotTree checkUnassignedReferences "declare -A foo; (( foo[bar] ))"
 prop_checkUnassignedReferences35= verifyNotTree checkUnassignedReferences "echo ${arr[foo-bar]:?fail}"
+prop_checkUnassignedReferences36= verifyTree checkUnassignedReferences "#!/bin/ksh\necho \"${GLOBAL}\"\n"
+prop_checkUnassignedReferences37= verifyNotTree checkUnassignedReferences "#!/bin/ksh\necho \"$1\"\n"
 checkUnassignedReferences params t = warnings
   where
     (readMap, writeMap) = execState (mapM tally $ variableFlow params) (Map.empty, Map.empty)
@@ -1908,9 +1910,16 @@ checkUnassignedReferences params t = warnings
     isLocal = any isLower
 
     warningForGlobals var place = do
-        match <- getBestMatch var
+        isNotSpecialVars var
         return $ warn (getId place) 2153 $
-            "Possible misspelling: " ++ var ++ " may not be assigned, but " ++ match ++ " is."
+            case getBestMatch var of
+                Just match -> "Possible misspelling: " ++ var ++ " may not be assigned, but "  ++ match ++ " is."
+                Nothing -> "Possible misspelling: " ++ var ++ " may not be assigned."
+      where
+        isNotSpecialVars [] = Nothing
+        isNotSpecialVars (a:_) | isNumber a = Nothing
+                               | any (== a) "$#@?!" = Nothing
+                               | otherwise = return ()
 
     warningForLocals var place =
         return $ warn (getId place) 2154 $
