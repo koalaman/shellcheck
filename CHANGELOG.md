@@ -3,6 +3,7 @@
 ### Changed
 - Most warnings now have useful end positions
 ### Fixed
+- SC2021 no longer triggers for equivalence classes like '[=e=]'
 
 ## v0.5.0 - 2018-05-31
 ### Added

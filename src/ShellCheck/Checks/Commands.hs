@@ -141,6 +141,7 @@ prop_checkTr8 = verifyNot checkTr "tr aeiou _____"
 prop_checkTr9 = verifyNot checkTr "a-z n-za-m"
 prop_checkTr10= verifyNot checkTr "tr --squeeze-repeats rl lr"
 prop_checkTr11= verifyNot checkTr "tr abc '[d*]'"
+prop_checkTr12= verifyNot checkTr "tr '[=e=]' 'e'"
 checkTr = CommandCheck (Basename "tr") (mapM_ f . arguments)
   where
     f w | isGlob w = -- The user will go [ab] -> '[ab]' -> 'ab'. Fixme?
@@ -152,7 +153,7 @@ checkTr = CommandCheck (Basename "tr") (mapM_ f . arguments)
         Just s -> do  -- Eliminate false positives by only looking for dupes in SET2?
           when (not ("-" `isPrefixOf` s || "[:" `isInfixOf` s) && duplicated s) $
             info (getId word) 2020 "tr replaces sets of chars, not words (mentioned due to duplicates)."
-          unless ("[:" `isPrefixOf` s) $
+          unless ("[:" `isPrefixOf` s || "[=" `isPrefixOf` s) $
             when ("[" `isPrefixOf` s && "]" `isSuffixOf` s && (length s > 2) && ('*' `notElem` s)) $
               info (getId word) 2021 "Don't use [] around classes in tr, it replaces literal square brackets."
         Nothing -> return ()
