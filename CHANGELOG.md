@@ -1,6 +1,7 @@
 ## ???
 ### Added
 ### Changed
+- Most warnings now have useful end positions
 ### Fixed
 
 ## v0.5.0 - 2018-05-31
