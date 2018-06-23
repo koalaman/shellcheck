@@ -679,10 +679,11 @@ prop_checkFindWithoutPath3 = verifyNot checkFindWithoutPath "find . -type f"
 prop_checkFindWithoutPath4 = verifyNot checkFindWithoutPath "find -H -L \"$path\" -print"
 prop_checkFindWithoutPath5 = verifyNot checkFindWithoutPath "find -O3 ."
 prop_checkFindWithoutPath6 = verifyNot checkFindWithoutPath "find -D exec ."
+prop_checkFindWithoutPath7 = verifyNot checkFindWithoutPath "find --help"
 checkFindWithoutPath = CommandCheck (Basename "find") f
   where
-    f (T_SimpleCommand _ _ (cmd:args)) =
-        unless (hasPath args) $
+    f t@(T_SimpleCommand _ _ (cmd:args)) =
+        unless (t `hasFlag` "help" || hasPath args) $
             info (getId cmd) 2185 "Some finds don't have a default path. Specify '.' explicitly."
 
     -- This is a bit of a kludge. find supports flag arguments both before and after the path,
