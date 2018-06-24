@@ -1367,7 +1367,7 @@ readNormalEscaped = called "escaped char" $ do
             return [next]
   where
     alternative 'n' = "a quoted, literal line feed"
-    alternative t = "\"$(printf \"\\" ++ [t] ++ "\")\""
+    alternative t = "\"$(printf '\\" ++ [t] ++ "')\""
     escapedChar 'n' = Just "line feed"
     escapedChar 't' = Just "tab"
     escapedChar 'r' = Just "carriage return"
