@@ -2838,6 +2838,7 @@ prop_checkPipeToNowhere5 = verifyNot checkPipeToNowhere "echo foo | xargs du"
 prop_checkPipeToNowhere6 = verifyNot checkPipeToNowhere "ls | echo $(cat)"
 prop_checkPipeToNowhere7 = verifyNot checkPipeToNowhere "echo foo | var=$(cat) ls"
 prop_checkPipeToNowhere8 = verify checkPipeToNowhere "foo | true"
+prop_checkPipeToNowhere9 = verifyNot checkPipeToNowhere "mv -i f . < /dev/stdin"
 checkPipeToNowhere :: Parameters -> Token -> WriterT [TokenComment] Identity ()
 checkPipeToNowhere _ t =
     case t of
@@ -2857,6 +2858,7 @@ checkPipeToNowhere _ t =
         name <- getCommandBasename cmd
         guard $ name `elem` nonReadingCommands
         guard . not $ hasAdditionalConsumers cmd
+        guard . not $ name `elem` ["cp", "mv", "rm"] && cmd `hasFlag` "i"
         return $ warn (getId cmd) 2217 $
             "Redirecting to '" ++ name ++ "', a command that doesn't read stdin. Bad quoting or missing xargs?"
 
