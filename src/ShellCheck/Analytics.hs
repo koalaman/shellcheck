@@ -1781,6 +1781,44 @@ checkFunctionsUsedExternally params t =
             info definitionId 2032 $
               "Use own script or sh -c '..' to run this from " ++ cmd ++ "."
 
+prop_a1 =
+  verifyTree a "foo() { :; }; sudo foo"
+prop_a2 =
+  verifyTree a "alias f='a'; xargs -n 1 f"
+prop_a3 =
+  verifyNotTree a "f() { :; }; echo f"
+prop_a4 =
+  verifyNotTree a "foo() { :; }; sudo \"foo\""
+prop_a5 =
+  verifyNotTree a "if [ 1 ]; then mv a b; else a() { echo 1; } fi"
+a params t = fst $ runState (execWriterT $ doAnalysis z t) []
+  where
+    invokingCmds = ["chroot", "find", "screen", "ssh", "su", "sudo", "xargs"]
+    z (T_Function id _ _ name _) = lift (modify ((name, id):))
+    z t@(T_SimpleCommand id _ (_:args)) | t `isUnqualifiedCommand` "alias" =
+        mapM_ getAlias args
+    z t@(T_SimpleCommand id _ (cmd:args)) =
+        let name = fromMaybe "" $ getCommandBasename t in
+          when (name `elem` invokingCmds) $
+            mapM_ (checkArg name) args
+    z _ = return ()
+    getAlias arg =
+        let string = concat $ oversimplify arg
+        in when ('=' `elem` string) $
+            modify ((takeWhile (/= '=') string, getId arg):)
+
+checkArg :: String -> Token -> WriterT [TokenComment] (State [(String, Id)]) ()
+checkArg cmd arg = do
+    functions <- lift get
+    potentially $ do
+        literalArg <- getUnquotedLiteral arg
+        definitionId <- Map.lookup literalArg (Map.fromList functions)
+        return $ do
+            warn (getId arg) 2033
+              "Shell functions can't be passed to external commands."
+            info definitionId 2032 $
+              "Use own script or sh -c '..' to run this from " ++ cmd ++ "."
+
 prop_checkUnused0 = verifyNotTree checkUnusedAssignments "var=foo; echo $var"
 prop_checkUnused1 = verifyTree checkUnusedAssignments "var=foo; echo $bar"
 prop_checkUnused2 = verifyNotTree checkUnusedAssignments "var=foo; export var;"
