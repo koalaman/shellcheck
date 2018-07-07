@@ -171,19 +171,21 @@ or see the [storage bucket listing](https://shellcheck.storage.googleapis.com/in
 
 Travis CI has now integrated ShellCheck by default, so you don't need to manually install it.
 
-If you still want to do so in order to upgrade at your leisure or ensure the latest release:
+If you still want to do so in order to upgrade at your leisure or ensure the latest release, follow the steps to install the shellcheck binary, bellow.
 
-    install:
+## Installing the shellcheck binary
 
-      # Install a custom version of shellcheck instead of Travis CI's default
-      - scversion="stable" # or "v0.4.7", or "latest"
-      - wget "https://storage.googleapis.com/shellcheck/shellcheck-$scversion.linux.x86_64.tar.xz"
-      - tar --xz -xvf "shellcheck-$scversion.linux.x86_64.tar.xz"
-      - shellcheck() { "shellcheck-$scversion/shellcheck" "$@"; }
-      - shellcheck --version
+*Pre-requisite*: the program 'xz' needs to be installed on the system.  
+To install it on debian/ubuntu/linux mint, run `apt install xz-utils`.  
+To install it on Redhat/Fedora/CentOS, run `yum -y install xz`.  
 
-    script:
-      - shellcheck *.sh
+```bash
+export scversion="stable" # or "v0.4.7", or "latest"
+wget "https://storage.googleapis.com/shellcheck/shellcheck-${scversion}.linux.x86_64.tar.xz"
+tar --xz -xvf shellcheck-"${scversion}".linux.x86_64.tar.xz
+cp shellcheck-"${scversion}"/shellcheck /usr/bin/
+shellcheck --version
+```
 
 ## Compiling from source
 
