@@ -30,18 +30,21 @@ script:
   - docker rm "$id"
   - ls -l shellcheck
   - ./shellcheck myscript
-  - for tag in $TAGS; do cp "shellcheck" "deploy/shellcheck-$tag.linux"; done
+  - for tag in $TAGS; do cp "shellcheck" "deploy/shellcheck-$tag.linux-x86_64"; done
   # Linux Alpine based Docker image
   - name="$DOCKER_BASE-alpine"
   - DOCKER_BUILDS="$DOCKER_BUILDS $name"
   - sed -e '/DELETE-MARKER/,$d' Dockerfile > Dockerfile.alpine
   - docker build -f Dockerfile.alpine -t "$name:current" .
   - docker run "$name:current" sh -c 'shellcheck --version'
+  # Linux armv6hf static executable
+  - docker run -v "$PWD:/mnt" koalaman/armv6hf-builder -c 'compile-shellcheck'
+  - for tag in $TAGS; do cp "shellcheck" "deploy/shellcheck-$tag.linux-armv6hf"; done
+  - rm -f shellcheck || true
   # Windows .exe
-  - docker pull koalaman/winghc
-  - docker run --user="$UID" --rm -v "$PWD:/appdata" koalaman/winghc cuib
+  - docker run --user="$UID" -v "$PWD:/appdata" koalaman/winghc cuib
   - for tag in $TAGS; do cp "dist/build/ShellCheck/shellcheck.exe" "deploy/shellcheck-$tag.exe"; done
-  - rm -rf dist || true
+  - rm -rf dist shellcheck || true
   # Misc packaging
   - ./.prepare_deploy
 
