@@ -520,7 +520,7 @@ readConditionContents single =
         notFollowedBy2 (try (spacing >> string "]"))
         x <- readNormalWord
         pos <- getPosition
-        when (endedWith "]" x) $ do
+        when (endedWith "]" x && notArrayIndex x) $ do
             parseProblemAt pos ErrorC 1020 $
                 "You need a space before the " ++ (if single then "]" else "]]") ++ "."
             fail "Missing space before ]"
@@ -534,6 +534,8 @@ readConditionContents single =
                 case last s of T_Literal id s -> str `isSuffixOf` s
                                _ -> False
             endedWith _ _ = False
+            notArrayIndex (T_NormalWord id s@(_:T_Literal _ t:_)) = t /= "["
+            notArrayIndex _ = True
 
     readCondAndOp = readAndOrOp TC_And "&&" False <|> readAndOrOp TC_And "-a" True
 
