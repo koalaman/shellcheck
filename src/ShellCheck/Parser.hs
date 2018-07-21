@@ -900,6 +900,7 @@ prop_readCondition19 = isOk readCondition "[ '(' x \")\" ]"
 prop_readCondition20 = isOk readCondition "[[ echo_rc -eq 0 ]]"
 prop_readCondition21 = isOk readCondition "[[ $1 =~ ^(a\\ b)$ ]]"
 prop_readCondition22 = isOk readCondition "[[ $1 =~ \\.a\\.(\\.b\\.)\\.c\\. ]]"
+prop_readCondition23 = isOk readCondition "[[ -v arr[$var] ]]"
 readCondition = called "test expression" $ do
     opos <- getPosition
     start <- startSpan
