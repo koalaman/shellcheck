@@ -305,7 +305,8 @@ initialSystemState = SystemState {
 
 data Environment m = Environment {
     systemInterface :: SystemInterface m,
-    checkSourced :: Bool
+    checkSourced :: Bool,
+    shellTypeOverride :: Maybe Shell
 }
 
 parseProblem level code msg = do
@@ -2965,17 +2966,24 @@ readScriptFile = do
         parseProblem ErrorC 1082
             "This file has a UTF-8 BOM. Remove it with: LC_CTYPE=C sed '1s/^...//' < yourscript ."
     sb <- option "" readShebang
-    verifyShell pos (getShell sb)
-    if isValidShell (getShell sb) /= Just False
+    allspacing
+    annotationStart <- startSpan
+    annotations <- readAnnotations
+    annotationId <- endSpan annotationStart
+    let shellAnnotationSpecified =
+            any (\x -> case x of ShellOverride {} -> True; _ -> False) annotations
+    shellFlagSpecified <- isJust <$> Mr.asks shellTypeOverride
+    let ignoreShebang = shellAnnotationSpecified || shellFlagSpecified
+
+    unless ignoreShebang $
+        verifyShebang pos (getShell sb)
+    if ignoreShebang || isValidShell (getShell sb) /= Just False
       then do
-            allspacing
-            annotationStart <- startSpan
-            annotations <- readAnnotations
-            annotationId <- endSpan annotationStart
             commands <- withAnnotations annotations readCompoundListOrEmpty
             id <- endSpan start
             verifyEof
-            let script = T_Annotation annotationId annotations $  T_Script id sb commands
+            let script = T_Annotation annotationId annotations $
+                            T_Script id sb commands
             reparseIndices script
         else do
             many anyChar
@@ -2993,7 +3001,7 @@ readScriptFile = do
                     then second
                     else basename first
 
-    verifyShell pos s =
+    verifyShebang pos s = do
         case isValidShell s of
             Just True -> return ()
             Just False -> parseProblemAt pos ErrorC 1071 "ShellCheck only supports sh/bash/dash/ksh scripts. Sorry!"
@@ -3055,16 +3063,16 @@ debugParseScript string =
     }
   where
     result = runIdentity $
-        parseScript (mockedSystemInterface []) $ ParseSpec {
+        parseScript (mockedSystemInterface []) $ newParseSpec {
             psFilename = "debug",
-            psScript = string,
-            psCheckSourced = False
+            psScript = string
         }
 
 testEnvironment =
     Environment {
         systemInterface = (mockedSystemInterface []),
-        checkSourced = False
+        checkSourced = False,
+        shellTypeOverride = Nothing
     }
 
 
@@ -3230,7 +3238,8 @@ parseScript sys spec =
   where
     env = Environment {
         systemInterface = sys,
-        checkSourced = psCheckSourced spec
+        checkSourced = psCheckSourced spec,
+        shellTypeOverride = psShellTypeOverride spec
     }
 
 -- Same as 'try' but emit syntax errors if the parse fails.

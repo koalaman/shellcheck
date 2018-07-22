@@ -52,11 +52,20 @@ emptyCheckSpec = CheckSpec {
     csShellTypeOverride = Nothing
 }
 
+newParseSpec :: ParseSpec
+newParseSpec = ParseSpec {
+    psFilename = "",
+    psScript = "",
+    psCheckSourced = False,
+    psShellTypeOverride = Nothing
+}
+
 -- Parser input and output
 data ParseSpec = ParseSpec {
     psFilename :: String,
     psScript :: String,
-    psCheckSourced :: Bool
+    psCheckSourced :: Bool,
+    psShellTypeOverride :: Maybe Shell
 } deriving (Show, Eq)
 
 data ParseResult = ParseResult {

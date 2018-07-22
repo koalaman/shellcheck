@@ -52,10 +52,11 @@ checkScript sys spec = do
     }
   where
     checkScript contents = do
-        result <- parseScript sys ParseSpec {
+        result <- parseScript sys newParseSpec {
             psFilename = csFilename spec,
             psScript = contents,
-            psCheckSourced = csCheckSourced spec
+            psCheckSourced = csCheckSourced spec,
+            psShellTypeOverride = csShellTypeOverride spec
         }
         let parseMessages = prComments result
         let analysisMessages =
@@ -136,6 +137,21 @@ prop_optionDisablesIssue2 =
                     csExcludedWarnings = [2148, 1037]
                 }
 
+prop_wontParseBadShell =
+    [1071] == check "#!/usr/bin/python\ntrue $1\n"
+
+prop_optionDisablesBadShebang =
+    null $ getErrors
+                (mockedSystemInterface [])
+                emptyCheckSpec {
+                    csScript = "#!/usr/bin/python\ntrue\n",
+                    csShellTypeOverride = Just Sh
+                }
+
+prop_annotationDisablesBadShebang =
+    [] == check "#!/usr/bin/python\n# shellcheck shell=sh\ntrue\n"
+
+
 prop_canParseDevNull =
     [] == check "source /dev/null"
 
@@ -180,7 +196,7 @@ prop_filewideAnnotation1 = null $
 prop_filewideAnnotation2 = null $
     check "#!/bin/sh\n# shellcheck disable=2086\ntrue\necho $1"
 prop_filewideAnnotation3 = null $
-    check "#!/bin/sh\n#unerlated\n# shellcheck disable=2086\ntrue\necho $1"
+    check "#!/bin/sh\n#unrelated\n# shellcheck disable=2086\ntrue\necho $1"
 prop_filewideAnnotation4 = null $
     check "#!/bin/sh\n# shellcheck disable=2086\n#unrelated\ntrue\necho $1"
 prop_filewideAnnotation5 = null $
@@ -196,7 +212,6 @@ prop_filewideAnnotation8 = null $
 
 prop_sourcePartOfOriginalScript = -- #1181: -x disabled posix warning for 'source'
     2039 `elem` checkWithIncludes [("./saywhat.sh", "echo foo")] "#!/bin/sh\nsource ./saywhat.sh"
-
 
 return []
 runTests = $quickCheckAll

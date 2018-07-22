@@ -118,10 +118,9 @@ defaultSpec root = AnalysisSpec {
 
 pScript s =
   let
-    pSpec = ParseSpec {
+    pSpec = newParseSpec {
         psFilename = "script",
-        psScript = s,
-        psCheckSourced = False
+        psScript = s
     }
   in prRoot . runIdentity $ parseScript (mockedSystemInterface []) pSpec
 
