@@ -66,7 +66,7 @@ doubleQuote = char '"'
 variableStart = upper <|> lower <|> oneOf "_"
 variableChars = upper <|> lower <|> digit <|> oneOf "_"
 -- Chars to allow in function names
-functionChars = variableChars <|> oneOf ":+?-./^"
+functionChars = variableChars <|> oneOf ":+?-./^@"
 -- Chars to allow in functions using the 'function' keyword
 extendedFunctionChars = functionChars <|> oneOf "[]*=!"
 specialVariable = oneOf "@*#?-$!"
@@ -2499,6 +2499,7 @@ prop_readFunctionDefinition9 = isOk readFunctionDefinition "function foo { true;
 prop_readFunctionDefinition10= isOk readFunctionDefinition "function foo () { true; }"
 prop_readFunctionDefinition11= isWarning readFunctionDefinition "function foo{\ntrue\n}"
 prop_readFunctionDefinition12= isOk readFunctionDefinition "function []!() { true; }"
+prop_readFunctionDefinition13= isOk readFunctionDefinition "@require(){ true; }"
 readFunctionDefinition = called "function" $ do
     start <- startSpan
     functionSignature <- try readFunctionSignature
