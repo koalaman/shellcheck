@@ -2,6 +2,7 @@
 ### Added
 ### Changed
 - Most warnings now have useful end positions
+- SC1117 about unknown double-quoted escape sequences has been retired
 ### Fixed
 - SC2021 no longer triggers for equivalence classes like '[=e=]'
 

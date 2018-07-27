@@ -1254,7 +1254,6 @@ prop_readDoubleQuoted5 = isOk readSimpleCommand "lol \"foo\nbar\" etc"
 prop_readDoubleQuoted6 = isOk readSimpleCommand "echo \"${ ls; }\""
 prop_readDoubleQuoted7 = isOk readSimpleCommand "echo \"${ ls;}bar\""
 prop_readDoubleQuoted8 = isWarning readDoubleQuoted "\"\x201Chello\x201D\""
-prop_readDoubleQuoted9 = isWarning readDoubleQuoted "\"foo\\n\""
 prop_readDoubleQuoted10 = isOk readDoubleQuoted "\"foo\\\\n\""
 readDoubleQuoted = called "double quoted string" $ do
     start <- startSpan
@@ -1440,8 +1439,9 @@ readDoubleEscaped = do
         <|> fmap return doubleQuotable
         <|> do
             c <- anyChar
-            parseNoteAt pos StyleC 1117 $
-                "Backslash is literal in \"\\" ++ [c] ++ "\". Prefer explicit escaping: \"\\\\" ++ [c] ++ "\"."
+            -- This is an invalid escape sequence where the \ is literal.
+            -- Previously this caused a SC1117, which may be re-enabled as
+            -- as a pedantic warning.
             return [bs, c]
 
 readBraceEscaped = do
@@ -1694,8 +1694,6 @@ prop_readHereDoc14= isWarning readScript "cat << foo\nbar\nfoo \n"
 prop_readHereDoc15= isWarning readScript "cat <<foo\nbar\nfoo bar\nfoo"
 prop_readHereDoc16= isOk readScript "cat <<- ' foo'\nbar\n foo\n"
 prop_readHereDoc17= isWarning readScript "cat <<- ' foo'\nbar\n  foo\n foo\n"
-prop_readHereDoc18= isWarning readScript "cat << foo\nLoose \\t\nfoo"
-prop_readHereDoc19= isOk readScript "# shellcheck disable=SC1117\ncat << foo\nLoose \\t\nfoo"
 prop_readHereDoc20= isWarning readScript "cat << foo\n  foo\n()\nfoo\n"
 prop_readHereDoc21= isOk readScript "# shellcheck disable=SC1039\ncat << foo\n  foo\n()\nfoo\n"
 readHereDoc = called "here document" $ do
