@@ -5,6 +5,7 @@
 - SC1117 about unknown double-quoted escape sequences has been retired
 ### Fixed
 - SC2021 no longer triggers for equivalence classes like '[=e=]'
+- SC2221/SC2222 no longer mistriggers on fall-through case branches
 
 ## v0.5.0 - 2018-05-31
 ### Added

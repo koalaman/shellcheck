@@ -2686,26 +2686,31 @@ prop_checkUnmatchableCases5 = verify checkUnmatchableCases "case $f in *.txt) tr
 prop_checkUnmatchableCases6 = verifyNot checkUnmatchableCases "case $f in ?*) true;; *) false;; esac"
 prop_checkUnmatchableCases7 = verifyNot checkUnmatchableCases "case $f in $(x)) true;; asdf) false;; esac"
 prop_checkUnmatchableCases8 = verify checkUnmatchableCases "case $f in cow) true;; bar|cow) false;; esac"
+prop_checkUnmatchableCases9 = verifyNot checkUnmatchableCases "case $f in x) true;;& x) false;; esac"
 checkUnmatchableCases _ t =
     case t of
         T_CaseExpression _ word list -> do
-            let patterns = concatMap snd3 list
+            -- Check all patterns for whether they can ever match
+            let allpatterns  = concatMap snd3 list
+            -- Check only the non-fallthrough branches for shadowing
+            let breakpatterns = concatMap snd3 $ filter (\x -> fst3 x == CaseBreak) list
 
             if isConstant word
                 then warn (getId word) 2194
                         "This word is constant. Did you forget the $ on a variable?"
                 else  potentially $ do
                     pg <- wordToPseudoGlob word
-                    return $ mapM_ (check pg) patterns
+                    return $ mapM_ (check pg) allpatterns
 
-            let exactGlobs = tupMap wordToExactPseudoGlob patterns
-            let fuzzyGlobs = tupMap wordToPseudoGlob patterns
+            let exactGlobs = tupMap wordToExactPseudoGlob breakpatterns
+            let fuzzyGlobs = tupMap wordToPseudoGlob breakpatterns
             let dominators = zip exactGlobs (tails $ drop 1 fuzzyGlobs)
 
             mapM_ checkDoms dominators
 
         _ -> return ()
   where
+    fst3 (x,_,_) = x
     snd3 (_,x,_) = x
     check target candidate = potentially $ do
         candidateGlob <- wordToPseudoGlob candidate
