@@ -2856,16 +2856,25 @@ checkPipeToNowhere _ t =
         name <- getCommandBasename cmd
         guard $ name `elem` nonReadingCommands
         guard . not $ hasAdditionalConsumers cmd
+        -- Confusing echo for cat is so common that it's worth a special case
+        let suggestion =
+                if name == "echo"
+                then "Did you want 'cat' instead?"
+                else "Wrong command or missing xargs?"
         return $ warn (getId cmd) 2216 $
-            "Piping to '" ++ name ++ "', a command that doesn't read stdin. Wrong command or missing xargs?"
+            "Piping to '" ++ name ++ "', a command that doesn't read stdin. " ++ suggestion
 
     checkRedir cmd = potentially $ do
         name <- getCommandBasename cmd
         guard $ name `elem` nonReadingCommands
         guard . not $ hasAdditionalConsumers cmd
         guard . not $ name `elem` ["cp", "mv", "rm"] && cmd `hasFlag` "i"
+        let suggestion =
+                if name == "echo"
+                then "Did you want 'cat' instead?"
+                else "Bad quoting, wrong command or missing xargs?"
         return $ warn (getId cmd) 2217 $
-            "Redirecting to '" ++ name ++ "', a command that doesn't read stdin. Bad quoting or missing xargs?"
+            "Redirecting to '" ++ name ++ "', a command that doesn't read stdin. " ++ suggestion
 
     -- Could any words in a SimpleCommand consume stdin (e.g. echo "$(cat)")?
     hasAdditionalConsumers t = fromMaybe True $ do
