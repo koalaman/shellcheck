@@ -325,26 +325,18 @@ prop_checkUnusedEchoEscapes2 = verifyNot checkUnusedEchoEscapes "echo -e 'foi\\n
 prop_checkUnusedEchoEscapes3 = verify checkUnusedEchoEscapes "echo \"n:\\t42\""
 prop_checkUnusedEchoEscapes4 = verifyNot checkUnusedEchoEscapes "echo lol"
 prop_checkUnusedEchoEscapes5 = verifyNot checkUnusedEchoEscapes "echo -n -e '\n'"
-checkUnusedEchoEscapes = CommandCheck (Basename "echo") (f . arguments)
+checkUnusedEchoEscapes = CommandCheck (Basename "echo") f
   where
-    isDashE = mkRegex "^-.*e"
     hasEscapes = mkRegex "\\\\[rnt]"
-    f args | concat (concatMap oversimplify allButLast) `matches` isDashE =
-        return ()
-      where allButLast = reverse . drop 1 . reverse $ args
-    f args = mapM_ checkEscapes args
+    f cmd =
+        whenShell [Sh, Bash, Ksh] $
+            unless (cmd `hasFlag` "e") $
+                mapM_ examine $ arguments cmd
 
-    checkEscapes (T_NormalWord _ args) =
-        mapM_ checkEscapes args
-    checkEscapes (T_DoubleQuoted id args) =
-        mapM_ checkEscapes args
-    checkEscapes (T_Literal id str) = examine id str
-    checkEscapes (T_SingleQuoted id str) = examine id str
-    checkEscapes _ = return ()
-
-    examine id str =
+    examine token = do
+        let str = onlyLiteralString token
         when (str `matches` hasEscapes) $
-            info id 2028 "echo won't expand escape sequences. Consider printf."
+            info (getId token) 2028 "echo may not expand escape sequences. Use printf."
 
 
 prop_checkInjectableFindSh1 = verify checkInjectableFindSh "find . -exec sh -c 'echo {}' \\;"
