@@ -37,16 +37,20 @@ import Control.Monad
 
 import Test.QuickCheck.All
 
-tokenToPosition startMap (TokenComment id c) = fromMaybe fail $ do
-    span <- Map.lookup id startMap
-    return $ PositionedComment (fst span) (snd span) c
+tokenToPosition startMap t = fromMaybe fail $ do
+    span <- Map.lookup (tcId t) startMap
+    return $ newPositionedComment {
+        pcStartPos = fst span,
+        pcEndPos = snd span,
+        pcComment = tcComment t
+    }
   where
     fail = error "Internal shellcheck error: id doesn't exist. Please report!"
 
 checkScript :: Monad m => SystemInterface m -> CheckSpec -> m CheckResult
 checkScript sys spec = do
     results <- checkScript (csScript spec)
-    return CheckResult {
+    return emptyCheckResult {
         crFilename = csFilename spec,
         crComments = results
     }
@@ -67,27 +71,35 @@ checkScript sys spec = do
         return . nub . sortMessages . filter shouldInclude $
             (parseMessages ++ map translator analysisMessages)
 
-    shouldInclude (PositionedComment _ _ (Comment _ code _)) =
+    shouldInclude pc =
+        let code = cCode (pcComment pc) in
         code `notElem` csExcludedWarnings spec
 
     sortMessages = sortBy (comparing order)
-    order (PositionedComment pos _ (Comment severity code message)) =
-        (posFile pos, posLine pos, posColumn pos, severity, code, message)
-    getPosition (PositionedComment pos _ _) = pos
+    order pc =
+        let pos = pcStartPos pc
+            comment = pcComment pc in
+        (posFile pos,
+         posLine pos,
+         posColumn pos,
+         cSeverity comment,
+         cCode comment,
+         cMessage comment)
+    getPosition = pcStartPos
 
     analysisSpec root =
-        AnalysisSpec {
+        as {
             asScript = root,
             asShellType = csShellTypeOverride spec,
             asCheckSourced = csCheckSourced spec,
             asExecutionMode = Executed
-         }
+         } where as = newAnalysisSpec root
 
 getErrors sys spec =
     sort . map getCode . crComments $
         runIdentity (checkScript sys spec)
   where
-    getCode (PositionedComment _ _ (Comment _ code _)) = code
+    getCode = cCode . pcComment
 
 check = checkWithIncludes []
 

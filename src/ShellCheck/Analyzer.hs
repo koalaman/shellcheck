@@ -30,7 +30,7 @@ import qualified ShellCheck.Checks.ShellSupport
 
 -- TODO: Clean up the cruft this is layered on
 analyzeScript :: AnalysisSpec -> AnalysisResult
-analyzeScript spec = AnalysisResult {
+analyzeScript spec = newAnalysisResult {
     arComments =
         filterByAnnotation spec params . nub $
             runAnalytics spec

@@ -40,7 +40,10 @@ format = do
     }
 
 instance ToJSON (PositionedComment) where
-  toJSON comment@(PositionedComment start end (Comment level code string)) =
+  toJSON comment =
+    let start = pcStartPos comment
+        end = pcEndPos comment
+        c = pcComment comment in
     object [
       "file" .= posFile start,
       "line" .= posLine start,
@@ -48,11 +51,14 @@ instance ToJSON (PositionedComment) where
       "column" .= posColumn start,
       "endColumn" .= posColumn end,
       "level" .= severityText comment,
-      "code" .= code,
-      "message" .= string
+      "code" .= cCode c,
+      "message" .= cMessage c
     ]
 
-  toEncoding comment@(PositionedComment start end (Comment level code string)) =
+  toEncoding comment =
+    let start = pcStartPos comment
+        end = pcEndPos comment
+        c = pcComment comment in
     pairs (
          "file" .= posFile start
       <> "line" .= posLine start
@@ -60,8 +66,8 @@ instance ToJSON (PositionedComment) where
       <> "column" .= posColumn start
       <> "endColumn" .= posColumn end
       <> "level" .= severityText comment
-      <> "code" .= code
-      <> "message" .= string
+      <> "code" .= cCode c
+      <> "message" .= cMessage c
     )
 
 outputError file msg = hPutStrLn stderr $ file ++ ": " ++ msg

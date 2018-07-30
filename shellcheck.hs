@@ -73,7 +73,7 @@ data Options = Options {
 defaultOptions = Options {
     checkSpec = emptyCheckSpec,
     externalSources = False,
-    formatterOptions = FormatterOptions {
+    formatterOptions = newFormatterOptions {
         foColorOption = ColorAuto
     }
 }

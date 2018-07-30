@@ -3050,11 +3050,11 @@ debugParseScript string =
     result {
         -- Remove the noisiest parts
         prTokenPositions = Map.fromList [
-            (Id 0, (Position {
+            (Id 0, (newPosition {
                 posFile = "removed for clarity",
                 posLine = -1,
                 posColumn = -1
-            }, Position {
+            }, newPosition {
                 posFile = "removed for clarity",
                 posLine = -1,
                 posColumn = -1
@@ -3143,14 +3143,14 @@ parseShell env name contents = do
     (result, state) <- runParser env (parseWithNotes readScript) name contents
     case result of
         Right (script, userstate) ->
-            return ParseResult {
+            return newParseResult {
                 prComments = map toPositionedComment $ nub $ parseNotes userstate ++ parseProblems state,
                 prTokenPositions = Map.map startEndPosToPos (positionMap userstate),
                 prRoot = Just $
                     reattachHereDocs script (hereDocMap userstate)
             }
         Left err ->
-            return ParseResult {
+            return newParseResult {
                 prComments =
                     map toPositionedComment $
                         notesForContext (contextStack state)
@@ -3217,10 +3217,18 @@ reattachHereDocs root map =
 
 toPositionedComment :: ParseNote -> PositionedComment
 toPositionedComment (ParseNote start end severity code message) =
-    PositionedComment (posToPos start) (posToPos end) $ Comment severity code message
+    newPositionedComment {
+        pcStartPos = (posToPos start)
+      , pcEndPos = (posToPos end)
+      , pcComment = newComment {
+          cSeverity = severity
+        , cCode = code
+        , cMessage = message
+      }
+    }
 
 posToPos :: SourcePos -> Position
-posToPos sp = Position {
+posToPos sp = newPosition {
     posFile = sourceName sp,
     posLine = fromIntegral $ sourceLine sp,
     posColumn = fromIntegral $ sourceColumn sp
