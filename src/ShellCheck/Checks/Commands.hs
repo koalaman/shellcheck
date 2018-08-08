@@ -517,6 +517,8 @@ prop_checkPrintfVar13= verifyNot checkPrintfVar "printf '%s %s\\n' 1 2 3 4"
 prop_checkPrintfVar14= verify checkPrintfVar "printf '%*s\\n' 1"
 prop_checkPrintfVar15= verifyNot checkPrintfVar "printf '%*s\\n' 1 2"
 prop_checkPrintfVar16= verifyNot checkPrintfVar "printf $'string'"
+prop_checkPrintfVar17= verify checkPrintfVar "printf '%-*s\\n' 1"
+prop_checkPrintfVar18= verifyNot checkPrintfVar "printf '%-*s\\n' 1 2"
 checkPrintfVar = CommandCheck (Exactly "printf") (f . arguments) where
     f (doubledash:rest) | getLiteralString doubledash == Just "--" = f rest
     f (dashv:var:rest) | getLiteralString dashv == Just "-v" = f rest
@@ -527,11 +529,20 @@ checkPrintfVar = CommandCheck (Exactly "printf") (f . arguments) where
         case string of
             '%':'%':rest -> countFormats rest
             '%':'(':rest -> 1 + countFormats (dropWhile (/= ')') rest)
-            '%':'*':rest -> 2 + countFormats rest -- width is specified as an argument
-            '%':rest -> 1 + countFormats rest
+            '%':rest -> regexBasedCountFormats rest + countFormats (dropWhile (/= '%') rest)
             _:rest -> countFormats rest
             [] -> 0
 
+    regexBasedCountFormats rest =
+        maybe 1 (foldl (\acc group -> acc + (if group == "*" then 1 else 0)) 1) (matchRegex re rest)
+      where
+        -- constructed based on specifications in "man printf"
+        re = mkRegex "#?-?\\+? ?0?(\\*|\\d*).?(\\d*|\\*)[diouxXfFeEgGaAcsb]"
+        --            \____ _____/\___ ____/ \____ ____/\________ ________/
+        --                 V          V           V               V
+        --               flags    field width  precision   format character
+        -- field width and precision can be specified with a '*' instead of a digit,
+        -- in which case printf will accept one more argument for each '*' used
     check format more = do
         fromMaybe (return ()) $ do
             string <- getLiteralString format
