@@ -67,7 +67,8 @@ instance Monoid Status where
 data Options = Options {
     checkSpec        :: CheckSpec,
     externalSources  :: Bool,
-    formatterOptions :: FormatterOptions
+    formatterOptions :: FormatterOptions,
+    maxSeverity      :: Severity
 }
 
 defaultOptions = Options {
@@ -75,7 +76,8 @@ defaultOptions = Options {
     externalSources = False,
     formatterOptions = FormatterOptions {
         foColorOption = ColorAuto
-    }
+    },
+    maxSeverity = StyleC
 }
 
 usageHeader = "Usage: shellcheck [OPTIONS...] FILES..."
@@ -93,6 +95,9 @@ options = [
     Option "s" ["shell"]
         (ReqArg (Flag "shell") "SHELLNAME")
         "Specify dialect (sh, bash, dash, ksh)",
+    Option "S" ["severity"]
+        (ReqArg (Flag "severity") "SEVERITY")
+        "Maximum severity of errors to consider (error, warning, info, style)",
     Option "V" ["version"]
         (NoArg $ Flag "version" "true") "Print version information",
     Option "x" ["external-sources"]
@@ -223,6 +228,14 @@ parseColorOption colorOption =
         "never"  -> ColorNever
         _        -> error $ "Bad value for --color `" ++ colorOption ++ "'"
 
+parseSeverityOption severityOption =
+    case severityOption of
+        "error"   -> ErrorC
+        "warning" -> WarningC
+        "info"    -> InfoC
+        "style"   -> StyleC
+        _         -> error $ "Bad value for --severity `" ++ severityOption ++ "'"
+
 parseOption flag options =
     case flag of
         Flag "shell" str ->
@@ -263,6 +276,13 @@ parseOption flag options =
             return options {
                 checkSpec = (checkSpec options) {
                     csCheckSourced = True
+                }
+            }
+
+        Flag "severity" severity ->
+            return options {
+                checkSpec = (checkSpec options) {
+                    csMaxSeverity = parseSeverityOption severity
                 }
             }
 

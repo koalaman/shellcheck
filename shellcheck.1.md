@@ -56,6 +56,11 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
     standard output. Subsequent **-f** options are ignored, see **FORMATS**
     below for more information.
 
+**-S**\ *SEVERITY*,\ **--severity=***severity*
+
+:   Specify maximum severity of errors to consider. Valid values are *error*,
+    *warning*, *info* and *style*.    The default is *style*.
+
 **-s**\ *shell*,\ **--shell=***shell*
 
 :   Specify Bourne shell dialect. Valid values are *sh*, *bash*, *dash* and *ksh*.
