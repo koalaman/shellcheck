@@ -695,6 +695,7 @@ prop_a19= isOk readArithmeticContents "\\\n3 +\\\n  2"
 prop_a20= isOk readArithmeticContents "a ? b ? c : d : e"
 prop_a21= isOk readArithmeticContents "a ? b : c ? d : e"
 prop_a22= isOk readArithmeticContents "!!a"
+prop_a23= isOk readArithmeticContents "~0"
 readArithmeticContents :: Monad m => SCParser m Token
 readArithmeticContents =
     readSequence
