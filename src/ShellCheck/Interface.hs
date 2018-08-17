@@ -35,7 +35,8 @@ data CheckSpec = CheckSpec {
     csScript :: String,
     csCheckSourced :: Bool,
     csExcludedWarnings :: [Integer],
-    csShellTypeOverride :: Maybe Shell
+    csShellTypeOverride :: Maybe Shell,
+    csMinSeverity :: Severity
 } deriving (Show, Eq)
 
 data CheckResult = CheckResult {
@@ -49,7 +50,8 @@ emptyCheckSpec = CheckSpec {
     csScript = "",
     csCheckSourced = False,
     csExcludedWarnings = [],
-    csShellTypeOverride = Nothing
+    csShellTypeOverride = Nothing,
+    csMinSeverity = StyleC
 }
 
 newParseSpec :: ParseSpec
