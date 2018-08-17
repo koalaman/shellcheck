@@ -68,7 +68,7 @@ checkScript sys spec = do
             (parseMessages ++ map translator analysisMessages)
 
     shouldInclude (PositionedComment _ _ (Comment severity code _)) =
-        severity <= csMaxSeverity spec &&
+        severity <= csMinSeverity spec &&
         code `notElem` csExcludedWarnings spec
 
     sortMessages = sortBy (comparing order)

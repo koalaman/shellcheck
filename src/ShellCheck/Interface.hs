@@ -36,7 +36,7 @@ data CheckSpec = CheckSpec {
     csCheckSourced :: Bool,
     csExcludedWarnings :: [Integer],
     csShellTypeOverride :: Maybe Shell,
-    csMaxSeverity :: Severity
+    csMinSeverity :: Severity
 } deriving (Show, Eq)
 
 data CheckResult = CheckResult {
@@ -51,7 +51,7 @@ emptyCheckSpec = CheckSpec {
     csCheckSourced = False,
     csExcludedWarnings = [],
     csShellTypeOverride = Nothing,
-    csMaxSeverity = StyleC
+    csMinSeverity = StyleC
 }
 
 newParseSpec :: ParseSpec

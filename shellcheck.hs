@@ -68,7 +68,7 @@ data Options = Options {
     checkSpec        :: CheckSpec,
     externalSources  :: Bool,
     formatterOptions :: FormatterOptions,
-    maxSeverity      :: Severity
+    minSeverity      :: Severity
 }
 
 defaultOptions = Options {
@@ -77,7 +77,7 @@ defaultOptions = Options {
     formatterOptions = FormatterOptions {
         foColorOption = ColorAuto
     },
-    maxSeverity = StyleC
+    minSeverity = StyleC
 }
 
 usageHeader = "Usage: shellcheck [OPTIONS...] FILES..."
@@ -97,7 +97,7 @@ options = [
         "Specify dialect (sh, bash, dash, ksh)",
     Option "S" ["severity"]
         (ReqArg (Flag "severity") "SEVERITY")
-        "Maximum severity of errors to consider (error, warning, info, style)",
+        "Minimum severity of errors to consider (error, warning, info, style)",
     Option "V" ["version"]
         (NoArg $ Flag "version" "true") "Print version information",
     Option "x" ["external-sources"]
@@ -282,7 +282,7 @@ parseOption flag options =
         Flag "severity" severity ->
             return options {
                 checkSpec = (checkSpec options) {
-                    csMaxSeverity = parseSeverityOption severity
+                    csMinSeverity = parseSeverityOption severity
                 }
             }
 
