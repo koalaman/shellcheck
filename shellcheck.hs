@@ -221,20 +221,28 @@ runFormatter sys format options files = do
                 then NoProblems
                 else SomeProblems
 
-parseColorOption colorOption =
-    case colorOption of
-        "auto"   -> ColorAuto
-        "always" -> ColorAlways
-        "never"  -> ColorNever
-        _        -> error $ "Bad value for --color `" ++ colorOption ++ "'"
+parseEnum name value list =
+    case filter ((== value) . fst) list of
+        [(name, value)] -> return value
+        [] -> do
+            printErr $ "Unknown value for --" ++ name ++ ". " ++
+                       "Valid options are: " ++ (intercalate ", " $ map fst list)
+            throwError SupportFailure
 
-parseSeverityOption severityOption =
-    case severityOption of
-        "error"   -> ErrorC
-        "warning" -> WarningC
-        "info"    -> InfoC
-        "style"   -> StyleC
-        _         -> error $ "Bad value for --severity `" ++ severityOption ++ "'"
+parseColorOption value =
+    parseEnum "color" value [
+        ("auto",   ColorAuto),
+        ("always", ColorAlways),
+        ("never",  ColorNever)
+        ]
+
+parseSeverityOption value =
+    parseEnum "severity" value [
+        ("error",   ErrorC),
+        ("warning", WarningC),
+        ("info",    InfoC),
+        ("style",   StyleC)
+        ]
 
 parseOption flag options =
     case flag of
@@ -265,10 +273,11 @@ parseOption flag options =
                 externalSources = True
             }
 
-        Flag "color" color ->
+        Flag "color" color -> do
+            option <- parseColorOption color
             return options {
                 formatterOptions = (formatterOptions options) {
-                    foColorOption = parseColorOption color
+                    foColorOption = option
                 }
             }
 
@@ -279,10 +288,11 @@ parseOption flag options =
                 }
             }
 
-        Flag "severity" severity ->
+        Flag "severity" severity -> do
+            option <- parseSeverityOption severity
             return options {
                 checkSpec = (checkSpec options) {
-                    csMinSeverity = parseSeverityOption severity
+                    csMinSeverity = option
                 }
             }
 
