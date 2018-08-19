@@ -1,5 +1,6 @@
 ## ???
 ### Added
+- Command line option --severity/-S for filtering by minimum severity
 ### Changed
 - Most warnings now have useful end positions
 - SC1117 about unknown double-quoted escape sequences has been retired
