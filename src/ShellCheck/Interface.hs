@@ -17,7 +17,39 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -}
-module ShellCheck.Interface where
+module ShellCheck.Interface
+    (
+    SystemInterface(..)
+    , CheckSpec(csFilename, csScript, csCheckSourced, csExcludedWarnings, csShellTypeOverride, csMinSeverity)
+    , CheckResult(crFilename, crComments)
+    , ParseSpec(psFilename, psScript, psCheckSourced, psShellTypeOverride)
+    , ParseResult(prComments, prTokenPositions, prRoot)
+    , AnalysisSpec(asScript, asShellType, asExecutionMode, asCheckSourced)
+    , AnalysisResult(arComments)
+    , FormatterOptions(foColorOption)
+    , Shell(Ksh, Sh, Bash, Dash)
+    , ExecutionMode(Executed, Sourced)
+    , ErrorMessage
+    , Code
+    , Severity(ErrorC, WarningC, InfoC, StyleC)
+    , Position(posFile, posLine, posColumn)
+    , Comment(cSeverity, cCode, cMessage)
+    , PositionedComment(pcStartPos , pcEndPos , pcComment)
+    , ColorOption(ColorAuto, ColorAlways, ColorNever)
+    , TokenComment(tcId, tcComment)
+    , emptyCheckResult
+    , newParseResult
+    , newAnalysisSpec
+    , newAnalysisResult
+    , newFormatterOptions
+    , newPosition
+    , newTokenComment
+    , mockedSystemInterface
+    , newParseSpec
+    , emptyCheckSpec
+    , newPositionedComment
+    , newComment
+    ) where
 
 import ShellCheck.AST
 import Control.Monad.Identity
@@ -43,6 +75,12 @@ data CheckResult = CheckResult {
     crFilename :: String,
     crComments :: [PositionedComment]
 } deriving (Show, Eq)
+
+emptyCheckResult :: CheckResult
+emptyCheckResult = CheckResult {
+    crFilename = "",
+    crComments = []
+}
 
 emptyCheckSpec :: CheckSpec
 emptyCheckSpec = CheckSpec {
@@ -76,6 +114,13 @@ data ParseResult = ParseResult {
     prRoot :: Maybe Token
 } deriving (Show, Eq)
 
+newParseResult :: ParseResult
+newParseResult = ParseResult {
+    prComments = [],
+    prTokenPositions = Map.empty,
+    prRoot = Nothing
+}
+
 -- Analyzer input and output
 data AnalysisSpec = AnalysisSpec {
     asScript :: Token,
@@ -84,14 +129,28 @@ data AnalysisSpec = AnalysisSpec {
     asCheckSourced :: Bool
 }
 
+newAnalysisSpec token = AnalysisSpec {
+    asScript = token,
+    asShellType = Nothing,
+    asExecutionMode = Executed,
+    asCheckSourced = False
+}
+
 newtype AnalysisResult = AnalysisResult {
     arComments :: [TokenComment]
 }
 
+newAnalysisResult = AnalysisResult {
+    arComments = []
+}
 
 -- Formatter options
 newtype FormatterOptions = FormatterOptions {
     foColorOption :: ColorOption
+}
+
+newFormatterOptions = FormatterOptions {
+    foColorOption = ColorAuto
 }
 
 
@@ -109,9 +168,48 @@ data Position = Position {
     posColumn :: Integer  -- 1 based source column, where tabs are 8
 } deriving (Show, Eq)
 
-data Comment = Comment Severity Code String deriving (Show, Eq)
-data PositionedComment = PositionedComment Position Position Comment deriving (Show, Eq)
-data TokenComment = TokenComment Id Comment deriving (Show, Eq)
+newPosition :: Position
+newPosition = Position {
+    posFile   = "",
+    posLine   = 1,
+    posColumn = 1
+}
+
+data Comment = Comment {
+    cSeverity :: Severity,
+    cCode     :: Code,
+    cMessage  :: String
+} deriving (Show, Eq)
+
+newComment :: Comment
+newComment = Comment {
+    cSeverity = StyleC,
+    cCode     = 0,
+    cMessage  = ""
+}
+
+data PositionedComment = PositionedComment {
+    pcStartPos :: Position,
+    pcEndPos   :: Position,
+    pcComment  :: Comment
+} deriving (Show, Eq)
+
+newPositionedComment :: PositionedComment
+newPositionedComment = PositionedComment {
+    pcStartPos = newPosition,
+    pcEndPos   = newPosition,
+    pcComment  = newComment
+}
+
+data TokenComment = TokenComment {
+    tcId :: Id,
+    tcComment :: Comment
+} deriving (Show, Eq)
+
+newTokenComment = TokenComment {
+    tcId = Id 0,
+    tcComment = newComment
+}
 
 data ColorOption =
     ColorAuto

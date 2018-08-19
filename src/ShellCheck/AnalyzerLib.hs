@@ -109,12 +109,11 @@ data DataSource =
 
 data VariableState = Dead Token String | Alive deriving (Show)
 
-defaultSpec root = AnalysisSpec {
-    asScript = root,
+defaultSpec root = spec {
     asShellType = Nothing,
     asCheckSourced = False,
     asExecutionMode = Executed
-}
+} where spec = newAnalysisSpec root
 
 pScript s =
   let
@@ -134,7 +133,14 @@ producesComments c s = do
 
 makeComment :: Severity -> Id -> Code -> String -> TokenComment
 makeComment severity id code note =
-    TokenComment id $ Comment severity code note
+    newTokenComment {
+        tcId = id,
+        tcComment = newComment {
+            cSeverity = severity,
+            cCode = code,
+            cMessage = note
+        }
+    }
 
 addComment note = tell [note]
 
@@ -811,10 +817,9 @@ filterByAnnotation asSpec params =
     filter (not . shouldIgnore)
   where
     token = asScript asSpec
-    idFor (TokenComment id _) = id
     shouldIgnore note =
         any (shouldIgnoreFor (getCode note)) $
-            getPath parents (T_Bang $ idFor note)
+            getPath parents (T_Bang $ tcId note)
     shouldIgnoreFor num (T_Annotation _ anns _) =
         any hasNum anns
       where
@@ -823,7 +828,7 @@ filterByAnnotation asSpec params =
     shouldIgnoreFor _ T_Include {} = not $ asCheckSourced asSpec
     shouldIgnoreFor _ _ = False
     parents = parentMap params
-    getCode (TokenComment _ (Comment _ c _)) = c
+    getCode = cCode . tcComment
 
 -- Is this a ${#anything}, to get string length or array count?
 isCountingReference (T_DollarBraced id token) =

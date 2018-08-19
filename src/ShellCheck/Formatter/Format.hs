@@ -30,17 +30,17 @@ data Formatter = Formatter {
     footer :: IO ()
 }
 
-sourceFile (PositionedComment pos _ _) = posFile pos
-lineNo (PositionedComment pos _ _) = posLine pos
-endLineNo (PositionedComment _ end _) = posLine end
-colNo  (PositionedComment pos _ _) = posColumn pos
-endColNo  (PositionedComment _ end _) = posColumn end
-codeNo (PositionedComment _ _ (Comment _ code _)) = code
-messageText (PositionedComment _ _ (Comment _ _ t)) = t
+sourceFile = posFile . pcStartPos
+lineNo = posLine . pcStartPos
+endLineNo = posLine . pcEndPos
+colNo  = posColumn . pcStartPos
+endColNo = posColumn . pcEndPos
+codeNo = cCode . pcComment
+messageText = cMessage . pcComment
 
 severityText :: PositionedComment -> String
-severityText (PositionedComment _ _ (Comment c _ _)) =
-    case c of
+severityText pc =
+    case cSeverity (pcComment pc) of
         ErrorC   -> "error"
         WarningC -> "warning"
         InfoC    -> "info"
@@ -51,11 +51,14 @@ makeNonVirtual comments contents =
     map fix comments
   where
     ls = lines contents
-    fix c@(PositionedComment start end comment) = PositionedComment start {
-        posColumn = realignColumn lineNo colNo c
-    } end {
-        posColumn = realignColumn endLineNo endColNo c
-    } comment
+    fix c = c {
+        pcStartPos = (pcStartPos c) {
+            posColumn = realignColumn lineNo colNo c
+        }
+      , pcEndPos = (pcEndPos c) {
+            posColumn = realignColumn endLineNo endColNo c
+        }
+    }
     realignColumn lineNo colNo c =
       if lineNo c > 0 && lineNo c <= fromIntegral (length ls)
       then real (ls !! fromIntegral (lineNo c - 1)) 0 0 (colNo c)
