@@ -684,20 +684,23 @@ prop_checkFindWithoutPath4 = verifyNot checkFindWithoutPath "find -H -L \"$path\
 prop_checkFindWithoutPath5 = verifyNot checkFindWithoutPath "find -O3 ."
 prop_checkFindWithoutPath6 = verifyNot checkFindWithoutPath "find -D exec ."
 prop_checkFindWithoutPath7 = verifyNot checkFindWithoutPath "find --help"
+prop_checkFindWithoutPath8 = verifyNot checkFindWithoutPath "find -Hx . -print"
 checkFindWithoutPath = CommandCheck (Basename "find") f
   where
     f t@(T_SimpleCommand _ _ (cmd:args)) =
         unless (t `hasFlag` "help" || hasPath args) $
             info (getId cmd) 2185 "Some finds don't have a default path. Specify '.' explicitly."
 
-    -- This is a bit of a kludge. find supports flag arguments both before and after the path,
-    -- as well as multiple non-flag arguments that are not the path. We assume that all the
-    -- pre-path flags are single characters, which is generally the case except for -O3.
+    -- This is a bit of a kludge. find supports flag arguments both before and
+    -- after the path, as well as multiple non-flag arguments that are not the
+    -- path. We assume that all the pre-path flags are single characters from a
+    -- list of GNU and macOS flags.
     hasPath (first:rest) =
         let flag = fromJust $ getLiteralStringExt (const $ return "___") first in
             not ("-" `isPrefixOf` flag) || isLeadingFlag flag && hasPath rest
     hasPath [] = False
-    isLeadingFlag flag = length flag <= 2 || "-O" `isPrefixOf` flag
+    isLeadingFlag flag = length flag <= 2 || all (`elem` leadingFlagChars) flag
+    leadingFlagChars="-EHLPXdfsxO0123456789"
 
 
 prop_checkTimeParameters1 = verify checkTimeParameters "time -f lol sleep 10"
