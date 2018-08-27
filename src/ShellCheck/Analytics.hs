@@ -2943,9 +2943,10 @@ checkForLoopGlobVariables _ t =
 prop_checkSubshelledTests1 = verify checkSubshelledTests "a && ( [ b ] || ! [ c ] )"
 prop_checkSubshelledTests2 = verify checkSubshelledTests "( [ a ] )"
 prop_checkSubshelledTests3 = verify checkSubshelledTests "( [ a ] && [ b ] || test c )"
+prop_checkSubshelledTests4 = verify checkSubshelledTests "( [ a ] && { [ b ] && [ c ]; } )"
 checkSubshelledTests params t =
     case t of
-        T_Subshell id list | isSubshelledTest t ->
+        T_Subshell id list | all isTestStructure list ->
             case () of
                 -- Special case for if (test) and while (test)
                 _ | isCompoundCondition (getPath (parentMap params) t) ->
@@ -2965,19 +2966,24 @@ checkSubshelledTests params t =
             [c] | isTestCommand c -> True
             _ -> False
 
-    isSubshelledTest t =
+    isTestStructure t =
         case t of
-            T_Subshell _ list -> all isSubshelledTest list
-            T_AndIf _ a b -> isSubshelledTest a && isSubshelledTest b
-            T_OrIf  _ a b -> isSubshelledTest a && isSubshelledTest b
-            T_Annotation _ _ t -> isSubshelledTest t
+            T_Banged _ t -> isTestStructure t
+            T_AndIf _ a b -> isTestStructure a && isTestStructure b
+            T_OrIf  _ a b -> isTestStructure a && isTestStructure b
+            T_Pipeline _ [] [T_Redirecting _ _ cmd] ->
+                case cmd of
+                    T_BraceGroup _ ts -> all isTestStructure ts
+                    T_Subshell   _ ts -> all isTestStructure ts
+                    _ -> isTestCommand t
             _ -> isTestCommand t
 
     isTestCommand t =
         case t of
-            T_Banged _ t -> isTestCommand t
-            T_Pipeline _ [] [T_Redirecting _ _ T_Condition {}] -> True
-            T_Pipeline _ [] [T_Redirecting _ _ cmd] -> cmd `isCommand` "test"
+            T_Pipeline _ [] [T_Redirecting _ _ cmd] ->
+                case cmd of
+                    T_Condition {} -> True
+                    _ -> cmd `isCommand` "test"
             _ -> False
 
     -- Check if a T_Subshell is used as a condition, e.g. if ( test )
