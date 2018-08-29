@@ -168,6 +168,7 @@ nodeChecks = [
     ,checkPipeToNowhere
     ,checkForLoopGlobVariables
     ,checkSubshelledTests
+    ,checkInvertedStringTest
     ]
 
 
@@ -3003,6 +3004,27 @@ checkSubshelledTests params t =
             T_Pipeline _ [] _ -> True
             T_Annotation {} -> True
             _ -> False
+
+prop_checkInvertedStringTest1 = verify checkInvertedStringTest "[ ! -z $var ]"
+prop_checkInvertedStringTest2 = verify checkInvertedStringTest "! [[ -n $var ]]"
+prop_checkInvertedStringTest3 = verifyNot checkInvertedStringTest "! [ -x $var ]"
+prop_checkInvertedStringTest4 = verifyNot checkInvertedStringTest "[[ ! -w $var ]]"
+prop_checkInvertedStringTest5 = verifyNot checkInvertedStringTest "[ -z $var ]"
+checkInvertedStringTest _ t =
+    case t of
+        TC_Unary _ _ "!" (TC_Unary _ _ op _) ->
+            case op of
+                "-n" -> style (getId t) 2236 "Use -z instead of ! -n."
+                "-z" -> style (getId t) 2236 "Use -n instead of ! -z."
+                _ -> return ()
+        T_Banged _ (T_Pipeline _ _
+          [T_Redirecting _ _ (T_Condition _ _ (TC_Unary _ _ op _))]) ->
+            case op of
+                "-n" -> style (getId t) 2237 "Use [ -z .. ] instead of ! [ -n .. ]."
+                "-z" -> style (getId t) 2237 "Use [ -n .. ] instead of ! [ -z .. ]."
+                _ -> return ()
+        _ -> return ()
+
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
