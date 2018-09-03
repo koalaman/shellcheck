@@ -127,7 +127,7 @@ prop_checkBashisms44= verifyNot checkBashisms "#!/bin/dash\ntrap foo int"
 prop_checkBashisms45= verifyNot checkBashisms "#!/bin/dash\ntrap foo INT"
 prop_checkBashisms46= verify checkBashisms "#!/bin/dash\ntrap foo SIGINT"
 prop_checkBashisms47= verify checkBashisms "#!/bin/dash\necho foo 42>/dev/null"
-prop_checkBashisms48= verifyNot checkBashisms "#!/bin/dash\necho $LINENO"
+prop_checkBashisms48= verifyNot checkBashisms "#!/bin/sh\necho $LINENO"
 prop_checkBashisms49= verify checkBashisms "#!/bin/dash\necho $MACHTYPE"
 prop_checkBashisms50= verify checkBashisms "#!/bin/sh\ncmd >& file"
 prop_checkBashisms51= verifyNot checkBashisms "#!/bin/sh\ncmd 2>&1"
@@ -302,11 +302,11 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
         (re $ "^[" ++ varChars ++ "*@]+(\\[.*\\])?/", "string replacement is")
         ]
     bashVars = [
-        "LINENO", "OSTYPE", "MACHTYPE", "HOSTTYPE", "HOSTNAME",
+        "OSTYPE", "MACHTYPE", "HOSTTYPE", "HOSTNAME",
         "DIRSTACK", "EUID", "UID", "SHLVL", "PIPESTATUS", "SHELLOPTS"
         ]
     bashDynamicVars = [ "RANDOM", "SECONDS" ]
-    dashVars = [ "LINENO" ]
+    dashVars = [ ]
     isBashVariable var =
         (var `elem` bashDynamicVars
             || var `elem` bashVars && not (isAssigned var))
