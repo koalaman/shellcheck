@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
 # TODO: Find a less trashy way to get the next available error code
-if ! shopt -s globstar
-then
+if ! shopt -s globstar; then
   echo "Error: This script depends on Bash 4." >&2
   exit 1
 fi
 
-for i in 1 2
-do
-  last=$(grep -hv "^prop" ./**/*.hs | grep -Ewo "$i[0-9]{3}" | sort -n | tail -n 1)
+for i in 1 2; do
+  last=$(grep --no-filename --invert-match "^prop" ./**/*.hs \
+	| grep --extended-regexp --word-regexp --only-matching "$i[0-9]{3}" \
+	| sort --numeric-sort \
+	| tail --lines 1
+)
   echo "Next ${i}xxx: $((last+1))"
 done
+
+exit 0
+
