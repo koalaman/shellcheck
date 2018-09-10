@@ -13,6 +13,9 @@ cabal-dev
 cabal.sandbox.config
 cabal.config
 .stack-work
+dist-newstyle/
+.ghc.environment.*
+cabal.project.local
 
 ### Snap ###
 /snap/.snapcraft/

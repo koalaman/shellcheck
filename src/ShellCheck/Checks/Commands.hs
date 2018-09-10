@@ -17,11 +17,9 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleContexts #-}
-
 -- This module contains checks that examine specific commands by name.
-module ShellCheck.Checks.Commands (checker , ShellCheck.Checks.Commands.runTests) where
+module ShellCheck.Checks.Commands (checker) where
 
 import ShellCheck.AST
 import ShellCheck.ASTLib
@@ -37,8 +35,6 @@ import Data.Char
 import Data.List
 import Data.Maybe
 import qualified Data.Map.Strict as Map
-import Test.QuickCheck.All (forAllProperties)
-import Test.QuickCheck.Test (quickCheckWithResult, stdArgs, maxSuccess)
 
 data CommandName = Exactly String | Basename String
     deriving (Eq, Ord)
@@ -128,20 +124,21 @@ getChecker list = Checker {
 checker :: Parameters -> Checker
 checker params = getChecker commandChecks
 
-prop_checkTr1 = verify checkTr "tr [a-f] [A-F]"
-prop_checkTr2 = verify checkTr "tr 'a-z' 'A-Z'"
-prop_checkTr2a= verify checkTr "tr '[a-z]' '[A-Z]'"
-prop_checkTr3 = verifyNot checkTr "tr -d '[:lower:]'"
-prop_checkTr3a= verifyNot checkTr "tr -d '[:upper:]'"
-prop_checkTr3b= verifyNot checkTr "tr -d '|/_[:upper:]'"
-prop_checkTr4 = verifyNot checkTr "ls [a-z]"
-prop_checkTr5 = verify checkTr "tr foo bar"
-prop_checkTr6 = verify checkTr "tr 'hello' 'world'"
-prop_checkTr8 = verifyNot checkTr "tr aeiou _____"
-prop_checkTr9 = verifyNot checkTr "a-z n-za-m"
-prop_checkTr10= verifyNot checkTr "tr --squeeze-repeats rl lr"
-prop_checkTr11= verifyNot checkTr "tr abc '[d*]'"
-prop_checkTr12= verifyNot checkTr "tr '[=e=]' 'e'"
+-- |
+-- prop> verify checkTr "tr [a-f] [A-F]"
+-- prop> verify checkTr "tr 'a-z' 'A-Z'"
+-- prop> verify checkTr "tr '[a-z]' '[A-Z]'"
+-- prop> verifyNot checkTr "tr -d '[:lower:]'"
+-- prop> verifyNot checkTr "tr -d '[:upper:]'"
+-- prop> verifyNot checkTr "tr -d '|/_[:upper:]'"
+-- prop> verifyNot checkTr "ls [a-z]"
+-- prop> verify checkTr "tr foo bar"
+-- prop> verify checkTr "tr 'hello' 'world'"
+-- prop> verifyNot checkTr "tr aeiou _____"
+-- prop> verifyNot checkTr "a-z n-za-m"
+-- prop> verifyNot checkTr "tr --squeeze-repeats rl lr"
+-- prop> verifyNot checkTr "tr abc '[d*]'"
+-- prop> verifyNot checkTr "tr '[=e=]' 'e'"
 checkTr = CommandCheck (Basename "tr") (mapM_ f . arguments)
   where
     f w | isGlob w = -- The user will go [ab] -> '[ab]' -> 'ab'. Fixme?
@@ -162,9 +159,10 @@ checkTr = CommandCheck (Basename "tr") (mapM_ f . arguments)
         let relevant = filter isAlpha s
         in relevant /= nub relevant
 
-prop_checkFindNameGlob1 = verify checkFindNameGlob "find / -name *.php"
-prop_checkFindNameGlob2 = verify checkFindNameGlob "find / -type f -ipath *(foo)"
-prop_checkFindNameGlob3 = verifyNot checkFindNameGlob "find * -name '*.php'"
+-- |
+-- prop> verify checkFindNameGlob "find / -name *.php"
+-- prop> verify checkFindNameGlob "find / -type f -ipath *(foo)"
+-- prop> verifyNot checkFindNameGlob "find * -name '*.php'"
 checkFindNameGlob = CommandCheck (Basename "find") (f . arguments)  where
     acceptsGlob (Just s) = s `elem` [ "-ilname", "-iname", "-ipath", "-iregex", "-iwholename", "-lname", "-name", "-path", "-regex", "-wholename" ]
     acceptsGlob _ = False
@@ -177,10 +175,11 @@ checkFindNameGlob = CommandCheck (Basename "find") (f . arguments)  where
         f (b:r)
 
 
-prop_checkNeedlessExpr = verify checkNeedlessExpr "foo=$(expr 3 + 2)"
-prop_checkNeedlessExpr2 = verify checkNeedlessExpr "foo=`echo \\`expr 3 + 2\\``"
-prop_checkNeedlessExpr3 = verifyNot checkNeedlessExpr "foo=$(expr foo : regex)"
-prop_checkNeedlessExpr4 = verifyNot checkNeedlessExpr "foo=$(expr foo \\< regex)"
+-- |
+-- prop> verify checkNeedlessExpr "foo=$(expr 3 + 2)"
+-- prop> verify checkNeedlessExpr "foo=`echo \\`expr 3 + 2\\``"
+-- prop> verifyNot checkNeedlessExpr "foo=$(expr foo : regex)"
+-- prop> verifyNot checkNeedlessExpr "foo=$(expr foo \\< regex)"
 checkNeedlessExpr = CommandCheck (Basename "expr") f where
     f t =
         when (all (`notElem` exceptions) (words $ arguments t)) $
@@ -191,21 +190,22 @@ checkNeedlessExpr = CommandCheck (Basename "expr") f where
     words = mapMaybe getLiteralString
 
 
-prop_checkGrepRe1 = verify checkGrepRe "cat foo | grep *.mp3"
-prop_checkGrepRe2 = verify checkGrepRe "grep -Ev cow*test *.mp3"
-prop_checkGrepRe3 = verify checkGrepRe "grep --regex=*.mp3 file"
-prop_checkGrepRe4 = verifyNot checkGrepRe "grep foo *.mp3"
-prop_checkGrepRe5 = verifyNot checkGrepRe "grep-v  --regex=moo *"
-prop_checkGrepRe6 = verifyNot checkGrepRe "grep foo \\*.mp3"
-prop_checkGrepRe7 = verify checkGrepRe "grep *foo* file"
-prop_checkGrepRe8 = verify checkGrepRe "ls | grep foo*.jpg"
-prop_checkGrepRe9 = verifyNot checkGrepRe "grep '[0-9]*' file"
-prop_checkGrepRe10= verifyNot checkGrepRe "grep '^aa*' file"
-prop_checkGrepRe11= verifyNot checkGrepRe "grep --include=*.png foo"
-prop_checkGrepRe12= verifyNot checkGrepRe "grep -F 'Foo*' file"
-prop_checkGrepRe13= verifyNot checkGrepRe "grep -- -foo bar*"
-prop_checkGrepRe14= verifyNot checkGrepRe "grep -e -foo bar*"
-prop_checkGrepRe15= verifyNot checkGrepRe "grep --regex -foo bar*"
+-- |
+-- prop> verify checkGrepRe "cat foo | grep *.mp3"
+-- prop> verify checkGrepRe "grep -Ev cow*test *.mp3"
+-- prop> verify checkGrepRe "grep --regex=*.mp3 file"
+-- prop> verifyNot checkGrepRe "grep foo *.mp3"
+-- prop> verifyNot checkGrepRe "grep-v  --regex=moo *"
+-- prop> verifyNot checkGrepRe "grep foo \\*.mp3"
+-- prop> verify checkGrepRe "grep *foo* file"
+-- prop> verify checkGrepRe "ls | grep foo*.jpg"
+-- prop> verifyNot checkGrepRe "grep '[0-9]*' file"
+-- prop> verifyNot checkGrepRe "grep '^aa*' file"
+-- prop> verifyNot checkGrepRe "grep --include=*.png foo"
+-- prop> verifyNot checkGrepRe "grep -F 'Foo*' file"
+-- prop> verifyNot checkGrepRe "grep -- -foo bar*"
+-- prop> verifyNot checkGrepRe "grep -e -foo bar*"
+-- prop> verifyNot checkGrepRe "grep --regex -foo bar*"
 
 checkGrepRe = CommandCheck (Basename "grep") check where
     check cmd = f cmd (arguments cmd)
@@ -256,10 +256,11 @@ checkGrepRe = CommandCheck (Basename "grep") check where
         contra = mkRegex "[^a-zA-Z1-9]\\*|[][^$+\\\\]"
 
 
-prop_checkTrapQuotes1 = verify checkTrapQuotes "trap \"echo $num\" INT"
-prop_checkTrapQuotes1a= verify checkTrapQuotes "trap \"echo `ls`\" INT"
-prop_checkTrapQuotes2 = verifyNot checkTrapQuotes "trap 'echo $num' INT"
-prop_checkTrapQuotes3 = verify checkTrapQuotes "trap \"echo $((1+num))\" EXIT DEBUG"
+-- |
+-- prop> verify checkTrapQuotes "trap \"echo $num\" INT"
+-- prop> verify checkTrapQuotes "trap \"echo `ls`\" INT"
+-- prop> verifyNot checkTrapQuotes "trap 'echo $num' INT"
+-- prop> verify checkTrapQuotes "trap \"echo $((1+num))\" EXIT DEBUG"
 checkTrapQuotes = CommandCheck (Exactly "trap") (f . arguments) where
     f (x:_) = checkTrap x
     f _ = return ()
@@ -273,13 +274,14 @@ checkTrapQuotes = CommandCheck (Exactly "trap") (f . arguments) where
     checkExpansions _ = return ()
 
 
-prop_checkReturn1 = verifyNot checkReturn "return"
-prop_checkReturn2 = verifyNot checkReturn "return 1"
-prop_checkReturn3 = verifyNot checkReturn "return $var"
-prop_checkReturn4 = verifyNot checkReturn "return $((a|b))"
-prop_checkReturn5 = verify checkReturn "return -1"
-prop_checkReturn6 = verify checkReturn "return 1000"
-prop_checkReturn7 = verify checkReturn "return 'hello world'"
+-- |
+-- prop> verifyNot checkReturn "return"
+-- prop> verifyNot checkReturn "return 1"
+-- prop> verifyNot checkReturn "return $var"
+-- prop> verifyNot checkReturn "return $((a|b))"
+-- prop> verify checkReturn "return -1"
+-- prop> verify checkReturn "return 1000"
+-- prop> verify checkReturn "return 'hello world'"
 checkReturn = CommandCheck (Exactly "return") (f . arguments)
   where
     f (first:second:_) =
@@ -302,9 +304,10 @@ checkReturn = CommandCheck (Exactly "return") (f . arguments)
     lit _ = return "WTF"
 
 
-prop_checkFindExecWithSingleArgument1 = verify checkFindExecWithSingleArgument "find . -exec 'cat {} | wc -l' \\;"
-prop_checkFindExecWithSingleArgument2 = verify checkFindExecWithSingleArgument "find . -execdir 'cat {} | wc -l' +"
-prop_checkFindExecWithSingleArgument3 = verifyNot checkFindExecWithSingleArgument "find . -exec wc -l {} \\;"
+-- |
+-- prop> verify checkFindExecWithSingleArgument "find . -exec 'cat {} | wc -l' \\;"
+-- prop> verify checkFindExecWithSingleArgument "find . -execdir 'cat {} | wc -l' +"
+-- prop> verifyNot checkFindExecWithSingleArgument "find . -exec wc -l {} \\;"
 checkFindExecWithSingleArgument = CommandCheck (Basename "find") (f . arguments)
   where
     f = void . sequence . mapMaybe check . tails
@@ -320,11 +323,12 @@ checkFindExecWithSingleArgument = CommandCheck (Basename "find") (f . arguments)
     commandRegex = mkRegex "[ |;]"
 
 
-prop_checkUnusedEchoEscapes1 = verify checkUnusedEchoEscapes "echo 'foo\\nbar\\n'"
-prop_checkUnusedEchoEscapes2 = verifyNot checkUnusedEchoEscapes "echo -e 'foi\\nbar'"
-prop_checkUnusedEchoEscapes3 = verify checkUnusedEchoEscapes "echo \"n:\\t42\""
-prop_checkUnusedEchoEscapes4 = verifyNot checkUnusedEchoEscapes "echo lol"
-prop_checkUnusedEchoEscapes5 = verifyNot checkUnusedEchoEscapes "echo -n -e '\n'"
+-- |
+-- prop> verify checkUnusedEchoEscapes "echo 'foo\\nbar\\n'"
+-- prop> verifyNot checkUnusedEchoEscapes "echo -e 'foi\\nbar'"
+-- prop> verify checkUnusedEchoEscapes "echo \"n:\\t42\""
+-- prop> verifyNot checkUnusedEchoEscapes "echo lol"
+-- prop> verifyNot checkUnusedEchoEscapes "echo -n -e '\n'"
 checkUnusedEchoEscapes = CommandCheck (Basename "echo") f
   where
     hasEscapes = mkRegex "\\\\[rnt]"
@@ -339,9 +343,10 @@ checkUnusedEchoEscapes = CommandCheck (Basename "echo") f
             info (getId token) 2028 "echo may not expand escape sequences. Use printf."
 
 
-prop_checkInjectableFindSh1 = verify checkInjectableFindSh "find . -exec sh -c 'echo {}' \\;"
-prop_checkInjectableFindSh2 = verify checkInjectableFindSh "find . -execdir bash -c 'rm \"{}\"' ';'"
-prop_checkInjectableFindSh3 = verifyNot checkInjectableFindSh "find . -exec sh -c 'rm \"$@\"' _ {} \\;"
+-- |
+-- prop> verify checkInjectableFindSh "find . -exec sh -c 'echo {}' \\;"
+-- prop> verify checkInjectableFindSh "find . -execdir bash -c 'rm \"{}\"' ';'"
+-- prop> verifyNot checkInjectableFindSh "find . -exec sh -c 'rm \"$@\"' _ {} \\;"
 checkInjectableFindSh = CommandCheck (Basename "find") (check . arguments)
   where
     check args = do
@@ -364,9 +369,10 @@ checkInjectableFindSh = CommandCheck (Basename "find") (check . arguments)
             warn id 2156 "Injecting filenames is fragile and insecure. Use parameters."
 
 
-prop_checkFindActionPrecedence1 = verify checkFindActionPrecedence "find . -name '*.wav' -o -name '*.au' -exec rm {} +"
-prop_checkFindActionPrecedence2 = verifyNot checkFindActionPrecedence "find . -name '*.wav' -o \\( -name '*.au' -exec rm {} + \\)"
-prop_checkFindActionPrecedence3 = verifyNot checkFindActionPrecedence "find . -name '*.wav' -o -name '*.au'"
+-- |
+-- prop> verify checkFindActionPrecedence "find . -name '*.wav' -o -name '*.au' -exec rm {} +"
+-- prop> verifyNot checkFindActionPrecedence "find . -name '*.wav' -o \\( -name '*.au' -exec rm {} + \\)"
+-- prop> verifyNot checkFindActionPrecedence "find . -name '*.wav' -o -name '*.au'"
 checkFindActionPrecedence = CommandCheck (Basename "find") (f . arguments)
   where
     pattern = [isMatch, const True, isParam ["-o", "-or"], isMatch, const True, isAction]
@@ -383,28 +389,29 @@ checkFindActionPrecedence = CommandCheck (Basename "find") (f . arguments)
     warnFor t = warn (getId t) 2146 "This action ignores everything before the -o. Use \\( \\) to group."
 
 
-prop_checkMkdirDashPM0 = verify checkMkdirDashPM "mkdir -p -m 0755 a/b"
-prop_checkMkdirDashPM1 = verify checkMkdirDashPM "mkdir -pm 0755 $dir"
-prop_checkMkdirDashPM2 = verify checkMkdirDashPM "mkdir -vpm 0755 a/b"
-prop_checkMkdirDashPM3 = verify checkMkdirDashPM "mkdir -pm 0755 -v a/b"
-prop_checkMkdirDashPM4 = verify checkMkdirDashPM "mkdir --parents --mode=0755 a/b"
-prop_checkMkdirDashPM5 = verify checkMkdirDashPM "mkdir --parents --mode 0755 a/b"
-prop_checkMkdirDashPM6 = verify checkMkdirDashPM "mkdir -p --mode=0755 a/b"
-prop_checkMkdirDashPM7 = verify checkMkdirDashPM "mkdir --parents -m 0755 a/b"
-prop_checkMkdirDashPM8 = verifyNot checkMkdirDashPM "mkdir -p a/b"
-prop_checkMkdirDashPM9 = verifyNot checkMkdirDashPM "mkdir -m 0755 a/b"
-prop_checkMkdirDashPM10 = verifyNot checkMkdirDashPM "mkdir a/b"
-prop_checkMkdirDashPM11 = verifyNot checkMkdirDashPM "mkdir --parents a/b"
-prop_checkMkdirDashPM12 = verifyNot checkMkdirDashPM "mkdir --mode=0755 a/b"
-prop_checkMkdirDashPM13 = verifyNot checkMkdirDashPM "mkdir_func -pm 0755 a/b"
-prop_checkMkdirDashPM14 = verifyNot checkMkdirDashPM "mkdir -p -m 0755 singlelevel"
-prop_checkMkdirDashPM15 = verifyNot checkMkdirDashPM "mkdir -p -m 0755 ../bin"
-prop_checkMkdirDashPM16 = verify checkMkdirDashPM "mkdir -p -m 0755 ../bin/laden"
-prop_checkMkdirDashPM17 = verifyNot checkMkdirDashPM "mkdir -p -m 0755 ./bin"
-prop_checkMkdirDashPM18 = verify checkMkdirDashPM "mkdir -p -m 0755 ./bin/laden"
-prop_checkMkdirDashPM19 = verifyNot checkMkdirDashPM "mkdir -p -m 0755 ./../bin"
-prop_checkMkdirDashPM20 = verifyNot checkMkdirDashPM "mkdir -p -m 0755 .././bin"
-prop_checkMkdirDashPM21 = verifyNot checkMkdirDashPM "mkdir -p -m 0755 ../../bin"
+-- |
+-- prop> verify checkMkdirDashPM "mkdir -p -m 0755 a/b"
+-- prop> verify checkMkdirDashPM "mkdir -pm 0755 $dir"
+-- prop> verify checkMkdirDashPM "mkdir -vpm 0755 a/b"
+-- prop> verify checkMkdirDashPM "mkdir -pm 0755 -v a/b"
+-- prop> verify checkMkdirDashPM "mkdir --parents --mode=0755 a/b"
+-- prop> verify checkMkdirDashPM "mkdir --parents --mode 0755 a/b"
+-- prop> verify checkMkdirDashPM "mkdir -p --mode=0755 a/b"
+-- prop> verify checkMkdirDashPM "mkdir --parents -m 0755 a/b"
+-- prop> verifyNot checkMkdirDashPM "mkdir -p a/b"
+-- prop> verifyNot checkMkdirDashPM "mkdir -m 0755 a/b"
+-- prop> verifyNot checkMkdirDashPM "mkdir a/b"
+-- prop> verifyNot checkMkdirDashPM "mkdir --parents a/b"
+-- prop> verifyNot checkMkdirDashPM "mkdir --mode=0755 a/b"
+-- prop> verifyNot checkMkdirDashPM "mkdir_func -pm 0755 a/b"
+-- prop> verifyNot checkMkdirDashPM "mkdir -p -m 0755 singlelevel"
+-- prop> verifyNot checkMkdirDashPM "mkdir -p -m 0755 ../bin"
+-- prop> verify checkMkdirDashPM "mkdir -p -m 0755 ../bin/laden"
+-- prop> verifyNot checkMkdirDashPM "mkdir -p -m 0755 ./bin"
+-- prop> verify checkMkdirDashPM "mkdir -p -m 0755 ./bin/laden"
+-- prop> verifyNot checkMkdirDashPM "mkdir -p -m 0755 ./../bin"
+-- prop> verifyNot checkMkdirDashPM "mkdir -p -m 0755 .././bin"
+-- prop> verifyNot checkMkdirDashPM "mkdir -p -m 0755 ../../bin"
 checkMkdirDashPM = CommandCheck (Basename "mkdir") check
   where
     check t = potentially $ do
@@ -420,13 +427,14 @@ checkMkdirDashPM = CommandCheck (Basename "mkdir") check
     re = mkRegex "^(\\.\\.?\\/)+[^/]+$"
 
 
-prop_checkNonportableSignals1 = verify checkNonportableSignals "trap f 8"
-prop_checkNonportableSignals2 = verifyNot checkNonportableSignals "trap f 0"
-prop_checkNonportableSignals3 = verifyNot checkNonportableSignals "trap f 14"
-prop_checkNonportableSignals4 = verify checkNonportableSignals "trap f SIGKILL"
-prop_checkNonportableSignals5 = verify checkNonportableSignals "trap f 9"
-prop_checkNonportableSignals6 = verify checkNonportableSignals "trap f stop"
-prop_checkNonportableSignals7 = verifyNot checkNonportableSignals "trap 'stop' int"
+-- |
+-- prop> verify checkNonportableSignals "trap f 8"
+-- prop> verifyNot checkNonportableSignals "trap f 0"
+-- prop> verifyNot checkNonportableSignals "trap f 14"
+-- prop> verify checkNonportableSignals "trap f SIGKILL"
+-- prop> verify checkNonportableSignals "trap f 9"
+-- prop> verify checkNonportableSignals "trap f stop"
+-- prop> verifyNot checkNonportableSignals "trap 'stop' int"
 checkNonportableSignals = CommandCheck (Exactly "trap") (f . arguments)
   where
     f args = case args of
@@ -455,10 +463,11 @@ checkNonportableSignals = CommandCheck (Exactly "trap") (f . arguments)
             "SIGKILL/SIGSTOP can not be trapped."
 
 
-prop_checkInteractiveSu1 = verify checkInteractiveSu "su; rm file; su $USER"
-prop_checkInteractiveSu2 = verify checkInteractiveSu "su foo; something; exit"
-prop_checkInteractiveSu3 = verifyNot checkInteractiveSu "echo rm | su foo"
-prop_checkInteractiveSu4 = verifyNot checkInteractiveSu "su root < script"
+-- |
+-- prop> verify checkInteractiveSu "su; rm file; su $USER"
+-- prop> verify checkInteractiveSu "su foo; something; exit"
+-- prop> verifyNot checkInteractiveSu "echo rm | su foo"
+-- prop> verifyNot checkInteractiveSu "su root < script"
 checkInteractiveSu = CommandCheck (Basename "su") f
   where
     f cmd = when (length (arguments cmd) <= 1) $ do
@@ -473,11 +482,13 @@ checkInteractiveSu = CommandCheck (Basename "su") f
     undirected _ = True
 
 
+-- |
 -- This is hard to get right without properly parsing ssh args
-prop_checkSshCmdStr1 = verify checkSshCommandString "ssh host \"echo $PS1\""
-prop_checkSshCmdStr2 = verifyNot checkSshCommandString "ssh host \"ls foo\""
-prop_checkSshCmdStr3 = verifyNot checkSshCommandString "ssh \"$host\""
-prop_checkSshCmdStr4 = verifyNot checkSshCommandString "ssh -i key \"$host\""
+--
+-- prop> verify checkSshCommandString "ssh host \"echo $PS1\""
+-- prop> verifyNot checkSshCommandString "ssh host \"ls foo\""
+-- prop> verifyNot checkSshCommandString "ssh \"$host\""
+-- prop> verifyNot checkSshCommandString "ssh -i key \"$host\""
 checkSshCommandString = CommandCheck (Basename "ssh") (f . arguments)
   where
     isOption x = "-" `isPrefixOf` (concat $ oversimplify x)
@@ -493,24 +504,25 @@ checkSshCommandString = CommandCheck (Basename "ssh") (f . arguments)
     checkArg _ = return ()
 
 
-prop_checkPrintfVar1 = verify checkPrintfVar "printf \"Lol: $s\""
-prop_checkPrintfVar2 = verifyNot checkPrintfVar "printf 'Lol: $s'"
-prop_checkPrintfVar3 = verify checkPrintfVar "printf -v cow $(cmd)"
-prop_checkPrintfVar4 = verifyNot checkPrintfVar "printf \"%${count}s\" var"
-prop_checkPrintfVar5 = verify checkPrintfVar "printf '%s %s %s' foo bar"
-prop_checkPrintfVar6 = verify checkPrintfVar "printf foo bar baz"
-prop_checkPrintfVar7 = verify checkPrintfVar "printf -- foo bar baz"
-prop_checkPrintfVar8 = verifyNot checkPrintfVar "printf '%s %s %s' \"${var[@]}\""
-prop_checkPrintfVar9 = verifyNot checkPrintfVar "printf '%s %s %s\\n' *.png"
-prop_checkPrintfVar10= verifyNot checkPrintfVar "printf '%s %s %s' foo bar baz"
-prop_checkPrintfVar11= verifyNot checkPrintfVar "printf '%(%s%s)T' -1"
-prop_checkPrintfVar12= verify checkPrintfVar "printf '%s %s\\n' 1 2 3"
-prop_checkPrintfVar13= verifyNot checkPrintfVar "printf '%s %s\\n' 1 2 3 4"
-prop_checkPrintfVar14= verify checkPrintfVar "printf '%*s\\n' 1"
-prop_checkPrintfVar15= verifyNot checkPrintfVar "printf '%*s\\n' 1 2"
-prop_checkPrintfVar16= verifyNot checkPrintfVar "printf $'string'"
-prop_checkPrintfVar17= verify checkPrintfVar "printf '%-*s\\n' 1"
-prop_checkPrintfVar18= verifyNot checkPrintfVar "printf '%-*s\\n' 1 2"
+-- |
+-- prop> verify checkPrintfVar "printf \"Lol: $s\""
+-- prop> verifyNot checkPrintfVar "printf 'Lol: $s'"
+-- prop> verify checkPrintfVar "printf -v cow $(cmd)"
+-- prop> verifyNot checkPrintfVar "printf \"%${count}s\" var"
+-- prop> verify checkPrintfVar "printf '%s %s %s' foo bar"
+-- prop> verify checkPrintfVar "printf foo bar baz"
+-- prop> verify checkPrintfVar "printf -- foo bar baz"
+-- prop> verifyNot checkPrintfVar "printf '%s %s %s' \"${var[@]}\""
+-- prop> verifyNot checkPrintfVar "printf '%s %s %s\\n' *.png"
+-- prop> verifyNot checkPrintfVar "printf '%s %s %s' foo bar baz"
+-- prop> verifyNot checkPrintfVar "printf '%(%s%s)T' -1"
+-- prop> verify checkPrintfVar "printf '%s %s\\n' 1 2 3"
+-- prop> verifyNot checkPrintfVar "printf '%s %s\\n' 1 2 3 4"
+-- prop> verify checkPrintfVar "printf '%*s\\n' 1"
+-- prop> verifyNot checkPrintfVar "printf '%*s\\n' 1 2"
+-- prop> verifyNot checkPrintfVar "printf $'string'"
+-- prop> verify checkPrintfVar "printf '%-*s\\n' 1"
+-- prop> verifyNot checkPrintfVar "printf '%-*s\\n' 1 2"
 checkPrintfVar = CommandCheck (Exactly "printf") (f . arguments) where
     f (doubledash:rest) | getLiteralString doubledash == Just "--" = f rest
     f (dashv:var:rest) | getLiteralString dashv == Just "-v" = f rest
@@ -559,24 +571,26 @@ checkPrintfVar = CommandCheck (Exactly "printf") (f . arguments) where
 
 
 
-prop_checkUuoeCmd1 = verify checkUuoeCmd "echo $(date)"
-prop_checkUuoeCmd2 = verify checkUuoeCmd "echo `date`"
-prop_checkUuoeCmd3 = verify checkUuoeCmd "echo \"$(date)\""
-prop_checkUuoeCmd4 = verify checkUuoeCmd "echo \"`date`\""
-prop_checkUuoeCmd5 = verifyNot checkUuoeCmd "echo \"The time is $(date)\""
-prop_checkUuoeCmd6 = verifyNot checkUuoeCmd "echo \"$(<file)\""
+-- |
+-- prop> verify checkUuoeCmd "echo $(date)"
+-- prop> verify checkUuoeCmd "echo `date`"
+-- prop> verify checkUuoeCmd "echo \"$(date)\""
+-- prop> verify checkUuoeCmd "echo \"`date`\""
+-- prop> verifyNot checkUuoeCmd "echo \"The time is $(date)\""
+-- prop> verifyNot checkUuoeCmd "echo \"$(<file)\""
 checkUuoeCmd = CommandCheck (Exactly "echo") (f . arguments) where
     msg id = style id 2005 "Useless echo? Instead of 'echo $(cmd)', just use 'cmd'."
     f [token] = when (tokenIsJustCommandOutput token) $ msg (getId token)
     f _ = return ()
 
 
-prop_checkSetAssignment1 = verify checkSetAssignment "set foo 42"
-prop_checkSetAssignment2 = verify checkSetAssignment "set foo = 42"
-prop_checkSetAssignment3 = verify checkSetAssignment "set foo=42"
-prop_checkSetAssignment4 = verifyNot checkSetAssignment "set -- if=/dev/null"
-prop_checkSetAssignment5 = verifyNot checkSetAssignment "set 'a=5'"
-prop_checkSetAssignment6 = verifyNot checkSetAssignment "set"
+-- |
+-- prop> verify checkSetAssignment "set foo 42"
+-- prop> verify checkSetAssignment "set foo = 42"
+-- prop> verify checkSetAssignment "set foo=42"
+-- prop> verifyNot checkSetAssignment "set -- if=/dev/null"
+-- prop> verifyNot checkSetAssignment "set 'a=5'"
+-- prop> verifyNot checkSetAssignment "set"
 checkSetAssignment = CommandCheck (Exactly "set") (f . arguments)
   where
     f (var:value:rest) =
@@ -596,10 +610,11 @@ checkSetAssignment = CommandCheck (Exactly "set") (f . arguments)
     literal _ = "*"
 
 
-prop_checkExportedExpansions1 = verify checkExportedExpansions "export $foo"
-prop_checkExportedExpansions2 = verify checkExportedExpansions "export \"$foo\""
-prop_checkExportedExpansions3 = verifyNot checkExportedExpansions "export foo"
-prop_checkExportedExpansions4 = verifyNot checkExportedExpansions "export ${foo?}"
+-- |
+-- prop> verify checkExportedExpansions "export $foo"
+-- prop> verify checkExportedExpansions "export \"$foo\""
+-- prop> verifyNot checkExportedExpansions "export foo"
+-- prop> verifyNot checkExportedExpansions "export ${foo?}"
 checkExportedExpansions = CommandCheck (Exactly "export") (mapM_ check . arguments)
   where
     check t = potentially $ do
@@ -608,14 +623,15 @@ checkExportedExpansions = CommandCheck (Exactly "export") (mapM_ check . argumen
         return . warn (getId t) 2163 $
             "This does not export '" ++ name ++ "'. Remove $/${} for that, or use ${var?} to quiet."
 
-prop_checkReadExpansions1 = verify checkReadExpansions "read $var"
-prop_checkReadExpansions2 = verify checkReadExpansions "read -r $var"
-prop_checkReadExpansions3 = verifyNot checkReadExpansions "read -p $var"
-prop_checkReadExpansions4 = verifyNot checkReadExpansions "read -rd $delim name"
-prop_checkReadExpansions5 = verify checkReadExpansions "read \"$var\""
-prop_checkReadExpansions6 = verify checkReadExpansions "read -a $var"
-prop_checkReadExpansions7 = verifyNot checkReadExpansions "read $1"
-prop_checkReadExpansions8 = verifyNot checkReadExpansions "read ${var?}"
+-- |
+-- prop> verify checkReadExpansions "read $var"
+-- prop> verify checkReadExpansions "read -r $var"
+-- prop> verifyNot checkReadExpansions "read -p $var"
+-- prop> verifyNot checkReadExpansions "read -rd $delim name"
+-- prop> verify checkReadExpansions "read \"$var\""
+-- prop> verify checkReadExpansions "read -a $var"
+-- prop> verifyNot checkReadExpansions "read $1"
+-- prop> verifyNot checkReadExpansions "read ${var?}"
 checkReadExpansions = CommandCheck (Exactly "read") check
   where
     options = getGnuOpts "sreu:n:N:i:p:a:"
@@ -642,9 +658,10 @@ getSingleUnmodifiedVariable word =
             in guard (contents == name) >> return t
         _ -> Nothing
 
-prop_checkAliasesUsesArgs1 = verify checkAliasesUsesArgs "alias a='cp $1 /a'"
-prop_checkAliasesUsesArgs2 = verifyNot checkAliasesUsesArgs "alias $1='foo'"
-prop_checkAliasesUsesArgs3 = verify checkAliasesUsesArgs "alias a=\"echo \\${@}\""
+-- |
+-- prop> verify checkAliasesUsesArgs "alias a='cp $1 /a'"
+-- prop> verifyNot checkAliasesUsesArgs "alias $1='foo'"
+-- prop> verify checkAliasesUsesArgs "alias a=\"echo \\${@}\""
 checkAliasesUsesArgs = CommandCheck (Exactly "alias") (f . arguments)
   where
     re = mkRegex "\\$\\{?[0-9*@]"
@@ -656,9 +673,10 @@ checkAliasesUsesArgs = CommandCheck (Exactly "alias") (f . arguments)
                     "Aliases can't use positional parameters. Use a function."
 
 
-prop_checkAliasesExpandEarly1 = verify checkAliasesExpandEarly "alias foo=\"echo $PWD\""
-prop_checkAliasesExpandEarly2 = verifyNot checkAliasesExpandEarly "alias -p"
-prop_checkAliasesExpandEarly3 = verifyNot checkAliasesExpandEarly "alias foo='echo {1..10}'"
+-- |
+-- prop> verify checkAliasesExpandEarly "alias foo=\"echo $PWD\""
+-- prop> verifyNot checkAliasesExpandEarly "alias -p"
+-- prop> verifyNot checkAliasesExpandEarly "alias foo='echo {1..10}'"
 checkAliasesExpandEarly = CommandCheck (Exactly "alias") (f . arguments)
   where
     f = mapM_ checkArg
@@ -668,8 +686,8 @@ checkAliasesExpandEarly = CommandCheck (Exactly "alias") (f . arguments)
     checkArg _ = return ()
 
 
-prop_checkUnsetGlobs1 = verify checkUnsetGlobs "unset foo[1]"
-prop_checkUnsetGlobs2 = verifyNot checkUnsetGlobs "unset foo"
+-- prop> verify checkUnsetGlobs "unset foo[1]"
+-- prop> verifyNot checkUnsetGlobs "unset foo"
 checkUnsetGlobs = CommandCheck (Exactly "unset") (mapM_ check . arguments)
   where
     check arg =
@@ -677,14 +695,15 @@ checkUnsetGlobs = CommandCheck (Exactly "unset") (mapM_ check . arguments)
             warn (getId arg) 2184 "Quote arguments to unset so they're not glob expanded."
 
 
-prop_checkFindWithoutPath1 = verify checkFindWithoutPath "find -type f"
-prop_checkFindWithoutPath2 = verify checkFindWithoutPath "find"
-prop_checkFindWithoutPath3 = verifyNot checkFindWithoutPath "find . -type f"
-prop_checkFindWithoutPath4 = verifyNot checkFindWithoutPath "find -H -L \"$path\" -print"
-prop_checkFindWithoutPath5 = verifyNot checkFindWithoutPath "find -O3 ."
-prop_checkFindWithoutPath6 = verifyNot checkFindWithoutPath "find -D exec ."
-prop_checkFindWithoutPath7 = verifyNot checkFindWithoutPath "find --help"
-prop_checkFindWithoutPath8 = verifyNot checkFindWithoutPath "find -Hx . -print"
+-- |
+-- prop> verify checkFindWithoutPath "find -type f"
+-- prop> verify checkFindWithoutPath "find"
+-- prop> verifyNot checkFindWithoutPath "find . -type f"
+-- prop> verifyNot checkFindWithoutPath "find -H -L \"$path\" -print"
+-- prop> verifyNot checkFindWithoutPath "find -O3 ."
+-- prop> verifyNot checkFindWithoutPath "find -D exec ."
+-- prop> verifyNot checkFindWithoutPath "find --help"
+-- prop> verifyNot checkFindWithoutPath "find -Hx . -print"
 checkFindWithoutPath = CommandCheck (Basename "find") f
   where
     f t@(T_SimpleCommand _ _ (cmd:args)) =
@@ -703,10 +722,11 @@ checkFindWithoutPath = CommandCheck (Basename "find") f
     leadingFlagChars="-EHLPXdfsxO0123456789"
 
 
-prop_checkTimeParameters1 = verify checkTimeParameters "time -f lol sleep 10"
-prop_checkTimeParameters2 = verifyNot checkTimeParameters "time sleep 10"
-prop_checkTimeParameters3 = verifyNot checkTimeParameters "time -p foo"
-prop_checkTimeParameters4 = verifyNot checkTimeParameters "command time -f lol sleep 10"
+-- |
+-- prop> verify checkTimeParameters "time -f lol sleep 10"
+-- prop> verifyNot checkTimeParameters "time sleep 10"
+-- prop> verifyNot checkTimeParameters "time -p foo"
+-- prop> verifyNot checkTimeParameters "command time -f lol sleep 10"
 checkTimeParameters = CommandCheck (Exactly "time") f
   where
     f (T_SimpleCommand _ _ (cmd:args:_)) =
@@ -717,9 +737,10 @@ checkTimeParameters = CommandCheck (Exactly "time") f
 
     f _ = return ()
 
-prop_checkTimedCommand1 = verify checkTimedCommand "#!/bin/sh\ntime -p foo | bar"
-prop_checkTimedCommand2 = verify checkTimedCommand "#!/bin/dash\ntime ( foo; bar; )"
-prop_checkTimedCommand3 = verifyNot checkTimedCommand "#!/bin/sh\ntime sleep 1"
+-- |
+-- prop> verify checkTimedCommand "#!/bin/sh\ntime -p foo | bar"
+-- prop> verify checkTimedCommand "#!/bin/dash\ntime ( foo; bar; )"
+-- prop> verifyNot checkTimedCommand "#!/bin/sh\ntime sleep 1"
 checkTimedCommand = CommandCheck (Exactly "time") f where
     f (T_SimpleCommand _ _ (c:args@(_:_))) =
         whenShell [Sh, Dash] $ do
@@ -743,32 +764,37 @@ checkTimedCommand = CommandCheck (Exactly "time") f where
             T_SimpleCommand {} -> return True
             _ -> return False
 
-prop_checkLocalScope1 = verify checkLocalScope "local foo=3"
-prop_checkLocalScope2 = verifyNot checkLocalScope "f() { local foo=3; }"
+-- |
+-- prop> verify checkLocalScope "local foo=3"
+-- prop> verifyNot checkLocalScope "f() { local foo=3; }"
 checkLocalScope = CommandCheck (Exactly "local") $ \t ->
     whenShell [Bash, Dash] $ do -- Ksh allows it, Sh doesn't support local
         path <- getPathM t
         unless (any isFunction path) $
             err (getId $ getCommandTokenOrThis t) 2168 "'local' is only valid in functions."
 
-prop_checkDeprecatedTempfile1 = verify checkDeprecatedTempfile "var=$(tempfile)"
-prop_checkDeprecatedTempfile2 = verifyNot checkDeprecatedTempfile "tempfile=$(mktemp)"
+-- |
+-- prop> verify checkDeprecatedTempfile "var=$(tempfile)"
+-- prop> verifyNot checkDeprecatedTempfile "tempfile=$(mktemp)"
 checkDeprecatedTempfile = CommandCheck (Basename "tempfile") $
     \t -> warn (getId $ getCommandTokenOrThis t) 2186 "tempfile is deprecated. Use mktemp instead."
 
-prop_checkDeprecatedEgrep = verify checkDeprecatedEgrep "egrep '.+'"
+-- |
+-- prop> verify checkDeprecatedEgrep "egrep '.+'"
 checkDeprecatedEgrep = CommandCheck (Basename "egrep") $
     \t -> info (getId $ getCommandTokenOrThis t) 2196 "egrep is non-standard and deprecated. Use grep -E instead."
 
-prop_checkDeprecatedFgrep = verify checkDeprecatedFgrep "fgrep '*' files"
+-- |
+-- prop> verify checkDeprecatedFgrep "fgrep '*' files"
 checkDeprecatedFgrep = CommandCheck (Basename "fgrep") $
     \t -> info (getId $ getCommandTokenOrThis t) 2197 "fgrep is non-standard and deprecated. Use grep -F instead."
 
-prop_checkWhileGetoptsCase1 = verify checkWhileGetoptsCase "while getopts 'a:b' x; do case $x in a) foo;; esac; done"
-prop_checkWhileGetoptsCase2 = verify checkWhileGetoptsCase "while getopts 'a:' x; do case $x in a) foo;; b) bar;; esac; done"
-prop_checkWhileGetoptsCase3 = verifyNot checkWhileGetoptsCase "while getopts 'a:b' x; do case $x in a) foo;; b) bar;; *) :;esac; done"
-prop_checkWhileGetoptsCase4 = verifyNot checkWhileGetoptsCase "while getopts 'a:123' x; do case $x in a) foo;; [0-9]) bar;; esac; done"
-prop_checkWhileGetoptsCase5 = verifyNot checkWhileGetoptsCase "while getopts 'a:' x; do case $x in a) foo;; \\?) bar;; *) baz;; esac; done"
+-- |
+-- prop> verify checkWhileGetoptsCase "while getopts 'a:b' x; do case $x in a) foo;; esac; done"
+-- prop> verify checkWhileGetoptsCase "while getopts 'a:' x; do case $x in a) foo;; b) bar;; esac; done"
+-- prop> verifyNot checkWhileGetoptsCase "while getopts 'a:b' x; do case $x in a) foo;; b) bar;; *) :;esac; done"
+-- prop> verifyNot checkWhileGetoptsCase "while getopts 'a:123' x; do case $x in a) foo;; [0-9]) bar;; esac; done"
+-- prop> verifyNot checkWhileGetoptsCase "while getopts 'a:' x; do case $x in a) foo;; \\?) bar;; *) baz;; esac; done"
 checkWhileGetoptsCase = CommandCheck (Exactly "getopts") f
   where
     f :: Token -> Analysis
@@ -833,19 +859,20 @@ checkWhileGetoptsCase = CommandCheck (Exactly "getopts") f
             T_Redirecting _ _ x@(T_CaseExpression {}) -> return x
             _ -> Nothing
 
-prop_checkCatastrophicRm1 = verify checkCatastrophicRm "rm -r $1/$2"
-prop_checkCatastrophicRm2 = verify checkCatastrophicRm "rm -r /home/$foo"
-prop_checkCatastrophicRm3 = verifyNot checkCatastrophicRm "rm -r /home/${USER:?}/*"
-prop_checkCatastrophicRm4 = verify checkCatastrophicRm "rm -fr /home/$(whoami)/*"
-prop_checkCatastrophicRm5 = verifyNot checkCatastrophicRm "rm -r /home/${USER:-thing}/*"
-prop_checkCatastrophicRm6 = verify checkCatastrophicRm "rm --recursive /etc/*$config*"
-prop_checkCatastrophicRm8 = verify checkCatastrophicRm "rm -rf /home"
-prop_checkCatastrophicRm10= verifyNot checkCatastrophicRm "rm -r \"${DIR}\"/{.gitignore,.gitattributes,ci}"
-prop_checkCatastrophicRm11= verify checkCatastrophicRm "rm -r /{bin,sbin}/$exec"
-prop_checkCatastrophicRm12= verify checkCatastrophicRm "rm -r /{{usr,},{bin,sbin}}/$exec"
-prop_checkCatastrophicRm13= verifyNot checkCatastrophicRm "rm -r /{{a,b},{c,d}}/$exec"
-prop_checkCatastrophicRmA = verify checkCatastrophicRm "rm -rf /usr /lib/nvidia-current/xorg/xorg"
-prop_checkCatastrophicRmB = verify checkCatastrophicRm "rm -rf \"$STEAMROOT/\"*"
+-- |
+-- prop> verify checkCatastrophicRm "rm -r $1/$2"
+-- prop> verify checkCatastrophicRm "rm -r /home/$foo"
+-- prop> verifyNot checkCatastrophicRm "rm -r /home/${USER:?}/*"
+-- prop> verify checkCatastrophicRm "rm -fr /home/$(whoami)/*"
+-- prop> verifyNot checkCatastrophicRm "rm -r /home/${USER:-thing}/*"
+-- prop> verify checkCatastrophicRm "rm --recursive /etc/*$config*"
+-- prop> verify checkCatastrophicRm "rm -rf /home"
+-- prop> verifyNot checkCatastrophicRm "rm -r \"${DIR}\"/{.gitignore,.gitattributes,ci}"
+-- prop> verify checkCatastrophicRm "rm -r /{bin,sbin}/$exec"
+-- prop> verify checkCatastrophicRm "rm -r /{{usr,},{bin,sbin}}/$exec"
+-- prop> verifyNot checkCatastrophicRm "rm -r /{{a,b},{c,d}}/$exec"
+-- prop> verify checkCatastrophicRm "rm -rf /usr /lib/nvidia-current/xorg/xorg"
+-- prop> verify checkCatastrophicRm "rm -rf \"$STEAMROOT/\"*"
 checkCatastrophicRm = CommandCheck (Basename "rm") $ \t ->
     when (isRecursive t) $
         mapM_ (mapM_ checkWord . braceExpand) $ arguments t
@@ -894,8 +921,9 @@ checkCatastrophicRm = CommandCheck (Basename "rm") $ \t ->
         ["", "/", "/*", "/*/*"] >>= (\x -> map (++x) paths)
 
 
-prop_checkLetUsage1 = verify checkLetUsage "let a=1"
-prop_checkLetUsage2 = verifyNot checkLetUsage "(( a=1 ))"
+-- |
+-- prop> verify checkLetUsage "let a=1"
+-- prop> verifyNot checkLetUsage "(( a=1 ))"
 checkLetUsage = CommandCheck (Exactly "let") f
   where
     f t = whenShell [Bash,Ksh] $ do
@@ -915,15 +943,16 @@ missingDestination handler token = do
         any (\x -> x /= "" && x `isPrefixOf` "target-directory") $
             map snd args
 
-prop_checkMvArguments1 = verify    checkMvArguments "mv 'foo bar'"
-prop_checkMvArguments2 = verifyNot checkMvArguments "mv foo bar"
-prop_checkMvArguments3 = verifyNot checkMvArguments "mv 'foo bar'{,bak}"
-prop_checkMvArguments4 = verifyNot checkMvArguments "mv \"$@\""
-prop_checkMvArguments5 = verifyNot checkMvArguments "mv -t foo bar"
-prop_checkMvArguments6 = verifyNot checkMvArguments "mv --target-directory=foo bar"
-prop_checkMvArguments7 = verifyNot checkMvArguments "mv --target-direc=foo bar"
-prop_checkMvArguments8 = verifyNot checkMvArguments "mv --version"
-prop_checkMvArguments9 = verifyNot checkMvArguments "mv \"${!var}\""
+-- |
+-- prop> verify    checkMvArguments "mv 'foo bar'"
+-- prop> verifyNot checkMvArguments "mv foo bar"
+-- prop> verifyNot checkMvArguments "mv 'foo bar'{,bak}"
+-- prop> verifyNot checkMvArguments "mv \"$@\""
+-- prop> verifyNot checkMvArguments "mv -t foo bar"
+-- prop> verifyNot checkMvArguments "mv --target-directory=foo bar"
+-- prop> verifyNot checkMvArguments "mv --target-direc=foo bar"
+-- prop> verifyNot checkMvArguments "mv --version"
+-- prop> verifyNot checkMvArguments "mv \"${!var}\""
 checkMvArguments = CommandCheck (Basename "mv") $ missingDestination f
   where
     f t = err (getId t) 2224 "This mv has no destination. Check the arguments."
@@ -937,9 +966,10 @@ checkLnArguments = CommandCheck (Basename "ln") $ missingDestination f
     f t = warn (getId t) 2226 "This ln has no destination. Check the arguments, or specify '.' explicitly."
 
 
-prop_checkFindRedirections1 = verify    checkFindRedirections "find . -exec echo {} > file \\;"
-prop_checkFindRedirections2 = verifyNot checkFindRedirections "find . -exec echo {} \\; > file"
-prop_checkFindRedirections3 = verifyNot checkFindRedirections "find . -execdir sh -c 'foo > file' \\;"
+-- |
+-- prop> verify    checkFindRedirections "find . -exec echo {} > file \\;"
+-- prop> verifyNot checkFindRedirections "find . -exec echo {} \\; > file"
+-- prop> verifyNot checkFindRedirections "find . -execdir sh -c 'foo > file' \\;"
 checkFindRedirections = CommandCheck (Basename "find") f
   where
     f t = do
@@ -954,17 +984,18 @@ checkFindRedirections = CommandCheck (Basename "find") f
                         "Redirection applies to the find command itself. Rewrite to work per action (or move to end)."
             _ -> return ()
 
-prop_checkWhich = verify checkWhich "which '.+'"
+-- prop> verify checkWhich "which '.+'"
 checkWhich = CommandCheck (Basename "which") $
     \t -> info (getId $ getCommandTokenOrThis t) 2230 "which is non-standard. Use builtin 'command -v' instead."
 
-prop_checkSudoRedirect1 = verify checkSudoRedirect "sudo echo 3 > /proc/file"
-prop_checkSudoRedirect2 = verify checkSudoRedirect "sudo cmd < input"
-prop_checkSudoRedirect3 = verify checkSudoRedirect "sudo cmd >> file"
-prop_checkSudoRedirect4 = verify checkSudoRedirect "sudo cmd &> file"
-prop_checkSudoRedirect5 = verifyNot checkSudoRedirect "sudo cmd 2>&1"
-prop_checkSudoRedirect6 = verifyNot checkSudoRedirect "sudo cmd 2> log"
-prop_checkSudoRedirect7 = verifyNot checkSudoRedirect "sudo cmd > /dev/null 2>&1"
+-- |
+-- prop> verify checkSudoRedirect "sudo echo 3 > /proc/file"
+-- prop> verify checkSudoRedirect "sudo cmd < input"
+-- prop> verify checkSudoRedirect "sudo cmd >> file"
+-- prop> verify checkSudoRedirect "sudo cmd &> file"
+-- prop> verifyNot checkSudoRedirect "sudo cmd 2>&1"
+-- prop> verifyNot checkSudoRedirect "sudo cmd 2> log"
+-- prop> verifyNot checkSudoRedirect "sudo cmd > /dev/null 2>&1"
 checkSudoRedirect = CommandCheck (Basename "sudo") f
   where
     f t = do
@@ -988,13 +1019,14 @@ checkSudoRedirect = CommandCheck (Basename "sudo") f
     warnAbout _ = return ()
     special file = concat (oversimplify file) == "/dev/null"
 
-prop_checkSudoArgs1 = verify checkSudoArgs "sudo cd /root"
-prop_checkSudoArgs2 = verify checkSudoArgs "sudo export x=3"
-prop_checkSudoArgs3 = verifyNot checkSudoArgs "sudo ls /usr/local/protected"
-prop_checkSudoArgs4 = verifyNot checkSudoArgs "sudo ls && export x=3"
-prop_checkSudoArgs5 = verifyNot checkSudoArgs "sudo echo ls"
-prop_checkSudoArgs6 = verifyNot checkSudoArgs "sudo -n -u export ls"
-prop_checkSudoArgs7 = verifyNot checkSudoArgs "sudo docker export foo"
+-- |
+-- prop> verify checkSudoArgs "sudo cd /root"
+-- prop> verify checkSudoArgs "sudo export x=3"
+-- prop> verifyNot checkSudoArgs "sudo ls /usr/local/protected"
+-- prop> verifyNot checkSudoArgs "sudo ls && export x=3"
+-- prop> verifyNot checkSudoArgs "sudo echo ls"
+-- prop> verifyNot checkSudoArgs "sudo -n -u export ls"
+-- prop> verifyNot checkSudoArgs "sudo docker export foo"
 checkSudoArgs = CommandCheck (Basename "sudo") f
   where
     f t = potentially $ do
@@ -1008,5 +1040,3 @@ checkSudoArgs = CommandCheck (Basename "sudo") f
     -- This mess is why ShellCheck prefers not to know.
     parseOpts = getBsdOpts "vAknSbEHPa:g:h:p:u:c:T:r:"
 
-return []
-runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

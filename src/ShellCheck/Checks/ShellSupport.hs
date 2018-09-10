@@ -17,9 +17,8 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleContexts #-}
-module ShellCheck.Checks.ShellSupport (checker , ShellCheck.Checks.ShellSupport.runTests) where
+module ShellCheck.Checks.ShellSupport (checker) where
 
 import ShellCheck.AST
 import ShellCheck.ASTLib
@@ -33,8 +32,6 @@ import Data.Char
 import Data.List
 import Data.Maybe
 import qualified Data.Map as Map
-import Test.QuickCheck.All (forAllProperties)
-import Test.QuickCheck.Test (quickCheckWithResult, stdArgs, maxSuccess)
 
 data ForShell = ForShell [Shell] (Token -> Analysis)
 
@@ -67,9 +64,10 @@ testChecker (ForShell _ t) =
 verify c s = producesComments (testChecker c) s == Just True
 verifyNot c s = producesComments (testChecker c) s == Just False
 
-prop_checkForDecimals1 = verify checkForDecimals "((3.14*c))"
-prop_checkForDecimals2 = verify checkForDecimals "foo[1.2]=bar"
-prop_checkForDecimals3 = verifyNot checkForDecimals "declare -A foo; foo[1.2]=bar"
+-- |
+-- prop> verify checkForDecimals "((3.14*c))"
+-- prop> verify checkForDecimals "foo[1.2]=bar"
+-- prop> verifyNot checkForDecimals "declare -A foo; foo[1.2]=bar"
 checkForDecimals = ForShell [Sh, Dash, Bash] f
   where
     f t@(TA_Expansion id _) = potentially $ do
@@ -80,62 +78,63 @@ checkForDecimals = ForShell [Sh, Dash, Bash] f
     f _ = return ()
 
 
-prop_checkBashisms = verify checkBashisms "while read a; do :; done < <(a)"
-prop_checkBashisms2 = verify checkBashisms "[ foo -nt bar ]"
-prop_checkBashisms3 = verify checkBashisms "echo $((i++))"
-prop_checkBashisms4 = verify checkBashisms "rm !(*.hs)"
-prop_checkBashisms5 = verify checkBashisms "source file"
-prop_checkBashisms6 = verify checkBashisms "[ \"$a\" == 42 ]"
-prop_checkBashisms7 = verify checkBashisms "echo ${var[1]}"
-prop_checkBashisms8 = verify checkBashisms "echo ${!var[@]}"
-prop_checkBashisms9 = verify checkBashisms "echo ${!var*}"
-prop_checkBashisms10= verify checkBashisms "echo ${var:4:12}"
-prop_checkBashisms11= verifyNot checkBashisms "echo ${var:-4}"
-prop_checkBashisms12= verify checkBashisms "echo ${var//foo/bar}"
-prop_checkBashisms13= verify checkBashisms "exec -c env"
-prop_checkBashisms14= verify checkBashisms "echo -n \"Foo: \""
-prop_checkBashisms15= verify checkBashisms "let n++"
-prop_checkBashisms16= verify checkBashisms "echo $RANDOM"
-prop_checkBashisms17= verify checkBashisms "echo $((RANDOM%6+1))"
-prop_checkBashisms18= verify checkBashisms "foo &> /dev/null"
-prop_checkBashisms19= verify checkBashisms "foo > file*.txt"
-prop_checkBashisms20= verify checkBashisms "read -ra foo"
-prop_checkBashisms21= verify checkBashisms "[ -a foo ]"
-prop_checkBashisms22= verifyNot checkBashisms "[ foo -a bar ]"
-prop_checkBashisms23= verify checkBashisms "trap mything ERR INT"
-prop_checkBashisms24= verifyNot checkBashisms "trap mything INT TERM"
-prop_checkBashisms25= verify checkBashisms "cat < /dev/tcp/host/123"
-prop_checkBashisms26= verify checkBashisms "trap mything ERR SIGTERM"
-prop_checkBashisms27= verify checkBashisms "echo *[^0-9]*"
-prop_checkBashisms28= verify checkBashisms "exec {n}>&2"
-prop_checkBashisms29= verify checkBashisms "echo ${!var}"
-prop_checkBashisms30= verify checkBashisms "printf -v '%s' \"$1\""
-prop_checkBashisms31= verify checkBashisms "printf '%q' \"$1\""
-prop_checkBashisms32= verifyNot checkBashisms "#!/bin/dash\n[ foo -nt bar ]"
-prop_checkBashisms33= verify checkBashisms "#!/bin/sh\necho -n foo"
-prop_checkBashisms34= verifyNot checkBashisms "#!/bin/dash\necho -n foo"
-prop_checkBashisms35= verifyNot checkBashisms "#!/bin/dash\nlocal foo"
-prop_checkBashisms36= verifyNot checkBashisms "#!/bin/dash\nread -p foo -r bar"
-prop_checkBashisms37= verifyNot checkBashisms "HOSTNAME=foo; echo $HOSTNAME"
-prop_checkBashisms38= verify checkBashisms "RANDOM=9; echo $RANDOM"
-prop_checkBashisms39= verify checkBashisms "foo-bar() { true; }"
-prop_checkBashisms40= verify checkBashisms "echo $(<file)"
-prop_checkBashisms41= verify checkBashisms "echo `<file`"
-prop_checkBashisms42= verify checkBashisms "trap foo int"
-prop_checkBashisms43= verify checkBashisms "trap foo sigint"
-prop_checkBashisms44= verifyNot checkBashisms "#!/bin/dash\ntrap foo int"
-prop_checkBashisms45= verifyNot checkBashisms "#!/bin/dash\ntrap foo INT"
-prop_checkBashisms46= verify checkBashisms "#!/bin/dash\ntrap foo SIGINT"
-prop_checkBashisms47= verify checkBashisms "#!/bin/dash\necho foo 42>/dev/null"
-prop_checkBashisms48= verifyNot checkBashisms "#!/bin/sh\necho $LINENO"
-prop_checkBashisms49= verify checkBashisms "#!/bin/dash\necho $MACHTYPE"
-prop_checkBashisms50= verify checkBashisms "#!/bin/sh\ncmd >& file"
-prop_checkBashisms51= verifyNot checkBashisms "#!/bin/sh\ncmd 2>&1"
-prop_checkBashisms52= verifyNot checkBashisms "#!/bin/sh\ncmd >&2"
-prop_checkBashisms53= verifyNot checkBashisms "#!/bin/sh\nprintf -- -f\n"
-prop_checkBashisms54= verify checkBashisms "#!/bin/sh\nfoo+=bar"
-prop_checkBashisms55= verify checkBashisms "#!/bin/sh\necho ${@%foo}"
-prop_checkBashisms56= verifyNot checkBashisms "#!/bin/sh\necho ${##}"
+-- |
+-- prop> verify checkBashisms "while read a; do :; done < <(a)"
+-- prop> verify checkBashisms "[ foo -nt bar ]"
+-- prop> verify checkBashisms "echo $((i++))"
+-- prop> verify checkBashisms "rm !(*.hs)"
+-- prop> verify checkBashisms "source file"
+-- prop> verify checkBashisms "[ \"$a\" == 42 ]"
+-- prop> verify checkBashisms "echo ${var[1]}"
+-- prop> verify checkBashisms "echo ${!var[@]}"
+-- prop> verify checkBashisms "echo ${!var*}"
+-- prop> verify checkBashisms "echo ${var:4:12}"
+-- prop> verifyNot checkBashisms "echo ${var:-4}"
+-- prop> verify checkBashisms "echo ${var//foo/bar}"
+-- prop> verify checkBashisms "exec -c env"
+-- prop> verify checkBashisms "echo -n \"Foo: \""
+-- prop> verify checkBashisms "let n++"
+-- prop> verify checkBashisms "echo $RANDOM"
+-- prop> verify checkBashisms "echo $((RANDOM%6+1))"
+-- prop> verify checkBashisms "foo &> /dev/null"
+-- prop> verify checkBashisms "foo > file*.txt"
+-- prop> verify checkBashisms "read -ra foo"
+-- prop> verify checkBashisms "[ -a foo ]"
+-- prop> verifyNot checkBashisms "[ foo -a bar ]"
+-- prop> verify checkBashisms "trap mything ERR INT"
+-- prop> verifyNot checkBashisms "trap mything INT TERM"
+-- prop> verify checkBashisms "cat < /dev/tcp/host/123"
+-- prop> verify checkBashisms "trap mything ERR SIGTERM"
+-- prop> verify checkBashisms "echo *[^0-9]*"
+-- prop> verify checkBashisms "exec {n}>&2"
+-- prop> verify checkBashisms "echo ${!var}"
+-- prop> verify checkBashisms "printf -v '%s' \"$1\""
+-- prop> verify checkBashisms "printf '%q' \"$1\""
+-- prop> verifyNot checkBashisms "#!/bin/dash\n[ foo -nt bar ]"
+-- prop> verify checkBashisms "#!/bin/sh\necho -n foo"
+-- prop> verifyNot checkBashisms "#!/bin/dash\necho -n foo"
+-- prop> verifyNot checkBashisms "#!/bin/dash\nlocal foo"
+-- prop> verifyNot checkBashisms "#!/bin/dash\nread -p foo -r bar"
+-- prop> verifyNot checkBashisms "HOSTNAME=foo; echo $HOSTNAME"
+-- prop> verify checkBashisms "RANDOM=9; echo $RANDOM"
+-- prop> verify checkBashisms "foo-bar() { true; }"
+-- prop> verify checkBashisms "echo $(<file)"
+-- prop> verify checkBashisms "echo `<file`"
+-- prop> verify checkBashisms "trap foo int"
+-- prop> verify checkBashisms "trap foo sigint"
+-- prop> verifyNot checkBashisms "#!/bin/dash\ntrap foo int"
+-- prop> verifyNot checkBashisms "#!/bin/dash\ntrap foo INT"
+-- prop> verify checkBashisms "#!/bin/dash\ntrap foo SIGINT"
+-- prop> verify checkBashisms "#!/bin/dash\necho foo 42>/dev/null"
+-- prop> verifyNot checkBashisms "#!/bin/sh\necho $LINENO"
+-- prop> verify checkBashisms "#!/bin/dash\necho $MACHTYPE"
+-- prop> verify checkBashisms "#!/bin/sh\ncmd >& file"
+-- prop> verifyNot checkBashisms "#!/bin/sh\ncmd 2>&1"
+-- prop> verifyNot checkBashisms "#!/bin/sh\ncmd >&2"
+-- prop> verifyNot checkBashisms "#!/bin/sh\nprintf -- -f\n"
+-- prop> verify checkBashisms "#!/bin/sh\nfoo+=bar"
+-- prop> verify checkBashisms "#!/bin/sh\necho ${@%foo}"
+-- prop> verifyNot checkBashisms "#!/bin/sh\necho ${##}"
 checkBashisms = ForShell [Sh, Dash] $ \t -> do
     params <- ask
     kludge params t
@@ -317,8 +316,9 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
                 Assignment (_, _, name, _) -> name == var
                 _ -> False
 
-prop_checkEchoSed1 = verify checkEchoSed "FOO=$(echo \"$cow\" | sed 's/foo/bar/g')"
-prop_checkEchoSed2 = verify checkEchoSed "rm $(echo $cow | sed -e 's,foo,bar,')"
+-- |
+-- prop> verify checkEchoSed "FOO=$(echo \"$cow\" | sed 's/foo/bar/g')"
+-- prop> verify checkEchoSed "rm $(echo $cow | sed -e 's,foo,bar,')"
 checkEchoSed = ForShell [Bash, Ksh] f
   where
     f (T_Pipeline id _ [a, b]) =
@@ -344,10 +344,11 @@ checkEchoSed = ForShell [Bash, Ksh] f
     f _ = return ()
 
 
-prop_checkBraceExpansionVars1 = verify checkBraceExpansionVars "echo {1..$n}"
-prop_checkBraceExpansionVars2 = verifyNot checkBraceExpansionVars "echo {1,3,$n}"
-prop_checkBraceExpansionVars3 = verify checkBraceExpansionVars "eval echo DSC{0001..$n}.jpg"
-prop_checkBraceExpansionVars4 = verify checkBraceExpansionVars "echo {$i..100}"
+-- |
+-- prop> verify checkBraceExpansionVars "echo {1..$n}"
+-- prop> verifyNot checkBraceExpansionVars "echo {1,3,$n}"
+-- prop> verify checkBraceExpansionVars "eval echo DSC{0001..$n}.jpg"
+-- prop> verify checkBraceExpansionVars "echo {$i..100}"
 checkBraceExpansionVars = ForShell [Bash] f
   where
     f t@(T_BraceExpansion id list) = mapM_ check list
@@ -372,12 +373,13 @@ checkBraceExpansionVars = ForShell [Bash] f
         return $ isJust cmd && fromJust cmd `isUnqualifiedCommand` "eval"
 
 
-prop_checkMultiDimensionalArrays1 = verify checkMultiDimensionalArrays "foo[a][b]=3"
-prop_checkMultiDimensionalArrays2 = verifyNot checkMultiDimensionalArrays "foo[a]=3"
-prop_checkMultiDimensionalArrays3 = verify checkMultiDimensionalArrays "foo=( [a][b]=c )"
-prop_checkMultiDimensionalArrays4 = verifyNot checkMultiDimensionalArrays "foo=( [a]=c )"
-prop_checkMultiDimensionalArrays5 = verify checkMultiDimensionalArrays "echo ${foo[bar][baz]}"
-prop_checkMultiDimensionalArrays6 = verifyNot checkMultiDimensionalArrays "echo ${foo[bar]}"
+-- |
+-- prop> verify checkMultiDimensionalArrays "foo[a][b]=3"
+-- prop> verifyNot checkMultiDimensionalArrays "foo[a]=3"
+-- prop> verify checkMultiDimensionalArrays "foo=( [a][b]=c )"
+-- prop> verifyNot checkMultiDimensionalArrays "foo=( [a]=c )"
+-- prop> verify checkMultiDimensionalArrays "echo ${foo[bar][baz]}"
+-- prop> verifyNot checkMultiDimensionalArrays "echo ${foo[bar]}"
 checkMultiDimensionalArrays = ForShell [Bash] f
   where
     f token =
@@ -392,16 +394,17 @@ checkMultiDimensionalArrays = ForShell [Bash] f
     re = mkRegex "^\\[.*\\]\\[.*\\]"  -- Fixme, this matches ${foo:- [][]} and such as well
     isMultiDim t = getBracedModifier (bracedString t) `matches` re
 
-prop_checkPS11 = verify checkPS1Assignments "PS1='\\033[1;35m\\$ '"
-prop_checkPS11a= verify checkPS1Assignments "export PS1='\\033[1;35m\\$ '"
-prop_checkPSf2 = verify checkPS1Assignments "PS1='\\h \\e[0m\\$ '"
-prop_checkPS13 = verify checkPS1Assignments "PS1=$'\\x1b[c '"
-prop_checkPS14 = verify checkPS1Assignments "PS1=$'\\e[3m; '"
-prop_checkPS14a= verify checkPS1Assignments "export PS1=$'\\e[3m; '"
-prop_checkPS15 = verifyNot checkPS1Assignments "PS1='\\[\\033[1;35m\\]\\$ '"
-prop_checkPS16 = verifyNot checkPS1Assignments "PS1='\\[\\e1m\\e[1m\\]\\$ '"
-prop_checkPS17 = verifyNot checkPS1Assignments "PS1='e033x1B'"
-prop_checkPS18 = verifyNot checkPS1Assignments "PS1='\\[\\e\\]'"
+-- |
+-- prop> verify checkPS1Assignments "PS1='\\033[1;35m\\$ '"
+-- prop> verify checkPS1Assignments "export PS1='\\033[1;35m\\$ '"
+-- prop> verify checkPS1Assignments "PS1='\\h \\e[0m\\$ '"
+-- prop> verify checkPS1Assignments "PS1=$'\\x1b[c '"
+-- prop> verify checkPS1Assignments "PS1=$'\\e[3m; '"
+-- prop> verify checkPS1Assignments "export PS1=$'\\e[3m; '"
+-- prop> verifyNot checkPS1Assignments "PS1='\\[\\033[1;35m\\]\\$ '"
+-- prop> verifyNot checkPS1Assignments "PS1='\\[\\e1m\\e[1m\\]\\$ '"
+-- prop> verifyNot checkPS1Assignments "PS1='e033x1B'"
+-- prop> verifyNot checkPS1Assignments "PS1='\\[\\e\\]'"
 checkPS1Assignments = ForShell [Bash] f
   where
     f token = case token of
@@ -417,7 +420,3 @@ checkPS1Assignments = ForShell [Bash] f
            isJust $ matchRegex escapeRegex unenclosed
     enclosedRegex = mkRegex "\\\\\\[.*\\\\\\]" -- FIXME: shouldn't be eager
     escapeRegex = mkRegex "\\\\x1[Bb]|\\\\e|\x1B|\\\\033"
-
-
-return []
-runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

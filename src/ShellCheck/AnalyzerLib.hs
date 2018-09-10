@@ -18,7 +18,6 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TemplateHaskell  #-}
 module ShellCheck.AnalyzerLib where
 import           ShellCheck.AST
 import           ShellCheck.ASTLib
@@ -37,9 +36,6 @@ import           Data.List
 import qualified Data.Map               as Map
 import           Data.Maybe
 import           Data.Semigroup
-
-import           Test.QuickCheck.All    (forAllProperties)
-import           Test.QuickCheck.Test   (maxSuccess, quickCheckWithResult, stdArgs)
 
 type Analysis = AnalyzerM ()
 type AnalyzerM a = RWS Parameters [TokenComment] Cache a
@@ -196,16 +192,15 @@ containsLastpipe root =
                 _ -> False
 
 
-prop_determineShell0 = determineShell (fromJust $ pScript "#!/bin/sh") == Sh
-prop_determineShell1 = determineShell (fromJust $ pScript "#!/usr/bin/env ksh") == Ksh
-prop_determineShell2 = determineShell (fromJust $ pScript "") == Bash
-prop_determineShell3 = determineShell (fromJust $ pScript "#!/bin/sh -e") == Sh
-prop_determineShell4 = determineShell (fromJust $ pScript
-    "#!/bin/ksh\n#shellcheck shell=sh\nfoo") == Sh
-prop_determineShell5 = determineShell (fromJust $ pScript
-    "#shellcheck shell=sh\nfoo") == Sh
-prop_determineShell6 = determineShell (fromJust $ pScript "#! /bin/sh") == Sh
-prop_determineShell7 = determineShell (fromJust $ pScript "#! /bin/ash") == Dash
+-- |
+-- prop> determineShell (fromJust $ pScript "#!/bin/sh") == Sh
+-- prop> determineShell (fromJust $ pScript "#!/usr/bin/env ksh") == Ksh
+-- prop> determineShell (fromJust $ pScript "") == Bash
+-- prop> determineShell (fromJust $ pScript "#!/bin/sh -e") == Sh
+-- prop> determineShell (fromJust $ pScript "#!/bin/ksh\n#shellcheck shell=sh\nfoo") == Sh
+-- prop> determineShell (fromJust $ pScript "#shellcheck shell=sh\nfoo") == Sh
+-- prop> determineShell (fromJust $ pScript "#! /bin/sh") == Sh
+-- prop> determineShell (fromJust $ pScript "#! /bin/ash") == Dash
 determineShell t = fromMaybe Bash $ do
     shellString <- foldl mplus Nothing $ getCandidates t
     shellForExecutable shellString
@@ -627,10 +622,11 @@ getIndexReferences s = fromMaybe [] $ do
   where
     re = mkRegex "(\\[.*\\])"
 
-prop_getOffsetReferences1 = getOffsetReferences ":bar" == ["bar"]
-prop_getOffsetReferences2 = getOffsetReferences ":bar:baz" == ["bar", "baz"]
-prop_getOffsetReferences3 = getOffsetReferences "[foo]:bar" == ["bar"]
-prop_getOffsetReferences4 = getOffsetReferences "[foo]:bar:baz" == ["bar", "baz"]
+-- |
+-- prop> getOffsetReferences ":bar" == ["bar"]
+-- prop> getOffsetReferences ":bar:baz" == ["bar", "baz"]
+-- prop> getOffsetReferences "[foo]:bar" == ["bar"]
+-- prop> getOffsetReferences "[foo]:bar:baz" == ["bar", "baz"]
 getOffsetReferences mods = fromMaybe [] $ do
 -- if mods start with [, then drop until ]
     match <- matchRegex re mods
@@ -705,9 +701,15 @@ isUnqualifiedCommand token str = isCommandMatch token (== str)
 isCommandMatch token matcher = fromMaybe False $
     fmap matcher (getCommandName token)
 
+-- |
 -- Does this regex look like it was intended as a glob?
--- True:  *foo*
--- False: .*foo.*
+--
+-- >>> isConfusedGlobRegex "*foo*"
+-- True
+--
+-- >>> isConfusedGlobRegex ".*foo.*"
+-- False
+--
 isConfusedGlobRegex :: String -> Bool
 isConfusedGlobRegex ('*':_) = True
 isConfusedGlobRegex [x,'*'] | x /= '\\' = True
@@ -717,9 +719,10 @@ isVariableStartChar x = x == '_' || isAsciiLower x || isAsciiUpper x
 isVariableChar x = isVariableStartChar x || isDigit x
 variableNameRegex = mkRegex "[_a-zA-Z][_a-zA-Z0-9]*"
 
-prop_isVariableName1 = isVariableName "_fo123"
-prop_isVariableName2 = not $ isVariableName "4"
-prop_isVariableName3 = not $ isVariableName "test: "
+-- |
+-- prop> isVariableName "_fo123"
+-- prop> not $ isVariableName "4"
+-- prop> not $ isVariableName "test: "
 isVariableName (x:r) = isVariableStartChar x && all isVariableChar r
 isVariableName _     = False
 
@@ -728,27 +731,28 @@ getVariablesFromLiteralToken token =
 
 -- Try to get referenced variables from a literal string like "$foo"
 -- Ignores tons of cases like arithmetic evaluation and array indices.
-prop_getVariablesFromLiteral1 =
-    getVariablesFromLiteral "$foo${bar//a/b}$BAZ" == ["foo", "bar", "BAZ"]
+-- prop> getVariablesFromLiteral "$foo${bar//a/b}$BAZ" == ["foo", "bar", "BAZ"]
 getVariablesFromLiteral string =
     map (!! 0) $ matchAllSubgroups variableRegex string
   where
     variableRegex = mkRegex "\\$\\{?([A-Za-z0-9_]+)"
 
+-- |
 -- Get the variable name from an expansion like ${var:-foo}
-prop_getBracedReference1 = getBracedReference "foo" == "foo"
-prop_getBracedReference2 = getBracedReference "#foo" == "foo"
-prop_getBracedReference3 = getBracedReference "#" == "#"
-prop_getBracedReference4 = getBracedReference "##" == "#"
-prop_getBracedReference5 = getBracedReference "#!" == "!"
-prop_getBracedReference6 = getBracedReference "!#" == "#"
-prop_getBracedReference7 = getBracedReference "!foo#?" == "foo"
-prop_getBracedReference8 = getBracedReference "foo-bar" == "foo"
-prop_getBracedReference9 = getBracedReference "foo:-bar" == "foo"
-prop_getBracedReference10= getBracedReference "foo: -1" == "foo"
-prop_getBracedReference11= getBracedReference "!os*" == ""
-prop_getBracedReference12= getBracedReference "!os?bar**" == ""
-prop_getBracedReference13= getBracedReference "foo[bar]" == "foo"
+--
+-- prop> getBracedReference "foo" == "foo"
+-- prop> getBracedReference "#foo" == "foo"
+-- prop> getBracedReference "#" == "#"
+-- prop> getBracedReference "##" == "#"
+-- prop> getBracedReference "#!" == "!"
+-- prop> getBracedReference "!#" == "#"
+-- prop> getBracedReference "!foo#?" == "foo"
+-- prop> getBracedReference "foo-bar" == "foo"
+-- prop> getBracedReference "foo:-bar" == "foo"
+-- prop> getBracedReference "foo: -1" == "foo"
+-- prop> getBracedReference "!os*" == ""
+-- prop> getBracedReference "!os?bar**" == ""
+-- prop> getBracedReference "foo[bar]" == "foo"
 getBracedReference s = fromMaybe s $
     nameExpansion s `mplus` takeName noPrefix `mplus` getSpecial noPrefix `mplus` getSpecial s
   where
@@ -771,9 +775,10 @@ getBracedReference s = fromMaybe s $
         return ""
     nameExpansion _ = Nothing
 
-prop_getBracedModifier1 = getBracedModifier "foo:bar:baz" == ":bar:baz"
-prop_getBracedModifier2 = getBracedModifier "!var:-foo" == ":-foo"
-prop_getBracedModifier3 = getBracedModifier "foo[bar]" == "[bar]"
+-- |
+-- prop> getBracedModifier "foo:bar:baz" == ":bar:baz"
+-- prop> getBracedModifier "!var:-foo" == ":-foo"
+-- prop> getBracedModifier "foo[bar]" == "[bar]"
 getBracedModifier s = fromMaybe "" . listToMaybe $ do
     let var = getBracedReference s
     a <- dropModifier s
@@ -790,10 +795,13 @@ getBracedModifier s = fromMaybe "" . listToMaybe $ do
 
 -- Run an action in a Maybe (or do nothing).
 -- Example:
+--
+-- @
 -- potentially $ do
 --   s <- getLiteralString cmd
 --   guard $ s `elem` ["--recursive", "-r"]
 --   return $ warn .. "Something something recursive"
+-- @
 potentially :: Monad m => Maybe (m ()) -> m ()
 potentially = fromMaybe (return ())
 
@@ -878,6 +886,3 @@ getOpts flagTokenizer string cmd = process flags
             else do
                 more <- process rest2
                 return $ (flag1, token1) : more
-
-return []
-runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

@@ -17,9 +17,8 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleContexts #-}
-module ShellCheck.Analytics (runAnalytics, ShellCheck.Analytics.runTests) where
+module ShellCheck.Analytics (runAnalytics) where
 
 import ShellCheck.AST
 import ShellCheck.ASTLib
@@ -43,8 +42,6 @@ import Data.Maybe
 import Data.Ord
 import Debug.Trace
 import qualified Data.Map.Strict as Map
-import Test.QuickCheck.All (forAllProperties)
-import Test.QuickCheck.Test (quickCheckWithResult, stdArgs, maxSuccess)
 
 -- Checks that are run on the AST root
 treeChecks :: [Parameters -> Token -> [TokenComment]]
@@ -240,7 +237,7 @@ isCondition (child:parent:rest) =
             T_UntilExpression id c l -> take 1 . reverse $ c
             _ -> []
 
-prop_checkEchoWc3 = verify checkEchoWc "n=$(echo $foo | wc -c)"
+-- prop> verify checkEchoWc "n=$(echo $foo | wc -c)"
 checkEchoWc _ (T_Pipeline id _ [a, b]) =
     when (acmd == ["echo", "${VAR}"]) $
         case bcmd of
@@ -253,20 +250,22 @@ checkEchoWc _ (T_Pipeline id _ [a, b]) =
     countMsg = style id 2000 "See if you can use ${#variable} instead."
 checkEchoWc _ _ = return ()
 
-prop_checkPipedAssignment1 = verify checkPipedAssignment "A=ls | grep foo"
-prop_checkPipedAssignment2 = verifyNot checkPipedAssignment "A=foo cmd | grep foo"
-prop_checkPipedAssignment3 = verifyNot checkPipedAssignment "A=foo"
+-- |
+-- prop> verify checkPipedAssignment "A=ls | grep foo"
+-- prop> verifyNot checkPipedAssignment "A=foo cmd | grep foo"
+-- prop> verifyNot checkPipedAssignment "A=foo"
 checkPipedAssignment _ (T_Pipeline _ _ (T_Redirecting _ _ (T_SimpleCommand id (_:_) []):_:_)) =
     warn id 2036 "If you wanted to assign the output of the pipeline, use a=$(b | c) ."
 checkPipedAssignment _ _ = return ()
 
-prop_checkAssignAteCommand1 = verify checkAssignAteCommand "A=ls -l"
-prop_checkAssignAteCommand2 = verify checkAssignAteCommand "A=ls --sort=$foo"
-prop_checkAssignAteCommand3 = verify checkAssignAteCommand "A=cat foo | grep bar"
-prop_checkAssignAteCommand4 = verifyNot checkAssignAteCommand "A=foo ls -l"
-prop_checkAssignAteCommand5 = verify checkAssignAteCommand "PAGER=cat grep bar"
-prop_checkAssignAteCommand6 = verifyNot checkAssignAteCommand "PAGER=\"cat\" grep bar"
-prop_checkAssignAteCommand7 = verify checkAssignAteCommand "here=pwd"
+-- |
+-- prop> verify checkAssignAteCommand "A=ls -l"
+-- prop> verify checkAssignAteCommand "A=ls --sort=$foo"
+-- prop> verify checkAssignAteCommand "A=cat foo | grep bar"
+-- prop> verifyNot checkAssignAteCommand "A=foo ls -l"
+-- prop> verify checkAssignAteCommand "PAGER=cat grep bar"
+-- prop> verifyNot checkAssignAteCommand "PAGER=\"cat\" grep bar"
+-- prop> verify checkAssignAteCommand "here=pwd"
 checkAssignAteCommand _ (T_SimpleCommand id (T_Assignment _ _ _ _ assignmentTerm:[]) list) =
     -- Check if first word is intended as an argument (flag or glob).
     if firstWordIsArg list
@@ -285,9 +284,10 @@ checkAssignAteCommand _ (T_SimpleCommand id (T_Assignment _ _ _ _ assignmentTerm
 
 checkAssignAteCommand _ _ = return ()
 
-prop_checkArithmeticOpCommand1 = verify checkArithmeticOpCommand "i=i + 1"
-prop_checkArithmeticOpCommand2 = verify checkArithmeticOpCommand "foo=bar * 2"
-prop_checkArithmeticOpCommand3 = verifyNot checkArithmeticOpCommand "foo + opts"
+-- |
+-- prop> verify checkArithmeticOpCommand "i=i + 1"
+-- prop> verify checkArithmeticOpCommand "foo=bar * 2"
+-- prop> verifyNot checkArithmeticOpCommand "foo + opts"
 checkArithmeticOpCommand _ (T_SimpleCommand id [T_Assignment {}] (firstWord:_)) =
     fromMaybe (return ()) $ check <$> getGlobOrLiteralString firstWord
   where
@@ -297,8 +297,9 @@ checkArithmeticOpCommand _ (T_SimpleCommand id [T_Assignment {}] (firstWord:_)) 
                 "Use $((..)) for arithmetics, e.g. i=$((i " ++ op ++ " 2))"
 checkArithmeticOpCommand _ _ = return ()
 
-prop_checkWrongArit = verify checkWrongArithmeticAssignment "i=i+1"
-prop_checkWrongArit2 = verify checkWrongArithmeticAssignment "n=2; i=n*2"
+-- |
+-- prop> verify checkWrongArithmeticAssignment "i=i+1"
+-- prop> verify checkWrongArithmeticAssignment "n=2; i=n*2"
 checkWrongArithmeticAssignment params (T_SimpleCommand id (T_Assignment _ _ _ _ val:[]) []) =
   fromMaybe (return ()) $ do
     str <- getNormalString val
@@ -326,12 +327,13 @@ checkWrongArithmeticAssignment params (T_SimpleCommand id (T_Assignment _ _ _ _ 
 checkWrongArithmeticAssignment _ _ = return ()
 
 
-prop_checkUuoc1 = verify checkUuoc "cat foo | grep bar"
-prop_checkUuoc2 = verifyNot checkUuoc "cat * | grep bar"
-prop_checkUuoc3 = verify checkUuoc "cat $var | grep bar"
-prop_checkUuoc4 = verifyNot checkUuoc "cat $var"
-prop_checkUuoc5 = verifyNot checkUuoc "cat \"$@\""
-prop_checkUuoc6 = verifyNot checkUuoc "cat -n | grep bar"
+-- |
+-- prop> verify checkUuoc "cat foo | grep bar"
+-- prop> verifyNot checkUuoc "cat * | grep bar"
+-- prop> verify checkUuoc "cat $var | grep bar"
+-- prop> verifyNot checkUuoc "cat $var"
+-- prop> verifyNot checkUuoc "cat \"$@\""
+-- prop> verifyNot checkUuoc "cat -n | grep bar"
 checkUuoc _ (T_Pipeline _ _ (T_Redirecting _ _ cmd:_:_)) =
     checkCommand "cat" (const f) cmd
   where
@@ -341,20 +343,21 @@ checkUuoc _ (T_Pipeline _ _ (T_Redirecting _ _ cmd:_:_)) =
     isOption word = "-" `isPrefixOf` onlyLiteralString word
 checkUuoc _ _ = return ()
 
-prop_checkPipePitfalls3 = verify checkPipePitfalls "ls | grep -v mp3"
-prop_checkPipePitfalls4 = verifyNot checkPipePitfalls "find . -print0 | xargs -0 foo"
-prop_checkPipePitfalls5 = verifyNot checkPipePitfalls "ls -N | foo"
-prop_checkPipePitfalls6 = verify checkPipePitfalls "find . | xargs foo"
-prop_checkPipePitfalls7 = verifyNot checkPipePitfalls "find . -printf '%s\\n' | xargs foo"
-prop_checkPipePitfalls8 = verify checkPipePitfalls "foo | grep bar | wc -l"
-prop_checkPipePitfalls9 = verifyNot checkPipePitfalls "foo | grep -o bar | wc -l"
-prop_checkPipePitfalls10 = verifyNot checkPipePitfalls "foo | grep -o bar | wc"
-prop_checkPipePitfalls11 = verifyNot checkPipePitfalls "foo | grep bar | wc"
-prop_checkPipePitfalls12 = verifyNot checkPipePitfalls "foo | grep -o bar | wc -c"
-prop_checkPipePitfalls13 = verifyNot checkPipePitfalls "foo | grep bar | wc -c"
-prop_checkPipePitfalls14 = verifyNot checkPipePitfalls "foo | grep -o bar | wc -cmwL"
-prop_checkPipePitfalls15 = verifyNot checkPipePitfalls "foo | grep bar | wc -cmwL"
-prop_checkPipePitfalls16 = verifyNot checkPipePitfalls "foo | grep -r bar | wc -l"
+-- |
+-- prop> verify checkPipePitfalls "ls | grep -v mp3"
+-- prop> verifyNot checkPipePitfalls "find . -print0 | xargs -0 foo"
+-- prop> verifyNot checkPipePitfalls "ls -N | foo"
+-- prop> verify checkPipePitfalls "find . | xargs foo"
+-- prop> verifyNot checkPipePitfalls "find . -printf '%s\\n' | xargs foo"
+-- prop> verify checkPipePitfalls "foo | grep bar | wc -l"
+-- prop> verifyNot checkPipePitfalls "foo | grep -o bar | wc -l"
+-- prop> verifyNot checkPipePitfalls "foo | grep -o bar | wc"
+-- prop> verifyNot checkPipePitfalls "foo | grep bar | wc"
+-- prop> verifyNot checkPipePitfalls "foo | grep -o bar | wc -c"
+-- prop> verifyNot checkPipePitfalls "foo | grep bar | wc -c"
+-- prop> verifyNot checkPipePitfalls "foo | grep -o bar | wc -cmwL"
+-- prop> verifyNot checkPipePitfalls "foo | grep bar | wc -cmwL"
+-- prop> verifyNot checkPipePitfalls "foo | grep -r bar | wc -l"
 checkPipePitfalls _ (T_Pipeline id _ commands) = do
     for ["find", "xargs"] $
         \(find:xargs:_) ->
@@ -418,19 +421,21 @@ indexOfSublists sub = f 0
     match _ _ = False
 
 
-prop_checkShebangParameters1 = verifyTree checkShebangParameters "#!/usr/bin/env bash -x\necho cow"
-prop_checkShebangParameters2 = verifyNotTree checkShebangParameters "#! /bin/sh  -l "
+-- |
+-- prop> verifyTree checkShebangParameters "#!/usr/bin/env bash -x\necho cow"
+-- prop> verifyNotTree checkShebangParameters "#! /bin/sh  -l "
 checkShebangParameters p (T_Annotation _ _ t) = checkShebangParameters p t
 checkShebangParameters _ (T_Script id sb _) =
     [makeComment ErrorC id 2096 "On most OS, shebangs can only specify a single parameter." | length (words sb) > 2]
 
-prop_checkShebang1 = verifyNotTree checkShebang "#!/usr/bin/env bash -x\necho cow"
-prop_checkShebang2 = verifyNotTree checkShebang "#! /bin/sh  -l "
-prop_checkShebang3 = verifyTree checkShebang "ls -l"
-prop_checkShebang4 = verifyNotTree checkShebang "#shellcheck shell=sh\nfoo"
-prop_checkShebang5 = verifyTree checkShebang "#!/usr/bin/env ash"
-prop_checkShebang6 = verifyNotTree checkShebang "#!/usr/bin/env ash\n# shellcheck shell=dash\n"
-prop_checkShebang7 = verifyNotTree checkShebang "#!/usr/bin/env ash\n# shellcheck shell=sh\n"
+-- |
+-- prop> verifyNotTree checkShebang "#!/usr/bin/env bash -x\necho cow"
+-- prop> verifyNotTree checkShebang "#! /bin/sh  -l "
+-- prop> verifyTree checkShebang "ls -l"
+-- prop> verifyNotTree checkShebang "#shellcheck shell=sh\nfoo"
+-- prop> verifyTree checkShebang "#!/usr/bin/env ash"
+-- prop> verifyNotTree checkShebang "#!/usr/bin/env ash\n# shellcheck shell=dash\n"
+-- prop> verifyNotTree checkShebang "#!/usr/bin/env ash\n# shellcheck shell=sh\n"
 checkShebang params (T_Annotation _ list t) =
     if any isOverride list then [] else checkShebang params t
   where
@@ -444,15 +449,16 @@ checkShebang params (T_Script id sb _) = execWriter $
             warn id 2187 "Ash scripts will be checked as Dash. Add '# shellcheck shell=dash' to silence."
 
 
-prop_checkForInQuoted = verify checkForInQuoted "for f in \"$(ls)\"; do echo foo; done"
-prop_checkForInQuoted2 = verifyNot checkForInQuoted "for f in \"$@\"; do echo foo; done"
-prop_checkForInQuoted2a = verifyNot checkForInQuoted "for f in *.mp3; do echo foo; done"
-prop_checkForInQuoted2b = verify checkForInQuoted "for f in \"*.mp3\"; do echo foo; done"
-prop_checkForInQuoted3 = verify checkForInQuoted "for f in 'find /'; do true; done"
-prop_checkForInQuoted4 = verify checkForInQuoted "for f in 1,2,3; do true; done"
-prop_checkForInQuoted4a = verifyNot checkForInQuoted "for f in foo{1,2,3}; do true; done"
-prop_checkForInQuoted5 = verify checkForInQuoted "for f in ls; do true; done"
-prop_checkForInQuoted6 = verifyNot checkForInQuoted "for f in \"${!arr}\"; do true; done"
+-- |
+-- prop> verify checkForInQuoted "for f in \"$(ls)\"; do echo foo; done"
+-- prop> verifyNot checkForInQuoted "for f in \"$@\"; do echo foo; done"
+-- prop> verifyNot checkForInQuoted "for f in *.mp3; do echo foo; done"
+-- prop> verify checkForInQuoted "for f in \"*.mp3\"; do echo foo; done"
+-- prop> verify checkForInQuoted "for f in 'find /'; do true; done"
+-- prop> verify checkForInQuoted "for f in 1,2,3; do true; done"
+-- prop> verifyNot checkForInQuoted "for f in foo{1,2,3}; do true; done"
+-- prop> verify checkForInQuoted "for f in ls; do true; done"
+-- prop> verifyNot checkForInQuoted "for f in \"${!arr}\"; do true; done"
 checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [word@(T_DoubleQuoted id list)]] _) =
     when (any (\x -> willSplit x && not (mayBecomeMultipleArgs x)) list
             || (fmap wouldHaveBeenGlob (getLiteralString word) == Just True)) $
@@ -466,11 +472,12 @@ checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [T_Literal id s]] _) =
       else warn id 2043 "This loop will only ever run once for a constant value. Did you perhaps mean to loop over dir/*, $var or $(cmd)?"
 checkForInQuoted _ _ = return ()
 
-prop_checkForInCat1 = verify checkForInCat "for f in $(cat foo); do stuff; done"
-prop_checkForInCat1a= verify checkForInCat "for f in `cat foo`; do stuff; done"
-prop_checkForInCat2 = verify checkForInCat "for f in $(cat foo | grep lol); do stuff; done"
-prop_checkForInCat2a= verify checkForInCat "for f in `cat foo | grep lol`; do stuff; done"
-prop_checkForInCat3 = verifyNot checkForInCat "for f in $(cat foo | grep bar | wc -l); do stuff; done"
+-- |
+-- prop> verify checkForInCat "for f in $(cat foo); do stuff; done"
+-- prop> verify checkForInCat "for f in `cat foo`; do stuff; done"
+-- prop> verify checkForInCat "for f in $(cat foo | grep lol); do stuff; done"
+-- prop> verify checkForInCat "for f in `cat foo | grep lol`; do stuff; done"
+-- prop> verifyNot checkForInCat "for f in $(cat foo | grep bar | wc -l); do stuff; done"
 checkForInCat _ (T_ForIn _ f [T_NormalWord _ w] _) = mapM_ checkF w
   where
     checkF (T_DollarExpansion id [T_Pipeline _ _ r])
@@ -482,9 +489,10 @@ checkForInCat _ (T_ForIn _ f [T_NormalWord _ w] _) = mapM_ checkF w
                         ["grep", "fgrep", "egrep", "sed", "cat", "awk", "cut", "sort"]
 checkForInCat _ _ = return ()
 
-prop_checkForInLs = verify checkForInLs "for f in $(ls *.mp3); do mplayer \"$f\"; done"
-prop_checkForInLs2 = verify checkForInLs "for f in `ls *.mp3`; do mplayer \"$f\"; done"
-prop_checkForInLs3 = verify checkForInLs "for f in `find / -name '*.mp3'`; do mplayer \"$f\"; done"
+-- |
+-- prop> verify checkForInLs "for f in $(ls *.mp3); do mplayer \"$f\"; done"
+-- prop> verify checkForInLs "for f in `ls *.mp3`; do mplayer \"$f\"; done"
+-- prop> verify checkForInLs "for f in `find / -name '*.mp3'`; do mplayer \"$f\"; done"
 checkForInLs _ = try
   where
    try (T_ForIn _ f [T_NormalWord _ [T_DollarExpansion id [x]]] _) =
@@ -501,12 +509,13 @@ checkForInLs _ = try
       _ -> return ()
 
 
-prop_checkFindExec1 = verify checkFindExec "find / -name '*.php' -exec rm {};"
-prop_checkFindExec2 = verify checkFindExec "find / -exec touch {} && ls {} \\;"
-prop_checkFindExec3 = verify checkFindExec "find / -execdir cat {} | grep lol +"
-prop_checkFindExec4 = verifyNot checkFindExec "find / -name '*.php' -exec foo {} +"
-prop_checkFindExec5 = verifyNot checkFindExec "find / -execdir bash -c 'a && b' \\;"
-prop_checkFindExec6 = verify checkFindExec "find / -type d -execdir rm *.jpg \\;"
+-- |
+-- prop> verify checkFindExec "find / -name '*.php' -exec rm {};"
+-- prop> verify checkFindExec "find / -exec touch {} && ls {} \\;"
+-- prop> verify checkFindExec "find / -execdir cat {} | grep lol +"
+-- prop> verifyNot checkFindExec "find / -name '*.php' -exec foo {} +"
+-- prop> verifyNot checkFindExec "find / -execdir bash -c 'a && b' \\;"
+-- prop> verify checkFindExec "find / -type d -execdir rm *.jpg \\;"
 checkFindExec _ cmd@(T_SimpleCommand _ _ t@(h:r)) | cmd `isCommand` "find" = do
     c <- broken r False
     when c $
@@ -541,17 +550,18 @@ checkFindExec _ cmd@(T_SimpleCommand _ _ t@(h:r)) | cmd `isCommand` "find" = do
 checkFindExec _ _ = return ()
 
 
-prop_checkUnquotedExpansions1 = verify checkUnquotedExpansions "rm $(ls)"
-prop_checkUnquotedExpansions1a= verify checkUnquotedExpansions "rm `ls`"
-prop_checkUnquotedExpansions2 = verify checkUnquotedExpansions "rm foo$(date)"
-prop_checkUnquotedExpansions3 = verify checkUnquotedExpansions "[ $(foo) == cow ]"
-prop_checkUnquotedExpansions3a= verify checkUnquotedExpansions "[ ! $(foo) ]"
-prop_checkUnquotedExpansions4 = verifyNot checkUnquotedExpansions "[[ $(foo) == cow ]]"
-prop_checkUnquotedExpansions5 = verifyNot checkUnquotedExpansions "for f in $(cmd); do echo $f; done"
-prop_checkUnquotedExpansions6 = verifyNot checkUnquotedExpansions "$(cmd)"
-prop_checkUnquotedExpansions7 = verifyNot checkUnquotedExpansions "cat << foo\n$(ls)\nfoo"
-prop_checkUnquotedExpansions8 = verifyNot checkUnquotedExpansions "set -- $(seq 1 4)"
-prop_checkUnquotedExpansions9 = verifyNot checkUnquotedExpansions "echo foo `# inline comment`"
+-- |
+-- prop> verify checkUnquotedExpansions "rm $(ls)"
+-- prop> verify checkUnquotedExpansions "rm `ls`"
+-- prop> verify checkUnquotedExpansions "rm foo$(date)"
+-- prop> verify checkUnquotedExpansions "[ $(foo) == cow ]"
+-- prop> verify checkUnquotedExpansions "[ ! $(foo) ]"
+-- prop> verifyNot checkUnquotedExpansions "[[ $(foo) == cow ]]"
+-- prop> verifyNot checkUnquotedExpansions "for f in $(cmd); do echo $f; done"
+-- prop> verifyNot checkUnquotedExpansions "$(cmd)"
+-- prop> verifyNot checkUnquotedExpansions "cat << foo\n$(ls)\nfoo"
+-- prop> verifyNot checkUnquotedExpansions "set -- $(seq 1 4)"
+-- prop> verifyNot checkUnquotedExpansions "echo foo `# inline comment`"
 checkUnquotedExpansions params =
     check
   where
@@ -568,14 +578,15 @@ checkUnquotedExpansions params =
         getCommandNameFromExpansion t == Just "seq"
 
 
-prop_checkRedirectToSame = verify checkRedirectToSame "cat foo > foo"
-prop_checkRedirectToSame2 = verify checkRedirectToSame "cat lol | sed -e 's/a/b/g' > lol"
-prop_checkRedirectToSame3 = verifyNot checkRedirectToSame "cat lol | sed -e 's/a/b/g' > foo.bar && mv foo.bar lol"
-prop_checkRedirectToSame4 = verifyNot checkRedirectToSame "foo /dev/null > /dev/null"
-prop_checkRedirectToSame5 = verifyNot checkRedirectToSame "foo > bar 2> bar"
-prop_checkRedirectToSame6 = verifyNot checkRedirectToSame "echo foo > foo"
-prop_checkRedirectToSame7 = verifyNot checkRedirectToSame "sed 's/foo/bar/g' file | sponge file"
-prop_checkRedirectToSame8 = verifyNot checkRedirectToSame "while read -r line; do _=\"$fname\"; done <\"$fname\""
+-- |
+-- prop> verify checkRedirectToSame "cat foo > foo"
+-- prop> verify checkRedirectToSame "cat lol | sed -e 's/a/b/g' > lol"
+-- prop> verifyNot checkRedirectToSame "cat lol | sed -e 's/a/b/g' > foo.bar && mv foo.bar lol"
+-- prop> verifyNot checkRedirectToSame "foo /dev/null > /dev/null"
+-- prop> verifyNot checkRedirectToSame "foo > bar 2> bar"
+-- prop> verifyNot checkRedirectToSame "echo foo > foo"
+-- prop> verifyNot checkRedirectToSame "sed 's/foo/bar/g' file | sponge file"
+-- prop> verifyNot checkRedirectToSame "while read -r line; do _=\"$fname\"; done <\"$fname\""
 checkRedirectToSame params s@(T_Pipeline _ _ list) =
     mapM_ (\l -> (mapM_ (\x -> doAnalysis (checkOccurrences x) l) (getAllRedirs list))) list
   where
@@ -621,14 +632,15 @@ checkRedirectToSame params s@(T_Pipeline _ _ list) =
 checkRedirectToSame _ _ = return ()
 
 
-prop_checkShorthandIf  = verify checkShorthandIf "[[ ! -z file ]] && scp file host || rm file"
-prop_checkShorthandIf2 = verifyNot checkShorthandIf "[[ ! -z file ]] && { scp file host || echo 'Eek'; }"
-prop_checkShorthandIf3 = verifyNot checkShorthandIf "foo && bar || echo baz"
-prop_checkShorthandIf4 = verifyNot checkShorthandIf "foo && a=b || a=c"
-prop_checkShorthandIf5 = verifyNot checkShorthandIf "foo && rm || printf b"
-prop_checkShorthandIf6 = verifyNot checkShorthandIf "if foo && bar || baz; then true; fi"
-prop_checkShorthandIf7 = verifyNot checkShorthandIf "while foo && bar || baz; do true; done"
-prop_checkShorthandIf8 = verify checkShorthandIf "if true; then foo && bar || baz; fi"
+-- |
+-- prop> verify checkShorthandIf "[[ ! -z file ]] && scp file host || rm file"
+-- prop> verifyNot checkShorthandIf "[[ ! -z file ]] && { scp file host || echo 'Eek'; }"
+-- prop> verifyNot checkShorthandIf "foo && bar || echo baz"
+-- prop> verifyNot checkShorthandIf "foo && a=b || a=c"
+-- prop> verifyNot checkShorthandIf "foo && rm || printf b"
+-- prop> verifyNot checkShorthandIf "if foo && bar || baz; then true; fi"
+-- prop> verifyNot checkShorthandIf "while foo && bar || baz; do true; done"
+-- prop> verify checkShorthandIf "if true; then foo && bar || baz; fi"
 checkShorthandIf params x@(T_AndIf id _ (T_OrIf _ _ (T_Pipeline _ _ t)))
         | not (isOk t || inCondition) =
     info id 2015 "Note that A && B || C is not if-then-else. C may run when A is true."
@@ -641,9 +653,10 @@ checkShorthandIf params x@(T_AndIf id _ (T_OrIf _ _ (T_Pipeline _ _ t)))
 checkShorthandIf _ _ = return ()
 
 
-prop_checkDollarStar = verify checkDollarStar "for f in $*; do ..; done"
-prop_checkDollarStar2 = verifyNot checkDollarStar "a=$*"
-prop_checkDollarStar3 = verifyNot checkDollarStar "[[ $* = 'a b' ]]"
+-- |
+-- prop> verify checkDollarStar "for f in $*; do ..; done"
+-- prop> verifyNot checkDollarStar "a=$*"
+-- prop> verifyNot checkDollarStar "[[ $* = 'a b' ]]"
 checkDollarStar p t@(T_NormalWord _ [b@(T_DollarBraced id _)])
       | bracedString b == "*"  =
     unless (isStrictlyQuoteFree (parentMap p) t) $
@@ -651,17 +664,18 @@ checkDollarStar p t@(T_NormalWord _ [b@(T_DollarBraced id _)])
 checkDollarStar _ _ = return ()
 
 
-prop_checkUnquotedDollarAt = verify checkUnquotedDollarAt "ls $@"
-prop_checkUnquotedDollarAt1= verifyNot checkUnquotedDollarAt "ls ${#@}"
-prop_checkUnquotedDollarAt2 = verify checkUnquotedDollarAt "ls ${foo[@]}"
-prop_checkUnquotedDollarAt3 = verifyNot checkUnquotedDollarAt "ls ${#foo[@]}"
-prop_checkUnquotedDollarAt4 = verifyNot checkUnquotedDollarAt "ls \"$@\""
-prop_checkUnquotedDollarAt5 = verifyNot checkUnquotedDollarAt "ls ${foo/@/ at }"
-prop_checkUnquotedDollarAt6 = verifyNot checkUnquotedDollarAt "a=$@"
-prop_checkUnquotedDollarAt7 = verify checkUnquotedDollarAt "for f in ${var[@]}; do true; done"
-prop_checkUnquotedDollarAt8 = verifyNot checkUnquotedDollarAt "echo \"${args[@]:+${args[@]}}\""
-prop_checkUnquotedDollarAt9 = verifyNot checkUnquotedDollarAt "echo ${args[@]:+\"${args[@]}\"}"
-prop_checkUnquotedDollarAt10 = verifyNot checkUnquotedDollarAt "echo ${@+\"$@\"}"
+-- |
+-- prop> verify checkUnquotedDollarAt "ls $@"
+-- prop> verifyNot checkUnquotedDollarAt "ls ${#@}"
+-- prop> verify checkUnquotedDollarAt "ls ${foo[@]}"
+-- prop> verifyNot checkUnquotedDollarAt "ls ${#foo[@]}"
+-- prop> verifyNot checkUnquotedDollarAt "ls \"$@\""
+-- prop> verifyNot checkUnquotedDollarAt "ls ${foo/@/ at }"
+-- prop> verifyNot checkUnquotedDollarAt "a=$@"
+-- prop> verify checkUnquotedDollarAt "for f in ${var[@]}; do true; done"
+-- prop> verifyNot checkUnquotedDollarAt "echo \"${args[@]:+${args[@]}}\""
+-- prop> verifyNot checkUnquotedDollarAt "echo ${args[@]:+\"${args[@]}\"}"
+-- prop> verifyNot checkUnquotedDollarAt "echo ${@+\"$@\"}"
 checkUnquotedDollarAt p word@(T_NormalWord _ parts) | not $ isStrictlyQuoteFree (parentMap p) word =
     forM_ (take 1 $ filter isArrayExpansion parts) $ \x ->
         unless (isQuotedAlternativeReference x) $
@@ -669,11 +683,12 @@ checkUnquotedDollarAt p word@(T_NormalWord _ parts) | not $ isStrictlyQuoteFree 
                 "Double quote array expansions to avoid re-splitting elements."
 checkUnquotedDollarAt _ _ = return ()
 
-prop_checkConcatenatedDollarAt1 = verify checkConcatenatedDollarAt "echo \"foo$@\""
-prop_checkConcatenatedDollarAt2 = verify checkConcatenatedDollarAt "echo ${arr[@]}lol"
-prop_checkConcatenatedDollarAt3 = verify checkConcatenatedDollarAt "echo $a$@"
-prop_checkConcatenatedDollarAt4 = verifyNot checkConcatenatedDollarAt "echo $@"
-prop_checkConcatenatedDollarAt5 = verifyNot checkConcatenatedDollarAt "echo \"${arr[@]}\""
+-- |
+-- prop> verify checkConcatenatedDollarAt "echo \"foo$@\""
+-- prop> verify checkConcatenatedDollarAt "echo ${arr[@]}lol"
+-- prop> verify checkConcatenatedDollarAt "echo $a$@"
+-- prop> verifyNot checkConcatenatedDollarAt "echo $@"
+-- prop> verifyNot checkConcatenatedDollarAt "echo \"${arr[@]}\""
 checkConcatenatedDollarAt p word@T_NormalWord {}
     | not $ isQuoteFree (parentMap p) word =
         unless (null $ drop 1 parts) $
@@ -684,13 +699,14 @@ checkConcatenatedDollarAt p word@T_NormalWord {}
     for t = err (getId t) 2145 "Argument mixes string and array. Use * or separate argument."
 checkConcatenatedDollarAt _ _ = return ()
 
-prop_checkArrayAsString1 = verify checkArrayAsString "a=$@"
-prop_checkArrayAsString2 = verify checkArrayAsString "a=\"${arr[@]}\""
-prop_checkArrayAsString3 = verify checkArrayAsString "a=*.png"
-prop_checkArrayAsString4 = verify checkArrayAsString "a={1..10}"
-prop_checkArrayAsString5 = verifyNot checkArrayAsString "a='*.gif'"
-prop_checkArrayAsString6 = verifyNot checkArrayAsString "a=$*"
-prop_checkArrayAsString7 = verifyNot checkArrayAsString "a=( $@ )"
+-- |
+-- prop> verify checkArrayAsString "a=$@"
+-- prop> verify checkArrayAsString "a=\"${arr[@]}\""
+-- prop> verify checkArrayAsString "a=*.png"
+-- prop> verify checkArrayAsString "a={1..10}"
+-- prop> verifyNot checkArrayAsString "a='*.gif'"
+-- prop> verifyNot checkArrayAsString "a=$*"
+-- prop> verifyNot checkArrayAsString "a=( $@ )"
 checkArrayAsString _ (T_Assignment id _ _ _ word) =
     if willConcatInAssignment word
     then
@@ -702,14 +718,15 @@ checkArrayAsString _ (T_Assignment id _ _ _ word) =
           "Brace expansions and globs are literal in assignments. Quote it or use an array."
 checkArrayAsString _ _ = return ()
 
-prop_checkArrayWithoutIndex1 = verifyTree checkArrayWithoutIndex "foo=(a b); echo $foo"
-prop_checkArrayWithoutIndex2 = verifyNotTree checkArrayWithoutIndex "foo='bar baz'; foo=($foo); echo ${foo[0]}"
-prop_checkArrayWithoutIndex3 = verifyTree checkArrayWithoutIndex "coproc foo while true; do echo cow; done; echo $foo"
-prop_checkArrayWithoutIndex4 = verifyTree checkArrayWithoutIndex "coproc tail -f log; echo $COPROC"
-prop_checkArrayWithoutIndex5 = verifyTree checkArrayWithoutIndex "a[0]=foo; echo $a"
-prop_checkArrayWithoutIndex6 = verifyTree checkArrayWithoutIndex "echo $PIPESTATUS"
-prop_checkArrayWithoutIndex7 = verifyTree checkArrayWithoutIndex "a=(a b); a+=c"
-prop_checkArrayWithoutIndex8 = verifyTree checkArrayWithoutIndex "declare -a foo; foo=bar;"
+-- |
+-- prop> verifyTree checkArrayWithoutIndex "foo=(a b); echo $foo"
+-- prop> verifyNotTree checkArrayWithoutIndex "foo='bar baz'; foo=($foo); echo ${foo[0]}"
+-- prop> verifyTree checkArrayWithoutIndex "coproc foo while true; do echo cow; done; echo $foo"
+-- prop> verifyTree checkArrayWithoutIndex "coproc tail -f log; echo $COPROC"
+-- prop> verifyTree checkArrayWithoutIndex "a[0]=foo; echo $a"
+-- prop> verifyTree checkArrayWithoutIndex "echo $PIPESTATUS"
+-- prop> verifyTree checkArrayWithoutIndex "a=(a b); a+=c"
+-- prop> verifyTree checkArrayWithoutIndex "declare -a foo; foo=bar;"
 checkArrayWithoutIndex params _ =
     doVariableFlowAnalysis readF writeF defaultMap (variableFlow params)
   where
@@ -744,13 +761,14 @@ checkArrayWithoutIndex params _ =
             T_Assignment _ _ _ (_:_) _ -> True
             _ -> False
 
-prop_checkStderrRedirect = verify checkStderrRedirect "test 2>&1 > cow"
-prop_checkStderrRedirect2 = verifyNot checkStderrRedirect "test > cow 2>&1"
-prop_checkStderrRedirect3 = verifyNot checkStderrRedirect "test 2>&1 > file | grep stderr"
-prop_checkStderrRedirect4 = verifyNot checkStderrRedirect "errors=$(test 2>&1 > file)"
-prop_checkStderrRedirect5 = verifyNot checkStderrRedirect "read < <(test 2>&1 > file)"
-prop_checkStderrRedirect6 = verify checkStderrRedirect "foo | bar 2>&1 > /dev/null"
-prop_checkStderrRedirect7 = verifyNot checkStderrRedirect "{ cmd > file; } 2>&1"
+-- |
+-- prop> verify checkStderrRedirect "test 2>&1 > cow"
+-- prop> verifyNot checkStderrRedirect "test > cow 2>&1"
+-- prop> verifyNot checkStderrRedirect "test 2>&1 > file | grep stderr"
+-- prop> verifyNot checkStderrRedirect "errors=$(test 2>&1 > file)"
+-- prop> verifyNot checkStderrRedirect "read < <(test 2>&1 > file)"
+-- prop> verify checkStderrRedirect "foo | bar 2>&1 > /dev/null"
+-- prop> verifyNot checkStderrRedirect "{ cmd > file; } 2>&1"
 checkStderrRedirect params redir@(T_Redirecting _ [
     T_FdRedirect id "2" (T_IoDuplicate _ (T_GREATAND _) "1"),
     T_FdRedirect _ _ (T_IoFile _ op _)
@@ -777,27 +795,28 @@ lt x = trace ("Tracing " ++ show x) x
 ltt t = trace ("Tracing " ++ show t)
 
 
-prop_checkSingleQuotedVariables  = verify checkSingleQuotedVariables "echo '$foo'"
-prop_checkSingleQuotedVariables2 = verify checkSingleQuotedVariables "echo 'lol$1.jpg'"
-prop_checkSingleQuotedVariables3 = verifyNot checkSingleQuotedVariables "sed 's/foo$/bar/'"
-prop_checkSingleQuotedVariables3a= verify checkSingleQuotedVariables "sed 's/${foo}/bar/'"
-prop_checkSingleQuotedVariables3b= verify checkSingleQuotedVariables "sed 's/$(echo cow)/bar/'"
-prop_checkSingleQuotedVariables3c= verify checkSingleQuotedVariables "sed 's/$((1+foo))/bar/'"
-prop_checkSingleQuotedVariables4 = verifyNot checkSingleQuotedVariables "awk '{print $1}'"
-prop_checkSingleQuotedVariables5 = verifyNot checkSingleQuotedVariables "trap 'echo $SECONDS' EXIT"
-prop_checkSingleQuotedVariables6 = verifyNot checkSingleQuotedVariables "sed -n '$p'"
-prop_checkSingleQuotedVariables6a= verify checkSingleQuotedVariables "sed -n '$pattern'"
-prop_checkSingleQuotedVariables7 = verifyNot checkSingleQuotedVariables "PS1='$PWD \\$ '"
-prop_checkSingleQuotedVariables8 = verify checkSingleQuotedVariables "find . -exec echo '$1' {} +"
-prop_checkSingleQuotedVariables9 = verifyNot checkSingleQuotedVariables "find . -exec awk '{print $1}' {} \\;"
-prop_checkSingleQuotedVariables10= verify checkSingleQuotedVariables "echo '`pwd`'"
-prop_checkSingleQuotedVariables11= verifyNot checkSingleQuotedVariables "sed '${/lol/d}'"
-prop_checkSingleQuotedVariables12= verifyNot checkSingleQuotedVariables "eval 'echo $1'"
-prop_checkSingleQuotedVariables13= verifyNot checkSingleQuotedVariables "busybox awk '{print $1}'"
-prop_checkSingleQuotedVariables14= verifyNot checkSingleQuotedVariables "[ -v 'bar[$foo]' ]"
-prop_checkSingleQuotedVariables15= verifyNot checkSingleQuotedVariables "git filter-branch 'test $GIT_COMMIT'"
-prop_checkSingleQuotedVariables16= verify checkSingleQuotedVariables "git '$a'"
-prop_checkSingleQuotedVariables17= verifyNot checkSingleQuotedVariables "rename 's/(.)a/$1/g' *"
+-- |
+-- prop> verify checkSingleQuotedVariables "echo '$foo'"
+-- prop> verify checkSingleQuotedVariables "echo 'lol$1.jpg'"
+-- prop> verifyNot checkSingleQuotedVariables "sed 's/foo$/bar/'"
+-- prop> verify checkSingleQuotedVariables "sed 's/${foo}/bar/'"
+-- prop> verify checkSingleQuotedVariables "sed 's/$(echo cow)/bar/'"
+-- prop> verify checkSingleQuotedVariables "sed 's/$((1+foo))/bar/'"
+-- prop> verifyNot checkSingleQuotedVariables "awk '{print $1}'"
+-- prop> verifyNot checkSingleQuotedVariables "trap 'echo $SECONDS' EXIT"
+-- prop> verifyNot checkSingleQuotedVariables "sed -n '$p'"
+-- prop> verify checkSingleQuotedVariables "sed -n '$pattern'"
+-- prop> verifyNot checkSingleQuotedVariables "PS1='$PWD \\$ '"
+-- prop> verify checkSingleQuotedVariables "find . -exec echo '$1' {} +"
+-- prop> verifyNot checkSingleQuotedVariables "find . -exec awk '{print $1}' {} \\;"
+-- prop> verify checkSingleQuotedVariables "echo '`pwd`'"
+-- prop> verifyNot checkSingleQuotedVariables "sed '${/lol/d}'"
+-- prop> verifyNot checkSingleQuotedVariables "eval 'echo $1'"
+-- prop> verifyNot checkSingleQuotedVariables "busybox awk '{print $1}'"
+-- prop> verifyNot checkSingleQuotedVariables "[ -v 'bar[$foo]' ]"
+-- prop> verifyNot checkSingleQuotedVariables "git filter-branch 'test $GIT_COMMIT'"
+-- prop> verify checkSingleQuotedVariables "git '$a'"
+-- prop> verifyNot checkSingleQuotedVariables "rename 's/(.)a/$1/g' *"
 
 checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
     when (s `matches` re) $
@@ -864,29 +883,31 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
 checkSingleQuotedVariables _ _ = return ()
 
 
-prop_checkUnquotedN = verify checkUnquotedN "if [ -n $foo ]; then echo cow; fi"
-prop_checkUnquotedN2 = verify checkUnquotedN "[ -n $cow ]"
-prop_checkUnquotedN3 = verifyNot checkUnquotedN "[[ -n $foo ]] && echo cow"
-prop_checkUnquotedN4 = verify checkUnquotedN "[ -n $cow -o -t 1 ]"
-prop_checkUnquotedN5 = verifyNot checkUnquotedN "[ -n \"$@\" ]"
+-- |
+-- prop> verify checkUnquotedN "if [ -n $foo ]; then echo cow; fi"
+-- prop> verify checkUnquotedN "[ -n $cow ]"
+-- prop> verifyNot checkUnquotedN "[[ -n $foo ]] && echo cow"
+-- prop> verify checkUnquotedN "[ -n $cow -o -t 1 ]"
+-- prop> verifyNot checkUnquotedN "[ -n \"$@\" ]"
 checkUnquotedN _ (TC_Unary _ SingleBracket "-n" (T_NormalWord id [t])) | willSplit t =
        err id 2070 "-n doesn't work with unquoted arguments. Quote or use [[ ]]."
 checkUnquotedN _ _ = return ()
 
-prop_checkNumberComparisons1 = verify checkNumberComparisons "[[ $foo < 3 ]]"
-prop_checkNumberComparisons2 = verify checkNumberComparisons "[[ 0 >= $(cmd) ]]"
-prop_checkNumberComparisons3 = verifyNot checkNumberComparisons "[[ $foo ]] > 3"
-prop_checkNumberComparisons4 = verify checkNumberComparisons "[[ $foo > 2.72 ]]"
-prop_checkNumberComparisons5 = verify checkNumberComparisons "[[ $foo -le 2.72 ]]"
-prop_checkNumberComparisons6 = verify checkNumberComparisons "[[ 3.14 -eq $foo ]]"
-prop_checkNumberComparisons7 = verifyNot checkNumberComparisons "[[ 3.14 == $foo ]]"
-prop_checkNumberComparisons8 = verify checkNumberComparisons "[ foo <= bar ]"
-prop_checkNumberComparisons9 = verify checkNumberComparisons "[ foo \\>= bar ]"
-prop_checkNumberComparisons11 = verify checkNumberComparisons "[ $foo -eq 'N' ]"
-prop_checkNumberComparisons12 = verify checkNumberComparisons "[ x$foo -gt x${N} ]"
-prop_checkNumberComparisons13 = verify checkNumberComparisons "[ $foo > $bar ]"
-prop_checkNumberComparisons14 = verifyNot checkNumberComparisons "[[ foo < bar ]]"
-prop_checkNumberComparisons15 = verifyNot checkNumberComparisons "[ $foo '>' $bar ]"
+-- |
+-- prop> verify checkNumberComparisons "[[ $foo < 3 ]]"
+-- prop> verify checkNumberComparisons "[[ 0 >= $(cmd) ]]"
+-- prop> verifyNot checkNumberComparisons "[[ $foo ]] > 3"
+-- prop> verify checkNumberComparisons "[[ $foo > 2.72 ]]"
+-- prop> verify checkNumberComparisons "[[ $foo -le 2.72 ]]"
+-- prop> verify checkNumberComparisons "[[ 3.14 -eq $foo ]]"
+-- prop> verifyNot checkNumberComparisons "[[ 3.14 == $foo ]]"
+-- prop> verify checkNumberComparisons "[ foo <= bar ]"
+-- prop> verify checkNumberComparisons "[ foo \\>= bar ]"
+-- prop> verify checkNumberComparisons "[ $foo -eq 'N' ]"
+-- prop> verify checkNumberComparisons "[ x$foo -gt x${N} ]"
+-- prop> verify checkNumberComparisons "[ $foo > $bar ]"
+-- prop> verifyNot checkNumberComparisons "[[ foo < bar ]]"
+-- prop> verifyNot checkNumberComparisons "[ $foo '>' $bar ]"
 checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
     if isNum lhs || isNum rhs
       then do
@@ -969,24 +990,27 @@ checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
       floatRegex = mkRegex "^[-+]?[0-9]+\\.[0-9]+$"
 checkNumberComparisons _ _ = return ()
 
-prop_checkSingleBracketOperators1 = verify checkSingleBracketOperators "[ test =~ foo ]"
+-- |
+-- prop> verify checkSingleBracketOperators "[ test =~ foo ]"
 checkSingleBracketOperators params (TC_Binary id SingleBracket "=~" lhs rhs) =
     when (shellType params `elem` [Bash, Ksh]) $
         err id 2074 $ "Can't use =~ in [ ]. Use [[..]] instead."
 checkSingleBracketOperators _ _ = return ()
 
-prop_checkDoubleBracketOperators1 = verify checkDoubleBracketOperators "[[ 3 \\< 4 ]]"
-prop_checkDoubleBracketOperators3 = verifyNot checkDoubleBracketOperators "[[ foo < bar ]]"
+-- |
+-- prop> verify checkDoubleBracketOperators "[[ 3 \\< 4 ]]"
+-- prop> verifyNot checkDoubleBracketOperators "[[ foo < bar ]]"
 checkDoubleBracketOperators _ x@(TC_Binary id typ op lhs rhs)
     | typ == DoubleBracket && op `elem` ["\\<", "\\>"] =
         err id 2075 $ "Escaping " ++ op ++" is required in [..], but invalid in [[..]]"
 checkDoubleBracketOperators _ _ = return ()
 
-prop_checkConditionalAndOrs1 = verify checkConditionalAndOrs "[ foo && bar ]"
-prop_checkConditionalAndOrs2 = verify checkConditionalAndOrs "[[ foo -o bar ]]"
-prop_checkConditionalAndOrs3 = verifyNot checkConditionalAndOrs "[[ foo || bar ]]"
-prop_checkConditionalAndOrs4 = verify checkConditionalAndOrs "[ foo -a bar ]"
-prop_checkConditionalAndOrs5 = verify checkConditionalAndOrs "[ -z 3 -o a = b ]"
+-- |
+-- prop> verify checkConditionalAndOrs "[ foo && bar ]"
+-- prop> verify checkConditionalAndOrs "[[ foo -o bar ]]"
+-- prop> verifyNot checkConditionalAndOrs "[[ foo || bar ]]"
+-- prop> verify checkConditionalAndOrs "[ foo -a bar ]"
+-- prop> verify checkConditionalAndOrs "[ -z 3 -o a = b ]"
 checkConditionalAndOrs _ t =
     case t of
         (TC_And id SingleBracket "&&" _ _) ->
@@ -1005,12 +1029,13 @@ checkConditionalAndOrs _ t =
 
         _ -> return ()
 
-prop_checkQuotedCondRegex1 = verify checkQuotedCondRegex "[[ $foo =~ \"bar.*\" ]]"
-prop_checkQuotedCondRegex2 = verify checkQuotedCondRegex "[[ $foo =~ '(cow|bar)' ]]"
-prop_checkQuotedCondRegex3 = verifyNot checkQuotedCondRegex "[[ $foo =~ $foo ]]"
-prop_checkQuotedCondRegex4 = verifyNot checkQuotedCondRegex "[[ $foo =~ \"bar\" ]]"
-prop_checkQuotedCondRegex5 = verifyNot checkQuotedCondRegex "[[ $foo =~ 'cow bar' ]]"
-prop_checkQuotedCondRegex6 = verify checkQuotedCondRegex "[[ $foo =~ 'cow|bar' ]]"
+-- |
+-- prop> verify checkQuotedCondRegex "[[ $foo =~ \"bar.*\" ]]"
+-- prop> verify checkQuotedCondRegex "[[ $foo =~ '(cow|bar)' ]]"
+-- prop> verifyNot checkQuotedCondRegex "[[ $foo =~ $foo ]]"
+-- prop> verifyNot checkQuotedCondRegex "[[ $foo =~ \"bar\" ]]"
+-- prop> verifyNot checkQuotedCondRegex "[[ $foo =~ 'cow bar' ]]"
+-- prop> verify checkQuotedCondRegex "[[ $foo =~ 'cow|bar' ]]"
 checkQuotedCondRegex _ (TC_Binary _ _ "=~" _ rhs) =
     case rhs of
         T_NormalWord id [T_DoubleQuoted _ _] -> error rhs
@@ -1028,11 +1053,12 @@ checkQuotedCondRegex _ (TC_Binary _ _ "=~" _ rhs) =
         return . not $ hasMetachars s
 checkQuotedCondRegex _ _ = return ()
 
-prop_checkGlobbedRegex1 = verify checkGlobbedRegex "[[ $foo =~ *foo* ]]"
-prop_checkGlobbedRegex2 = verify checkGlobbedRegex "[[ $foo =~ f* ]]"
-prop_checkGlobbedRegex2a = verify checkGlobbedRegex "[[ $foo =~ \\#* ]]"
-prop_checkGlobbedRegex3 = verifyNot checkGlobbedRegex "[[ $foo =~ $foo ]]"
-prop_checkGlobbedRegex4 = verifyNot checkGlobbedRegex "[[ $foo =~ ^c.* ]]"
+-- |
+-- prop> verify checkGlobbedRegex "[[ $foo =~ *foo* ]]"
+-- prop> verify checkGlobbedRegex "[[ $foo =~ f* ]]"
+-- prop> verify checkGlobbedRegex "[[ $foo =~ \\#* ]]"
+-- prop> verifyNot checkGlobbedRegex "[[ $foo =~ $foo ]]"
+-- prop> verifyNot checkGlobbedRegex "[[ $foo =~ ^c.* ]]"
 checkGlobbedRegex _ (TC_Binary _ DoubleBracket "=~" _ rhs) =
     let s = concat $ oversimplify rhs in
         when (isConfusedGlobRegex s) $
@@ -1040,16 +1066,17 @@ checkGlobbedRegex _ (TC_Binary _ DoubleBracket "=~" _ rhs) =
 checkGlobbedRegex _ _ = return ()
 
 
-prop_checkConstantIfs1 = verify checkConstantIfs "[[ foo != bar ]]"
-prop_checkConstantIfs2a= verify checkConstantIfs "[ n -le 4 ]"
-prop_checkConstantIfs2b= verifyNot checkConstantIfs "[[ n -le 4 ]]"
-prop_checkConstantIfs3 = verify checkConstantIfs "[[ $n -le 4 && n != 2 ]]"
-prop_checkConstantIfs4 = verifyNot checkConstantIfs "[[ $n -le 3 ]]"
-prop_checkConstantIfs5 = verifyNot checkConstantIfs "[[ $n -le $n ]]"
-prop_checkConstantIfs6 = verifyNot checkConstantIfs "[[ a -ot b ]]"
-prop_checkConstantIfs7 = verifyNot checkConstantIfs "[ a -nt b ]"
-prop_checkConstantIfs8 = verifyNot checkConstantIfs "[[ ~foo == '~foo' ]]"
-prop_checkConstantIfs9 = verify checkConstantIfs "[[ *.png == [a-z] ]]"
+-- |
+-- prop> verify checkConstantIfs "[[ foo != bar ]]"
+-- prop> verify checkConstantIfs "[ n -le 4 ]"
+-- prop> verifyNot checkConstantIfs "[[ n -le 4 ]]"
+-- prop> verify checkConstantIfs "[[ $n -le 4 && n != 2 ]]"
+-- prop> verifyNot checkConstantIfs "[[ $n -le 3 ]]"
+-- prop> verifyNot checkConstantIfs "[[ $n -le $n ]]"
+-- prop> verifyNot checkConstantIfs "[[ a -ot b ]]"
+-- prop> verifyNot checkConstantIfs "[ a -nt b ]"
+-- prop> verifyNot checkConstantIfs "[[ ~foo == '~foo' ]]"
+-- prop> verify checkConstantIfs "[[ *.png == [a-z] ]]"
 checkConstantIfs _ (TC_Binary id typ op lhs rhs) | not isDynamic =
     if isConstant lhs && isConstant rhs
         then  warn id 2050 "This expression is constant. Did you forget the $ on a variable?"
@@ -1065,15 +1092,16 @@ checkConstantIfs _ (TC_Binary id typ op lhs rhs) | not isDynamic =
             warn id 2193 "The arguments to this comparison can never be equal. Make sure your syntax is correct."
 checkConstantIfs _ _ = return ()
 
-prop_checkLiteralBreakingTest = verify checkLiteralBreakingTest "[[ a==$foo ]]"
-prop_checkLiteralBreakingTest2 = verify checkLiteralBreakingTest "[ $foo=3 ]"
-prop_checkLiteralBreakingTest3 = verify checkLiteralBreakingTest "[ $foo!=3 ]"
-prop_checkLiteralBreakingTest4 = verify checkLiteralBreakingTest "[ \"$(ls) \" ]"
-prop_checkLiteralBreakingTest5 = verify checkLiteralBreakingTest "[ -n \"$(true) \" ]"
-prop_checkLiteralBreakingTest6 = verify checkLiteralBreakingTest "[ -z $(true)z ]"
-prop_checkLiteralBreakingTest7 = verifyNot checkLiteralBreakingTest "[ -z $(true) ]"
-prop_checkLiteralBreakingTest8 = verifyNot checkLiteralBreakingTest "[ $(true)$(true) ]"
-prop_checkLiteralBreakingTest10 = verify checkLiteralBreakingTest "[ -z foo ]"
+-- |
+-- prop> verify checkLiteralBreakingTest "[[ a==$foo ]]"
+-- prop> verify checkLiteralBreakingTest "[ $foo=3 ]"
+-- prop> verify checkLiteralBreakingTest "[ $foo!=3 ]"
+-- prop> verify checkLiteralBreakingTest "[ \"$(ls) \" ]"
+-- prop> verify checkLiteralBreakingTest "[ -n \"$(true) \" ]"
+-- prop> verify checkLiteralBreakingTest "[ -z $(true)z ]"
+-- prop> verifyNot checkLiteralBreakingTest "[ -z $(true) ]"
+-- prop> verifyNot checkLiteralBreakingTest "[ $(true)$(true) ]"
+-- prop> verify checkLiteralBreakingTest "[ -z foo ]"
 checkLiteralBreakingTest _ t = potentially $
         case t of
             (TC_Nullary _ _ w@(T_NormalWord _ l)) -> do
@@ -1100,13 +1128,14 @@ checkLiteralBreakingTest _ t = potentially $
         token <- listToMaybe $ filter isNonEmpty $ getWordParts t
         return $ err (getId token) 2157 s
 
-prop_checkConstantNullary = verify checkConstantNullary "[[ '$(foo)' ]]"
-prop_checkConstantNullary2 = verify checkConstantNullary "[ \"-f lol\" ]"
-prop_checkConstantNullary3 = verify checkConstantNullary "[[ cmd ]]"
-prop_checkConstantNullary4 = verify checkConstantNullary "[[ ! cmd ]]"
-prop_checkConstantNullary5 = verify checkConstantNullary "[[ true ]]"
-prop_checkConstantNullary6 = verify checkConstantNullary "[ 1 ]"
-prop_checkConstantNullary7 = verify checkConstantNullary "[ false ]"
+-- |
+-- prop> verify checkConstantNullary "[[ '$(foo)' ]]"
+-- prop> verify checkConstantNullary "[ \"-f lol\" ]"
+-- prop> verify checkConstantNullary "[[ cmd ]]"
+-- prop> verify checkConstantNullary "[[ ! cmd ]]"
+-- prop> verify checkConstantNullary "[[ true ]]"
+-- prop> verify checkConstantNullary "[ 1 ]"
+-- prop> verify checkConstantNullary "[ false ]"
 checkConstantNullary _ (TC_Nullary _ _ t) | isConstant t =
     case fromMaybe "" $ getLiteralString t of
         "false" -> err (getId t) 2158 "[ false ] is true. Remove the brackets."
@@ -1119,9 +1148,10 @@ checkConstantNullary _ (TC_Nullary _ _ t) | isConstant t =
 
 checkConstantNullary _ _ = return ()
 
-prop_checkForDecimals1 = verify checkForDecimals "((3.14*c))"
-prop_checkForDecimals2 = verify checkForDecimals "foo[1.2]=bar"
-prop_checkForDecimals3 = verifyNot checkForDecimals "declare -A foo; foo[1.2]=bar"
+-- |
+-- prop> verify checkForDecimals "((3.14*c))"
+-- prop> verify checkForDecimals "foo[1.2]=bar"
+-- prop> verifyNot checkForDecimals "declare -A foo; foo[1.2]=bar"
 checkForDecimals params t@(TA_Expansion id _) = potentially $ do
     guard $ not (hasFloatingPoint params)
     str <- getLiteralString t
@@ -1130,29 +1160,31 @@ checkForDecimals params t@(TA_Expansion id _) = potentially $ do
     return $ err id 2079 "(( )) doesn't support decimals. Use bc or awk."
 checkForDecimals _ _ = return ()
 
-prop_checkDivBeforeMult = verify checkDivBeforeMult "echo $((c/n*100))"
-prop_checkDivBeforeMult2 = verifyNot checkDivBeforeMult "echo $((c*100/n))"
-prop_checkDivBeforeMult3 = verifyNot checkDivBeforeMult "echo $((c/10*10))"
+-- |
+-- prop> verify checkDivBeforeMult "echo $((c/n*100))"
+-- prop> verifyNot checkDivBeforeMult "echo $((c*100/n))"
+-- prop> verifyNot checkDivBeforeMult "echo $((c/10*10))"
 checkDivBeforeMult params (TA_Binary _ "*" (TA_Binary id "/" _ x) y)
     | not (hasFloatingPoint params) && x /= y =
         info id 2017 "Increase precision by replacing a/b*c with a*c/b."
 checkDivBeforeMult _ _ = return ()
 
-prop_checkArithmeticDeref = verify checkArithmeticDeref "echo $((3+$foo))"
-prop_checkArithmeticDeref2 = verify checkArithmeticDeref "cow=14; (( s+= $cow ))"
-prop_checkArithmeticDeref3 = verifyNot checkArithmeticDeref "cow=1/40; (( s+= ${cow%%/*} ))"
-prop_checkArithmeticDeref4 = verifyNot checkArithmeticDeref "(( ! $? ))"
-prop_checkArithmeticDeref5 = verifyNot checkArithmeticDeref "(($1))"
-prop_checkArithmeticDeref6 = verify checkArithmeticDeref "(( a[$i] ))"
-prop_checkArithmeticDeref7 = verifyNot checkArithmeticDeref "(( 10#$n ))"
-prop_checkArithmeticDeref8 = verifyNot checkArithmeticDeref "let i=$i+1"
-prop_checkArithmeticDeref9 = verifyNot checkArithmeticDeref "(( a[foo] ))"
-prop_checkArithmeticDeref10= verifyNot checkArithmeticDeref "(( a[\\$foo] ))"
-prop_checkArithmeticDeref11= verifyNot checkArithmeticDeref "a[$foo]=wee"
-prop_checkArithmeticDeref12= verify checkArithmeticDeref "for ((i=0; $i < 3; i)); do true; done"
-prop_checkArithmeticDeref13= verifyNot checkArithmeticDeref "(( $$ ))"
-prop_checkArithmeticDeref14= verifyNot checkArithmeticDeref "(( $! ))"
-prop_checkArithmeticDeref15= verifyNot checkArithmeticDeref "(( ${!var} ))"
+-- |
+-- prop> verify checkArithmeticDeref "echo $((3+$foo))"
+-- prop> verify checkArithmeticDeref "cow=14; (( s+= $cow ))"
+-- prop> verifyNot checkArithmeticDeref "cow=1/40; (( s+= ${cow%%/*} ))"
+-- prop> verifyNot checkArithmeticDeref "(( ! $? ))"
+-- prop> verifyNot checkArithmeticDeref "(($1))"
+-- prop> verify checkArithmeticDeref "(( a[$i] ))"
+-- prop> verifyNot checkArithmeticDeref "(( 10#$n ))"
+-- prop> verifyNot checkArithmeticDeref "let i=$i+1"
+-- prop> verifyNot checkArithmeticDeref "(( a[foo] ))"
+-- prop> verifyNot checkArithmeticDeref "(( a[\\$foo] ))"
+-- prop> verifyNot checkArithmeticDeref "a[$foo]=wee"
+-- prop> verify checkArithmeticDeref "for ((i=0; $i < 3; i)); do true; done"
+-- prop> verifyNot checkArithmeticDeref "(( $$ ))"
+-- prop> verifyNot checkArithmeticDeref "(( $! ))"
+-- prop> verifyNot checkArithmeticDeref "(( ${!var} ))"
 checkArithmeticDeref params t@(TA_Expansion _ [b@(T_DollarBraced id _)]) =
     unless (isException $ bracedString b) getWarning
   where
@@ -1171,9 +1203,10 @@ checkArithmeticDeref params t@(TA_Expansion _ [b@(T_DollarBraced id _)]) =
     noWarning = return ()
 checkArithmeticDeref _ _ = return ()
 
-prop_checkArithmeticBadOctal1 = verify checkArithmeticBadOctal "(( 0192 ))"
-prop_checkArithmeticBadOctal2 = verifyNot checkArithmeticBadOctal "(( 0x192 ))"
-prop_checkArithmeticBadOctal3 = verifyNot checkArithmeticBadOctal "(( 1 ^ 0777 ))"
+-- |
+-- prop> verify checkArithmeticBadOctal "(( 0192 ))"
+-- prop> verifyNot checkArithmeticBadOctal "(( 0x192 ))"
+-- prop> verifyNot checkArithmeticBadOctal "(( 1 ^ 0777 ))"
 checkArithmeticBadOctal _ t@(TA_Expansion id _) = potentially $ do
     str <- getLiteralString t
     guard $ str `matches` octalRE
@@ -1182,11 +1215,12 @@ checkArithmeticBadOctal _ t@(TA_Expansion id _) = potentially $ do
     octalRE = mkRegex "^0[0-7]*[8-9]"
 checkArithmeticBadOctal _ _ = return ()
 
-prop_checkComparisonAgainstGlob = verify checkComparisonAgainstGlob "[[ $cow == $bar ]]"
-prop_checkComparisonAgainstGlob2 = verifyNot checkComparisonAgainstGlob "[[ $cow == \"$bar\" ]]"
-prop_checkComparisonAgainstGlob3 = verify checkComparisonAgainstGlob "[ $cow = *foo* ]"
-prop_checkComparisonAgainstGlob4 = verifyNot checkComparisonAgainstGlob "[ $cow = foo ]"
-prop_checkComparisonAgainstGlob5 = verify checkComparisonAgainstGlob "[[ $cow != $bar ]]"
+-- |
+-- prop> verify checkComparisonAgainstGlob "[[ $cow == $bar ]]"
+-- prop> verifyNot checkComparisonAgainstGlob "[[ $cow == \"$bar\" ]]"
+-- prop> verify checkComparisonAgainstGlob "[ $cow = *foo* ]"
+-- prop> verifyNot checkComparisonAgainstGlob "[ $cow = foo ]"
+-- prop> verify checkComparisonAgainstGlob "[[ $cow != $bar ]]"
 checkComparisonAgainstGlob _ (TC_Binary _ DoubleBracket op _ (T_NormalWord id [T_DollarBraced _ _]))
     | op `elem` ["=", "==", "!="] =
         warn id 2053 $ "Quote the rhs of " ++ op ++ " in [[ ]] to prevent glob matching."
@@ -1195,12 +1229,13 @@ checkComparisonAgainstGlob _ (TC_Binary _ SingleBracket op _ word)
     err (getId word) 2081 "[ .. ] can't match globs. Use [[ .. ]] or case statement."
 checkComparisonAgainstGlob _ _ = return ()
 
-prop_checkCommarrays1 = verify checkCommarrays "a=(1, 2)"
-prop_checkCommarrays2 = verify checkCommarrays "a+=(1,2,3)"
-prop_checkCommarrays3 = verifyNot checkCommarrays "cow=(1 \"foo,bar\" 3)"
-prop_checkCommarrays4 = verifyNot checkCommarrays "cow=('one,' 'two')"
-prop_checkCommarrays5 = verify checkCommarrays "a=([a]=b, [c]=d)"
-prop_checkCommarrays6 = verify checkCommarrays "a=([a]=b,[c]=d,[e]=f)"
+-- |
+-- prop> verify checkCommarrays "a=(1, 2)"
+-- prop> verify checkCommarrays "a+=(1,2,3)"
+-- prop> verifyNot checkCommarrays "cow=(1 \"foo,bar\" 3)"
+-- prop> verifyNot checkCommarrays "cow=('one,' 'two')"
+-- prop> verify checkCommarrays "a=([a]=b, [c]=d)"
+-- prop> verify checkCommarrays "a=([a]=b,[c]=d,[e]=f)"
 checkCommarrays _ (T_Array id l) =
     when (any (isCommaSeparated . literal) l) $
         warn id 2054 "Use spaces, not commas, to separate array elements."
@@ -1213,11 +1248,12 @@ checkCommarrays _ (T_Array id l) =
     isCommaSeparated str = "," `isSuffixOf` str || length (filter (== ',') str) > 1
 checkCommarrays _ _ = return ()
 
-prop_checkOrNeq1 = verify checkOrNeq "if [[ $lol -ne cow || $lol -ne foo ]]; then echo foo; fi"
-prop_checkOrNeq2 = verify checkOrNeq "(( a!=lol || a!=foo ))"
-prop_checkOrNeq3 = verify checkOrNeq "[ \"$a\" != lol || \"$a\" != foo ]"
-prop_checkOrNeq4 = verifyNot checkOrNeq "[ a != $cow || b != $foo ]"
-prop_checkOrNeq5 = verifyNot checkOrNeq "[[ $a != /home || $a != */public_html/* ]]"
+-- |
+-- prop> verify checkOrNeq "if [[ $lol -ne cow || $lol -ne foo ]]; then echo foo; fi"
+-- prop> verify checkOrNeq "(( a!=lol || a!=foo ))"
+-- prop> verify checkOrNeq "[ \"$a\" != lol || \"$a\" != foo ]"
+-- prop> verifyNot checkOrNeq "[ a != $cow || b != $foo ]"
+-- prop> verifyNot checkOrNeq "[[ $a != /home || $a != */public_html/* ]]"
 -- This only catches the most idiomatic cases. Fixme?
 checkOrNeq _ (TC_Or id typ op (TC_Binary _ _ op1 lhs1 rhs1 ) (TC_Binary _ _ op2 lhs2 rhs2))
     | lhs1 == lhs2 && (op1 == op2 && (op1 == "-ne" || op1 == "!=")) && not (any isGlob [rhs1,rhs2]) =
@@ -1229,11 +1265,12 @@ checkOrNeq _ (TA_Binary id "||" (TA_Binary _ "!=" word1 _) (TA_Binary _ "!=" wor
 checkOrNeq _ _ = return ()
 
 
-prop_checkValidCondOps1 = verify checkValidCondOps "[[ a -xz b ]]"
-prop_checkValidCondOps2 = verify checkValidCondOps "[ -M a ]"
-prop_checkValidCondOps2a= verifyNot checkValidCondOps "[ 3 \\> 2 ]"
-prop_checkValidCondOps3 = verifyNot checkValidCondOps "[ 1 = 2 -a 3 -ge 4 ]"
-prop_checkValidCondOps4 = verifyNot checkValidCondOps "[[ ! -v foo ]]"
+-- |
+-- prop> verify checkValidCondOps "[[ a -xz b ]]"
+-- prop> verify checkValidCondOps "[ -M a ]"
+-- prop> verifyNot checkValidCondOps "[ 3 \\> 2 ]"
+-- prop> verifyNot checkValidCondOps "[ 1 = 2 -a 3 -ge 4 ]"
+-- prop> verifyNot checkValidCondOps "[[ ! -v foo ]]"
 checkValidCondOps _ (TC_Binary id _ s _ _)
     | s `notElem` binaryTestOps =
         warn id 2057 "Unknown binary operator."
@@ -1242,15 +1279,16 @@ checkValidCondOps _ (TC_Unary id _ s _)
         warn id 2058 "Unknown unary operator."
 checkValidCondOps _ _ = return ()
 
-prop_checkUuoeVar1 = verify checkUuoeVar "for f in $(echo $tmp); do echo lol; done"
-prop_checkUuoeVar2 = verify checkUuoeVar "date +`echo \"$format\"`"
-prop_checkUuoeVar3 = verifyNot checkUuoeVar "foo \"$(echo -e '\r')\""
-prop_checkUuoeVar4 = verifyNot checkUuoeVar "echo $tmp"
-prop_checkUuoeVar5 = verify checkUuoeVar "foo \"$(echo \"$(date) value:\" $value)\""
-prop_checkUuoeVar6 = verifyNot checkUuoeVar "foo \"$(echo files: *.png)\""
-prop_checkUuoeVar7 = verifyNot checkUuoeVar "foo $(echo $(bar))" -- covered by 2005
-prop_checkUuoeVar8 = verifyNot checkUuoeVar "#!/bin/sh\nz=$(echo)"
-prop_checkUuoeVar9 = verify checkUuoeVar "foo $(echo $(<file))"
+-- |
+-- prop> verify checkUuoeVar "for f in $(echo $tmp); do echo lol; done"
+-- prop> verify checkUuoeVar "date +`echo \"$format\"`"
+-- prop> verifyNot checkUuoeVar "foo \"$(echo -e '\r')\""
+-- prop> verifyNot checkUuoeVar "echo $tmp"
+-- prop> verify checkUuoeVar "foo \"$(echo \"$(date) value:\" $value)\""
+-- prop> verifyNot checkUuoeVar "foo \"$(echo files: *.png)\""
+-- prop> verifyNot checkUuoeVar "foo $(echo $(bar))" -- covered by 2005
+-- prop> verifyNot checkUuoeVar "#!/bin/sh\nz=$(echo)"
+-- prop> verify checkUuoeVar "foo $(echo $(<file))"
 checkUuoeVar _ p =
     case p of
         T_Backticked id [cmd] -> check id cmd
@@ -1277,10 +1315,11 @@ checkUuoeVar _ p =
           _ -> return ()
 
 
-prop_checkTestRedirects1 = verify checkTestRedirects "test 3 > 1"
-prop_checkTestRedirects2 = verifyNot checkTestRedirects "test 3 \\> 1"
-prop_checkTestRedirects3 = verify checkTestRedirects "/usr/bin/test $var > $foo"
-prop_checkTestRedirects4 = verifyNot checkTestRedirects "test 1 -eq 2 2> file"
+-- |
+-- prop> verify checkTestRedirects "test 3 > 1"
+-- prop> verifyNot checkTestRedirects "test 3 \\> 1"
+-- prop> verify checkTestRedirects "/usr/bin/test $var > $foo"
+-- prop> verifyNot checkTestRedirects "test 1 -eq 2 2> file"
 checkTestRedirects _ (T_Redirecting id redirs cmd) | cmd `isCommand` "test" =
     mapM_ check redirs
   where
@@ -1298,16 +1337,17 @@ checkTestRedirects _ (T_Redirecting id redirs cmd) | cmd `isCommand` "test" =
             _ -> False
 checkTestRedirects _ _ = return ()
 
-prop_checkPS11 = verify checkPS1Assignments "PS1='\\033[1;35m\\$ '"
-prop_checkPS11a= verify checkPS1Assignments "export PS1='\\033[1;35m\\$ '"
-prop_checkPSf2 = verify checkPS1Assignments "PS1='\\h \\e[0m\\$ '"
-prop_checkPS13 = verify checkPS1Assignments "PS1=$'\\x1b[c '"
-prop_checkPS14 = verify checkPS1Assignments "PS1=$'\\e[3m; '"
-prop_checkPS14a= verify checkPS1Assignments "export PS1=$'\\e[3m; '"
-prop_checkPS15 = verifyNot checkPS1Assignments "PS1='\\[\\033[1;35m\\]\\$ '"
-prop_checkPS16 = verifyNot checkPS1Assignments "PS1='\\[\\e1m\\e[1m\\]\\$ '"
-prop_checkPS17 = verifyNot checkPS1Assignments "PS1='e033x1B'"
-prop_checkPS18 = verifyNot checkPS1Assignments "PS1='\\[\\e\\]'"
+-- |
+-- prop> verify checkPS1Assignments "PS1='\\033[1;35m\\$ '"
+-- prop> verify checkPS1Assignments "export PS1='\\033[1;35m\\$ '"
+-- prop> verify checkPS1Assignments "PS1='\\h \\e[0m\\$ '"
+-- prop> verify checkPS1Assignments "PS1=$'\\x1b[c '"
+-- prop> verify checkPS1Assignments "PS1=$'\\e[3m; '"
+-- prop> verify checkPS1Assignments "export PS1=$'\\e[3m; '"
+-- prop> verifyNot checkPS1Assignments "PS1='\\[\\033[1;35m\\]\\$ '"
+-- prop> verifyNot checkPS1Assignments "PS1='\\[\\e1m\\e[1m\\]\\$ '"
+-- prop> verifyNot checkPS1Assignments "PS1='e033x1B'"
+-- prop> verifyNot checkPS1Assignments "PS1='\\[\\e\\]'"
 checkPS1Assignments _ (T_Assignment _ _ "PS1" _ word) = warnFor word
   where
     warnFor word =
@@ -1321,18 +1361,19 @@ checkPS1Assignments _ (T_Assignment _ _ "PS1" _ word) = warnFor word
     escapeRegex = mkRegex "\\\\x1[Bb]|\\\\e|\x1B|\\\\033"
 checkPS1Assignments _ _ = return ()
 
-prop_checkBackticks1 = verify checkBackticks "echo `foo`"
-prop_checkBackticks2 = verifyNot checkBackticks "echo $(foo)"
-prop_checkBackticks3 = verifyNot checkBackticks "echo `#inlined comment` foo"
+-- prop> verify checkBackticks "echo `foo`"
+-- prop> verifyNot checkBackticks "echo $(foo)"
+-- prop> verifyNot checkBackticks "echo `#inlined comment` foo"
 checkBackticks _ (T_Backticked id list) | not (null list) =
     style id 2006 "Use $(...) notation instead of legacy backticked `...`."
 checkBackticks _ _ = return ()
 
-prop_checkIndirectExpansion1 = verify checkIndirectExpansion "${foo$n}"
-prop_checkIndirectExpansion2 = verifyNot checkIndirectExpansion "${foo//$n/lol}"
-prop_checkIndirectExpansion3 = verify checkIndirectExpansion "${$#}"
-prop_checkIndirectExpansion4 = verify checkIndirectExpansion "${var${n}_$((i%2))}"
-prop_checkIndirectExpansion5 = verifyNot checkIndirectExpansion "${bar}"
+-- |
+-- prop> verify checkIndirectExpansion "${foo$n}"
+-- prop> verifyNot checkIndirectExpansion "${foo//$n/lol}"
+-- prop> verify checkIndirectExpansion "${$#}"
+-- prop> verify checkIndirectExpansion "${var${n}_$((i%2))}"
+-- prop> verifyNot checkIndirectExpansion "${bar}"
 checkIndirectExpansion _ (T_DollarBraced i (T_NormalWord _ contents)) =
     when (isIndirection contents) $
         err i 2082 "To expand via indirection, use arrays, ${!name} or (for sh only) eval."
@@ -1352,14 +1393,15 @@ checkIndirectExpansion _ (T_DollarBraced i (T_NormalWord _ contents)) =
 
 checkIndirectExpansion _ _ = return ()
 
-prop_checkInexplicablyUnquoted1 = verify checkInexplicablyUnquoted "echo 'var='value';'"
-prop_checkInexplicablyUnquoted2 = verifyNot checkInexplicablyUnquoted "'foo'*"
-prop_checkInexplicablyUnquoted3 = verifyNot checkInexplicablyUnquoted "wget --user-agent='something'"
-prop_checkInexplicablyUnquoted4 = verify checkInexplicablyUnquoted "echo \"VALUES (\"id\")\""
-prop_checkInexplicablyUnquoted5 = verifyNot checkInexplicablyUnquoted "\"$dir\"/\"$file\""
-prop_checkInexplicablyUnquoted6 = verifyNot checkInexplicablyUnquoted "\"$dir\"some_stuff\"$file\""
-prop_checkInexplicablyUnquoted7 = verifyNot checkInexplicablyUnquoted "${dir/\"foo\"/\"bar\"}"
-prop_checkInexplicablyUnquoted8 = verifyNot checkInexplicablyUnquoted "  'foo'\\\n  'bar'"
+-- |
+-- prop> verify checkInexplicablyUnquoted "echo 'var='value';'"
+-- prop> verifyNot checkInexplicablyUnquoted "'foo'*"
+-- prop> verifyNot checkInexplicablyUnquoted "wget --user-agent='something'"
+-- prop> verify checkInexplicablyUnquoted "echo \"VALUES (\"id\")\""
+-- prop> verifyNot checkInexplicablyUnquoted "\"$dir\"/\"$file\""
+-- prop> verifyNot checkInexplicablyUnquoted "\"$dir\"some_stuff\"$file\""
+-- prop> verifyNot checkInexplicablyUnquoted "${dir/\"foo\"/\"bar\"}"
+-- prop> verifyNot checkInexplicablyUnquoted "  'foo'\\\n  'bar'"
 checkInexplicablyUnquoted _ (T_NormalWord id tokens) = mapM_ check (tails tokens)
   where
     check (T_SingleQuoted _ _:T_Literal id str:_)
@@ -1391,11 +1433,12 @@ checkInexplicablyUnquoted _ (T_NormalWord id tokens) = mapM_ check (tails tokens
         warn id 2140 "Word is of the form \"A\"B\"C\" (B indicated). Did you mean \"ABC\" or \"A\\\"B\\\"C\"?"
 checkInexplicablyUnquoted _ _ = return ()
 
-prop_checkTildeInQuotes1 = verify checkTildeInQuotes "var=\"~/out.txt\""
-prop_checkTildeInQuotes2 = verify checkTildeInQuotes "foo > '~/dir'"
-prop_checkTildeInQuotes4 = verifyNot checkTildeInQuotes "~/file"
-prop_checkTildeInQuotes5 = verifyNot checkTildeInQuotes "echo '/~foo/cow'"
-prop_checkTildeInQuotes6 = verifyNot checkTildeInQuotes "awk '$0 ~ /foo/'"
+-- |
+-- prop> verify checkTildeInQuotes "var=\"~/out.txt\""
+-- prop> verify checkTildeInQuotes "foo > '~/dir'"
+-- prop> verifyNot checkTildeInQuotes "~/file"
+-- prop> verifyNot checkTildeInQuotes "echo '/~foo/cow'"
+-- prop> verifyNot checkTildeInQuotes "awk '$0 ~ /foo/'"
 checkTildeInQuotes _ = check
   where
     verify id ('~':'/':_) = warn id 2088 "Tilde does not expand in quotes. Use $HOME."
@@ -1406,22 +1449,23 @@ checkTildeInQuotes _ = check
         verify id str
     check _ = return ()
 
-prop_checkLonelyDotDash1 = verify checkLonelyDotDash "./ file"
-prop_checkLonelyDotDash2 = verifyNot checkLonelyDotDash "./file"
+-- prop> verify checkLonelyDotDash "./ file"
+-- prop> verifyNot checkLonelyDotDash "./file"
 checkLonelyDotDash _ t@(T_Redirecting id _ _)
     | isUnqualifiedCommand t "./" =
         err id 2083 "Don't add spaces after the slash in './file'."
 checkLonelyDotDash _ _ = return ()
 
 
-prop_checkSpuriousExec1 = verify checkSpuriousExec "exec foo; true"
-prop_checkSpuriousExec2 = verify checkSpuriousExec "if a; then exec b; exec c; fi"
-prop_checkSpuriousExec3 = verifyNot checkSpuriousExec "echo cow; exec foo"
-prop_checkSpuriousExec4 = verifyNot checkSpuriousExec "if a; then exec b; fi"
-prop_checkSpuriousExec5 = verifyNot checkSpuriousExec "exec > file; cmd"
-prop_checkSpuriousExec6 = verify checkSpuriousExec "exec foo > file; cmd"
-prop_checkSpuriousExec7 = verifyNot checkSpuriousExec "exec file; echo failed; exit 3"
-prop_checkSpuriousExec8 = verifyNot checkSpuriousExec "exec {origout}>&1- >tmp.log 2>&1; bar"
+-- |
+-- prop> verify checkSpuriousExec "exec foo; true"
+-- prop> verify checkSpuriousExec "if a; then exec b; exec c; fi"
+-- prop> verifyNot checkSpuriousExec "echo cow; exec foo"
+-- prop> verifyNot checkSpuriousExec "if a; then exec b; fi"
+-- prop> verifyNot checkSpuriousExec "exec > file; cmd"
+-- prop> verify checkSpuriousExec "exec foo > file; cmd"
+-- prop> verifyNot checkSpuriousExec "exec file; echo failed; exit 3"
+-- prop> verifyNot checkSpuriousExec "exec {origout}>&1- >tmp.log 2>&1; bar"
 checkSpuriousExec _ = doLists
   where
     doLists (T_Script _ _ cmds) = doList cmds
@@ -1456,10 +1500,11 @@ checkSpuriousExec _ = doLists
     commentIfExec _ = return ()
 
 
-prop_checkSpuriousExpansion1 = verify checkSpuriousExpansion "if $(true); then true; fi"
-prop_checkSpuriousExpansion2 = verify checkSpuriousExpansion "while \"$(cmd)\"; do :; done"
-prop_checkSpuriousExpansion3 = verifyNot checkSpuriousExpansion "$(cmd) --flag1 --flag2"
-prop_checkSpuriousExpansion4 = verify checkSpuriousExpansion "$((i++))"
+-- |
+-- prop> verify checkSpuriousExpansion "if $(true); then true; fi"
+-- prop> verify checkSpuriousExpansion "while \"$(cmd)\"; do :; done"
+-- prop> verifyNot checkSpuriousExpansion "$(cmd) --flag1 --flag2"
+-- prop> verify checkSpuriousExpansion "$((i++))"
 checkSpuriousExpansion _ (T_SimpleCommand _ _ [T_NormalWord _ [word]]) = check word
   where
     check word = case word of
@@ -1474,14 +1519,16 @@ checkSpuriousExpansion _ (T_SimpleCommand _ _ [T_NormalWord _ [word]]) = check w
 checkSpuriousExpansion _ _ = return ()
 
 
-prop_checkDollarBrackets1 = verify checkDollarBrackets "echo $[1+2]"
-prop_checkDollarBrackets2 = verifyNot checkDollarBrackets "echo $((1+2))"
+-- |
+-- prop> verify checkDollarBrackets "echo $[1+2]"
+-- prop> verifyNot checkDollarBrackets "echo $((1+2))"
 checkDollarBrackets _ (T_DollarBracket id _) =
     style id 2007 "Use $((..)) instead of deprecated $[..]"
 checkDollarBrackets _ _ = return ()
 
-prop_checkSshHereDoc1 = verify checkSshHereDoc "ssh host << foo\necho $PATH\nfoo"
-prop_checkSshHereDoc2 = verifyNot checkSshHereDoc "ssh host << 'foo'\necho $PATH\nfoo"
+-- |
+-- prop> verify checkSshHereDoc "ssh host << foo\necho $PATH\nfoo"
+-- prop> verifyNot checkSshHereDoc "ssh host << 'foo'\necho $PATH\nfoo"
 checkSshHereDoc _ (T_Redirecting _ redirs cmd)
         | cmd `isCommand` "ssh" =
     mapM_ checkHereDoc redirs
@@ -1493,27 +1540,28 @@ checkSshHereDoc _ (T_Redirecting _ redirs cmd)
     checkHereDoc _ = return ()
 checkSshHereDoc _ _ = return ()
 
---- Subshell detection
-prop_subshellAssignmentCheck = verifyTree     subshellAssignmentCheck "cat foo | while read bar; do a=$bar; done; echo \"$a\""
-prop_subshellAssignmentCheck2 = verifyNotTree subshellAssignmentCheck "while read bar; do a=$bar; done < file; echo \"$a\""
-prop_subshellAssignmentCheck3 = verifyTree    subshellAssignmentCheck "( A=foo; ); rm $A"
-prop_subshellAssignmentCheck4 = verifyNotTree subshellAssignmentCheck "( A=foo; rm $A; )"
-prop_subshellAssignmentCheck5 = verifyTree    subshellAssignmentCheck "cat foo | while read cow; do true; done; echo $cow;"
-prop_subshellAssignmentCheck6 = verifyTree    subshellAssignmentCheck "( export lol=$(ls); ); echo $lol;"
-prop_subshellAssignmentCheck6a= verifyTree    subshellAssignmentCheck "( typeset -a lol=a; ); echo $lol;"
-prop_subshellAssignmentCheck7 = verifyTree    subshellAssignmentCheck "cmd | while read foo; do (( n++ )); done; echo \"$n lines\""
-prop_subshellAssignmentCheck8 = verifyTree    subshellAssignmentCheck "n=3 & echo $((n++))"
-prop_subshellAssignmentCheck9 = verifyTree    subshellAssignmentCheck "read n & n=foo$n"
-prop_subshellAssignmentCheck10 = verifyTree    subshellAssignmentCheck "(( n <<= 3 )) & (( n |= 4 )) &"
-prop_subshellAssignmentCheck11 = verifyTree subshellAssignmentCheck "cat /etc/passwd | while read line; do let n=n+1; done\necho $n"
-prop_subshellAssignmentCheck12 = verifyTree subshellAssignmentCheck "cat /etc/passwd | while read line; do let ++n; done\necho $n"
-prop_subshellAssignmentCheck13 = verifyTree subshellAssignmentCheck "#!/bin/bash\necho foo | read bar; echo $bar"
-prop_subshellAssignmentCheck14 = verifyNotTree subshellAssignmentCheck "#!/bin/ksh93\necho foo | read bar; echo $bar"
-prop_subshellAssignmentCheck15 = verifyNotTree subshellAssignmentCheck "#!/bin/ksh\ncat foo | while read bar; do a=$bar; done\necho \"$a\""
-prop_subshellAssignmentCheck16 = verifyNotTree subshellAssignmentCheck "(set -e); echo $@"
-prop_subshellAssignmentCheck17 = verifyNotTree subshellAssignmentCheck "foo=${ { bar=$(baz); } 2>&1; }; echo $foo $bar"
-prop_subshellAssignmentCheck18 = verifyTree subshellAssignmentCheck "( exec {n}>&2; ); echo $n"
-prop_subshellAssignmentCheck19 = verifyNotTree subshellAssignmentCheck "#!/bin/bash\nshopt -s lastpipe; echo a | read -r b; echo \"$b\""
+-- | Subshell detection.
+--
+-- prop> verifyTree     subshellAssignmentCheck "cat foo | while read bar; do a=$bar; done; echo \"$a\""
+-- prop> verifyNotTree subshellAssignmentCheck "while read bar; do a=$bar; done < file; echo \"$a\""
+-- prop> verifyTree    subshellAssignmentCheck "( A=foo; ); rm $A"
+-- prop> verifyNotTree subshellAssignmentCheck "( A=foo; rm $A; )"
+-- prop> verifyTree    subshellAssignmentCheck "cat foo | while read cow; do true; done; echo $cow;"
+-- prop> verifyTree    subshellAssignmentCheck "( export lol=$(ls); ); echo $lol;"
+-- prop> verifyTree    subshellAssignmentCheck "( typeset -a lol=a; ); echo $lol;"
+-- prop> verifyTree    subshellAssignmentCheck "cmd | while read foo; do (( n++ )); done; echo \"$n lines\""
+-- prop> verifyTree    subshellAssignmentCheck "n=3 & echo $((n++))"
+-- prop> verifyTree    subshellAssignmentCheck "read n & n=foo$n"
+-- prop> verifyTree    subshellAssignmentCheck "(( n <<= 3 )) & (( n |= 4 )) &"
+-- prop> verifyTree subshellAssignmentCheck "cat /etc/passwd | while read line; do let n=n+1; done\necho $n"
+-- prop> verifyTree subshellAssignmentCheck "cat /etc/passwd | while read line; do let ++n; done\necho $n"
+-- prop> verifyTree subshellAssignmentCheck "#!/bin/bash\necho foo | read bar; echo $bar"
+-- prop> verifyNotTree subshellAssignmentCheck "#!/bin/ksh93\necho foo | read bar; echo $bar"
+-- prop> verifyNotTree subshellAssignmentCheck "#!/bin/ksh\ncat foo | while read bar; do a=$bar; done\necho \"$a\""
+-- prop> verifyNotTree subshellAssignmentCheck "(set -e); echo $@"
+-- prop> verifyNotTree subshellAssignmentCheck "foo=${ { bar=$(baz); } 2>&1; }; echo $foo $bar"
+-- prop> verifyTree subshellAssignmentCheck "( exec {n}>&2; ); echo $n"
+-- prop> verifyNotTree subshellAssignmentCheck "#!/bin/bash\nshopt -s lastpipe; echo a | read -r b; echo \"$b\""
 subshellAssignmentCheck params t =
     let flow = variableFlow params
         check = findSubshelled flow [("oops",[])] Map.empty
@@ -1563,42 +1611,43 @@ doVariableFlowAnalysis readFunc writeFunc empty flow = evalState (
         writeFunc base token name values
     doFlow _ = return []
 
----- Check whether variables could have spaces/globs
-prop_checkSpacefulness1 = verifyTree checkSpacefulness "a='cow moo'; echo $a"
-prop_checkSpacefulness2 = verifyNotTree checkSpacefulness "a='cow moo'; [[ $a ]]"
-prop_checkSpacefulness3 = verifyNotTree checkSpacefulness "a='cow*.mp3'; echo \"$a\""
-prop_checkSpacefulness4 = verifyTree checkSpacefulness "for f in *.mp3; do echo $f; done"
-prop_checkSpacefulness4a= verifyNotTree checkSpacefulness "foo=3; foo=$(echo $foo)"
-prop_checkSpacefulness5 = verifyTree checkSpacefulness "a='*'; b=$a; c=lol${b//foo/bar}; echo $c"
-prop_checkSpacefulness6 = verifyTree checkSpacefulness "a=foo$(lol); echo $a"
-prop_checkSpacefulness7 = verifyTree checkSpacefulness "a=foo\\ bar; rm $a"
-prop_checkSpacefulness8 = verifyNotTree checkSpacefulness "a=foo\\ bar; a=foo; rm $a"
-prop_checkSpacefulness10= verifyTree checkSpacefulness "rm $1"
-prop_checkSpacefulness11= verifyTree checkSpacefulness "rm ${10//foo/bar}"
-prop_checkSpacefulness12= verifyNotTree checkSpacefulness "(( $1 + 3 ))"
-prop_checkSpacefulness13= verifyNotTree checkSpacefulness "if [[ $2 -gt 14 ]]; then true; fi"
-prop_checkSpacefulness14= verifyNotTree checkSpacefulness "foo=$3 env"
-prop_checkSpacefulness15= verifyNotTree checkSpacefulness "local foo=$1"
-prop_checkSpacefulness16= verifyNotTree checkSpacefulness "declare foo=$1"
-prop_checkSpacefulness17= verifyTree checkSpacefulness "echo foo=$1"
-prop_checkSpacefulness18= verifyNotTree checkSpacefulness "$1 --flags"
-prop_checkSpacefulness19= verifyTree checkSpacefulness "echo $PWD"
-prop_checkSpacefulness20= verifyNotTree checkSpacefulness "n+='foo bar'"
-prop_checkSpacefulness21= verifyNotTree checkSpacefulness "select foo in $bar; do true; done"
-prop_checkSpacefulness22= verifyNotTree checkSpacefulness "echo $\"$1\""
-prop_checkSpacefulness23= verifyNotTree checkSpacefulness "a=(1); echo ${a[@]}"
-prop_checkSpacefulness24= verifyTree checkSpacefulness "a='a    b'; cat <<< $a"
-prop_checkSpacefulness25= verifyTree checkSpacefulness "a='s/[0-9]//g'; sed $a"
-prop_checkSpacefulness26= verifyTree checkSpacefulness "a='foo bar'; echo {1,2,$a}"
-prop_checkSpacefulness27= verifyNotTree checkSpacefulness "echo ${a:+'foo'}"
-prop_checkSpacefulness28= verifyNotTree checkSpacefulness "exec {n}>&1; echo $n"
-prop_checkSpacefulness29= verifyNotTree checkSpacefulness "n=$(stuff); exec {n}>&-;"
-prop_checkSpacefulness30= verifyTree checkSpacefulness "file='foo bar'; echo foo > $file;"
-prop_checkSpacefulness31= verifyNotTree checkSpacefulness "echo \"`echo \\\"$1\\\"`\""
-prop_checkSpacefulness32= verifyNotTree checkSpacefulness "var=$1; [ -v var ]"
-prop_checkSpacefulness33= verifyTree checkSpacefulness "for file; do echo $file; done"
-prop_checkSpacefulness34= verifyTree checkSpacefulness "declare foo$n=$1"
-prop_checkSpacefulness35= verifyNotTree checkSpacefulness "echo ${1+\"$1\"}"
+-- | Check whether variables could have spaces/globs.
+--
+-- prop> verifyTree checkSpacefulness "a='cow moo'; echo $a"
+-- prop> verifyNotTree checkSpacefulness "a='cow moo'; [[ $a ]]"
+-- prop> verifyNotTree checkSpacefulness "a='cow*.mp3'; echo \"$a\""
+-- prop> verifyTree checkSpacefulness "for f in *.mp3; do echo $f; done"
+-- prop> verifyNotTree checkSpacefulness "foo=3; foo=$(echo $foo)"
+-- prop> verifyTree checkSpacefulness "a='*'; b=$a; c=lol${b//foo/bar}; echo $c"
+-- prop> verifyTree checkSpacefulness "a=foo$(lol); echo $a"
+-- prop> verifyTree checkSpacefulness "a=foo\\ bar; rm $a"
+-- prop> verifyNotTree checkSpacefulness "a=foo\\ bar; a=foo; rm $a"
+-- prop> verifyTree checkSpacefulness "rm $1"
+-- prop> verifyTree checkSpacefulness "rm ${10//foo/bar}"
+-- prop> verifyNotTree checkSpacefulness "(( $1 + 3 ))"
+-- prop> verifyNotTree checkSpacefulness "if [[ $2 -gt 14 ]]; then true; fi"
+-- prop> verifyNotTree checkSpacefulness "foo=$3 env"
+-- prop> verifyNotTree checkSpacefulness "local foo=$1"
+-- prop> verifyNotTree checkSpacefulness "declare foo=$1"
+-- prop> verifyTree checkSpacefulness "echo foo=$1"
+-- prop> verifyNotTree checkSpacefulness "$1 --flags"
+-- prop> verifyTree checkSpacefulness "echo $PWD"
+-- prop> verifyNotTree checkSpacefulness "n+='foo bar'"
+-- prop> verifyNotTree checkSpacefulness "select foo in $bar; do true; done"
+-- prop> verifyNotTree checkSpacefulness "echo $\"$1\""
+-- prop> verifyNotTree checkSpacefulness "a=(1); echo ${a[@]}"
+-- prop> verifyTree checkSpacefulness "a='a    b'; cat <<< $a"
+-- prop> verifyTree checkSpacefulness "a='s/[0-9]//g'; sed $a"
+-- prop> verifyTree checkSpacefulness "a='foo bar'; echo {1,2,$a}"
+-- prop> verifyNotTree checkSpacefulness "echo ${a:+'foo'}"
+-- prop> verifyNotTree checkSpacefulness "exec {n}>&1; echo $n"
+-- prop> verifyNotTree checkSpacefulness "n=$(stuff); exec {n}>&-;"
+-- prop> verifyTree checkSpacefulness "file='foo bar'; echo foo > $file;"
+-- prop> verifyNotTree checkSpacefulness "echo \"`echo \\\"$1\\\"`\""
+-- prop> verifyNotTree checkSpacefulness "var=$1; [ -v var ]"
+-- prop> verifyTree checkSpacefulness "for file; do echo $file; done"
+-- prop> verifyTree checkSpacefulness "declare foo$n=$1"
+-- prop> verifyNotTree checkSpacefulness "echo ${1+\"$1\"}"
 
 checkSpacefulness params t =
     doVariableFlowAnalysis readF writeF (Map.fromList defaults) (variableFlow params)
@@ -1674,17 +1723,18 @@ checkSpacefulness params t =
             && any (`isPrefixOf` modifier) ["=", ":="]
             && isParamTo parents ":" token
 
-prop_checkQuotesInLiterals1 = verifyTree checkQuotesInLiterals "param='--foo=\"bar\"'; app $param"
-prop_checkQuotesInLiterals1a= verifyTree checkQuotesInLiterals "param=\"--foo='lolbar'\"; app $param"
-prop_checkQuotesInLiterals2 = verifyNotTree checkQuotesInLiterals "param='--foo=\"bar\"'; app \"$param\""
-prop_checkQuotesInLiterals3 =verifyNotTree checkQuotesInLiterals "param=('--foo='); app \"${param[@]}\""
-prop_checkQuotesInLiterals4 = verifyNotTree checkQuotesInLiterals "param=\"don't bother with this one\"; app $param"
-prop_checkQuotesInLiterals5 = verifyNotTree checkQuotesInLiterals "param=\"--foo='lolbar'\"; eval app $param"
-prop_checkQuotesInLiterals6 = verifyTree checkQuotesInLiterals "param='my\\ file'; cmd=\"rm $param\"; $cmd"
-prop_checkQuotesInLiterals6a= verifyNotTree checkQuotesInLiterals "param='my\\ file'; cmd=\"rm ${#param}\"; $cmd"
-prop_checkQuotesInLiterals7 = verifyTree checkQuotesInLiterals "param='my\\ file'; rm $param"
-prop_checkQuotesInLiterals8 = verifyTree checkQuotesInLiterals "param=\"/foo/'bar baz'/etc\"; rm $param"
-prop_checkQuotesInLiterals9 = verifyNotTree checkQuotesInLiterals "param=\"/foo/'bar baz'/etc\"; rm ${#param}"
+-- |
+-- prop> verifyTree checkQuotesInLiterals "param='--foo=\"bar\"'; app $param"
+-- prop> verifyTree checkQuotesInLiterals "param=\"--foo='lolbar'\"; app $param"
+-- prop> verifyNotTree checkQuotesInLiterals "param='--foo=\"bar\"'; app \"$param\""
+-- prop> verifyNotTree checkQuotesInLiterals "param=('--foo='); app \"${param[@]}\""
+-- prop> verifyNotTree checkQuotesInLiterals "param=\"don't bother with this one\"; app $param"
+-- prop> verifyNotTree checkQuotesInLiterals "param=\"--foo='lolbar'\"; eval app $param"
+-- prop> verifyTree checkQuotesInLiterals "param='my\\ file'; cmd=\"rm $param\"; $cmd"
+-- prop> verifyNotTree checkQuotesInLiterals "param='my\\ file'; cmd=\"rm ${#param}\"; $cmd"
+-- prop> verifyTree checkQuotesInLiterals "param='my\\ file'; rm $param"
+-- prop> verifyTree checkQuotesInLiterals "param=\"/foo/'bar baz'/etc\"; rm $param"
+-- prop> verifyNotTree checkQuotesInLiterals "param=\"/foo/'bar baz'/etc\"; rm ${#param}"
 checkQuotesInLiterals params t =
     doVariableFlowAnalysis readF writeF Map.empty (variableFlow params)
   where
@@ -1737,14 +1787,11 @@ checkQuotesInLiterals params t =
               else [])
 
 
-prop_checkFunctionsUsedExternally1 =
-  verifyTree checkFunctionsUsedExternally "foo() { :; }; sudo foo"
-prop_checkFunctionsUsedExternally2 =
-  verifyTree checkFunctionsUsedExternally "alias f='a'; xargs -n 1 f"
-prop_checkFunctionsUsedExternally3 =
-  verifyNotTree checkFunctionsUsedExternally "f() { :; }; echo f"
-prop_checkFunctionsUsedExternally4 =
-  verifyNotTree checkFunctionsUsedExternally "foo() { :; }; sudo \"foo\""
+-- |
+-- prop> verifyTree checkFunctionsUsedExternally "foo() { :; }; sudo foo"
+-- prop> verifyTree checkFunctionsUsedExternally "alias f='a'; xargs -n 1 f"
+-- prop> verifyNotTree checkFunctionsUsedExternally "f() { :; }; echo f"
+-- prop> verifyNotTree checkFunctionsUsedExternally "foo() { :; }; sudo \"foo\""
 checkFunctionsUsedExternally params t =
     runNodeAnalysis checkCommand params t
   where
@@ -1782,47 +1829,48 @@ checkFunctionsUsedExternally params t =
             info definitionId 2032 $
               "Use own script or sh -c '..' to run this from " ++ cmd ++ "."
 
-prop_checkUnused0 = verifyNotTree checkUnusedAssignments "var=foo; echo $var"
-prop_checkUnused1 = verifyTree checkUnusedAssignments "var=foo; echo $bar"
-prop_checkUnused2 = verifyNotTree checkUnusedAssignments "var=foo; export var;"
-prop_checkUnused3 = verifyTree checkUnusedAssignments "for f in *; do echo '$f'; done"
-prop_checkUnused4 = verifyTree checkUnusedAssignments "local i=0"
-prop_checkUnused5 = verifyNotTree checkUnusedAssignments "read lol; echo $lol"
-prop_checkUnused6 = verifyNotTree checkUnusedAssignments "var=4; (( var++ ))"
-prop_checkUnused7 = verifyNotTree checkUnusedAssignments "var=2; $((var))"
-prop_checkUnused8 = verifyTree checkUnusedAssignments "var=2; var=3;"
-prop_checkUnused9 = verifyNotTree checkUnusedAssignments "read ''"
-prop_checkUnused10= verifyNotTree checkUnusedAssignments "read -p 'test: '"
-prop_checkUnused11= verifyNotTree checkUnusedAssignments "bar=5; export foo[$bar]=3"
-prop_checkUnused12= verifyNotTree checkUnusedAssignments "read foo; echo ${!foo}"
-prop_checkUnused13= verifyNotTree checkUnusedAssignments "x=(1); (( x[0] ))"
-prop_checkUnused14= verifyNotTree checkUnusedAssignments "x=(1); n=0; echo ${x[n]}"
-prop_checkUnused15= verifyNotTree checkUnusedAssignments "x=(1); n=0; (( x[n] ))"
-prop_checkUnused16= verifyNotTree checkUnusedAssignments "foo=5; declare -x foo"
-prop_checkUnused17= verifyNotTree checkUnusedAssignments "read -i 'foo' -e -p 'Input: ' bar; $bar;"
-prop_checkUnused18= verifyNotTree checkUnusedAssignments "a=1; arr=( [$a]=42 ); echo \"${arr[@]}\""
-prop_checkUnused19= verifyNotTree checkUnusedAssignments "a=1; let b=a+1; echo $b"
-prop_checkUnused20= verifyNotTree checkUnusedAssignments "a=1; PS1='$a'"
-prop_checkUnused21= verifyNotTree checkUnusedAssignments "a=1; trap 'echo $a' INT"
-prop_checkUnused22= verifyNotTree checkUnusedAssignments "a=1; [ -v a ]"
-prop_checkUnused23= verifyNotTree checkUnusedAssignments "a=1; [ -R a ]"
-prop_checkUnused24= verifyNotTree checkUnusedAssignments "mapfile -C a b; echo ${b[@]}"
-prop_checkUnused25= verifyNotTree checkUnusedAssignments "readarray foo; echo ${foo[@]}"
-prop_checkUnused26= verifyNotTree checkUnusedAssignments "declare -F foo"
-prop_checkUnused27= verifyTree checkUnusedAssignments "var=3; [ var -eq 3 ]"
-prop_checkUnused28= verifyNotTree checkUnusedAssignments "var=3; [[ var -eq 3 ]]"
-prop_checkUnused29= verifyNotTree checkUnusedAssignments "var=(a b); declare -p var"
-prop_checkUnused30= verifyTree checkUnusedAssignments "let a=1"
-prop_checkUnused31= verifyTree checkUnusedAssignments "let 'a=1'"
-prop_checkUnused32= verifyTree checkUnusedAssignments "let a=b=c; echo $a"
-prop_checkUnused33= verifyNotTree checkUnusedAssignments "a=foo; [[ foo =~ ^{$a}$ ]]"
-prop_checkUnused34= verifyNotTree checkUnusedAssignments "foo=1; (( t = foo )); echo $t"
-prop_checkUnused35= verifyNotTree checkUnusedAssignments "a=foo; b=2; echo ${a:b}"
-prop_checkUnused36= verifyNotTree checkUnusedAssignments "if [[ -v foo ]]; then true; fi"
-prop_checkUnused37= verifyNotTree checkUnusedAssignments "fd=2; exec {fd}>&-"
-prop_checkUnused38= verifyTree checkUnusedAssignments "(( a=42 ))"
-prop_checkUnused39= verifyNotTree checkUnusedAssignments "declare -x -f foo"
-prop_checkUnused40= verifyNotTree checkUnusedAssignments "arr=(1 2); num=2; echo \"${arr[@]:num}\""
+-- |
+-- prop> verifyNotTree checkUnusedAssignments "var=foo; echo $var"
+-- prop> verifyTree checkUnusedAssignments "var=foo; echo $bar"
+-- prop> verifyNotTree checkUnusedAssignments "var=foo; export var;"
+-- prop> verifyTree checkUnusedAssignments "for f in *; do echo '$f'; done"
+-- prop> verifyTree checkUnusedAssignments "local i=0"
+-- prop> verifyNotTree checkUnusedAssignments "read lol; echo $lol"
+-- prop> verifyNotTree checkUnusedAssignments "var=4; (( var++ ))"
+-- prop> verifyNotTree checkUnusedAssignments "var=2; $((var))"
+-- prop> verifyTree checkUnusedAssignments "var=2; var=3;"
+-- prop> verifyNotTree checkUnusedAssignments "read ''"
+-- prop> verifyNotTree checkUnusedAssignments "read -p 'test: '"
+-- prop> verifyNotTree checkUnusedAssignments "bar=5; export foo[$bar]=3"
+-- prop> verifyNotTree checkUnusedAssignments "read foo; echo ${!foo}"
+-- prop> verifyNotTree checkUnusedAssignments "x=(1); (( x[0] ))"
+-- prop> verifyNotTree checkUnusedAssignments "x=(1); n=0; echo ${x[n]}"
+-- prop> verifyNotTree checkUnusedAssignments "x=(1); n=0; (( x[n] ))"
+-- prop> verifyNotTree checkUnusedAssignments "foo=5; declare -x foo"
+-- prop> verifyNotTree checkUnusedAssignments "read -i 'foo' -e -p 'Input: ' bar; $bar;"
+-- prop> verifyNotTree checkUnusedAssignments "a=1; arr=( [$a]=42 ); echo \"${arr[@]}\""
+-- prop> verifyNotTree checkUnusedAssignments "a=1; let b=a+1; echo $b"
+-- prop> verifyNotTree checkUnusedAssignments "a=1; PS1='$a'"
+-- prop> verifyNotTree checkUnusedAssignments "a=1; trap 'echo $a' INT"
+-- prop> verifyNotTree checkUnusedAssignments "a=1; [ -v a ]"
+-- prop> verifyNotTree checkUnusedAssignments "a=1; [ -R a ]"
+-- prop> verifyNotTree checkUnusedAssignments "mapfile -C a b; echo ${b[@]}"
+-- prop> verifyNotTree checkUnusedAssignments "readarray foo; echo ${foo[@]}"
+-- prop> verifyNotTree checkUnusedAssignments "declare -F foo"
+-- prop> verifyTree checkUnusedAssignments "var=3; [ var -eq 3 ]"
+-- prop> verifyNotTree checkUnusedAssignments "var=3; [[ var -eq 3 ]]"
+-- prop> verifyNotTree checkUnusedAssignments "var=(a b); declare -p var"
+-- prop> verifyTree checkUnusedAssignments "let a=1"
+-- prop> verifyTree checkUnusedAssignments "let 'a=1'"
+-- prop> verifyTree checkUnusedAssignments "let a=b=c; echo $a"
+-- prop> verifyNotTree checkUnusedAssignments "a=foo; [[ foo =~ ^{$a}$ ]]"
+-- prop> verifyNotTree checkUnusedAssignments "foo=1; (( t = foo )); echo $t"
+-- prop> verifyNotTree checkUnusedAssignments "a=foo; b=2; echo ${a:b}"
+-- prop> verifyNotTree checkUnusedAssignments "if [[ -v foo ]]; then true; fi"
+-- prop> verifyNotTree checkUnusedAssignments "fd=2; exec {fd}>&-"
+-- prop> verifyTree checkUnusedAssignments "(( a=42 ))"
+-- prop> verifyNotTree checkUnusedAssignments "declare -x -f foo"
+-- prop> verifyNotTree checkUnusedAssignments "arr=(1 2); num=2; echo \"${arr[@]:num}\""
 checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
     flow = variableFlow params
@@ -1845,41 +1893,42 @@ checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
     stripSuffix = takeWhile isVariableChar
     defaultMap = Map.fromList $ zip internalVariables $ repeat ()
 
-prop_checkUnassignedReferences1 = verifyTree checkUnassignedReferences "echo $foo"
-prop_checkUnassignedReferences2 = verifyNotTree checkUnassignedReferences "foo=hello; echo $foo"
-prop_checkUnassignedReferences3 = verifyTree checkUnassignedReferences "MY_VALUE=3; echo $MYVALUE"
-prop_checkUnassignedReferences4 = verifyNotTree checkUnassignedReferences "RANDOM2=foo; echo $RANDOM"
-prop_checkUnassignedReferences5 = verifyNotTree checkUnassignedReferences "declare -A foo=([bar]=baz); echo ${foo[bar]}"
-prop_checkUnassignedReferences6 = verifyNotTree checkUnassignedReferences "foo=..; echo ${foo-bar}"
-prop_checkUnassignedReferences7 = verifyNotTree checkUnassignedReferences "getopts ':h' foo; echo $foo"
-prop_checkUnassignedReferences8 = verifyNotTree checkUnassignedReferences "let 'foo = 1'; echo $foo"
-prop_checkUnassignedReferences9 = verifyNotTree checkUnassignedReferences "echo ${foo-bar}"
-prop_checkUnassignedReferences10= verifyNotTree checkUnassignedReferences "echo ${foo:?}"
-prop_checkUnassignedReferences11= verifyNotTree checkUnassignedReferences "declare -A foo; echo \"${foo[@]}\""
-prop_checkUnassignedReferences12= verifyNotTree checkUnassignedReferences "typeset -a foo; echo \"${foo[@]}\""
-prop_checkUnassignedReferences13= verifyNotTree checkUnassignedReferences "f() { local foo; echo $foo; }"
-prop_checkUnassignedReferences14= verifyNotTree checkUnassignedReferences "foo=; echo $foo"
-prop_checkUnassignedReferences15= verifyNotTree checkUnassignedReferences "f() { true; }; export -f f"
-prop_checkUnassignedReferences16= verifyNotTree checkUnassignedReferences "declare -A foo=( [a b]=bar ); echo ${foo[a b]}"
-prop_checkUnassignedReferences17= verifyNotTree checkUnassignedReferences "USERS=foo; echo $USER"
-prop_checkUnassignedReferences18= verifyNotTree checkUnassignedReferences "FOOBAR=42; export FOOBAR="
-prop_checkUnassignedReferences19= verifyNotTree checkUnassignedReferences "readonly foo=bar; echo $foo"
-prop_checkUnassignedReferences20= verifyNotTree checkUnassignedReferences "printf -v foo bar; echo $foo"
-prop_checkUnassignedReferences21= verifyTree checkUnassignedReferences "echo ${#foo}"
-prop_checkUnassignedReferences22= verifyNotTree checkUnassignedReferences "echo ${!os*}"
-prop_checkUnassignedReferences23= verifyTree checkUnassignedReferences "declare -a foo; foo[bar]=42;"
-prop_checkUnassignedReferences24= verifyNotTree checkUnassignedReferences "declare -A foo; foo[bar]=42;"
-prop_checkUnassignedReferences25= verifyNotTree checkUnassignedReferences "declare -A foo=(); foo[bar]=42;"
-prop_checkUnassignedReferences26= verifyNotTree checkUnassignedReferences "a::b() { foo; }; readonly -f a::b"
-prop_checkUnassignedReferences27= verifyNotTree checkUnassignedReferences ": ${foo:=bar}"
-prop_checkUnassignedReferences28= verifyNotTree checkUnassignedReferences "#!/bin/ksh\necho \"${.sh.version}\"\n"
-prop_checkUnassignedReferences29= verifyNotTree checkUnassignedReferences "if [[ -v foo ]]; then echo $foo; fi"
-prop_checkUnassignedReferences30= verifyNotTree checkUnassignedReferences "if [[ -v foo[3] ]]; then echo ${foo[3]}; fi"
-prop_checkUnassignedReferences31= verifyNotTree checkUnassignedReferences "X=1; if [[ -v foo[$X+42] ]]; then echo ${foo[$X+42]}; fi"
-prop_checkUnassignedReferences32= verifyNotTree checkUnassignedReferences "if [[ -v \"foo[1]\" ]]; then echo ${foo[@]}; fi"
-prop_checkUnassignedReferences33= verifyNotTree checkUnassignedReferences "f() { local -A foo; echo \"${foo[@]}\"; }"
-prop_checkUnassignedReferences34= verifyNotTree checkUnassignedReferences "declare -A foo; (( foo[bar] ))"
-prop_checkUnassignedReferences35= verifyNotTree checkUnassignedReferences "echo ${arr[foo-bar]:?fail}"
+-- |
+-- prop> verifyTree checkUnassignedReferences "echo $foo"
+-- prop> verifyNotTree checkUnassignedReferences "foo=hello; echo $foo"
+-- prop> verifyTree checkUnassignedReferences "MY_VALUE=3; echo $MYVALUE"
+-- prop> verifyNotTree checkUnassignedReferences "RANDOM2=foo; echo $RANDOM"
+-- prop> verifyNotTree checkUnassignedReferences "declare -A foo=([bar]=baz); echo ${foo[bar]}"
+-- prop> verifyNotTree checkUnassignedReferences "foo=..; echo ${foo-bar}"
+-- prop> verifyNotTree checkUnassignedReferences "getopts ':h' foo; echo $foo"
+-- prop> verifyNotTree checkUnassignedReferences "let 'foo = 1'; echo $foo"
+-- prop> verifyNotTree checkUnassignedReferences "echo ${foo-bar}"
+-- prop> verifyNotTree checkUnassignedReferences "echo ${foo:?}"
+-- prop> verifyNotTree checkUnassignedReferences "declare -A foo; echo \"${foo[@]}\""
+-- prop> verifyNotTree checkUnassignedReferences "typeset -a foo; echo \"${foo[@]}\""
+-- prop> verifyNotTree checkUnassignedReferences "f() { local foo; echo $foo; }"
+-- prop> verifyNotTree checkUnassignedReferences "foo=; echo $foo"
+-- prop> verifyNotTree checkUnassignedReferences "f() { true; }; export -f f"
+-- prop> verifyNotTree checkUnassignedReferences "declare -A foo=( [a b]=bar ); echo ${foo[a b]}"
+-- prop> verifyNotTree checkUnassignedReferences "USERS=foo; echo $USER"
+-- prop> verifyNotTree checkUnassignedReferences "FOOBAR=42; export FOOBAR="
+-- prop> verifyNotTree checkUnassignedReferences "readonly foo=bar; echo $foo"
+-- prop> verifyNotTree checkUnassignedReferences "printf -v foo bar; echo $foo"
+-- prop> verifyTree checkUnassignedReferences "echo ${#foo}"
+-- prop> verifyNotTree checkUnassignedReferences "echo ${!os*}"
+-- prop> verifyTree checkUnassignedReferences "declare -a foo; foo[bar]=42;"
+-- prop> verifyNotTree checkUnassignedReferences "declare -A foo; foo[bar]=42;"
+-- prop> verifyNotTree checkUnassignedReferences "declare -A foo=(); foo[bar]=42;"
+-- prop> verifyNotTree checkUnassignedReferences "a::b() { foo; }; readonly -f a::b"
+-- prop> verifyNotTree checkUnassignedReferences ": ${foo:=bar}"
+-- prop> verifyNotTree checkUnassignedReferences "#!/bin/ksh\necho \"${.sh.version}\"\n"
+-- prop> verifyNotTree checkUnassignedReferences "if [[ -v foo ]]; then echo $foo; fi"
+-- prop> verifyNotTree checkUnassignedReferences "if [[ -v foo[3] ]]; then echo ${foo[3]}; fi"
+-- prop> verifyNotTree checkUnassignedReferences "X=1; if [[ -v foo[$X+42] ]]; then echo ${foo[$X+42]}; fi"
+-- prop> verifyNotTree checkUnassignedReferences "if [[ -v \"foo[1]\" ]]; then echo ${foo[@]}; fi"
+-- prop> verifyNotTree checkUnassignedReferences "f() { local -A foo; echo \"${foo[@]}\"; }"
+-- prop> verifyNotTree checkUnassignedReferences "declare -A foo; (( foo[bar] ))"
+-- prop> verifyNotTree checkUnassignedReferences "echo ${arr[foo-bar]:?fail}"
 checkUnassignedReferences params t = warnings
   where
     (readMap, writeMap) = execState (mapM tally $ variableFlow params) (Map.empty, Map.empty)
@@ -1953,10 +2002,11 @@ checkUnassignedReferences params t = warnings
         else dist var candidate
 
 
-prop_checkGlobsAsOptions1 = verify checkGlobsAsOptions "rm *.txt"
-prop_checkGlobsAsOptions2 = verify checkGlobsAsOptions "ls ??.*"
-prop_checkGlobsAsOptions3 = verifyNot checkGlobsAsOptions "rm -- *.txt"
-prop_checkGlobsAsOptions4 = verifyNot checkGlobsAsOptions "*.txt"
+-- |
+-- prop> verify checkGlobsAsOptions "rm *.txt"
+-- prop> verify checkGlobsAsOptions "ls ??.*"
+-- prop> verifyNot checkGlobsAsOptions "rm -- *.txt"
+-- prop> verifyNot checkGlobsAsOptions "*.txt"
 checkGlobsAsOptions _ (T_SimpleCommand _ _ args) =
     mapM_ check $ takeWhile (not . isEndOfArgs) (drop 1 args)
   where
@@ -1974,14 +2024,15 @@ checkGlobsAsOptions _ (T_SimpleCommand _ _ args) =
 checkGlobsAsOptions _ _ = return ()
 
 
-prop_checkWhileReadPitfalls1 = verify checkWhileReadPitfalls "while read foo; do ssh $foo uptime; done < file"
-prop_checkWhileReadPitfalls2 = verifyNot checkWhileReadPitfalls "while read -u 3 foo; do ssh $foo uptime; done 3< file"
-prop_checkWhileReadPitfalls3 = verifyNot checkWhileReadPitfalls "while true; do ssh host uptime; done"
-prop_checkWhileReadPitfalls4 = verifyNot checkWhileReadPitfalls "while read foo; do ssh $foo hostname < /dev/null; done"
-prop_checkWhileReadPitfalls5 = verifyNot checkWhileReadPitfalls "while read foo; do echo ls | ssh $foo; done"
-prop_checkWhileReadPitfalls6 = verifyNot checkWhileReadPitfalls "while read foo <&3; do ssh $foo; done 3< foo"
-prop_checkWhileReadPitfalls7 = verify checkWhileReadPitfalls "while read foo; do if true; then ssh $foo uptime; fi; done < file"
-prop_checkWhileReadPitfalls8 = verifyNot checkWhileReadPitfalls "while read foo; do ssh -n $foo uptime; done < file"
+-- |
+-- prop> verify checkWhileReadPitfalls "while read foo; do ssh $foo uptime; done < file"
+-- prop> verifyNot checkWhileReadPitfalls "while read -u 3 foo; do ssh $foo uptime; done 3< file"
+-- prop> verifyNot checkWhileReadPitfalls "while true; do ssh host uptime; done"
+-- prop> verifyNot checkWhileReadPitfalls "while read foo; do ssh $foo hostname < /dev/null; done"
+-- prop> verifyNot checkWhileReadPitfalls "while read foo; do echo ls | ssh $foo; done"
+-- prop> verifyNot checkWhileReadPitfalls "while read foo <&3; do ssh $foo; done 3< foo"
+-- prop> verify checkWhileReadPitfalls "while read foo; do if true; then ssh $foo uptime; fi; done < file"
+-- prop> verifyNot checkWhileReadPitfalls "while read foo; do ssh -n $foo uptime; done < file"
 
 checkWhileReadPitfalls _ (T_WhileExpression id [command] contents)
         | isStdinReadCommand command =
@@ -2022,8 +2073,9 @@ checkWhileReadPitfalls _ (T_WhileExpression id [command] contents)
 checkWhileReadPitfalls _ _ = return ()
 
 
-prop_checkPrefixAssign1 = verify checkPrefixAssignmentReference "var=foo echo $var"
-prop_checkPrefixAssign2 = verifyNot checkPrefixAssignmentReference "var=$(echo $var) cmd"
+-- |
+-- prop> verify checkPrefixAssignmentReference "var=foo echo $var"
+-- prop> verifyNot checkPrefixAssignmentReference "var=$(echo $var) cmd"
 checkPrefixAssignmentReference params t@(T_DollarBraced id value) =
     check path
   where
@@ -2044,11 +2096,12 @@ checkPrefixAssignmentReference params t@(T_DollarBraced id value) =
 
 checkPrefixAssignmentReference _ _ = return ()
 
-prop_checkCharRangeGlob1 = verify checkCharRangeGlob "ls *[:digit:].jpg"
-prop_checkCharRangeGlob2 = verifyNot checkCharRangeGlob "ls *[[:digit:]].jpg"
-prop_checkCharRangeGlob3 = verify checkCharRangeGlob "ls [10-15]"
-prop_checkCharRangeGlob4 = verifyNot checkCharRangeGlob "ls [a-zA-Z]"
-prop_checkCharRangeGlob5 = verifyNot checkCharRangeGlob "tr -d [a-zA-Z]" -- tr has 2060
+-- |
+-- prop> verify checkCharRangeGlob "ls *[:digit:].jpg"
+-- prop> verifyNot checkCharRangeGlob "ls *[[:digit:]].jpg"
+-- prop> verify checkCharRangeGlob "ls [10-15]"
+-- prop> verifyNot checkCharRangeGlob "ls [a-zA-Z]"
+-- prop> verifyNot checkCharRangeGlob "tr -d [a-zA-Z]" -- tr has 2060
 checkCharRangeGlob p t@(T_Glob id str) |
   isCharClass str && not (isParamTo (parentMap p) "tr" t) =
     if ":" `isPrefixOf` contents
@@ -2066,10 +2119,11 @@ checkCharRangeGlob _ _ = return ()
 
 
 
-prop_checkCdAndBack1 = verify checkCdAndBack "for f in *; do cd $f; git pull; cd ..; done"
-prop_checkCdAndBack2 = verifyNot checkCdAndBack "for f in *; do cd $f || continue; git pull; cd ..; done"
-prop_checkCdAndBack3 = verifyNot checkCdAndBack "while [[ $PWD != / ]]; do cd ..; done"
-prop_checkCdAndBack4 = verify checkCdAndBack "cd $tmp; foo; cd -"
+-- |
+-- prop> verify checkCdAndBack "for f in *; do cd $f; git pull; cd ..; done"
+-- prop> verifyNot checkCdAndBack "for f in *; do cd $f || continue; git pull; cd ..; done"
+-- prop> verifyNot checkCdAndBack "while [[ $PWD != / ]]; do cd ..; done"
+-- prop> verify checkCdAndBack "cd $tmp; foo; cd -"
 checkCdAndBack params = doLists
   where
     shell = shellType params
@@ -2099,13 +2153,14 @@ checkCdAndBack params = doLists
 
     message = "Use a ( subshell ) to avoid having to cd back."
 
-prop_checkLoopKeywordScope1 = verify checkLoopKeywordScope "continue 2"
-prop_checkLoopKeywordScope2 = verify checkLoopKeywordScope "for f; do ( break; ); done"
-prop_checkLoopKeywordScope3 = verify checkLoopKeywordScope "if true; then continue; fi"
-prop_checkLoopKeywordScope4 = verifyNot checkLoopKeywordScope "while true; do break; done"
-prop_checkLoopKeywordScope5 = verify checkLoopKeywordScope "if true; then break; fi"
-prop_checkLoopKeywordScope6 = verify checkLoopKeywordScope "while true; do true | { break; }; done"
-prop_checkLoopKeywordScope7 = verifyNot checkLoopKeywordScope "#!/bin/ksh\nwhile true; do true | { break; }; done"
+-- |
+-- prop> verify checkLoopKeywordScope "continue 2"
+-- prop> verify checkLoopKeywordScope "for f; do ( break; ); done"
+-- prop> verify checkLoopKeywordScope "if true; then continue; fi"
+-- prop> verifyNot checkLoopKeywordScope "while true; do break; done"
+-- prop> verify checkLoopKeywordScope "if true; then break; fi"
+-- prop> verify checkLoopKeywordScope "while true; do true | { break; }; done"
+-- prop> verifyNot checkLoopKeywordScope "#!/bin/ksh\nwhile true; do true | { break; }; done"
 checkLoopKeywordScope params t |
         name `elem` map Just ["continue", "break"] =
     if not $ any isLoop path
@@ -2127,9 +2182,10 @@ checkLoopKeywordScope params t |
 checkLoopKeywordScope _ _ = return ()
 
 
-prop_checkFunctionDeclarations1 = verify checkFunctionDeclarations "#!/bin/ksh\nfunction foo() { command foo --lol \"$@\"; }"
-prop_checkFunctionDeclarations2 = verify checkFunctionDeclarations "#!/bin/dash\nfunction foo { lol; }"
-prop_checkFunctionDeclarations3 = verifyNot checkFunctionDeclarations "foo() { echo bar; }"
+-- |
+-- prop> verify checkFunctionDeclarations "#!/bin/ksh\nfunction foo() { command foo --lol \"$@\"; }"
+-- prop> verify checkFunctionDeclarations "#!/bin/dash\nfunction foo { lol; }"
+-- prop> verifyNot checkFunctionDeclarations "foo() { echo bar; }"
 checkFunctionDeclarations params
         (T_Function id (FunctionKeyword hasKeyword) (FunctionParentheses hasParens) _ _) =
     case shellType params of
@@ -2150,8 +2206,9 @@ checkFunctionDeclarations _ _ = return ()
 
 
 
-prop_checkStderrPipe1 = verify checkStderrPipe "#!/bin/ksh\nfoo |& bar"
-prop_checkStderrPipe2 = verifyNot checkStderrPipe "#!/bin/bash\nfoo |& bar"
+-- |
+-- prop> verify checkStderrPipe "#!/bin/ksh\nfoo |& bar"
+-- prop> verifyNot checkStderrPipe "#!/bin/bash\nfoo |& bar"
 checkStderrPipe params =
     case shellType params of
         Ksh -> match
@@ -2161,18 +2218,19 @@ checkStderrPipe params =
         err id 2118 "Ksh does not support |&. Use 2>&1 |."
     match _ = return ()
 
-prop_checkUnpassedInFunctions1 = verifyTree checkUnpassedInFunctions "foo() { echo $1; }; foo"
-prop_checkUnpassedInFunctions2 = verifyNotTree checkUnpassedInFunctions "foo() { echo $1; };"
-prop_checkUnpassedInFunctions3 = verifyNotTree checkUnpassedInFunctions "foo() { echo $lol; }; foo"
-prop_checkUnpassedInFunctions4 = verifyNotTree checkUnpassedInFunctions "foo() { echo $0; }; foo"
-prop_checkUnpassedInFunctions5 = verifyNotTree checkUnpassedInFunctions "foo() { echo $1; }; foo 'lol'; foo"
-prop_checkUnpassedInFunctions6 = verifyNotTree checkUnpassedInFunctions "foo() { set -- *; echo $1; }; foo"
-prop_checkUnpassedInFunctions7 = verifyTree checkUnpassedInFunctions "foo() { echo $1; }; foo; foo;"
-prop_checkUnpassedInFunctions8 = verifyNotTree checkUnpassedInFunctions "foo() { echo $((1)); }; foo;"
-prop_checkUnpassedInFunctions9 = verifyNotTree checkUnpassedInFunctions "foo() { echo $(($b)); }; foo;"
-prop_checkUnpassedInFunctions10= verifyNotTree checkUnpassedInFunctions "foo() { echo $!; }; foo;"
-prop_checkUnpassedInFunctions11= verifyNotTree checkUnpassedInFunctions "foo() { bar() { echo $1; }; bar baz; }; foo;"
-prop_checkUnpassedInFunctions12= verifyNotTree checkUnpassedInFunctions "foo() { echo ${!var*}; }; foo;"
+-- |
+-- prop> verifyTree checkUnpassedInFunctions "foo() { echo $1; }; foo"
+-- prop> verifyNotTree checkUnpassedInFunctions "foo() { echo $1; };"
+-- prop> verifyNotTree checkUnpassedInFunctions "foo() { echo $lol; }; foo"
+-- prop> verifyNotTree checkUnpassedInFunctions "foo() { echo $0; }; foo"
+-- prop> verifyNotTree checkUnpassedInFunctions "foo() { echo $1; }; foo 'lol'; foo"
+-- prop> verifyNotTree checkUnpassedInFunctions "foo() { set -- *; echo $1; }; foo"
+-- prop> verifyTree checkUnpassedInFunctions "foo() { echo $1; }; foo; foo;"
+-- prop> verifyNotTree checkUnpassedInFunctions "foo() { echo $((1)); }; foo;"
+-- prop> verifyNotTree checkUnpassedInFunctions "foo() { echo $(($b)); }; foo;"
+-- prop> verifyNotTree checkUnpassedInFunctions "foo() { echo $!; }; foo;"
+-- prop> verifyNotTree checkUnpassedInFunctions "foo() { bar() { echo $1; }; bar baz; }; foo;"
+-- prop> verifyNotTree checkUnpassedInFunctions "foo() { echo ${!var*}; }; foo;"
 checkUnpassedInFunctions params root =
     execWriter $ mapM_ warnForGroup referenceGroups
   where
@@ -2236,14 +2294,15 @@ checkUnpassedInFunctions params root =
             name ++ " references arguments, but none are ever passed."
 
 
-prop_checkOverridingPath1 = verify checkOverridingPath "PATH=\"$var/$foo\""
-prop_checkOverridingPath2 = verify checkOverridingPath "PATH=\"mydir\""
-prop_checkOverridingPath3 = verify checkOverridingPath "PATH=/cow/foo"
-prop_checkOverridingPath4 = verifyNot checkOverridingPath "PATH=/cow/foo/bin"
-prop_checkOverridingPath5 = verifyNot checkOverridingPath "PATH='/bin:/sbin'"
-prop_checkOverridingPath6 = verifyNot checkOverridingPath "PATH=\"$var/$foo\" cmd"
-prop_checkOverridingPath7 = verifyNot checkOverridingPath "PATH=$OLDPATH"
-prop_checkOverridingPath8 = verifyNot checkOverridingPath "PATH=$PATH:/stuff"
+-- |
+-- prop> verify checkOverridingPath "PATH=\"$var/$foo\""
+-- prop> verify checkOverridingPath "PATH=\"mydir\""
+-- prop> verify checkOverridingPath "PATH=/cow/foo"
+-- prop> verifyNot checkOverridingPath "PATH=/cow/foo/bin"
+-- prop> verifyNot checkOverridingPath "PATH='/bin:/sbin'"
+-- prop> verifyNot checkOverridingPath "PATH=\"$var/$foo\" cmd"
+-- prop> verifyNot checkOverridingPath "PATH=$OLDPATH"
+-- prop> verifyNot checkOverridingPath "PATH=$PATH:/stuff"
 checkOverridingPath _ (T_SimpleCommand _ vars []) =
     mapM_ checkVar vars
   where
@@ -2256,9 +2315,10 @@ checkOverridingPath _ (T_SimpleCommand _ vars []) =
     notify id = warn id 2123 "PATH is the shell search path. Use another name."
 checkOverridingPath _ _ = return ()
 
-prop_checkTildeInPath1 = verify checkTildeInPath "PATH=\"$PATH:~/bin\""
-prop_checkTildeInPath2 = verify checkTildeInPath "PATH='~foo/bin'"
-prop_checkTildeInPath3 = verifyNot checkTildeInPath "PATH=~/bin"
+-- |
+-- prop> verify checkTildeInPath "PATH=\"$PATH:~/bin\""
+-- prop> verify checkTildeInPath "PATH='~foo/bin'"
+-- prop> verifyNot checkTildeInPath "PATH=~/bin"
 checkTildeInPath _ (T_SimpleCommand _ vars _) =
     mapM_ checkVar vars
   where
@@ -2273,9 +2333,10 @@ checkTildeInPath _ (T_SimpleCommand _ vars _) =
     isQuoted _ = False
 checkTildeInPath _ _ = return ()
 
-prop_checkUnsupported3 = verify checkUnsupported "#!/bin/sh\ncase foo in bar) baz ;& esac"
-prop_checkUnsupported4 = verify checkUnsupported "#!/bin/ksh\ncase foo in bar) baz ;;& esac"
-prop_checkUnsupported5 = verify checkUnsupported "#!/bin/bash\necho \"${ ls; }\""
+-- |
+-- prop> verify checkUnsupported "#!/bin/sh\ncase foo in bar) baz ;& esac"
+-- prop> verify checkUnsupported "#!/bin/ksh\ncase foo in bar) baz ;;& esac"
+-- prop> verify checkUnsupported "#!/bin/bash\necho \"${ ls; }\""
 checkUnsupported params t =
     when (not (null support) && (shellType params `notElem` support)) $
         report name
@@ -2299,9 +2360,10 @@ shellSupport t =
 
 groupWith f = groupBy ((==) `on` f)
 
-prop_checkMultipleAppends1 = verify checkMultipleAppends "foo >> file; bar >> file; baz >> file;"
-prop_checkMultipleAppends2 = verify checkMultipleAppends "foo >> file; bar | grep f >> file; baz >> file;"
-prop_checkMultipleAppends3 = verifyNot checkMultipleAppends "foo < file; bar < file; baz < file;"
+-- |
+-- prop> verify checkMultipleAppends "foo >> file; bar >> file; baz >> file;"
+-- prop> verify checkMultipleAppends "foo >> file; bar | grep f >> file; baz >> file;"
+-- prop> verifyNot checkMultipleAppends "foo < file; bar < file; baz < file;"
 checkMultipleAppends params t =
     mapM_ checkList $ getCommandSequences t
   where
@@ -2321,8 +2383,9 @@ checkMultipleAppends params t =
     getAppend _ = Nothing
 
 
-prop_checkSuspiciousIFS1 = verify checkSuspiciousIFS "IFS=\"\\n\""
-prop_checkSuspiciousIFS2 = verifyNot checkSuspiciousIFS "IFS=$'\\t'"
+-- |
+-- prop> verify checkSuspiciousIFS "IFS=\"\\n\""
+-- prop> verifyNot checkSuspiciousIFS "IFS=$'\\t'"
 checkSuspiciousIFS params (T_Assignment id Assign "IFS" [] value) =
     potentially $ do
         str <- getLiteralString value
@@ -2341,12 +2404,13 @@ checkSuspiciousIFS params (T_Assignment id Assign "IFS" [] value) =
 checkSuspiciousIFS _ _ = return ()
 
 
-prop_checkGrepQ1= verify checkShouldUseGrepQ "[[ $(foo | grep bar) ]]"
-prop_checkGrepQ2= verify checkShouldUseGrepQ "[ -z $(fgrep lol) ]"
-prop_checkGrepQ3= verify checkShouldUseGrepQ "[ -n \"$(foo | zgrep lol)\" ]"
-prop_checkGrepQ4= verifyNot checkShouldUseGrepQ "[ -z $(grep bar | cmd) ]"
-prop_checkGrepQ5= verifyNot checkShouldUseGrepQ "rm $(ls | grep file)"
-prop_checkGrepQ6= verifyNot checkShouldUseGrepQ "[[ -n $(pgrep foo) ]]"
+-- |
+-- prop> verify checkShouldUseGrepQ "[[ $(foo | grep bar) ]]"
+-- prop> verify checkShouldUseGrepQ "[ -z $(fgrep lol) ]"
+-- prop> verify checkShouldUseGrepQ "[ -n \"$(foo | zgrep lol)\" ]"
+-- prop> verifyNot checkShouldUseGrepQ "[ -z $(grep bar | cmd) ]"
+-- prop> verifyNot checkShouldUseGrepQ "rm $(ls | grep file)"
+-- prop> verifyNot checkShouldUseGrepQ "[[ -n $(pgrep foo) ]]"
 checkShouldUseGrepQ params t =
     potentially $ case t of
         TC_Nullary id _ token -> check id True token
@@ -2377,22 +2441,23 @@ checkShouldUseGrepQ params t =
             _ -> fail "unknown"
     isGrep = (`elem` ["grep", "egrep", "fgrep", "zgrep"])
 
-prop_checkTestArgumentSplitting1 = verify checkTestArgumentSplitting "[ -e *.mp3 ]"
-prop_checkTestArgumentSplitting2 = verifyNot checkTestArgumentSplitting "[[ $a == *b* ]]"
-prop_checkTestArgumentSplitting3 = verify checkTestArgumentSplitting "[[ *.png == '' ]]"
-prop_checkTestArgumentSplitting4 = verify checkTestArgumentSplitting "[[ foo == f{o,oo,ooo} ]]"
-prop_checkTestArgumentSplitting5 = verify checkTestArgumentSplitting "[[ $@ ]]"
-prop_checkTestArgumentSplitting6 = verify checkTestArgumentSplitting "[ -e $@ ]"
-prop_checkTestArgumentSplitting7 = verify checkTestArgumentSplitting "[ $@ == $@ ]"
-prop_checkTestArgumentSplitting8 = verify checkTestArgumentSplitting "[[ $@ = $@ ]]"
-prop_checkTestArgumentSplitting9 = verifyNot checkTestArgumentSplitting "[[ foo =~ bar{1,2} ]]"
-prop_checkTestArgumentSplitting10 = verifyNot checkTestArgumentSplitting "[ \"$@\" ]"
-prop_checkTestArgumentSplitting11 = verify checkTestArgumentSplitting "[[ \"$@\" ]]"
-prop_checkTestArgumentSplitting12 = verify checkTestArgumentSplitting "[ *.png ]"
-prop_checkTestArgumentSplitting13 = verify checkTestArgumentSplitting "[ \"$@\" == \"\" ]"
-prop_checkTestArgumentSplitting14 = verify checkTestArgumentSplitting "[[ \"$@\" == \"\" ]]"
-prop_checkTestArgumentSplitting15 = verifyNot checkTestArgumentSplitting "[[ \"$*\" == \"\" ]]"
-prop_checkTestArgumentSplitting16 = verifyNot checkTestArgumentSplitting "[[ -v foo[123] ]]"
+-- |
+-- prop> verify checkTestArgumentSplitting "[ -e *.mp3 ]"
+-- prop> verifyNot checkTestArgumentSplitting "[[ $a == *b* ]]"
+-- prop> verify checkTestArgumentSplitting "[[ *.png == '' ]]"
+-- prop> verify checkTestArgumentSplitting "[[ foo == f{o,oo,ooo} ]]"
+-- prop> verify checkTestArgumentSplitting "[[ $@ ]]"
+-- prop> verify checkTestArgumentSplitting "[ -e $@ ]"
+-- prop> verify checkTestArgumentSplitting "[ $@ == $@ ]"
+-- prop> verify checkTestArgumentSplitting "[[ $@ = $@ ]]"
+-- prop> verifyNot checkTestArgumentSplitting "[[ foo =~ bar{1,2} ]]"
+-- prop> verifyNot checkTestArgumentSplitting "[ \"$@\" ]"
+-- prop> verify checkTestArgumentSplitting "[[ \"$@\" ]]"
+-- prop> verify checkTestArgumentSplitting "[ *.png ]"
+-- prop> verify checkTestArgumentSplitting "[ \"$@\" == \"\" ]"
+-- prop> verify checkTestArgumentSplitting "[[ \"$@\" == \"\" ]]"
+-- prop> verifyNot checkTestArgumentSplitting "[[ \"$*\" == \"\" ]]"
+-- prop> verifyNot checkTestArgumentSplitting "[[ -v foo[123] ]]"
 checkTestArgumentSplitting :: Parameters -> Token -> Writer [TokenComment] ()
 checkTestArgumentSplitting _ t =
     case t of
@@ -2447,11 +2512,12 @@ checkTestArgumentSplitting _ t =
             else err (getId token) 2203 "Globs are ignored in [[ ]] except right of =/!=. Use a loop."
 
 
-prop_checkMaskedReturns1 = verify checkMaskedReturns "f() { local a=$(false); }"
-prop_checkMaskedReturns2 = verify checkMaskedReturns "declare a=$(false)"
-prop_checkMaskedReturns3 = verify checkMaskedReturns "declare a=\"`false`\""
-prop_checkMaskedReturns4 = verifyNot checkMaskedReturns "declare a; a=$(false)"
-prop_checkMaskedReturns5 = verifyNot checkMaskedReturns "f() { local -r a=$(false); }"
+-- |
+-- prop> verify checkMaskedReturns "f() { local a=$(false); }"
+-- prop> verify checkMaskedReturns "declare a=$(false)"
+-- prop> verify checkMaskedReturns "declare a=\"`false`\""
+-- prop> verifyNot checkMaskedReturns "declare a; a=$(false)"
+-- prop> verifyNot checkMaskedReturns "f() { local -r a=$(false); }"
 checkMaskedReturns _ t@(T_SimpleCommand id _ (cmd:rest)) = potentially $ do
     name <- getCommandName t
     guard $ name `elem` ["declare", "export"]
@@ -2469,40 +2535,42 @@ checkMaskedReturns _ t@(T_SimpleCommand id _ (cmd:rest)) = potentially $ do
 checkMaskedReturns _ _ = return ()
 
 
-prop_checkReadWithoutR1 = verify checkReadWithoutR "read -a foo"
-prop_checkReadWithoutR2 = verifyNot checkReadWithoutR "read -ar foo"
+-- |
+-- prop> verify checkReadWithoutR "read -a foo"
+-- prop> verifyNot checkReadWithoutR "read -ar foo"
 checkReadWithoutR _ t@T_SimpleCommand {} | t `isUnqualifiedCommand` "read" =
     unless ("r" `elem` map snd (getAllFlags t)) $
         info (getId $ getCommandTokenOrThis t) 2162 "read without -r will mangle backslashes."
 checkReadWithoutR _ _ = return ()
 
-prop_checkUncheckedCd1 = verifyTree checkUncheckedCdPushdPopd "cd ~/src; rm -r foo"
-prop_checkUncheckedCd2 = verifyNotTree checkUncheckedCdPushdPopd "cd ~/src || exit; rm -r foo"
-prop_checkUncheckedCd3 = verifyNotTree checkUncheckedCdPushdPopd "set -e; cd ~/src; rm -r foo"
-prop_checkUncheckedCd4 = verifyNotTree checkUncheckedCdPushdPopd "if cd foo; then rm foo; fi"
-prop_checkUncheckedCd5 = verifyTree checkUncheckedCdPushdPopd "if true; then cd foo; fi"
-prop_checkUncheckedCd6 = verifyNotTree checkUncheckedCdPushdPopd "cd .."
-prop_checkUncheckedCd7 = verifyNotTree checkUncheckedCdPushdPopd "#!/bin/bash -e\ncd foo\nrm bar"
-prop_checkUncheckedCd8 = verifyNotTree checkUncheckedCdPushdPopd "set -o errexit; cd foo; rm bar"
-prop_checkUncheckedCd9 = verifyTree checkUncheckedCdPushdPopd "builtin cd ~/src; rm -r foo"
-prop_checkUncheckedPushd1 = verifyTree checkUncheckedCdPushdPopd "pushd ~/src; rm -r foo"
-prop_checkUncheckedPushd2 = verifyNotTree checkUncheckedCdPushdPopd "pushd ~/src || exit; rm -r foo"
-prop_checkUncheckedPushd3 = verifyNotTree checkUncheckedCdPushdPopd "set -e; pushd ~/src; rm -r foo"
-prop_checkUncheckedPushd4 = verifyNotTree checkUncheckedCdPushdPopd "if pushd foo; then rm foo; fi"
-prop_checkUncheckedPushd5 = verifyTree checkUncheckedCdPushdPopd "if true; then pushd foo; fi"
-prop_checkUncheckedPushd6 = verifyNotTree checkUncheckedCdPushdPopd "pushd .."
-prop_checkUncheckedPushd7 = verifyNotTree checkUncheckedCdPushdPopd "#!/bin/bash -e\npushd foo\nrm bar"
-prop_checkUncheckedPushd8 = verifyNotTree checkUncheckedCdPushdPopd "set -o errexit; pushd foo; rm bar"
-prop_checkUncheckedPushd9 = verifyNotTree checkUncheckedCdPushdPopd "pushd -n foo"
-prop_checkUncheckedPopd1 = verifyTree checkUncheckedCdPushdPopd "popd; rm -r foo"
-prop_checkUncheckedPopd2 = verifyNotTree checkUncheckedCdPushdPopd "popd || exit; rm -r foo"
-prop_checkUncheckedPopd3 = verifyNotTree checkUncheckedCdPushdPopd "set -e; popd; rm -r foo"
-prop_checkUncheckedPopd4 = verifyNotTree checkUncheckedCdPushdPopd "if popd; then rm foo; fi"
-prop_checkUncheckedPopd5 = verifyTree checkUncheckedCdPushdPopd "if true; then popd; fi"
-prop_checkUncheckedPopd6 = verifyTree checkUncheckedCdPushdPopd "popd"
-prop_checkUncheckedPopd7 = verifyNotTree checkUncheckedCdPushdPopd "#!/bin/bash -e\npopd\nrm bar"
-prop_checkUncheckedPopd8 = verifyNotTree checkUncheckedCdPushdPopd "set -o errexit; popd; rm bar"
-prop_checkUncheckedPopd9 = verifyNotTree checkUncheckedCdPushdPopd "popd -n foo"
+-- |
+-- prop> verifyTree checkUncheckedCdPushdPopd "cd ~/src; rm -r foo"
+-- prop> verifyNotTree checkUncheckedCdPushdPopd "cd ~/src || exit; rm -r foo"
+-- prop> verifyNotTree checkUncheckedCdPushdPopd "set -e; cd ~/src; rm -r foo"
+-- prop> verifyNotTree checkUncheckedCdPushdPopd "if cd foo; then rm foo; fi"
+-- prop> verifyTree checkUncheckedCdPushdPopd "if true; then cd foo; fi"
+-- prop> verifyNotTree checkUncheckedCdPushdPopd "cd .."
+-- prop> verifyNotTree checkUncheckedCdPushdPopd "#!/bin/bash -e\ncd foo\nrm bar"
+-- prop> verifyNotTree checkUncheckedCdPushdPopd "set -o errexit; cd foo; rm bar"
+-- prop> verifyTree checkUncheckedCdPushdPopd "builtin cd ~/src; rm -r foo"
+-- prop> verifyTree checkUncheckedCdPushdPopd "pushd ~/src; rm -r foo"
+-- prop> verifyNotTree checkUncheckedCdPushdPopd "pushd ~/src || exit; rm -r foo"
+-- prop> verifyNotTree checkUncheckedCdPushdPopd "set -e; pushd ~/src; rm -r foo"
+-- prop> verifyNotTree checkUncheckedCdPushdPopd "if pushd foo; then rm foo; fi"
+-- prop> verifyTree checkUncheckedCdPushdPopd "if true; then pushd foo; fi"
+-- prop> verifyNotTree checkUncheckedCdPushdPopd "pushd .."
+-- prop> verifyNotTree checkUncheckedCdPushdPopd "#!/bin/bash -e\npushd foo\nrm bar"
+-- prop> verifyNotTree checkUncheckedCdPushdPopd "set -o errexit; pushd foo; rm bar"
+-- prop> verifyNotTree checkUncheckedCdPushdPopd "pushd -n foo"
+-- prop> verifyTree checkUncheckedCdPushdPopd "popd; rm -r foo"
+-- prop> verifyNotTree checkUncheckedCdPushdPopd "popd || exit; rm -r foo"
+-- prop> verifyNotTree checkUncheckedCdPushdPopd "set -e; popd; rm -r foo"
+-- prop> verifyNotTree checkUncheckedCdPushdPopd "if popd; then rm foo; fi"
+-- prop> verifyTree checkUncheckedCdPushdPopd "if true; then popd; fi"
+-- prop> verifyTree checkUncheckedCdPushdPopd "popd"
+-- prop> verifyNotTree checkUncheckedCdPushdPopd "#!/bin/bash -e\npopd\nrm bar"
+-- prop> verifyNotTree checkUncheckedCdPushdPopd "set -o errexit; popd; rm bar"
+-- prop> verifyNotTree checkUncheckedCdPushdPopd "popd -n foo"
 
 checkUncheckedCdPushdPopd params root =
     if hasSetE params then
@@ -2521,9 +2589,10 @@ checkUncheckedCdPushdPopd params root =
           [_, ".."] -> True;
           _ -> False
 
-prop_checkLoopVariableReassignment1 = verify checkLoopVariableReassignment "for i in *; do for i in *.bar; do true; done; done"
-prop_checkLoopVariableReassignment2 = verify checkLoopVariableReassignment "for i in *; do for((i=0; i<3; i++)); do true; done; done"
-prop_checkLoopVariableReassignment3 = verifyNot checkLoopVariableReassignment "for i in *; do for j in *.bar; do true; done; done"
+-- |
+-- prop> verify checkLoopVariableReassignment "for i in *; do for i in *.bar; do true; done; done"
+-- prop> verify checkLoopVariableReassignment "for i in *; do for((i=0; i<3; i++)); do true; done; done"
+-- prop> verifyNot checkLoopVariableReassignment "for i in *; do for j in *.bar; do true; done; done"
 checkLoopVariableReassignment params token =
     potentially $ case token of
         T_ForIn {} -> check
@@ -2548,11 +2617,12 @@ checkLoopVariableReassignment params token =
                             _ _ _ -> return var
             _ -> fail "not loop"
 
-prop_checkTrailingBracket1 = verify checkTrailingBracket "if -z n ]]; then true; fi "
-prop_checkTrailingBracket2 = verifyNot checkTrailingBracket "if [[ -z n ]]; then true; fi "
-prop_checkTrailingBracket3 = verify checkTrailingBracket "a || b ] && thing"
-prop_checkTrailingBracket4 = verifyNot checkTrailingBracket "run [ foo ]"
-prop_checkTrailingBracket5 = verifyNot checkTrailingBracket "run bar ']'"
+-- |
+-- prop> verify checkTrailingBracket "if -z n ]]; then true; fi "
+-- prop> verifyNot checkTrailingBracket "if [[ -z n ]]; then true; fi "
+-- prop> verify checkTrailingBracket "a || b ] && thing"
+-- prop> verifyNot checkTrailingBracket "run [ foo ]"
+-- prop> verifyNot checkTrailingBracket "run bar ']'"
 checkTrailingBracket _ token =
     case token of
         T_SimpleCommand _ _ tokens@(_:_) -> check (last tokens) token
@@ -2574,15 +2644,16 @@ checkTrailingBracket _ token =
             "]" -> "["
             x -> x
 
-prop_checkReturnAgainstZero1 = verify checkReturnAgainstZero "[ $? -eq 0 ]"
-prop_checkReturnAgainstZero2 = verify checkReturnAgainstZero "[[ \"$?\" -gt 0 ]]"
-prop_checkReturnAgainstZero3 = verify checkReturnAgainstZero "[[ 0 -ne $? ]]"
-prop_checkReturnAgainstZero4 = verifyNot checkReturnAgainstZero "[[ $? -eq 4 ]]"
-prop_checkReturnAgainstZero5 = verify checkReturnAgainstZero "[[ 0 -eq $? ]]"
-prop_checkReturnAgainstZero6 = verifyNot checkReturnAgainstZero "[[ $R -eq 0 ]]"
-prop_checkReturnAgainstZero7 = verify checkReturnAgainstZero "(( $? == 0 ))"
-prop_checkReturnAgainstZero8 = verify checkReturnAgainstZero "(( $? ))"
-prop_checkReturnAgainstZero9 = verify checkReturnAgainstZero "(( ! $? ))"
+-- |
+-- prop> verify checkReturnAgainstZero "[ $? -eq 0 ]"
+-- prop> verify checkReturnAgainstZero "[[ \"$?\" -gt 0 ]]"
+-- prop> verify checkReturnAgainstZero "[[ 0 -ne $? ]]"
+-- prop> verifyNot checkReturnAgainstZero "[[ $? -eq 4 ]]"
+-- prop> verify checkReturnAgainstZero "[[ 0 -eq $? ]]"
+-- prop> verifyNot checkReturnAgainstZero "[[ $R -eq 0 ]]"
+-- prop> verify checkReturnAgainstZero "(( $? == 0 ))"
+-- prop> verify checkReturnAgainstZero "(( $? ))"
+-- prop> verify checkReturnAgainstZero "(( ! $? ))"
 checkReturnAgainstZero _ token =
     case token of
         TC_Binary id _ _ lhs rhs -> check lhs rhs
@@ -2604,14 +2675,15 @@ checkReturnAgainstZero _ token =
             _ -> False
     message id = style id 2181 "Check exit code directly with e.g. 'if mycmd;', not indirectly with $?."
 
-prop_checkRedirectedNowhere1 = verify checkRedirectedNowhere "> file"
-prop_checkRedirectedNowhere2 = verify checkRedirectedNowhere "> file | grep foo"
-prop_checkRedirectedNowhere3 = verify checkRedirectedNowhere "grep foo | > bar"
-prop_checkRedirectedNowhere4 = verifyNot checkRedirectedNowhere "grep foo > bar"
-prop_checkRedirectedNowhere5 = verifyNot checkRedirectedNowhere "foo | grep bar > baz"
-prop_checkRedirectedNowhere6 = verifyNot checkRedirectedNowhere "var=$(value) 2> /dev/null"
-prop_checkRedirectedNowhere7 = verifyNot checkRedirectedNowhere "var=$(< file)"
-prop_checkRedirectedNowhere8 = verifyNot checkRedirectedNowhere "var=`< file`"
+-- |
+-- prop> verify checkRedirectedNowhere "> file"
+-- prop> verify checkRedirectedNowhere "> file | grep foo"
+-- prop> verify checkRedirectedNowhere "grep foo | > bar"
+-- prop> verifyNot checkRedirectedNowhere "grep foo > bar"
+-- prop> verifyNot checkRedirectedNowhere "foo | grep bar > baz"
+-- prop> verifyNot checkRedirectedNowhere "var=$(value) 2> /dev/null"
+-- prop> verifyNot checkRedirectedNowhere "var=$(< file)"
+-- prop> verifyNot checkRedirectedNowhere "var=`< file`"
 checkRedirectedNowhere params token =
     case token of
         T_Pipeline _ _ [single] -> potentially $ do
@@ -2637,15 +2709,16 @@ checkRedirectedNowhere params token =
             _ -> Nothing
 
 
-prop_checkArrayAssignmentIndices1 = verifyTree checkArrayAssignmentIndices "declare -A foo; foo=(bar)"
-prop_checkArrayAssignmentIndices2 = verifyNotTree checkArrayAssignmentIndices "declare -a foo; foo=(bar)"
-prop_checkArrayAssignmentIndices3 = verifyNotTree checkArrayAssignmentIndices "declare -A foo; foo=([i]=bar)"
-prop_checkArrayAssignmentIndices4 = verifyTree checkArrayAssignmentIndices "typeset -A foo; foo+=(bar)"
-prop_checkArrayAssignmentIndices5 = verifyTree checkArrayAssignmentIndices "arr=( [foo]= bar )"
-prop_checkArrayAssignmentIndices6 = verifyTree checkArrayAssignmentIndices "arr=( [foo] = bar )"
-prop_checkArrayAssignmentIndices7 = verifyTree checkArrayAssignmentIndices "arr=( var=value )"
-prop_checkArrayAssignmentIndices8 = verifyNotTree checkArrayAssignmentIndices "arr=( [foo]=bar )"
-prop_checkArrayAssignmentIndices9 = verifyNotTree checkArrayAssignmentIndices "arr=( [foo]=\"\" )"
+-- |
+-- prop> verifyTree checkArrayAssignmentIndices "declare -A foo; foo=(bar)"
+-- prop> verifyNotTree checkArrayAssignmentIndices "declare -a foo; foo=(bar)"
+-- prop> verifyNotTree checkArrayAssignmentIndices "declare -A foo; foo=([i]=bar)"
+-- prop> verifyTree checkArrayAssignmentIndices "typeset -A foo; foo+=(bar)"
+-- prop> verifyTree checkArrayAssignmentIndices "arr=( [foo]= bar )"
+-- prop> verifyTree checkArrayAssignmentIndices "arr=( [foo] = bar )"
+-- prop> verifyTree checkArrayAssignmentIndices "arr=( var=value )"
+-- prop> verifyNotTree checkArrayAssignmentIndices "arr=( [foo]=bar )"
+-- prop> verifyNotTree checkArrayAssignmentIndices "arr=( [foo]=\"\" )"
 checkArrayAssignmentIndices params root =
     runNodeAnalysis check params root
   where
@@ -2679,15 +2752,16 @@ checkArrayAssignmentIndices params root =
 
             _ -> return ()
 
-prop_checkUnmatchableCases1 = verify checkUnmatchableCases "case foo in bar) true; esac"
-prop_checkUnmatchableCases2 = verify checkUnmatchableCases "case foo-$bar in ??|*) true; esac"
-prop_checkUnmatchableCases3 = verify checkUnmatchableCases "case foo in foo) true; esac"
-prop_checkUnmatchableCases4 = verifyNot checkUnmatchableCases "case foo-$bar in foo*|*bar|*baz*) true; esac"
-prop_checkUnmatchableCases5 = verify checkUnmatchableCases "case $f in *.txt) true;; f??.txt) false;; esac"
-prop_checkUnmatchableCases6 = verifyNot checkUnmatchableCases "case $f in ?*) true;; *) false;; esac"
-prop_checkUnmatchableCases7 = verifyNot checkUnmatchableCases "case $f in $(x)) true;; asdf) false;; esac"
-prop_checkUnmatchableCases8 = verify checkUnmatchableCases "case $f in cow) true;; bar|cow) false;; esac"
-prop_checkUnmatchableCases9 = verifyNot checkUnmatchableCases "case $f in x) true;;& x) false;; esac"
+-- |
+-- prop> verify checkUnmatchableCases "case foo in bar) true; esac"
+-- prop> verify checkUnmatchableCases "case foo-$bar in ??|*) true; esac"
+-- prop> verify checkUnmatchableCases "case foo in foo) true; esac"
+-- prop> verifyNot checkUnmatchableCases "case foo-$bar in foo*|*bar|*baz*) true; esac"
+-- prop> verify checkUnmatchableCases "case $f in *.txt) true;; f??.txt) false;; esac"
+-- prop> verifyNot checkUnmatchableCases "case $f in ?*) true;; *) false;; esac"
+-- prop> verifyNot checkUnmatchableCases "case $f in $(x)) true;; asdf) false;; esac"
+-- prop> verify checkUnmatchableCases "case $f in cow) true;; bar|cow) false;; esac"
+-- prop> verifyNot checkUnmatchableCases "case $f in x) true;;& x) false;; esac"
 checkUnmatchableCases _ t =
     case t of
         T_CaseExpression _ word list -> do
@@ -2733,13 +2807,14 @@ checkUnmatchableCases _ t =
     checkDoms _ = return ()
 
 
-prop_checkSubshellAsTest1 = verify checkSubshellAsTest "( -e file )"
-prop_checkSubshellAsTest2 = verify checkSubshellAsTest "( 1 -gt 2 )"
-prop_checkSubshellAsTest3 = verifyNot checkSubshellAsTest "( grep -c foo bar )"
-prop_checkSubshellAsTest4 = verifyNot checkSubshellAsTest "[ 1 -gt 2 ]"
-prop_checkSubshellAsTest5 = verify checkSubshellAsTest "( -e file && -x file )"
-prop_checkSubshellAsTest6 = verify checkSubshellAsTest "( -e file || -x file && -t 1 )"
-prop_checkSubshellAsTest7 = verify checkSubshellAsTest "( ! -d file )"
+-- |
+-- prop> verify checkSubshellAsTest "( -e file )"
+-- prop> verify checkSubshellAsTest "( 1 -gt 2 )"
+-- prop> verifyNot checkSubshellAsTest "( grep -c foo bar )"
+-- prop> verifyNot checkSubshellAsTest "[ 1 -gt 2 ]"
+-- prop> verify checkSubshellAsTest "( -e file && -x file )"
+-- prop> verify checkSubshellAsTest "( -e file || -x file && -t 1 )"
+-- prop> verify checkSubshellAsTest "( ! -d file )"
 checkSubshellAsTest _ t =
     case t of
         T_Subshell id [w] -> check id w
@@ -2761,14 +2836,15 @@ checkSubshellAsTest _ t =
             warn id 2205 "(..) is a subshell. Did you mean [ .. ], a test expression?"
 
 
-prop_checkSplittingInArrays1 = verify checkSplittingInArrays "a=( $var )"
-prop_checkSplittingInArrays2 = verify checkSplittingInArrays "a=( $(cmd) )"
-prop_checkSplittingInArrays3 = verifyNot checkSplittingInArrays "a=( \"$var\" )"
-prop_checkSplittingInArrays4 = verifyNot checkSplittingInArrays "a=( \"$(cmd)\" )"
-prop_checkSplittingInArrays5 = verifyNot checkSplittingInArrays "a=( $! $$ $# )"
-prop_checkSplittingInArrays6 = verifyNot checkSplittingInArrays "a=( ${#arr[@]} )"
-prop_checkSplittingInArrays7 = verifyNot checkSplittingInArrays "a=( foo{1,2} )"
-prop_checkSplittingInArrays8 = verifyNot checkSplittingInArrays "a=( * )"
+-- |
+-- prop> verify checkSplittingInArrays "a=( $var )"
+-- prop> verify checkSplittingInArrays "a=( $(cmd) )"
+-- prop> verifyNot checkSplittingInArrays "a=( \"$var\" )"
+-- prop> verifyNot checkSplittingInArrays "a=( \"$(cmd)\" )"
+-- prop> verifyNot checkSplittingInArrays "a=( $! $$ $# )"
+-- prop> verifyNot checkSplittingInArrays "a=( ${#arr[@]} )"
+-- prop> verifyNot checkSplittingInArrays "a=( foo{1,2} )"
+-- prop> verifyNot checkSplittingInArrays "a=( * )"
 checkSplittingInArrays params t =
     case t of
         T_Array _ elements -> mapM_ check elements
@@ -2798,10 +2874,11 @@ checkSplittingInArrays params t =
             else "Prefer mapfile or read -a to split command output (or quote to avoid splitting)."
 
 
-prop_checkRedirectionToNumber1 = verify checkRedirectionToNumber "( 1 > 2 )"
-prop_checkRedirectionToNumber2 = verify checkRedirectionToNumber "foo 1>2"
-prop_checkRedirectionToNumber3 = verifyNot checkRedirectionToNumber "echo foo > '2'"
-prop_checkRedirectionToNumber4 = verifyNot checkRedirectionToNumber "foo 1>&2"
+-- |
+-- prop> verify checkRedirectionToNumber "( 1 > 2 )"
+-- prop> verify checkRedirectionToNumber "foo 1>2"
+-- prop> verifyNot checkRedirectionToNumber "echo foo > '2'"
+-- prop> verifyNot checkRedirectionToNumber "foo 1>&2"
 checkRedirectionToNumber _ t = case t of
     T_IoFile id _ word -> potentially $ do
         file <- getUnquotedLiteral word
@@ -2809,9 +2886,10 @@ checkRedirectionToNumber _ t = case t of
         return $ warn id 2210 "This is a file redirection. Was it supposed to be a comparison or fd operation?"
     _ -> return ()
 
-prop_checkGlobAsCommand1 = verify checkGlobAsCommand "foo*"
-prop_checkGlobAsCommand2 = verify checkGlobAsCommand "$(var[i])"
-prop_checkGlobAsCommand3 = verifyNot checkGlobAsCommand "echo foo*"
+-- |
+-- prop> verify checkGlobAsCommand "foo*"
+-- prop> verify checkGlobAsCommand "$(var[i])"
+-- prop> verifyNot checkGlobAsCommand "echo foo*"
 checkGlobAsCommand _ t = case t of
     T_SimpleCommand _ _ (first:_) ->
         when (isGlob first) $
@@ -2819,10 +2897,11 @@ checkGlobAsCommand _ t = case t of
     _ -> return ()
 
 
-prop_checkFlagAsCommand1 = verify checkFlagAsCommand "-e file"
-prop_checkFlagAsCommand2 = verify checkFlagAsCommand "foo\n  --bar=baz"
-prop_checkFlagAsCommand3 = verifyNot checkFlagAsCommand "'--myexec--' args"
-prop_checkFlagAsCommand4 = verifyNot checkFlagAsCommand "var=cmd --arg"  -- Handled by SC2037
+-- |
+-- prop> verify checkFlagAsCommand "-e file"
+-- prop> verify checkFlagAsCommand "foo\n  --bar=baz"
+-- prop> verifyNot checkFlagAsCommand "'--myexec--' args"
+-- prop> verifyNot checkFlagAsCommand "var=cmd --arg"  -- Handled by SC2037
 checkFlagAsCommand _ t = case t of
     T_SimpleCommand _ [] (first:_) ->
         when (isUnquotedFlag first) $
@@ -2830,21 +2909,23 @@ checkFlagAsCommand _ t = case t of
     _ -> return ()
 
 
-prop_checkEmptyCondition1 = verify checkEmptyCondition "if [ ]; then ..; fi"
-prop_checkEmptyCondition2 = verifyNot checkEmptyCondition "[ foo -o bar ]"
+-- |
+-- prop> verify checkEmptyCondition "if [ ]; then ..; fi"
+-- prop> verifyNot checkEmptyCondition "[ foo -o bar ]"
 checkEmptyCondition _ t = case t of
     TC_Empty id _ -> style id 2212 "Use 'false' instead of empty [/[[ conditionals."
     _ -> return ()
 
-prop_checkPipeToNowhere1 = verify checkPipeToNowhere "foo | echo bar"
-prop_checkPipeToNowhere2 = verify checkPipeToNowhere "basename < file.txt"
-prop_checkPipeToNowhere3 = verify checkPipeToNowhere "printf 'Lol' <<< str"
-prop_checkPipeToNowhere4 = verify checkPipeToNowhere "printf 'Lol' << eof\nlol\neof\n"
-prop_checkPipeToNowhere5 = verifyNot checkPipeToNowhere "echo foo | xargs du"
-prop_checkPipeToNowhere6 = verifyNot checkPipeToNowhere "ls | echo $(cat)"
-prop_checkPipeToNowhere7 = verifyNot checkPipeToNowhere "echo foo | var=$(cat) ls"
-prop_checkPipeToNowhere8 = verify checkPipeToNowhere "foo | true"
-prop_checkPipeToNowhere9 = verifyNot checkPipeToNowhere "mv -i f . < /dev/stdin"
+-- |
+-- prop> verify checkPipeToNowhere "foo | echo bar"
+-- prop> verify checkPipeToNowhere "basename < file.txt"
+-- prop> verify checkPipeToNowhere "printf 'Lol' <<< str"
+-- prop> verify checkPipeToNowhere "printf 'Lol' << eof\nlol\neof\n"
+-- prop> verifyNot checkPipeToNowhere "echo foo | xargs du"
+-- prop> verifyNot checkPipeToNowhere "ls | echo $(cat)"
+-- prop> verifyNot checkPipeToNowhere "echo foo | var=$(cat) ls"
+-- prop> verify checkPipeToNowhere "foo | true"
+-- prop> verifyNot checkPipeToNowhere "mv -i f . < /dev/stdin"
 checkPipeToNowhere :: Parameters -> Token -> WriterT [TokenComment] Identity ()
 checkPipeToNowhere _ t =
     case t of
@@ -2896,10 +2977,11 @@ checkPipeToNowhere _ t =
             T_FdRedirect _ _ T_HereString {} -> True
             _ -> False
 
-prop_checkUseBeforeDefinition1 = verifyTree checkUseBeforeDefinition "f; f() { true; }"
-prop_checkUseBeforeDefinition2 = verifyNotTree checkUseBeforeDefinition "f() { true; }; f"
-prop_checkUseBeforeDefinition3 = verifyNotTree checkUseBeforeDefinition "if ! mycmd --version; then mycmd() { true; }; fi"
-prop_checkUseBeforeDefinition4 = verifyNotTree checkUseBeforeDefinition "mycmd || mycmd() { f; }"
+-- |
+-- prop> verifyTree checkUseBeforeDefinition "f; f() { true; }"
+-- prop> verifyNotTree checkUseBeforeDefinition "f() { true; }; f"
+-- prop> verifyNotTree checkUseBeforeDefinition "if ! mycmd --version; then mycmd() { true; }; fi"
+-- prop> verifyNotTree checkUseBeforeDefinition "mycmd || mycmd() { f; }"
 checkUseBeforeDefinition _ t =
     execWriter $ evalStateT (mapM_ examine $ revCommands) Map.empty
   where
@@ -2927,9 +3009,10 @@ checkUseBeforeDefinition _ t =
             then [x]
             else concatMap recursiveSequences list
 
-prop_checkForLoopGlobVariables1 = verify checkForLoopGlobVariables "for i in $var/*.txt; do true; done"
-prop_checkForLoopGlobVariables2 = verifyNot checkForLoopGlobVariables "for i in \"$var\"/*.txt; do true; done"
-prop_checkForLoopGlobVariables3 = verifyNot checkForLoopGlobVariables "for i in $var; do true; done"
+-- |
+-- prop> verify checkForLoopGlobVariables "for i in $var/*.txt; do true; done"
+-- prop> verifyNot checkForLoopGlobVariables "for i in \"$var\"/*.txt; do true; done"
+-- prop> verifyNot checkForLoopGlobVariables "for i in $var; do true; done"
 checkForLoopGlobVariables _ t =
     case t of
         T_ForIn _ _ words _ -> mapM_ check words
@@ -2941,10 +3024,11 @@ checkForLoopGlobVariables _ t =
     suggest t = info (getId t) 2231
         "Quote expansions in this for loop glob to prevent wordsplitting, e.g. \"$dir\"/*.txt ."
 
-prop_checkSubshelledTests1 = verify checkSubshelledTests "a && ( [ b ] || ! [ c ] )"
-prop_checkSubshelledTests2 = verify checkSubshelledTests "( [ a ] )"
-prop_checkSubshelledTests3 = verify checkSubshelledTests "( [ a ] && [ b ] || test c )"
-prop_checkSubshelledTests4 = verify checkSubshelledTests "( [ a ] && { [ b ] && [ c ]; } )"
+-- |
+-- prop> verify checkSubshelledTests "a && ( [ b ] || ! [ c ] )"
+-- prop> verify checkSubshelledTests "( [ a ] )"
+-- prop> verify checkSubshelledTests "( [ a ] && [ b ] || test c )"
+-- prop> verify checkSubshelledTests "( [ a ] && { [ b ] && [ c ]; } )"
 checkSubshelledTests params t =
     case t of
         T_Subshell id list | all isTestStructure list ->
@@ -3005,11 +3089,12 @@ checkSubshelledTests params t =
             T_Annotation {} -> True
             _ -> False
 
-prop_checkInvertedStringTest1 = verify checkInvertedStringTest "[ ! -z $var ]"
-prop_checkInvertedStringTest2 = verify checkInvertedStringTest "! [[ -n $var ]]"
-prop_checkInvertedStringTest3 = verifyNot checkInvertedStringTest "! [ -x $var ]"
-prop_checkInvertedStringTest4 = verifyNot checkInvertedStringTest "[[ ! -w $var ]]"
-prop_checkInvertedStringTest5 = verifyNot checkInvertedStringTest "[ -z $var ]"
+-- |
+-- prop> verify checkInvertedStringTest "[ ! -z $var ]"
+-- prop> verify checkInvertedStringTest "! [[ -n $var ]]"
+-- prop> verifyNot checkInvertedStringTest "! [ -x $var ]"
+-- prop> verifyNot checkInvertedStringTest "[[ ! -w $var ]]"
+-- prop> verifyNot checkInvertedStringTest "[ -z $var ]"
 checkInvertedStringTest _ t =
     case t of
         TC_Unary _ _ "!" (TC_Unary _ _ op _) ->
@@ -3024,7 +3109,3 @@ checkInvertedStringTest _ t =
                 "-z" -> style (getId t) 2237 "Use [ -n .. ] instead of ! [ -z .. ]."
                 _ -> return ()
         _ -> return ()
-
-
-return []
-runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
