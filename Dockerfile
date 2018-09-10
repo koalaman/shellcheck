@@ -16,7 +16,8 @@ COPY LICENSE Setup.hs shellcheck.hs ./
 COPY src src
 RUN cabal build Paths_ShellCheck && \
   ghc -optl-static -optl-pthread -isrc -idist/build/autogen --make shellcheck -split-sections -optc-Wl,--gc-sections -optlo-Os && \
-  strip --strip-all shellcheck
+  strip --strip-all shellcheck && \
+  ls -l shellcheck
 
 RUN mkdir -p /out/bin && \
   cp shellcheck  /out/bin/
