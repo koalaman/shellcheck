@@ -16,7 +16,7 @@ if [[ $var == *$'\nTrue'* ]]
 then
   exit 0
 else
-  grep --context 3 --regexp "Fail" --regexp "Tracing" <<< "${var}"
+  grep -C 3 -e "Fail" -e "Tracing" <<< "${var}"
   exit 1
 fi
 ) 2>&1
