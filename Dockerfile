@@ -9,10 +9,10 @@ RUN apt-get -yq update \
   && apt-get -yq install software-properties-common \
   && apt-add-repository -y "ppa:hvr/ghc" \
   && apt-get -yq update \
-  && apt-get -yq install cabal-install-2.4 ghc-8.4.3 llvm-5.0 pandoc \
+  && apt-get -yq install cabal-install-2.4 ghc-8.4.3 pandoc \
   && rm -rf /var/lib/apt/lists/*
 
-ENV PATH="/opt/ghc/bin:/usr/lib/llvm-5.0/bin:${PATH}"
+ENV PATH="/opt/ghc/bin:${PATH}"
 
 # Use gold linker and check tools versions
 RUN ln -s $(which ld.gold) /usr/local/bin/ld && \
@@ -34,7 +34,6 @@ RUN cabal update && \
   cabal get aeson-1.4.0.0 && sed -i 's/-O2//' aeson-1.4.0.0/aeson.cabal && \ 
   echo 'packages: . regex-tdfa-1.2.3.1 aeson-1.4.0.0 > cabal.project' && \
   cabal new-build --dependencies-only \
-    --ghc-options='-fllvm -optlo-Os' \
     --disable-executable-dynamic --enable-split-sections --disable-tests
 
 # Copy source and build it
@@ -46,7 +45,6 @@ COPY test test
 RUN sed -i 's/-- STATIC/ld-options: -static -pthread -Wl,--gc-sections/' ShellCheck.cabal && \
   cat ShellCheck.cabal && \
   cabal new-build \
-    --ghc-options='-fllvm -optlo-Os' \
     --disable-executable-dynamic --enable-split-sections --disable-tests && \
   cp $(find dist-newstyle -type f -name shellcheck) . && \
   strip --strip-all shellcheck && \
