@@ -28,15 +28,13 @@ Extra-Source-Files:
     shellcheck.1.md
     -- built with a cabal sdist hook
     shellcheck.1
-    -- tests
-    test/shellcheck.hs
 
 custom-setup
   setup-depends:
-    base          >= 4    && <5,
-    process       >= 1.0  && <1.7,
+    base          >= 4     && <5,
+    process       >= 1.0   && <1.7,
     cabal-doctest >= 1.0.6 && <1.1,
-    Cabal         >= 1.10 && <2.5
+    Cabal         >= 1.10  && <2.5
 
 source-repository head
     type: git
@@ -94,9 +92,11 @@ executable shellcheck
       directory,
       mtl >= 2.2.1,
       parsec >= 3.0,
-      QuickCheck >= 2.7.4,
       regex-tdfa
     main-is: shellcheck.hs
+
+    -- Marker to add flags for static linking
+    -- STATIC
 
 test-suite doctests
   type:                exitcode-stdio-1.0
