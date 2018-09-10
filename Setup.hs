@@ -14,6 +14,7 @@ import Distribution.Simple (
 import Distribution.Simple.Setup ( SDistFlags )
 
 import System.Process ( system )
+import System.Directory ( doesFileExist, getModificationTime )
 
 #ifndef MIN_VERSION_cabal_doctest
 #define MIN_VERSION_cabal_doctest(x,y,z) 0
@@ -61,10 +62,20 @@ main = defaultMainWithHooks myHooks
 --
 myPreSDist :: Args -> SDistFlags -> IO HookedBuildInfo
 myPreSDist _ _ = do
-  putStrLn "Building the man page (shellcheck.1) with pandoc..."
-  putStrLn pandoc_cmd
-  result <- system pandoc_cmd
-  putStrLn $ "pandoc exited with " ++ show result
+  exists <- doesFileExist "shellcheck.1"
+  if exists
+  then do
+    source <- getModificationTime "shellcheck.1.md"
+    target <- getModificationTime "shellcheck.1"
+    if target < source
+    then makeManPage
+    else putStrLn "shellcheck.1 is more recent than shellcheck.1.md"
+  else makeManPage
   return emptyHookedBuildInfo
   where
+    makeManPage = do
+      putStrLn "Building the man page (shellcheck.1) with pandoc..."
+      putStrLn pandoc_cmd
+      result <- system pandoc_cmd
+      putStrLn $ "pandoc exited with " ++ show result
     pandoc_cmd = "pandoc -s -t man shellcheck.1.md -o shellcheck.1"
