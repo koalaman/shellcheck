@@ -1020,7 +1020,7 @@ checkQuotedCondRegex _ (TC_Binary _ _ "=~" _ rhs) =
     error t =
         unless (isConstantNonRe t) $
             err (getId t) 2076
-                "Don't quote rhs of =~, it'll match literally rather than as a regex."
+                "Don't quote right-hand side of =~, it'll match literally rather than as a regex."
     re = mkRegex "[][*.+()|]"
     hasMetachars s = s `matches` re
     isConstantNonRe t = fromMaybe False $ do
@@ -1189,7 +1189,7 @@ prop_checkComparisonAgainstGlob4 = verifyNot checkComparisonAgainstGlob "[ $cow 
 prop_checkComparisonAgainstGlob5 = verify checkComparisonAgainstGlob "[[ $cow != $bar ]]"
 checkComparisonAgainstGlob _ (TC_Binary _ DoubleBracket op _ (T_NormalWord id [T_DollarBraced _ _]))
     | op `elem` ["=", "==", "!="] =
-        warn id 2053 $ "Quote the rhs of " ++ op ++ " in [[ ]] to prevent glob matching."
+        warn id 2053 $ "Quote the right-hand side of " ++ op ++ " in [[ ]] to prevent glob matching."
 checkComparisonAgainstGlob _ (TC_Binary _ SingleBracket op _ word)
         | (op == "=" || op == "==") && isGlob word =
     err (getId word) 2081 "[ .. ] can't match globs. Use [[ .. ]] or case statement."
