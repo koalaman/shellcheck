@@ -49,7 +49,8 @@ detestify() {
     '
 }
 
-if [[ ! -e 'ShellCheck.cabal' ]]; then
+if [[ ! -e 'ShellCheck.cabal' ]]
+then
   echo "Run me from the ShellCheck directory." >&2
   exit 1
 fi
