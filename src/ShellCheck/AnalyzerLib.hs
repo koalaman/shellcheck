@@ -525,12 +525,22 @@ getReferencedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Litera
 
 getReferencedVariableCommand _ = []
 
+-- The function returns a tuple consisting of four items describing an assignment.
+-- Given e.g. declare foo=bar
+-- (
+--   BaseCommand :: Token,     -- The command/structure assigning the variable, i.e. declare foo=bar
+--   AssignmentToken :: Token, -- The specific part that assigns this variable, i.e. foo=bar
+--   VariableName :: String,   -- The variable name, i.e. foo
+--   VariableValue :: DataType -- A description of the value being assigned, i.e. "Literal string with value foo"
+-- )
 getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal _ x:_):rest)) =
    filter (\(_,_,s,_) -> not ("-" `isPrefixOf` s)) $
     case x of
         "read" ->
-            let params = map getLiteral rest in
-                catMaybes . takeWhile isJust . reverse $ params
+            let params = map getLiteral rest
+                readArrayVars = getReadArrayVariables rest
+            in
+                catMaybes . (++ readArrayVars) . takeWhile isJust . reverse $ params
         "getopts" ->
             case rest of
                 opts:var:_ -> maybeToList $ getLiteral var
@@ -573,10 +583,14 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal 
       where
         defaultType = if any (`elem` flags) ["a", "A"] then DataArray else DataString
 
-    getLiteral t = do
+    getLiteralOfDataType t d = do
         s <- getLiteralString t
         when ("-" `isPrefixOf` s) $ fail "argument"
-        return (base, t, s, DataString SourceExternal)
+        return (base, t, s, d)
+
+    getLiteral t = getLiteralOfDataType t (DataString SourceExternal)
+
+    getLiteralArray t = getLiteralOfDataType t (DataArray SourceExternal)
 
     getModifierParamString = getModifierParam DataString
 
@@ -617,6 +631,11 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal 
         name <- getLiteralString lastArg
         guard $ isVariableName name
         return (base, lastArg, name, DataArray SourceExternal)
+
+    -- get all the array variables used in read, e.g. read -a arr
+    getReadArrayVariables args = do
+        map (getLiteralArray . snd)
+            (filter (\(x,_) -> getLiteralString x == Just "-a") (zip (args) (tail args)))
 
 getModifiedVariableCommand _ = []
 
