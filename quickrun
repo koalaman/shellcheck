@@ -1,5 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # quickrun runs ShellCheck in an interpreted mode.
 # This allows testing changes without recompiling.
 
 runghc -isrc -idist/build/autogen shellcheck.hs "$@"
+
+exit

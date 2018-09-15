@@ -5,15 +5,14 @@
 set -o pipefail
 
 sponge() {
-  data="$(cat)"
-  printf '%s\n' "$data" > "$1"
+  local -r DATA="$(cat)"
+  printf '%s\n' "${DATA}" > "${1}"
 }
 
 modify() {
-  if ! "${@:2}" < "$1" | sponge "$1"
-  then
+  if ! "${@:2}" < "${1}" | sponge "${1}"
     {
-      printf 'Failed to modify %s: ' "$1"
+      printf 'Failed to modify %s: ' "${1}"
       printf '%q ' "${@:2}"
       printf '\n'
     } >&2
@@ -50,28 +49,24 @@ detestify() {
     '
 }
 
-
-
-if [[ ! -e ShellCheck.cabal ]]
+if [[ ! -e 'ShellCheck.cabal' ]]
 then
   echo "Run me from the ShellCheck directory." >&2
   exit 1
 fi
 
-if [[ -d '.git' ]] && ! git diff --exit-code > /dev/null 2>&1
-then
+if [[ -d '.git' ]] && ! git diff --exit-code > /dev/null 2>&1; then
   echo "You have local changes! These may be overwritten." >&2
   exit 2
 fi
 
-modify ShellCheck.cabal sed -e '
+modify 'ShellCheck.cabal' sed -e '
   /QuickCheck/d
   /^test-suite/{ s/.*//; q; }
   '
 
-find . -name '.git' -prune -o -type f -name '*.hs' -print |
-  while IFS= read -r file
-  do
-    modify "$file" detestify
-  done
+while IFS= read -r file; do
+  modify "${file}" detestify
+done < <(find . -name '.git' -prune -o -type f -name '*.hs' -print)
 
+exit 0
