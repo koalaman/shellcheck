@@ -70,7 +70,7 @@ You can see ShellCheck suggestions directly in a variety of editors.
 
 ![Screenshot of Vim showing inlined shellcheck feedback](doc/vim-syntastic.png).
 
-* Emacs, through [Flycheck](https://github.com/flycheck/flycheck):
+* Emacs, through [Flycheck](https://github.com/flycheck/flycheck) or [Flymake](https://github.com/federicotdn/flymake-shellcheck):
 
 ![Screenshot of emacs showing inlined shellcheck feedback](doc/emacs-flycheck.png).
 
