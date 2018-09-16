@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # quicktest runs the ShellCheck unit tests in an interpreted mode.
 # This allows running tests without compiling, which can be faster.
 # 'cabal test' remains the source of truth.
