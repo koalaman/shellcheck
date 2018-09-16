@@ -445,3 +445,8 @@ ShellCheck is licensed under the GNU General Public License, v3. A copy of this 
 Copyright 2012-2018, Vidar 'koala_man' Holen and contributors.
 
 Happy ShellChecking!
+
+
+## Other Resources                                                                          
+* The wiki has [long form descriptions](https://github.com/koalaman/shellcheck/wiki/Checks) for each warning, e.g. [SC2221](https://github.com/koalaman/shellcheck/wiki/SC2221).
+* ShellCheck does not attempt to enforce any kind of formatting or indenting style, so also check out [shfmt](https://github.com/mvdan/sh)!
