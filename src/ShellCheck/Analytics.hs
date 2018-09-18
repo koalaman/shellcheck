@@ -169,6 +169,7 @@ nodeChecks = [
     ,checkForLoopGlobVariables
     ,checkSubshelledTests
     ,checkInvertedStringTest
+    ,checkRedirectionToCommand
     ]
 
 
@@ -3027,6 +3028,15 @@ checkInvertedStringTest _ t =
                 _ -> return ()
         _ -> return ()
 
+prop_checkRedirectionToCommand1 = verify checkRedirectionToCommand "ls > rm"
+prop_checkRedirectionToCommand2 = verifyNot checkRedirectionToCommand "ls > 'rm'"
+prop_checkRedirectionToCommand3 = verifyNot checkRedirectionToCommand "ls > myfile"
+checkRedirectionToCommand _ t =
+    case t of
+        T_IoFile _ _ (T_NormalWord id [T_Literal _ str]) | str `elem` commonCommands ->
+            unless (str == "file") $ -- This would be confusing
+                warn id 2238 "Redirecting to/from command name instead of file. Did you want pipes/xargs (or quote to ignore)?"
+        _ -> return ()
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
