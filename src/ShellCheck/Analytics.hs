@@ -2073,6 +2073,7 @@ prop_checkCdAndBack1 = verify checkCdAndBack "for f in *; do cd $f; git pull; cd
 prop_checkCdAndBack2 = verifyNot checkCdAndBack "for f in *; do cd $f || continue; git pull; cd ..; done"
 prop_checkCdAndBack3 = verifyNot checkCdAndBack "while [[ $PWD != / ]]; do cd ..; done"
 prop_checkCdAndBack4 = verify checkCdAndBack "cd $tmp; foo; cd -"
+prop_checkCdAndBack5 = verifyNot checkCdAndBack "cd ..; foo; cd .."
 checkCdAndBack params = doLists
   where
     shell = shellType params
@@ -2095,10 +2096,20 @@ checkCdAndBack params = doLists
     getCmd (T_Pipeline id _ [x]) = getCommandName x
     getCmd _ = Nothing
 
+    findCdPair list =
+        case list of
+            (a:b:rest) ->
+                if isCdRevert b && not (isCdRevert a)
+                then return $ getId b
+                else findCdPair (b:rest)
+            _ -> Nothing
+
+
     doList list =
         let cds = filter ((== Just "cd") . getCmd) list in
-            when (length cds >= 2 && isCdRevert (last cds)) $
-               info (getId $ last cds) 2103 message
+            potentially $ do
+                cd <- findCdPair cds
+                return $ info cd 2103 message
 
     message = "Use a ( subshell ) to avoid having to cd back."
 
