@@ -240,9 +240,10 @@ getParentTree t =
   where
     pre t = modify (first ((:) t))
     post t = do
-        (_:rest, map) <- get
-        case rest of []    -> put (rest, map)
-                     (x:_) -> put (rest, Map.insert (getId t) x map)
+        (x, map) <- get
+        case x of
+          _:rest -> case rest of []    -> put (rest, map)
+                                 (x:_) -> put (rest, Map.insert (getId t) x map)
 
 -- Given a root node, make a map from Id to Token
 getTokenMap :: Token -> Map.Map Id Token
