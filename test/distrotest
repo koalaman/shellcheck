@@ -1,0 +1,75 @@
+#!/bin/bash
+# This script runs 'buildtest' on each of several distros
+# via Docker.
+set -o pipefail
+
+exec 3>&1 4>&2
+die() { echo "$*" >&4; exit 1; }
+
+[ -e "ShellCheck.cabal" ] || die "ShellCheck.cabal not in this dir"
+
+[ "$1" = "--run" ] || {
+cat << EOF
+This script pulls multiple distros via Docker and compiles
+ShellCheck and dependencies for each one. It takes hours,
+and is still highly experimental.
+
+Make sure you're plugged in and have screen/tmux in place,
+then re-run with $0 --run to continue.
+EOF
+exit 0
+}
+
+
+log=$(mktemp) || die "Can't create temp file"
+date >> "$log" || die "Can't write to log"
+
+echo "Logging to $log" >&3
+exec >> "$log" 2>&1
+
+final=0
+while read -r distro setup
+do
+  [[ "$distro" = "#"* || -z "$distro" ]] && continue
+  printf '%s ' "$distro" >&3
+  docker pull "$distro" || die "Can't pull $distro"
+  printf 'pulled. ' >&3
+
+  tmp=$(mktemp -d) || die "Can't make temp dir"
+  cp -r . "$tmp/" || die "Can't populate test dir"
+  printf 'Result: ' >&3
+  < /dev/null docker run -v "$tmp:/mnt" "$distro" sh -c "
+    $setup
+    cd /mnt || exit 1
+    test/buildtest
+    "
+  ret=$?
+  if [ "$ret" = 0 ]
+  then
+    echo "OK" >&3
+  else
+    echo "FAIL with $ret. See $log" >&3
+    final=1
+  fi
+  rm -rf "$tmp"
+done << EOF
+# Docker tag          Setup command
+debian:stable         apt-get update && apt-get install -y cabal-install
+debian:testing        apt-get update && apt-get install -y cabal-install
+ubuntu:latest         apt-get update && apt-get install -y cabal-install
+opensuse:latest       zypper install -y cabal-install ghc
+
+# Older Ubuntu versions we want to support
+ubuntu:18.04          apt-get update && apt-get install -y cabal-install
+ubuntu:17.10          apt-get update && apt-get install -y cabal-install
+
+# Misc
+haskell:latest        true
+
+# Known to currently fail
+centos:latest         yum install -y epel-release && yum install -y cabal-install
+fedora:latest         dnf install -y cabal-install
+base/archlinux:latest pacman -S -y --noconfirm cabal-install ghc-static base-devel
+EOF
+
+exit "$final"

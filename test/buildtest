@@ -1,0 +1,35 @@
+#!/bin/bash
+# This script configures, builds and runs tests.
+# It's meant for automatic cross-distro testing.
+
+die() { echo "$*" >&2; exit 1; }
+
+[ -e "ShellCheck.cabal" ] ||
+  die "ShellCheck.cabal not in current dir"
+command -v cabal ||
+  die "cabal is missing"
+
+cabal update ||
+  die "can't update"
+cabal install --dependencies-only --enable-tests ||
+  die "can't install dependencies"
+cabal configure --enable-tests ||
+  die "configure failed"
+cabal build ||
+  die "build failed"
+cabal test ||
+  die "test failed"
+
+dist/build/shellcheck/shellcheck - << 'EOF' || die "execution failed"
+#!/bin/sh
+echo "Hello World"
+EOF
+
+dist/build/shellcheck/shellcheck - << 'EOF' && die "negative execution failed"
+#!/bin/sh
+echo $1
+EOF
+
+
+echo "Success"
+exit 0
