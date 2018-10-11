@@ -22,18 +22,27 @@ module ShellCheck.Formatter.TTY (format) where
 import ShellCheck.Interface
 import ShellCheck.Formatter.Format
 
+import Control.Monad
+import Data.IORef
 import Data.List
 import GHC.Exts
-import System.Info
 import System.IO
+import System.Info
+
+wikiLink = "https://www.shellcheck.net/wiki/"
+
+-- An arbitrary Ord thing to order warnings
+type Ranking = (Char, Severity, Integer)
 
 format :: FormatterOptions -> IO Formatter
-format options = return Formatter {
-    header = return (),
-    footer = return (),
-    onFailure = outputError options,
-    onResult = outputResult options
-}
+format options = do
+    topErrorRef <- newIORef []
+    return Formatter {
+        header = return (),
+        footer = outputWiki topErrorRef,
+        onFailure = outputError options,
+        onResult = outputResult options topErrorRef
+    }
 
 colorForLevel level =
     case level of
@@ -45,13 +54,60 @@ colorForLevel level =
         "source"  -> 0 -- none
         _ -> 0         -- none
 
+rankError :: PositionedComment -> Ranking
+rankError err = (ranking, cSeverity $ pcComment err, cCode $ pcComment err)
+  where
+    ranking =
+        if cCode (pcComment err) `elem` uninteresting
+        then 'Z'
+        else 'A'
+
+    -- A list of the most generic, least directly helpful
+    -- error codes to downrank.
+    uninteresting = [
+        1009, -- Mentioned parser error was..
+        1019, -- Expected this to be an argument
+        1036, -- ( is invalid here
+        1047, -- Expected 'fi'
+        1062, -- Expected 'done'
+        1070, -- Parsing stopped here (generic)
+        1072, -- Missing/unexpected ..
+        1073, -- Couldn't parse this ..
+        1088, -- Parsing stopped here (paren)
+        1089  -- Parsing stopped here (keyword)
+        ]
+
+appendComments errRef comments max = do
+    previous <- readIORef errRef
+    let current = map (\x -> (rankError x, cCode $ pcComment x, cMessage $ pcComment x)) comments
+    writeIORef errRef . take max . nubBy equal . sort $ previous ++ current
+  where
+    fst3 (x,_,_) = x
+    equal x y = fst3 x == fst3 y
+
+outputWiki :: IORef [(Ranking, Integer, String)] -> IO ()
+outputWiki errRef = do
+    issues <- readIORef errRef
+    unless (null issues) $ do
+        putStrLn "For more information:"
+        mapM_ showErr issues
+  where
+    showErr (_, code, msg) =
+        putStrLn $ "  " ++ wikiLink ++ "SC" ++ show code ++ " -- " ++ shorten msg
+    limit = 40
+    shorten msg =
+        if length msg < limit
+        then msg
+        else (take (limit-3) msg) ++ "..."
+
 outputError options file error = do
     color <- getColorFunc $ foColorOption options
     hPutStrLn stderr $ color "error" $ file ++ ": " ++ error
 
-outputResult options result sys = do
+outputResult options ref result sys = do
     color <- getColorFunc $ foColorOption options
     let comments = crComments result
+    appendComments ref comments (fromIntegral $ foWikiLinkCount options)
     let fileGroups = groupWith sourceFile comments
     mapM_ (outputForFile color sys) fileGroups
 
@@ -87,7 +143,7 @@ cuteIndent comment =
         in
             if sameLine && delta > 2 && delta < 32 then arrow delta else "^--"
 
-code code = "SC" ++ show code
+code num = "SC" ++ show num
 
 getColorFunc colorOption = do
     term <- hIsTerminalDevice stdout

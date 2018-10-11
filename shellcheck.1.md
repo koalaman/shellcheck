@@ -71,6 +71,11 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 
 :   Print version information and exit.
 
+**-W** *NUM*,\ **--wiki-link-count=NUM**
+
+:   For TTY output, show *NUM* wiki links to more information about mentioned
+    warnings. Set to 0 to disable them entirely.
+
 **-x**,\ **--external-sources**
 
 :   Follow 'source' statements even when the file is not specified as input.

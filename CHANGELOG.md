@@ -1,6 +1,7 @@
 ## ???
 ### Added
 - Command line option --severity/-S for filtering by minimum severity
+- Command line option --wiki-link-count/-W for showing wiki links
 - SC2236/SC2237: Suggest -n/-z instead of ! -z/-n
 - SC2238: Warn when redirecting to a known command name, e.g. ls > rm
 ### Changed

@@ -26,7 +26,7 @@ module ShellCheck.Interface
     , ParseResult(prComments, prTokenPositions, prRoot)
     , AnalysisSpec(asScript, asShellType, asExecutionMode, asCheckSourced)
     , AnalysisResult(arComments)
-    , FormatterOptions(foColorOption)
+    , FormatterOptions(foColorOption, foWikiLinkCount)
     , Shell(Ksh, Sh, Bash, Dash)
     , ExecutionMode(Executed, Sourced)
     , ErrorMessage
@@ -145,12 +145,14 @@ newAnalysisResult = AnalysisResult {
 }
 
 -- Formatter options
-newtype FormatterOptions = FormatterOptions {
-    foColorOption :: ColorOption
+data FormatterOptions = FormatterOptions {
+    foColorOption :: ColorOption,
+    foWikiLinkCount :: Integer
 }
 
 newFormatterOptions = FormatterOptions {
-    foColorOption = ColorAuto
+    foColorOption = ColorAuto,
+    foWikiLinkCount = 3
 }
 
 

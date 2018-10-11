@@ -100,6 +100,9 @@ options = [
         "Minimum severity of errors to consider (error, warning, info, style)",
     Option "V" ["version"]
         (NoArg $ Flag "version" "true") "Print version information",
+    Option "W" ["wiki-link-count"]
+        (ReqArg (Flag "wiki-link-count") "NUM")
+        "The number of wiki links to show, when applicable.",
     Option "x" ["external-sources"]
         (NoArg $ Flag "externals" "true") "Allow 'source' outside of FILES"
     ]
@@ -296,6 +299,14 @@ parseOption flag options =
                 }
             }
 
+        Flag "wiki-link-count" countString -> do
+            count <- parseNum countString
+            return options {
+                formatterOptions = (formatterOptions options) {
+                    foWikiLinkCount = count
+                }
+            }
+
         _ -> return options
   where
     die s = do
@@ -304,7 +315,7 @@ parseOption flag options =
     parseNum ('S':'C':str) = parseNum str
     parseNum num = do
         unless (all isDigit num) $ do
-            printErr $ "Bad exclusion: " ++ num
+            printErr $ "Invalid number: " ++ num
             throwError SyntaxFailure
         return (Prelude.read num :: Integer)
 
