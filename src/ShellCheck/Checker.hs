@@ -42,7 +42,8 @@ tokenToPosition startMap t = fromMaybe fail $ do
     return $ newPositionedComment {
         pcStartPos = fst span,
         pcEndPos = snd span,
-        pcComment = tcComment t
+        pcComment = tcComment t,
+        pcFix = tcFix t
     }
   where
     fail = error "Internal shellcheck error: id doesn't exist. Please report!"

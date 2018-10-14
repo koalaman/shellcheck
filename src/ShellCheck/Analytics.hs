@@ -1335,7 +1335,10 @@ prop_checkBackticks1 = verify checkBackticks "echo `foo`"
 prop_checkBackticks2 = verifyNot checkBackticks "echo $(foo)"
 prop_checkBackticks3 = verifyNot checkBackticks "echo `#inlined comment` foo"
 checkBackticks _ (T_Backticked id list) | not (null list) =
-    style id 2006 "Use $(...) notation instead of legacy backticked `...`."
+    addComment $
+        makeCommentWithFix StyleC id 2006  "Use $(...) notation instead of legacy backticked `...`."
+            ((replaceStart 1 "$(") ++ (replaceEnd 1 ")"))
+    -- style id 2006 "Use $(...) notation instead of legacy backticked `...`."
 checkBackticks _ _ = return ()
 
 prop_checkIndirectExpansion1 = verify checkIndirectExpansion "${foo$n}"
@@ -1639,8 +1642,10 @@ checkSpacefulness params t =
                 makeComment InfoC (getId token) 2223
                     "This default assignment may cause DoS due to globbing. Quote it."
             else
-                makeComment InfoC (getId token) 2086
-                    "Double quote to prevent globbing and word splitting."
+                makeCommentWithFix InfoC (getId token) 2086
+                    "Double quote to prevent globbing and word splitting." (surroundWith "\"")
+                -- makeComment InfoC (getId token) 2086
+                --     "Double quote to prevent globbing and word splitting."
 
     writeF _ _ name (DataString SourceExternal) = setSpaces name True >> return []
     writeF _ _ name (DataString SourceInteger) = setSpaces name False >> return []
@@ -2537,7 +2542,9 @@ checkUncheckedCdPushdPopd params root =
             && not (isSafeDir t)
             && not (name t `elem` ["pushd", "popd"] && ("n" `elem` map snd (getAllFlags t)))
             && not (isCondition $ getPath (parentMap params) t)) $
-                warn (getId t) 2164 "Use 'cd ... || exit' or 'cd ... || return' in case cd fails."
+                -- warn (getId t) 2164 "Use 'cd ... || exit' or 'cd ... || return' in case cd fails."
+                warnWithFix (getId t) 2164 "Use 'cd ... || exit' or 'cd ... || return' in case cd fails."
+                    (replaceEnd 0 " || exit")
     checkElement _ = return ()
     name t = fromMaybe "" $ getCommandName t
     isSafeDir t = case oversimplify t of
@@ -2694,7 +2701,7 @@ checkArrayAssignmentIndices params root =
                         T_Literal id str -> [(id,str)]
                         _ -> []
                     guard $ '=' `elem` str
-                    return $ warn id 2191 "The = here is literal. To assign by index, use ( [index]=value ) with no spaces. To keep as literal, quote it."
+                    return $ warnWithFix id 2191 "The = here is literal. To assign by index, use ( [index]=value ) with no spaces. To keep as literal, quote it." (surroundWith "\"")
                 in
                     if null literalEquals && isAssociative
                     then warn (getId t) 2190 "Elements in associative arrays need index, e.g. array=( [index]=value ) ."

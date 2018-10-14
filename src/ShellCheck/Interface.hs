@@ -34,9 +34,9 @@ module ShellCheck.Interface
     , Severity(ErrorC, WarningC, InfoC, StyleC)
     , Position(posFile, posLine, posColumn)
     , Comment(cSeverity, cCode, cMessage)
-    , PositionedComment(pcStartPos , pcEndPos , pcComment)
+    , PositionedComment(pcStartPos , pcEndPos , pcComment, pcFix)
     , ColorOption(ColorAuto, ColorAlways, ColorNever)
-    , TokenComment(tcId, tcComment)
+    , TokenComment(tcId, tcComment, tcFix)
     , emptyCheckResult
     , newParseResult
     , newAnalysisSpec
@@ -49,10 +49,16 @@ module ShellCheck.Interface
     , emptyCheckSpec
     , newPositionedComment
     , newComment
+    , Fix
+    , Replacement(Start, End)
+    , surroundWith
+    , replaceStart
+    , replaceEnd
     ) where
 
 import ShellCheck.AST
 import Control.Monad.Identity
+import Data.Monoid
 import qualified Data.Map as Map
 
 
@@ -190,27 +196,50 @@ newComment = Comment {
     cMessage  = ""
 }
 
+-- only support single line for now
+data Replacement =
+      Start Integer String
+    | End Integer String
+    deriving (Show, Eq)
+
+type Fix = [Replacement]
+
+surroundWith s =
+    (replaceStart 0 s) ++ (replaceEnd 0 s)
+
+-- replace first n chars
+replaceStart n r =
+    [ Start n r ]
+
+-- replace last n chars
+replaceEnd n r =
+    [ End n r ]
+
 data PositionedComment = PositionedComment {
     pcStartPos :: Position,
     pcEndPos   :: Position,
-    pcComment  :: Comment
+    pcComment  :: Comment,
+    pcFix      :: Maybe Fix
 } deriving (Show, Eq)
 
 newPositionedComment :: PositionedComment
 newPositionedComment = PositionedComment {
     pcStartPos = newPosition,
     pcEndPos   = newPosition,
-    pcComment  = newComment
+    pcComment  = newComment,
+    pcFix      = Nothing
 }
 
 data TokenComment = TokenComment {
     tcId :: Id,
-    tcComment :: Comment
+    tcComment :: Comment,
+    tcFix :: Maybe Fix
 } deriving (Show, Eq)
 
 newTokenComment = TokenComment {
     tcId = Id 0,
-    tcComment = newComment
+    tcComment = newComment,
+    tcFix = Nothing
 }
 
 data ColorOption =
