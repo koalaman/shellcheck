@@ -150,6 +150,19 @@ err   id code str = addComment $ makeComment ErrorC id code str
 info  id code str = addComment $ makeComment InfoC id code str
 style id code str = addComment $ makeComment StyleC id code str
 
+warnWithFix id code str fix = addComment $
+    let comment = makeComment WarningC id code str in
+    comment {
+        tcFix = Just fix
+    }
+
+makeCommentWithFix :: Severity -> Id -> Code -> String -> Fix -> TokenComment
+makeCommentWithFix severity id code str fix =
+    let comment = makeComment severity id code str in
+    comment {
+        tcFix = Just fix
+    }
+
 makeParameters spec =
     let params = Parameters {
         rootNode = root,

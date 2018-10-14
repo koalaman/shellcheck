@@ -129,7 +129,46 @@ outputForFile color sys comments = do
         putStrLn (color "source" line)
         mapM_ (\c -> putStrLn (color (severityText c) $ cuteIndent c)) x
         putStrLn ""
+        mapM_ (\c -> putStrLn "Did you mean:" >> putStrLn (fixedString c line)) x
       ) groups
+
+-- need to do something smart about sorting by end index
+fixedString :: PositionedComment -> String -> String
+fixedString comment line =
+    case (pcFix comment) of
+    Nothing -> ""
+    Just rs ->
+        apply_replacement rs line 0
+        where
+            apply_replacement [] s _ = s
+            apply_replacement ((Start n r):xs) s offset =
+                let start = (posColumn . pcStartPos) comment
+                    end = start + n
+                    z = do_replace start end s r
+                    len_r = (fromIntegral . length) r in
+                apply_replacement xs z (offset + (end - start) + len_r)
+            apply_replacement ((End n r):xs) s offset =
+                -- tricky math because column is 1 based
+                let end = (posColumn . pcEndPos) comment + 1
+                    start = end - n
+                    z = do_replace start end s r
+                    len_r = (fromIntegral . length) r in
+                apply_replacement xs z (offset + (end - start) + len_r)
+
+-- start and end comes from pos, which is 1 based
+-- do_replace 0 0 "1234" "A" -> "A1234" -- technically not valid
+-- do_replace 1 1 "1234" "A" -> "A1234"
+-- do_replace 1 2 "1234" "A" -> "A234"
+-- do_replace 3 3 "1234" "A" -> "12A34"
+-- do_replace 4 4 "1234" "A" -> "123A4"
+-- do_replace 5 5 "1234" "A" -> "1234A"
+do_replace start end o r =
+    let si = fromIntegral (start-1)
+        ei = fromIntegral (end-1)
+        (x, xs) = splitAt si o
+        (y, z) = splitAt (ei - si) xs
+    in
+    x ++ r ++ z
 
 cuteIndent :: PositionedComment -> String
 cuteIndent comment =
