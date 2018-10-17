@@ -1601,6 +1601,7 @@ prop_checkSpacefulness32= verifyNotTree checkSpacefulness "var=$1; [ -v var ]"
 prop_checkSpacefulness33= verifyTree checkSpacefulness "for file; do echo $file; done"
 prop_checkSpacefulness34= verifyTree checkSpacefulness "declare foo$n=$1"
 prop_checkSpacefulness35= verifyNotTree checkSpacefulness "echo ${1+\"$1\"}"
+prop_checkSpacefulness36= verifyNotTree checkSpacefulness "arg=$#; echo $arg"
 
 checkSpacefulness params t =
     doVariableFlowAnalysis readF writeF (Map.fromList defaults) (variableFlow params)

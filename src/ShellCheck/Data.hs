@@ -39,7 +39,7 @@ internalVariables = [
   ]
 
 variablesWithoutSpaces = [
-    "$", "-", "?", "!",
+    "$", "-", "?", "!", "#",
     "BASHPID", "BASH_ARGC", "BASH_LINENO", "BASH_SUBSHELL", "EUID", "LINENO",
     "OPTIND", "PPID", "RANDOM", "SECONDS", "SHELLOPTS", "SHLVL", "UID",
     "COLUMNS", "HISTFILESIZE", "HISTSIZE", "LINES"
