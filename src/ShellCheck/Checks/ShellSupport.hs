@@ -65,9 +65,9 @@ verify c s = producesComments (testChecker c) s == Just True
 verifyNot c s = producesComments (testChecker c) s == Just False
 
 -- |
--- prop> verify checkForDecimals "((3.14*c))"
--- prop> verify checkForDecimals "foo[1.2]=bar"
--- prop> verifyNot checkForDecimals "declare -A foo; foo[1.2]=bar"
+-- >>> prop $ verify checkForDecimals "((3.14*c))"
+-- >>> prop $ verify checkForDecimals "foo[1.2]=bar"
+-- >>> prop $ verifyNot checkForDecimals "declare -A foo; foo[1.2]=bar"
 checkForDecimals = ForShell [Sh, Dash, Bash] f
   where
     f t@(TA_Expansion id _) = potentially $ do
@@ -79,62 +79,62 @@ checkForDecimals = ForShell [Sh, Dash, Bash] f
 
 
 -- |
--- prop> verify checkBashisms "while read a; do :; done < <(a)"
--- prop> verify checkBashisms "[ foo -nt bar ]"
--- prop> verify checkBashisms "echo $((i++))"
--- prop> verify checkBashisms "rm !(*.hs)"
--- prop> verify checkBashisms "source file"
--- prop> verify checkBashisms "[ \"$a\" == 42 ]"
--- prop> verify checkBashisms "echo ${var[1]}"
--- prop> verify checkBashisms "echo ${!var[@]}"
--- prop> verify checkBashisms "echo ${!var*}"
--- prop> verify checkBashisms "echo ${var:4:12}"
--- prop> verifyNot checkBashisms "echo ${var:-4}"
--- prop> verify checkBashisms "echo ${var//foo/bar}"
--- prop> verify checkBashisms "exec -c env"
--- prop> verify checkBashisms "echo -n \"Foo: \""
--- prop> verify checkBashisms "let n++"
--- prop> verify checkBashisms "echo $RANDOM"
--- prop> verify checkBashisms "echo $((RANDOM%6+1))"
--- prop> verify checkBashisms "foo &> /dev/null"
--- prop> verify checkBashisms "foo > file*.txt"
--- prop> verify checkBashisms "read -ra foo"
--- prop> verify checkBashisms "[ -a foo ]"
--- prop> verifyNot checkBashisms "[ foo -a bar ]"
--- prop> verify checkBashisms "trap mything ERR INT"
--- prop> verifyNot checkBashisms "trap mything INT TERM"
--- prop> verify checkBashisms "cat < /dev/tcp/host/123"
--- prop> verify checkBashisms "trap mything ERR SIGTERM"
--- prop> verify checkBashisms "echo *[^0-9]*"
--- prop> verify checkBashisms "exec {n}>&2"
--- prop> verify checkBashisms "echo ${!var}"
--- prop> verify checkBashisms "printf -v '%s' \"$1\""
--- prop> verify checkBashisms "printf '%q' \"$1\""
--- prop> verifyNot checkBashisms "#!/bin/dash\n[ foo -nt bar ]"
--- prop> verify checkBashisms "#!/bin/sh\necho -n foo"
--- prop> verifyNot checkBashisms "#!/bin/dash\necho -n foo"
--- prop> verifyNot checkBashisms "#!/bin/dash\nlocal foo"
--- prop> verifyNot checkBashisms "#!/bin/dash\nread -p foo -r bar"
--- prop> verifyNot checkBashisms "HOSTNAME=foo; echo $HOSTNAME"
--- prop> verify checkBashisms "RANDOM=9; echo $RANDOM"
--- prop> verify checkBashisms "foo-bar() { true; }"
--- prop> verify checkBashisms "echo $(<file)"
--- prop> verify checkBashisms "echo `<file`"
--- prop> verify checkBashisms "trap foo int"
--- prop> verify checkBashisms "trap foo sigint"
--- prop> verifyNot checkBashisms "#!/bin/dash\ntrap foo int"
--- prop> verifyNot checkBashisms "#!/bin/dash\ntrap foo INT"
--- prop> verify checkBashisms "#!/bin/dash\ntrap foo SIGINT"
--- prop> verify checkBashisms "#!/bin/dash\necho foo 42>/dev/null"
--- prop> verifyNot checkBashisms "#!/bin/sh\necho $LINENO"
--- prop> verify checkBashisms "#!/bin/dash\necho $MACHTYPE"
--- prop> verify checkBashisms "#!/bin/sh\ncmd >& file"
--- prop> verifyNot checkBashisms "#!/bin/sh\ncmd 2>&1"
--- prop> verifyNot checkBashisms "#!/bin/sh\ncmd >&2"
--- prop> verifyNot checkBashisms "#!/bin/sh\nprintf -- -f\n"
--- prop> verify checkBashisms "#!/bin/sh\nfoo+=bar"
--- prop> verify checkBashisms "#!/bin/sh\necho ${@%foo}"
--- prop> verifyNot checkBashisms "#!/bin/sh\necho ${##}"
+-- >>> prop $ verify checkBashisms "while read a; do :; done < <(a)"
+-- >>> prop $ verify checkBashisms "[ foo -nt bar ]"
+-- >>> prop $ verify checkBashisms "echo $((i++))"
+-- >>> prop $ verify checkBashisms "rm !(*.hs)"
+-- >>> prop $ verify checkBashisms "source file"
+-- >>> prop $ verify checkBashisms "[ \"$a\" == 42 ]"
+-- >>> prop $ verify checkBashisms "echo ${var[1]}"
+-- >>> prop $ verify checkBashisms "echo ${!var[@]}"
+-- >>> prop $ verify checkBashisms "echo ${!var*}"
+-- >>> prop $ verify checkBashisms "echo ${var:4:12}"
+-- >>> prop $ verifyNot checkBashisms "echo ${var:-4}"
+-- >>> prop $ verify checkBashisms "echo ${var//foo/bar}"
+-- >>> prop $ verify checkBashisms "exec -c env"
+-- >>> prop $ verify checkBashisms "echo -n \"Foo: \""
+-- >>> prop $ verify checkBashisms "let n++"
+-- >>> prop $ verify checkBashisms "echo $RANDOM"
+-- >>> prop $ verify checkBashisms "echo $((RANDOM%6+1))"
+-- >>> prop $ verify checkBashisms "foo &> /dev/null"
+-- >>> prop $ verify checkBashisms "foo > file*.txt"
+-- >>> prop $ verify checkBashisms "read -ra foo"
+-- >>> prop $ verify checkBashisms "[ -a foo ]"
+-- >>> prop $ verifyNot checkBashisms "[ foo -a bar ]"
+-- >>> prop $ verify checkBashisms "trap mything ERR INT"
+-- >>> prop $ verifyNot checkBashisms "trap mything INT TERM"
+-- >>> prop $ verify checkBashisms "cat < /dev/tcp/host/123"
+-- >>> prop $ verify checkBashisms "trap mything ERR SIGTERM"
+-- >>> prop $ verify checkBashisms "echo *[^0-9]*"
+-- >>> prop $ verify checkBashisms "exec {n}>&2"
+-- >>> prop $ verify checkBashisms "echo ${!var}"
+-- >>> prop $ verify checkBashisms "printf -v '%s' \"$1\""
+-- >>> prop $ verify checkBashisms "printf '%q' \"$1\""
+-- >>> prop $ verifyNot checkBashisms "#!/bin/dash\n[ foo -nt bar ]"
+-- >>> prop $ verify checkBashisms "#!/bin/sh\necho -n foo"
+-- >>> prop $ verifyNot checkBashisms "#!/bin/dash\necho -n foo"
+-- >>> prop $ verifyNot checkBashisms "#!/bin/dash\nlocal foo"
+-- >>> prop $ verifyNot checkBashisms "#!/bin/dash\nread -p foo -r bar"
+-- >>> prop $ verifyNot checkBashisms "HOSTNAME=foo; echo $HOSTNAME"
+-- >>> prop $ verify checkBashisms "RANDOM=9; echo $RANDOM"
+-- >>> prop $ verify checkBashisms "foo-bar() { true; }"
+-- >>> prop $ verify checkBashisms "echo $(<file)"
+-- >>> prop $ verify checkBashisms "echo `<file`"
+-- >>> prop $ verify checkBashisms "trap foo int"
+-- >>> prop $ verify checkBashisms "trap foo sigint"
+-- >>> prop $ verifyNot checkBashisms "#!/bin/dash\ntrap foo int"
+-- >>> prop $ verifyNot checkBashisms "#!/bin/dash\ntrap foo INT"
+-- >>> prop $ verify checkBashisms "#!/bin/dash\ntrap foo SIGINT"
+-- >>> prop $ verify checkBashisms "#!/bin/dash\necho foo 42>/dev/null"
+-- >>> prop $ verifyNot checkBashisms "#!/bin/sh\necho $LINENO"
+-- >>> prop $ verify checkBashisms "#!/bin/dash\necho $MACHTYPE"
+-- >>> prop $ verify checkBashisms "#!/bin/sh\ncmd >& file"
+-- >>> prop $ verifyNot checkBashisms "#!/bin/sh\ncmd 2>&1"
+-- >>> prop $ verifyNot checkBashisms "#!/bin/sh\ncmd >&2"
+-- >>> prop $ verifyNot checkBashisms "#!/bin/sh\nprintf -- -f\n"
+-- >>> prop $ verify checkBashisms "#!/bin/sh\nfoo+=bar"
+-- >>> prop $ verify checkBashisms "#!/bin/sh\necho ${@%foo}"
+-- >>> prop $ verifyNot checkBashisms "#!/bin/sh\necho ${##}"
 checkBashisms = ForShell [Sh, Dash] $ \t -> do
     params <- ask
     kludge params t
@@ -317,8 +317,8 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
                 _ -> False
 
 -- |
--- prop> verify checkEchoSed "FOO=$(echo \"$cow\" | sed 's/foo/bar/g')"
--- prop> verify checkEchoSed "rm $(echo $cow | sed -e 's,foo,bar,')"
+-- >>> prop $ verify checkEchoSed "FOO=$(echo \"$cow\" | sed 's/foo/bar/g')"
+-- >>> prop $ verify checkEchoSed "rm $(echo $cow | sed -e 's,foo,bar,')"
 checkEchoSed = ForShell [Bash, Ksh] f
   where
     f (T_Pipeline id _ [a, b]) =
@@ -345,10 +345,10 @@ checkEchoSed = ForShell [Bash, Ksh] f
 
 
 -- |
--- prop> verify checkBraceExpansionVars "echo {1..$n}"
--- prop> verifyNot checkBraceExpansionVars "echo {1,3,$n}"
--- prop> verify checkBraceExpansionVars "eval echo DSC{0001..$n}.jpg"
--- prop> verify checkBraceExpansionVars "echo {$i..100}"
+-- >>> prop $ verify checkBraceExpansionVars "echo {1..$n}"
+-- >>> prop $ verifyNot checkBraceExpansionVars "echo {1,3,$n}"
+-- >>> prop $ verify checkBraceExpansionVars "eval echo DSC{0001..$n}.jpg"
+-- >>> prop $ verify checkBraceExpansionVars "echo {$i..100}"
 checkBraceExpansionVars = ForShell [Bash] f
   where
     f t@(T_BraceExpansion id list) = mapM_ check list
@@ -374,12 +374,12 @@ checkBraceExpansionVars = ForShell [Bash] f
 
 
 -- |
--- prop> verify checkMultiDimensionalArrays "foo[a][b]=3"
--- prop> verifyNot checkMultiDimensionalArrays "foo[a]=3"
--- prop> verify checkMultiDimensionalArrays "foo=( [a][b]=c )"
--- prop> verifyNot checkMultiDimensionalArrays "foo=( [a]=c )"
--- prop> verify checkMultiDimensionalArrays "echo ${foo[bar][baz]}"
--- prop> verifyNot checkMultiDimensionalArrays "echo ${foo[bar]}"
+-- >>> prop $ verify checkMultiDimensionalArrays "foo[a][b]=3"
+-- >>> prop $ verifyNot checkMultiDimensionalArrays "foo[a]=3"
+-- >>> prop $ verify checkMultiDimensionalArrays "foo=( [a][b]=c )"
+-- >>> prop $ verifyNot checkMultiDimensionalArrays "foo=( [a]=c )"
+-- >>> prop $ verify checkMultiDimensionalArrays "echo ${foo[bar][baz]}"
+-- >>> prop $ verifyNot checkMultiDimensionalArrays "echo ${foo[bar]}"
 checkMultiDimensionalArrays = ForShell [Bash] f
   where
     f token =
@@ -395,16 +395,16 @@ checkMultiDimensionalArrays = ForShell [Bash] f
     isMultiDim t = getBracedModifier (bracedString t) `matches` re
 
 -- |
--- prop> verify checkPS1Assignments "PS1='\\033[1;35m\\$ '"
--- prop> verify checkPS1Assignments "export PS1='\\033[1;35m\\$ '"
--- prop> verify checkPS1Assignments "PS1='\\h \\e[0m\\$ '"
--- prop> verify checkPS1Assignments "PS1=$'\\x1b[c '"
--- prop> verify checkPS1Assignments "PS1=$'\\e[3m; '"
--- prop> verify checkPS1Assignments "export PS1=$'\\e[3m; '"
--- prop> verifyNot checkPS1Assignments "PS1='\\[\\033[1;35m\\]\\$ '"
--- prop> verifyNot checkPS1Assignments "PS1='\\[\\e1m\\e[1m\\]\\$ '"
--- prop> verifyNot checkPS1Assignments "PS1='e033x1B'"
--- prop> verifyNot checkPS1Assignments "PS1='\\[\\e\\]'"
+-- >>> prop $ verify checkPS1Assignments "PS1='\\033[1;35m\\$ '"
+-- >>> prop $ verify checkPS1Assignments "export PS1='\\033[1;35m\\$ '"
+-- >>> prop $ verify checkPS1Assignments "PS1='\\h \\e[0m\\$ '"
+-- >>> prop $ verify checkPS1Assignments "PS1=$'\\x1b[c '"
+-- >>> prop $ verify checkPS1Assignments "PS1=$'\\e[3m; '"
+-- >>> prop $ verify checkPS1Assignments "export PS1=$'\\e[3m; '"
+-- >>> prop $ verifyNot checkPS1Assignments "PS1='\\[\\033[1;35m\\]\\$ '"
+-- >>> prop $ verifyNot checkPS1Assignments "PS1='\\[\\e1m\\e[1m\\]\\$ '"
+-- >>> prop $ verifyNot checkPS1Assignments "PS1='e033x1B'"
+-- >>> prop $ verifyNot checkPS1Assignments "PS1='\\[\\e\\]'"
 checkPS1Assignments = ForShell [Bash] f
   where
     f token = case token of

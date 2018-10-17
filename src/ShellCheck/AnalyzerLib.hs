@@ -37,6 +37,10 @@ import qualified Data.Map               as Map
 import           Data.Maybe
 import           Data.Semigroup
 
+prop :: Bool -> IO ()
+prop False = putStrLn "FAIL"
+prop True  = return ()
+
 type Analysis = AnalyzerM ()
 type AnalyzerM a = RWS Parameters [TokenComment] Cache a
 nullCheck = const $ return ()
@@ -193,14 +197,14 @@ containsLastpipe root =
 
 
 -- |
--- prop> determineShell (fromJust $ pScript "#!/bin/sh") == Sh
--- prop> determineShell (fromJust $ pScript "#!/usr/bin/env ksh") == Ksh
--- prop> determineShell (fromJust $ pScript "") == Bash
--- prop> determineShell (fromJust $ pScript "#!/bin/sh -e") == Sh
--- prop> determineShell (fromJust $ pScript "#!/bin/ksh\n#shellcheck shell=sh\nfoo") == Sh
--- prop> determineShell (fromJust $ pScript "#shellcheck shell=sh\nfoo") == Sh
--- prop> determineShell (fromJust $ pScript "#! /bin/sh") == Sh
--- prop> determineShell (fromJust $ pScript "#! /bin/ash") == Dash
+-- >>> prop $ determineShell (fromJust $ pScript "#!/bin/sh") == Sh
+-- >>> prop $ determineShell (fromJust $ pScript "#!/usr/bin/env ksh") == Ksh
+-- >>> prop $ determineShell (fromJust $ pScript "") == Bash
+-- >>> prop $ determineShell (fromJust $ pScript "#!/bin/sh -e") == Sh
+-- >>> prop $ determineShell (fromJust $ pScript "#!/bin/ksh\n#shellcheck shell=sh\nfoo") == Sh
+-- >>> prop $ determineShell (fromJust $ pScript "#shellcheck shell=sh\nfoo") == Sh
+-- >>> prop $ determineShell (fromJust $ pScript "#! /bin/sh") == Sh
+-- >>> prop $ determineShell (fromJust $ pScript "#! /bin/ash") == Dash
 determineShell t = fromMaybe Bash $ do
     shellString <- foldl mplus Nothing $ getCandidates t
     shellForExecutable shellString
@@ -623,10 +627,10 @@ getIndexReferences s = fromMaybe [] $ do
     re = mkRegex "(\\[.*\\])"
 
 -- |
--- prop> getOffsetReferences ":bar" == ["bar"]
--- prop> getOffsetReferences ":bar:baz" == ["bar", "baz"]
--- prop> getOffsetReferences "[foo]:bar" == ["bar"]
--- prop> getOffsetReferences "[foo]:bar:baz" == ["bar", "baz"]
+-- >>> prop $ getOffsetReferences ":bar" == ["bar"]
+-- >>> prop $ getOffsetReferences ":bar:baz" == ["bar", "baz"]
+-- >>> prop $ getOffsetReferences "[foo]:bar" == ["bar"]
+-- >>> prop $ getOffsetReferences "[foo]:bar:baz" == ["bar", "baz"]
 getOffsetReferences mods = fromMaybe [] $ do
 -- if mods start with [, then drop until ]
     match <- matchRegex re mods
@@ -720,9 +724,9 @@ isVariableChar x = isVariableStartChar x || isDigit x
 variableNameRegex = mkRegex "[_a-zA-Z][_a-zA-Z0-9]*"
 
 -- |
--- prop> isVariableName "_fo123"
--- prop> not $ isVariableName "4"
--- prop> not $ isVariableName "test: "
+-- >>> prop $ isVariableName "_fo123"
+-- >>> prop $ not $ isVariableName "4"
+-- >>> prop $ not $ isVariableName "test: "
 isVariableName (x:r) = isVariableStartChar x && all isVariableChar r
 isVariableName _     = False
 
@@ -731,7 +735,7 @@ getVariablesFromLiteralToken token =
 
 -- Try to get referenced variables from a literal string like "$foo"
 -- Ignores tons of cases like arithmetic evaluation and array indices.
--- prop> getVariablesFromLiteral "$foo${bar//a/b}$BAZ" == ["foo", "bar", "BAZ"]
+-- >>> prop $ getVariablesFromLiteral "$foo${bar//a/b}$BAZ" == ["foo", "bar", "BAZ"]
 getVariablesFromLiteral string =
     map (!! 0) $ matchAllSubgroups variableRegex string
   where
@@ -740,19 +744,19 @@ getVariablesFromLiteral string =
 -- |
 -- Get the variable name from an expansion like ${var:-foo}
 --
--- prop> getBracedReference "foo" == "foo"
--- prop> getBracedReference "#foo" == "foo"
--- prop> getBracedReference "#" == "#"
--- prop> getBracedReference "##" == "#"
--- prop> getBracedReference "#!" == "!"
--- prop> getBracedReference "!#" == "#"
--- prop> getBracedReference "!foo#?" == "foo"
--- prop> getBracedReference "foo-bar" == "foo"
--- prop> getBracedReference "foo:-bar" == "foo"
--- prop> getBracedReference "foo: -1" == "foo"
--- prop> getBracedReference "!os*" == ""
--- prop> getBracedReference "!os?bar**" == ""
--- prop> getBracedReference "foo[bar]" == "foo"
+-- >>> prop $ getBracedReference "foo" == "foo"
+-- >>> prop $ getBracedReference "#foo" == "foo"
+-- >>> prop $ getBracedReference "#" == "#"
+-- >>> prop $ getBracedReference "##" == "#"
+-- >>> prop $ getBracedReference "#!" == "!"
+-- >>> prop $ getBracedReference "!#" == "#"
+-- >>> prop $ getBracedReference "!foo#?" == "foo"
+-- >>> prop $ getBracedReference "foo-bar" == "foo"
+-- >>> prop $ getBracedReference "foo:-bar" == "foo"
+-- >>> prop $ getBracedReference "foo: -1" == "foo"
+-- >>> prop $ getBracedReference "!os*" == ""
+-- >>> prop $ getBracedReference "!os?bar**" == ""
+-- >>> prop $ getBracedReference "foo[bar]" == "foo"
 getBracedReference s = fromMaybe s $
     nameExpansion s `mplus` takeName noPrefix `mplus` getSpecial noPrefix `mplus` getSpecial s
   where
@@ -776,9 +780,9 @@ getBracedReference s = fromMaybe s $
     nameExpansion _ = Nothing
 
 -- |
--- prop> getBracedModifier "foo:bar:baz" == ":bar:baz"
--- prop> getBracedModifier "!var:-foo" == ":-foo"
--- prop> getBracedModifier "foo[bar]" == "[bar]"
+-- >>> prop $ getBracedModifier "foo:bar:baz" == ":bar:baz"
+-- >>> prop $ getBracedModifier "!var:-foo" == ":-foo"
+-- >>> prop $ getBracedModifier "foo[bar]" == "[bar]"
 getBracedModifier s = fromMaybe "" . listToMaybe $ do
     let var = getBracedReference s
     a <- dropModifier s
