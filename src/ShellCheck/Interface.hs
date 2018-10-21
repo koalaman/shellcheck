@@ -50,7 +50,8 @@ module ShellCheck.Interface
     , newPositionedComment
     , newComment
     , Fix
-    , Replacement(R)
+    , Replacement(repStartPos, repEndPos, repString)
+    , newReplacement
     ) where
 
 import ShellCheck.AST
@@ -196,9 +197,17 @@ newComment = Comment {
 }
 
 -- only support single line for now
-data Replacement =
-    R Position Position String
-    deriving (Show, Eq)
+data Replacement = Replacement {
+    repStartPos :: Position,
+    repEndPos :: Position,
+    repString :: String
+} deriving (Show, Eq)
+
+newReplacement = Replacement {
+    repStartPos = newPosition,
+    repEndPos = newPosition,
+    repString = ""
+}
 
 type Fix = [Replacement]
 
