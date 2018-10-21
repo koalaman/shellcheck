@@ -625,8 +625,8 @@ readConditionContents single =
             readSingleQuoted,
             readDoubleQuoted,
             readDollarExpression,
-            readNormalLiteral "( ",
-            readPipeLiteral,
+            readLiteralForParser $ readNormalLiteral "( ",
+            readLiteralString "|",
             readGlobLiteral
             ]
         readGlobLiteral = do
@@ -636,19 +636,19 @@ readConditionContents single =
             return $ T_Literal id [s]
         readGroup = called "regex grouping" $ do
             start <- startSpan
-            char '('
+            p1 <- readLiteralString "("
             parts <- many (readPart <|> readRegexLiteral)
-            char ')'
+            p2 <- readLiteralString ")"
             id <- endSpan start
-            return $ T_NormalWord id parts
+            return $ T_NormalWord id (p1:(parts ++ [p2]))
         readRegexLiteral = do
             start <- startSpan
             str <- readGenericLiteral1 (singleQuote <|> doubleQuotable <|> oneOf "()")
             id <- endSpan start
             return $ T_Literal id str
-        readPipeLiteral = do
+        readLiteralString s = do
             start <- startSpan
-            str <- string "|"
+            str <- string s
             id <- endSpan start
             return $ T_Literal id str
 
@@ -2653,6 +2653,13 @@ readStringForParser parser = do
     readUntil pos
   where
     readUntil endPos = anyChar `reluctantlyTill` (getPosition >>= guard . (== endPos))
+
+-- Like readStringForParser, returning the span as a T_Literal
+readLiteralForParser parser = do
+    start <- startSpan
+    str <- readStringForParser parser
+    id <- endSpan start
+    return $ T_Literal id str
 
 prop_readAssignmentWord = isOk readAssignmentWord "a=42"
 prop_readAssignmentWord2 = isOk readAssignmentWord "b=(1 2 3)"

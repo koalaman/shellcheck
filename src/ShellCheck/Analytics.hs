@@ -1037,13 +1037,16 @@ checkQuotedCondRegex _ _ = return ()
 
 prop_checkGlobbedRegex1 = verify checkGlobbedRegex "[[ $foo =~ *foo* ]]"
 prop_checkGlobbedRegex2 = verify checkGlobbedRegex "[[ $foo =~ f* ]]"
-prop_checkGlobbedRegex2a = verify checkGlobbedRegex "[[ $foo =~ \\#* ]]"
 prop_checkGlobbedRegex3 = verifyNot checkGlobbedRegex "[[ $foo =~ $foo ]]"
 prop_checkGlobbedRegex4 = verifyNot checkGlobbedRegex "[[ $foo =~ ^c.* ]]"
+prop_checkGlobbedRegex5 = verifyNot checkGlobbedRegex "[[ $foo =~ \\* ]]"
+prop_checkGlobbedRegex6 = verifyNot checkGlobbedRegex "[[ $foo =~ (o*) ]]"
+prop_checkGlobbedRegex7 = verifyNot checkGlobbedRegex "[[ $foo =~ \\*foo ]]"
+prop_checkGlobbedRegex8 = verifyNot checkGlobbedRegex "[[ $foo =~ x\\* ]]"
 checkGlobbedRegex _ (TC_Binary _ DoubleBracket "=~" _ rhs) =
     let s = concat $ oversimplify rhs in
         when (isConfusedGlobRegex s) $
-            warn (getId rhs) 2049 "=~ is for regex. Use == for globs."
+            warn (getId rhs) 2049 "=~ is for regex, but this looks like a glob. Use = instead."
 checkGlobbedRegex _ _ = return ()
 
 
