@@ -118,8 +118,8 @@ outputForFile color sys comments = do
     let fileLines = lines contents
     let lineCount = fromIntegral $ length fileLines
     let groups = groupWith lineNo comments
-    mapM_ (\x -> do
-        let lineNum = lineNo (head x)
+    mapM_ (\commentsForLine -> do
+        let lineNum = lineNo (head commentsForLine)
         let line = if lineNum < 1 || lineNum > lineCount
                         then ""
                         else fileLines !! fromIntegral (lineNum - 1)
@@ -127,9 +127,10 @@ outputForFile color sys comments = do
         putStrLn $ color "message" $
            "In " ++ fileName ++" line " ++ show lineNum ++ ":"
         putStrLn (color "source" line)
-        mapM_ (\c -> putStrLn (color (severityText c) $ cuteIndent c)) x
+        mapM_ (\c -> putStrLn (color (severityText c) $ cuteIndent c)) commentsForLine
         putStrLn ""
-        mapM_ (\c -> putStrLn "Did you mean:" >> putStrLn (fixedString c line)) x
+        -- in the spirit of error prone
+        mapM_ (\c -> putStrLn "Did you mean:" >> putStrLn (fixedString c line)) commentsForLine
       ) groups
 
 -- need to do something smart about sorting by end index
@@ -141,16 +142,9 @@ fixedString comment line =
         apply_replacement rs line 0
         where
             apply_replacement [] s _ = s
-            apply_replacement ((Start n r):xs) s offset =
-                let start = (posColumn . pcStartPos) comment
-                    end = start + n
-                    z = do_replace start end s r
-                    len_r = (fromIntegral . length) r in
-                apply_replacement xs z (offset + (end - start) + len_r)
-            apply_replacement ((End n r):xs) s offset =
-                -- tricky math because column is 1 based
-                let end = (posColumn . pcEndPos) comment + 1
-                    start = end - n
+            apply_replacement ((R startp endp r):xs) s offset =
+                let start = posColumn startp
+                    end = posColumn endp
                     z = do_replace start end s r
                     len_r = (fromIntegral . length) r in
                 apply_replacement xs z (offset + (end - start) + len_r)

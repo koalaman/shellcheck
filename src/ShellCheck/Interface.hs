@@ -24,7 +24,7 @@ module ShellCheck.Interface
     , CheckResult(crFilename, crComments)
     , ParseSpec(psFilename, psScript, psCheckSourced, psShellTypeOverride)
     , ParseResult(prComments, prTokenPositions, prRoot)
-    , AnalysisSpec(asScript, asShellType, asExecutionMode, asCheckSourced)
+    , AnalysisSpec(asScript, asShellType, asExecutionMode, asCheckSourced, asTokenPositions)
     , AnalysisResult(arComments)
     , FormatterOptions(foColorOption, foWikiLinkCount)
     , Shell(Ksh, Sh, Bash, Dash)
@@ -50,10 +50,7 @@ module ShellCheck.Interface
     , newPositionedComment
     , newComment
     , Fix
-    , Replacement(Start, End)
-    , surroundWith
-    , replaceStart
-    , replaceEnd
+    , Replacement(R)
     ) where
 
 import ShellCheck.AST
@@ -132,14 +129,16 @@ data AnalysisSpec = AnalysisSpec {
     asScript :: Token,
     asShellType :: Maybe Shell,
     asExecutionMode :: ExecutionMode,
-    asCheckSourced :: Bool
+    asCheckSourced :: Bool,
+    asTokenPositions :: Map.Map Id (Position, Position)
 }
 
 newAnalysisSpec token = AnalysisSpec {
     asScript = token,
     asShellType = Nothing,
     asExecutionMode = Executed,
-    asCheckSourced = False
+    asCheckSourced = False,
+    asTokenPositions = Map.empty
 }
 
 newtype AnalysisResult = AnalysisResult {
@@ -198,22 +197,10 @@ newComment = Comment {
 
 -- only support single line for now
 data Replacement =
-      Start Integer String
-    | End Integer String
+    R Position Position String
     deriving (Show, Eq)
 
 type Fix = [Replacement]
-
-surroundWith s =
-    (replaceStart 0 s) ++ (replaceEnd 0 s)
-
--- replace first n chars
-replaceStart n r =
-    [ Start n r ]
-
--- replace last n chars
-replaceEnd n r =
-    [ End n r ]
 
 data PositionedComment = PositionedComment {
     pcStartPos :: Position,
