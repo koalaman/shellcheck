@@ -249,7 +249,11 @@ replace_start id params n r =
             posColumn = posColumn start + n
         }
     in
-    [R start new_end r]
+    newReplacement {
+        repStartPos = start,
+        repEndPos = new_end,
+        repString = r
+    }
 replace_end id params n r =
     -- because of the way we count columns 1-based
     -- we have to offset end columns by 1
@@ -262,9 +266,13 @@ replace_end id params n r =
             posColumn = posColumn end + 1
         }
     in
-    [R new_start new_end r]
+    newReplacement {
+        repStartPos = new_start,
+        repEndPos = new_end,
+        repString = r
+    }
 surround_with id params s =
-    (replace_start id params 0 s) ++ (replace_end id params 0 s)
+    [replace_start id params 0 s, replace_end id params 0 s]
 
 prop_checkEchoWc3 = verify checkEchoWc "n=$(echo $foo | wc -c)"
 checkEchoWc _ (T_Pipeline id _ [a, b]) =
@@ -1363,7 +1371,7 @@ prop_checkBackticks3 = verifyNot checkBackticks "echo `#inlined comment` foo"
 checkBackticks params (T_Backticked id list) | not (null list) =
     addComment $
         makeCommentWithFix StyleC id 2006  "Use $(...) notation instead of legacy backticked `...`."
-            ((replace_start id params 1 "$(") ++ (replace_end id params 1 ")"))
+            [(replace_start id params 1 "$("), (replace_end id params 1 ")")]
     -- style id 2006 "Use $(...) notation instead of legacy backticked `...`."
 checkBackticks _ _ = return ()
 
@@ -2570,7 +2578,7 @@ checkUncheckedCdPushdPopd params root =
             && not (isCondition $ getPath (parentMap params) t)) $
                 -- warn (getId t) 2164 "Use 'cd ... || exit' or 'cd ... || return' in case cd fails."
                 warnWithFix (getId t) 2164 "Use 'cd ... || exit' or 'cd ... || return' in case cd fails."
-                    (replace_end (getId t) params 0 " || exit")
+                    [replace_end (getId t) params 0 " || exit"]
     checkElement _ = return ()
     name t = fromMaybe "" $ getCommandName t
     isSafeDir t = case oversimplify t of

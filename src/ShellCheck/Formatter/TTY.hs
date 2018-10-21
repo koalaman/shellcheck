@@ -142,11 +142,12 @@ fixedString comment line =
         apply_replacement rs line 0
         where
             apply_replacement [] s _ = s
-            apply_replacement ((R startp endp r):xs) s offset =
-                let start = posColumn startp
-                    end = posColumn endp
-                    z = do_replace start end s r
-                    len_r = (fromIntegral . length) r in
+            apply_replacement (rep:xs) s offset =
+                let replacementString = repString rep
+                    start = (posColumn . repStartPos) rep
+                    end = (posColumn . repEndPos) rep
+                    z = do_replace start end s replacementString
+                    len_r = (fromIntegral . length) replacementString in
                 apply_replacement xs z (offset + (end - start) + len_r)
 
 -- start and end comes from pos, which is 1 based

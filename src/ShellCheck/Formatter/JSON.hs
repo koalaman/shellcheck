@@ -39,6 +39,19 @@ format = do
         footer = finish ref
     }
 
+instance ToJSON Replacement where
+    toJSON replacement =
+        let start = repStartPos replacement
+            end = repEndPos replacement
+            str = repString replacement in
+        object [
+          "line" .= posLine start,
+          "endLine" .= posLine end,
+          "column" .= posColumn start,
+          "endColumn" .= posColumn end,
+          "replaceWith" .= str
+        ]
+
 instance ToJSON (PositionedComment) where
   toJSON comment =
     let start = pcStartPos comment
@@ -52,7 +65,8 @@ instance ToJSON (PositionedComment) where
       "endColumn" .= posColumn end,
       "level" .= severityText comment,
       "code" .= cCode c,
-      "message" .= cMessage c
+      "message" .= cMessage c,
+      "fix" .= pcFix comment
     ]
 
   toEncoding comment =
@@ -68,6 +82,7 @@ instance ToJSON (PositionedComment) where
       <> "level" .= severityText comment
       <> "code" .= cCode c
       <> "message" .= cMessage c
+      <> "replaceWith" .= pcFix comment
     )
 
 outputError file msg = hPutStrLn stderr $ file ++ ": " ++ msg
@@ -77,4 +92,3 @@ collectResult ref result _ =
 finish ref = do
     list <- readIORef ref
     BL.putStrLn $ encode list
-
