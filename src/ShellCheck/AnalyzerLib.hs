@@ -81,7 +81,8 @@ data Parameters = Parameters {
     parentMap          :: Map.Map Id Token, -- A map from Id to parent Token
     shellType          :: Shell,            -- The shell type, such as Bash or Ksh
     shellTypeSpecified :: Bool,    -- True if shell type was forced via flags
-    rootNode           :: Token              -- The root node of the AST
+    rootNode           :: Token,              -- The root node of the AST
+    tokenPositions     :: Map.Map Id (Position, Position) -- map from token id to start and end position
     }
 
 -- TODO: Cache results of common AST ops here
@@ -177,7 +178,8 @@ makeParameters spec =
 
         shellTypeSpecified = isJust $ asShellType spec,
         parentMap = getParentTree root,
-        variableFlow = getVariableFlow params root
+        variableFlow = getVariableFlow params root,
+        tokenPositions = asTokenPositions spec
     } in params
   where root = asScript spec
 

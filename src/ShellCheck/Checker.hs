@@ -64,11 +64,20 @@ checkScript sys spec = do
             psShellTypeOverride = csShellTypeOverride spec
         }
         let parseMessages = prComments result
+        let tokenPositions = prTokenPositions result
+        let analysisSpec root =
+                as {
+                    asScript = root,
+                    asShellType = csShellTypeOverride spec,
+                    asCheckSourced = csCheckSourced spec,
+                    asExecutionMode = Executed,
+                    asTokenPositions = tokenPositions
+                } where as = newAnalysisSpec root
         let analysisMessages =
                 fromMaybe [] $
                     (arComments . analyzeScript . analysisSpec)
                         <$> prRoot result
-        let translator = tokenToPosition (prTokenPositions result)
+        let translator = tokenToPosition tokenPositions
         return . nub . sortMessages . filter shouldInclude $
             (parseMessages ++ map translator analysisMessages)
 
@@ -91,13 +100,6 @@ checkScript sys spec = do
          cMessage comment)
     getPosition = pcStartPos
 
-    analysisSpec root =
-        as {
-            asScript = root,
-            asShellType = csShellTypeOverride spec,
-            asCheckSourced = csCheckSourced spec,
-            asExecutionMode = Executed
-         } where as = newAnalysisSpec root
 
 getErrors sys spec =
     sort . map getCode . crComments $
