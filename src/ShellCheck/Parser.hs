@@ -1911,7 +1911,13 @@ readHereString = called "here string" $ do
     word <- readNormalWord
     return $ T_HereString id word
 
-readNewlineList = many1 ((linefeed <|> carriageReturn) `thenSkip` spacing)
+readNewlineList =
+    many1 ((linefeed <|> carriageReturn) `thenSkip` spacing) <* checkBadBreak
+  where
+    checkBadBreak = optional $ do
+                pos <- getPosition
+                try $ lookAhead (oneOf "|&") -- |, || or &&
+                parseProblemAt pos ErrorC 1133 "Unexpected start of line. If breaking lines, |/||/&& should be at the end of the previous one."
 readLineBreak = optional readNewlineList
 
 prop_readSeparator1 = isWarning readScript "a &; b"
@@ -2300,7 +2306,7 @@ readSubshell = called "explicit subshell" $ do
     allspacing
     list <- readCompoundList
     allspacing
-    char ')' <|> fail ") closing the subshell"
+    char ')' <|> fail "Expected ) closing the subshell"
     id <- endSpan start
     return $ T_Subshell id list
 
