@@ -17,6 +17,7 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -}
+{-# LANGUAGE DeriveGeneric, DeriveAnyClass #-}
 module ShellCheck.Interface
     (
     SystemInterface(..)
@@ -56,8 +57,11 @@ module ShellCheck.Interface
     ) where
 
 import ShellCheck.AST
+
+import Control.DeepSeq
 import Control.Monad.Identity
 import Data.Monoid
+import GHC.Generics (Generic)
 import qualified Data.Map as Map
 
 
@@ -170,12 +174,13 @@ data ExecutionMode = Executed | Sourced deriving (Show, Eq)
 type ErrorMessage = String
 type Code = Integer
 
-data Severity = ErrorC | WarningC | InfoC | StyleC deriving (Show, Eq, Ord)
+data Severity = ErrorC | WarningC | InfoC | StyleC
+    deriving (Show, Eq, Ord, Generic, NFData)
 data Position = Position {
     posFile :: String,    -- Filename
     posLine :: Integer,   -- 1 based source line
     posColumn :: Integer  -- 1 based source column, where tabs are 8
-} deriving (Show, Eq)
+} deriving (Show, Eq, Generic, NFData)
 
 newPosition :: Position
 newPosition = Position {
@@ -188,7 +193,7 @@ data Comment = Comment {
     cSeverity :: Severity,
     cCode     :: Code,
     cMessage  :: String
-} deriving (Show, Eq)
+} deriving (Show, Eq, Generic, NFData)
 
 newComment :: Comment
 newComment = Comment {
@@ -202,7 +207,7 @@ data Replacement = Replacement {
     repStartPos :: Position,
     repEndPos :: Position,
     repString :: String
-} deriving (Show, Eq)
+} deriving (Show, Eq, Generic, NFData)
 
 newReplacement = Replacement {
     repStartPos = newPosition,
@@ -212,7 +217,7 @@ newReplacement = Replacement {
 
 data Fix = Fix {
     fixReplacements :: [Replacement]
-} deriving (Show, Eq)
+} deriving (Show, Eq, Generic, NFData)
 
 newFix = Fix {
     fixReplacements = []
@@ -223,7 +228,7 @@ data PositionedComment = PositionedComment {
     pcEndPos   :: Position,
     pcComment  :: Comment,
     pcFix      :: Maybe Fix
-} deriving (Show, Eq)
+} deriving (Show, Eq, Generic, NFData)
 
 newPositionedComment :: PositionedComment
 newPositionedComment = PositionedComment {
@@ -237,7 +242,7 @@ data TokenComment = TokenComment {
     tcId :: Id,
     tcComment :: Comment,
     tcFix :: Maybe Fix
-} deriving (Show, Eq)
+} deriving (Show, Eq, Generic, NFData)
 
 newTokenComment = TokenComment {
     tcId = Id 0,

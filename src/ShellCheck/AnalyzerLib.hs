@@ -20,26 +20,28 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TemplateHaskell  #-}
 module ShellCheck.AnalyzerLib where
-import           ShellCheck.AST
-import           ShellCheck.ASTLib
-import           ShellCheck.Data
-import           ShellCheck.Interface
-import           ShellCheck.Parser
-import           ShellCheck.Regex
 
-import           Control.Arrow          (first)
-import           Control.Monad.Identity
-import           Control.Monad.RWS
-import           Control.Monad.State
-import           Control.Monad.Writer
-import           Data.Char
-import           Data.List
-import qualified Data.Map               as Map
-import           Data.Maybe
-import           Data.Semigroup
+import ShellCheck.AST
+import ShellCheck.ASTLib
+import ShellCheck.Data
+import ShellCheck.Interface
+import ShellCheck.Parser
+import ShellCheck.Regex
 
-import           Test.QuickCheck.All    (forAllProperties)
-import           Test.QuickCheck.Test   (maxSuccess, quickCheckWithResult, stdArgs)
+import Control.Arrow (first)
+import Control.DeepSeq
+import Control.Monad.Identity
+import Control.Monad.RWS
+import Control.Monad.State
+import Control.Monad.Writer
+import Data.Char
+import Data.List
+import Data.Maybe
+import Data.Semigroup
+import qualified Data.Map as Map
+
+import Test.QuickCheck.All (forAllProperties)
+import Test.QuickCheck.Test (maxSuccess, quickCheckWithResult, stdArgs)
 
 type Analysis = AnalyzerM ()
 type AnalyzerM a = RWS Parameters [TokenComment] Cache a
@@ -143,7 +145,7 @@ makeComment severity id code note =
         }
     }
 
-addComment note = tell [note]
+addComment note = note `deepseq` tell [note]
 
 warn :: MonadWriter [TokenComment] m => Id -> Code -> String -> m ()
 warn  id code str = addComment $ makeComment WarningC id code str
@@ -159,10 +161,11 @@ warnWithFix id code str fix = addComment $
 
 makeCommentWithFix :: Severity -> Id -> Code -> String -> Fix -> TokenComment
 makeCommentWithFix severity id code str fix =
-    let comment = makeComment severity id code str in
-    comment {
-        tcFix = Just fix
-    }
+    let comment = makeComment severity id code str
+        withFix = comment {
+            tcFix = Just fix
+        }
+    in withFix `deepseq` withFix
 
 makeParameters spec =
     let params = Parameters {
