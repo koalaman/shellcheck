@@ -25,6 +25,7 @@ import ShellCheck.Formatter.Format
 import Control.Monad
 import Data.IORef
 import Data.List
+import Data.Maybe
 import GHC.Exts
 import System.IO
 import System.Info
@@ -129,9 +130,26 @@ outputForFile color sys comments = do
         putStrLn (color "source" line)
         mapM_ (\c -> putStrLn (color (severityText c) $ cuteIndent c)) commentsForLine
         putStrLn ""
-        -- in the spirit of error prone
-        mapM_ (\c -> putStrLn "Did you mean:" >> putStrLn (fixedString c line)) commentsForLine
+        -- FIXME: Enable when reasonably stable
+        -- showFixedString color comments lineNum line
       ) groups
+
+hasApplicableFix lineNum comment = fromMaybe False $ do
+    replacements <- fixReplacements <$> pcFix comment
+    guard $ all (\c -> onSameLine (repStartPos c) && onSameLine (repEndPos c)) replacements
+    return True
+  where
+    onSameLine pos = posLine pos == lineNum
+
+-- FIXME: Work correctly with multiple replacements
+showFixedString color comments lineNum line =
+    case filter (hasApplicableFix lineNum) comments of
+        (first:_) -> do
+            -- in the spirit of error prone
+            putStrLn $ color "message" "Did you mean: "
+            putStrLn $ fixedString first line
+            putStrLn ""
+        _ -> return ()
 
 -- need to do something smart about sorting by end index
 fixedString :: PositionedComment -> String -> String
@@ -139,25 +157,26 @@ fixedString comment line =
     case (pcFix comment) of
     Nothing -> ""
     Just rs ->
-        apply_replacement rs line 0
+        applyReplacement (fixReplacements rs) line 0
         where
-            apply_replacement [] s _ = s
-            apply_replacement (rep:xs) s offset =
+            applyReplacement [] s _ = s
+            applyReplacement (rep:xs) s offset =
                 let replacementString = repString rep
                     start = (posColumn . repStartPos) rep
                     end = (posColumn . repEndPos) rep
-                    z = do_replace start end s replacementString
+                    z = doReplace start end s replacementString
                     len_r = (fromIntegral . length) replacementString in
-                apply_replacement xs z (offset + (end - start) + len_r)
+                applyReplacement xs z (offset + (end - start) + len_r)
 
+-- FIXME: Work correctly with tabs
 -- start and end comes from pos, which is 1 based
--- do_replace 0 0 "1234" "A" -> "A1234" -- technically not valid
--- do_replace 1 1 "1234" "A" -> "A1234"
--- do_replace 1 2 "1234" "A" -> "A234"
--- do_replace 3 3 "1234" "A" -> "12A34"
--- do_replace 4 4 "1234" "A" -> "123A4"
--- do_replace 5 5 "1234" "A" -> "1234A"
-do_replace start end o r =
+-- doReplace 0 0 "1234" "A" -> "A1234" -- technically not valid
+-- doReplace 1 1 "1234" "A" -> "A1234"
+-- doReplace 1 2 "1234" "A" -> "A234"
+-- doReplace 3 3 "1234" "A" -> "12A34"
+-- doReplace 4 4 "1234" "A" -> "123A4"
+-- doReplace 5 5 "1234" "A" -> "1234A"
+doReplace start end o r =
     let si = fromIntegral (start-1)
         ei = fromIntegral (end-1)
         (x, xs) = splitAt si o

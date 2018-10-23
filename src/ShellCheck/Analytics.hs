@@ -242,7 +242,7 @@ isCondition (child:parent:rest) =
             _ -> []
 
 -- helpers to build replacements
-replace_start id params n r =
+replaceStart id params n r =
     let tp = tokenPositions params
         (start, _) = tp Map.! id
         new_end = start {
@@ -254,7 +254,7 @@ replace_start id params n r =
         repEndPos = new_end,
         repString = r
     }
-replace_end id params n r =
+replaceEnd id params n r =
     -- because of the way we count columns 1-based
     -- we have to offset end columns by 1
     let tp = tokenPositions params
@@ -271,8 +271,8 @@ replace_end id params n r =
         repEndPos = new_end,
         repString = r
     }
-surround_with id params s =
-    [replace_start id params 0 s, replace_end id params 0 s]
+surroundWidth id params s = fixWith [replaceStart id params 0 s, replaceEnd id params 0 s]
+fixWith fixes = newFix { fixReplacements = fixes }
 
 prop_checkEchoWc3 = verify checkEchoWc "n=$(echo $foo | wc -c)"
 checkEchoWc _ (T_Pipeline id _ [a, b]) =
@@ -1371,8 +1371,7 @@ prop_checkBackticks3 = verifyNot checkBackticks "echo `#inlined comment` foo"
 checkBackticks params (T_Backticked id list) | not (null list) =
     addComment $
         makeCommentWithFix StyleC id 2006  "Use $(...) notation instead of legacy backticked `...`."
-            [(replace_start id params 1 "$("), (replace_end id params 1 ")")]
-    -- style id 2006 "Use $(...) notation instead of legacy backticked `...`."
+            (fixWith [replaceStart id params 1 "$(", replaceEnd id params 1 ")"])
 checkBackticks _ _ = return ()
 
 prop_checkIndirectExpansion1 = verify checkIndirectExpansion "${foo$n}"
@@ -1677,7 +1676,7 @@ checkSpacefulness params t =
                     "This default assignment may cause DoS due to globbing. Quote it."
             else
                 makeCommentWithFix InfoC (getId token) 2086
-                    "Double quote to prevent globbing and word splitting." (surround_with (getId token) params "\"")
+                    "Double quote to prevent globbing and word splitting." (surroundWidth (getId token) params "\"")
                 -- makeComment InfoC (getId token) 2086
                 --     "Double quote to prevent globbing and word splitting."
 
@@ -2576,9 +2575,8 @@ checkUncheckedCdPushdPopd params root =
             && not (isSafeDir t)
             && not (name t `elem` ["pushd", "popd"] && ("n" `elem` map snd (getAllFlags t)))
             && not (isCondition $ getPath (parentMap params) t)) $
-                -- warn (getId t) 2164 "Use 'cd ... || exit' or 'cd ... || return' in case cd fails."
                 warnWithFix (getId t) 2164 "Use 'cd ... || exit' or 'cd ... || return' in case cd fails."
-                    [replace_end (getId t) params 0 " || exit"]
+                    (fixWith [replaceEnd (getId t) params 0 " || exit"])
     checkElement _ = return ()
     name t = fromMaybe "" $ getCommandName t
     isSafeDir t = case oversimplify t of
@@ -2735,7 +2733,7 @@ checkArrayAssignmentIndices params root =
                         T_Literal id str -> [(id,str)]
                         _ -> []
                     guard $ '=' `elem` str
-                    return $ warnWithFix id 2191 "The = here is literal. To assign by index, use ( [index]=value ) with no spaces. To keep as literal, quote it." (surround_with id params "\"")
+                    return $ warnWithFix id 2191 "The = here is literal. To assign by index, use ( [index]=value ) with no spaces. To keep as literal, quote it." (surroundWidth id params "\"")
                 in
                     if null literalEquals && isAssociative
                     then warn (getId t) 2190 "Elements in associative arrays need index, e.g. array=( [index]=value ) ."

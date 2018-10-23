@@ -52,7 +52,7 @@ instance ToJSON Replacement where
           "replaceWith" .= str
         ]
 
-instance ToJSON (PositionedComment) where
+instance ToJSON PositionedComment where
   toJSON comment =
     let start = pcStartPos comment
         end = pcEndPos comment
@@ -82,8 +82,13 @@ instance ToJSON (PositionedComment) where
       <> "level" .= severityText comment
       <> "code" .= cCode c
       <> "message" .= cMessage c
-      <> "replaceWith" .= pcFix comment
+      <> "fix" .= pcFix comment
     )
+
+instance ToJSON Fix where
+    toJSON fix = object [
+        "replacements" .= fixReplacements fix
+        ]
 
 outputError file msg = hPutStrLn stderr $ file ++ ": " ++ msg
 collectResult ref result _ =
