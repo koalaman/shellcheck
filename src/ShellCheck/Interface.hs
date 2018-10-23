@@ -49,7 +49,8 @@ module ShellCheck.Interface
     , emptyCheckSpec
     , newPositionedComment
     , newComment
-    , Fix
+    , Fix(fixReplacements)
+    , newFix
     , Replacement(repStartPos, repEndPos, repString)
     , newReplacement
     ) where
@@ -209,7 +210,13 @@ newReplacement = Replacement {
     repString = ""
 }
 
-type Fix = [Replacement]
+data Fix = Fix {
+    fixReplacements :: [Replacement]
+} deriving (Show, Eq)
+
+newFix = Fix {
+    fixReplacements = []
+}
 
 data PositionedComment = PositionedComment {
     pcStartPos :: Position,
