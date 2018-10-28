@@ -183,6 +183,43 @@ doReplace start end o r =
     in
     x ++ r ++ z
 
+-- A replacement that spans multiple line is applied by:
+-- 1. merging the affected lines into a single string using `unlines`
+-- 2. apply the replacement as if it only spanned a single line
+-- The tricky part is adjusting the end column of the replacement
+-- (the end line doesn't matter because there is only one line)
+--
+--   aaS  <--- start of replacement (row 1 column 3)
+--   bbbb
+--   cEc
+--    \------- end of replacement (row 3 column 2)
+--
+-- a flattened string will look like:
+--
+--   "aaS\nbbbb\ncEc\n"
+--
+-- The column of E has to be adjusted by:
+-- 1. lengths of lines to be replaced, except the end row itself
+-- 2. end column of the replacement
+-- 3. number of '\n' by `unlines`
+-- Returns the original lines from the file with the replacement applied.
+-- Multiline replacements completely overwrite new lines in the original string.
+-- e.g. if the replacement spans 2 lines, but the replacement string does not
+-- have a '\n', then the number of replaced lines will be 1 shorter.
+replaceMultiLines fileLines rep =
+    let startRow = fromIntegral $ (posLine . repStartPos) rep
+        endRow = fromIntegral $ (posLine . repEndPos) rep
+        (ys, zs) = splitAt endRow fileLines
+        (xs, toReplaceLines) = splitAt (startRow-1) ys
+        lengths = fromIntegral $ sum (map length (init toReplaceLines))
+        newlines = fromIntegral $ (length toReplaceLines - 1) -- for the '\n' from unlines
+        original = unlines toReplaceLines
+        startCol = ((posColumn . repStartPos) rep)
+        endCol = ((posColumn . repEndPos) rep + newlines + lengths)
+        replacedLines = (lines $ doReplace startCol endCol original (repString rep))
+    in
+    xs ++ replacedLines ++ zs
+
 cuteIndent :: PositionedComment -> String
 cuteIndent comment =
     replicate (fromIntegral $ colNo comment - 1) ' ' ++
