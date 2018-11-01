@@ -1197,11 +1197,12 @@ prop_checkComparisonAgainstGlob2 = verifyNot checkComparisonAgainstGlob "[[ $cow
 prop_checkComparisonAgainstGlob3 = verify checkComparisonAgainstGlob "[ $cow = *foo* ]"
 prop_checkComparisonAgainstGlob4 = verifyNot checkComparisonAgainstGlob "[ $cow = foo ]"
 prop_checkComparisonAgainstGlob5 = verify checkComparisonAgainstGlob "[[ $cow != $bar ]]"
+prop_checkComparisonAgainstGlob6 = verify checkComparisonAgainstGlob "[ $f != /* ]"
 checkComparisonAgainstGlob _ (TC_Binary _ DoubleBracket op _ (T_NormalWord id [T_DollarBraced _ _]))
     | op `elem` ["=", "==", "!="] =
         warn id 2053 $ "Quote the right-hand side of " ++ op ++ " in [[ ]] to prevent glob matching."
 checkComparisonAgainstGlob _ (TC_Binary _ SingleBracket op _ word)
-        | (op == "=" || op == "==") && isGlob word =
+        | op `elem` ["=", "==", "!="] && isGlob word =
     err (getId word) 2081 "[ .. ] can't match globs. Use [[ .. ]] or case statement."
 checkComparisonAgainstGlob _ _ = return ()
 
