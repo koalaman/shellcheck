@@ -19,6 +19,7 @@
 -}
 module ShellCheck.Formatter.TTY (format) where
 
+import ShellCheck.Fixer
 import ShellCheck.Interface
 import ShellCheck.Formatter.Format
 
@@ -154,88 +155,18 @@ showFixedString color comments lineNum fileLines =
 
 fixedString :: PositionedComment -> [String] -> [String]
 fixedString comment fileLines =
-    let lineNum = lineNo comment
-        line = fileLines !! fromIntegral (lineNum - 1) in
     case (pcFix comment) of
     Nothing -> [""]
-    Just rs ->
-        -- apply replacements in sorted order by end position
-        -- assert no overlaps, or maybe remove overlaps?
-        let sorted = (reverse . sort) (fixReplacements rs)
-            (start, end) = calculateOverlap sorted 1 1
-        in
+    Just fix ->
+        let (start, end) = affectedRange (fixReplacements fix) in
         -- applyReplacement returns the full update file, we really only care about the changed lines
         -- so we calculate overlapping lines using replacements
-        -- TODO separate this logic of printing affected lines out
-        -- since for some output we might want to have the full file output
-        drop (fromIntegral start) $ take (fromIntegral end) $ applyReplacement sorted fileLines
+        drop start $ take end $ applyFix fix fileLines
         where
-            applyReplacement [] s = s
-            applyReplacement (rep:xs) s =
-                let result = replaceMultiLines rep s
-                in
-                applyReplacement xs result
-            calculateOverlap [] s e = (s, e)
-            calculateOverlap (rep:xs) s e =
-                calculateOverlap xs (min s (posLine (repStartPos rep))) (max e (posLine (repEndPos rep)))
-
--- A replacement that spans multiple line is applied by:
--- 1. merging the affected lines into a single string using `unlines`
--- 2. apply the replacement as if it only spanned a single line
--- The tricky part is adjusting the end column of the replacement
--- (the end line doesn't matter because there is only one line)
---
---   aaS  <--- start of replacement (row 1 column 3)
---   bbbb
---   cEc
---    \------- end of replacement (row 3 column 2)
---
--- a flattened string will look like:
---
---   "aaS\nbbbb\ncEc\n"
---
--- The column of E has to be adjusted by:
--- 1. lengths of lines to be replaced, except the end row itself
--- 2. end column of the replacement
--- 3. number of '\n' by `unlines`
--- Returns the original lines from the file with the replacement applied.
--- Multiline replacements completely overwrite new lines in the original string.
--- e.g. if the replacement spans 2 lines, but the replacement string does not
--- have a '\n', then the number of replaced lines will be 1 shorter.
-replaceMultiLines rep fileLines = -- this can replace doReplace
-    let startRow = fromIntegral $ (posLine . repStartPos) rep
-        endRow =  fromIntegral $ (posLine . repEndPos) rep
-        (ys, zs) = splitAt endRow fileLines
-        (xs, toReplaceLines) = splitAt (startRow-1) ys
-        lengths = fromIntegral $ sum (map length (init toReplaceLines))
-        newlines = fromIntegral $ (length toReplaceLines - 1) -- for the '\n' from unlines
-        original = unlines toReplaceLines
-        startCol = ((posColumn . repStartPos) rep)
-        endCol = ((posColumn . repEndPos) rep + newlines + lengths)
-        replacedLines = (lines $ doReplace startCol endCol original (repString rep))
-    in
-    xs ++ replacedLines ++ zs
-
--- FIXME: Work correctly with tabs
--- start and end comes from pos, which is 1 based
--- doReplace 0 0 "1234" "A" -> "A1234" -- technically not valid
--- doReplace 1 1 "1234" "A" -> "A1234"
--- doReplace 1 2 "1234" "A" -> "A234"
--- doReplace 3 3 "1234" "A" -> "12A34"
--- doReplace 4 4 "1234" "A" -> "123A4"
--- doReplace 5 5 "1234" "A" -> "1234A"
-doReplace start end o r =
-    let si = fromIntegral (start-1)
-        ei = fromIntegral (end-1)
-        (x, xs) = splitAt si o
-        (y, z) = splitAt (ei - si) xs
-    in
-    x ++ r ++ z
-
-start = newPosition { posLine = 2, posColumn = 3 }
-end = newPosition { posLine = 2, posColumn = 4 }
-r = newReplacement { repStartPos = start, repEndPos = end, repString = "hello" }
-filelines = ["first", "second", "third", "fourth"]
+            affectedRange rs = _affectedRange rs 1 1
+            _affectedRange [] s e = (fromIntegral s, fromIntegral e)
+            _affectedRange (rep:xs) s e =
+                _affectedRange xs (min s (posLine (repStartPos rep))) (max e (posLine (repEndPos rep)))
 
 cuteIndent :: PositionedComment -> String
 cuteIndent comment =
