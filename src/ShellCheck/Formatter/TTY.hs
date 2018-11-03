@@ -130,7 +130,7 @@ outputForFile color sys comments = do
         putStrLn (color "source" line)
         mapM_ (\c -> putStrLn (color (severityText c) $ cuteIndent c)) commentsForLine
         putStrLn ""
-        showFixedString color comments lineNum line
+        showFixedString color comments lineNum fileLines
       ) groups
 
 hasApplicableFix lineNum comment = fromMaybe False $ do
@@ -141,47 +141,43 @@ hasApplicableFix lineNum comment = fromMaybe False $ do
     onSameLine pos = posLine pos == lineNum
 
 -- FIXME: Work correctly with multiple replacements
-showFixedString color comments lineNum line =
+showFixedString color comments lineNum fileLines =
+    let line = fileLines !! fromIntegral (lineNum - 1) in
+    -- need to check overlaps
     case filter (hasApplicableFix lineNum) comments of
         (first:_) -> do
             -- in the spirit of error prone
             putStrLn $ color "message" "Did you mean: "
-            putStrLn $ fixedString first line
+            putStrLn $ unlines $ fixedString first fileLines
             putStrLn ""
         _ -> return ()
 
--- need to do something smart about sorting by end index
-fixedString :: PositionedComment -> String -> String
-fixedString comment line =
+fixedString :: PositionedComment -> [String] -> [String]
+fixedString comment fileLines =
+    let lineNum = lineNo comment
+        line = fileLines !! fromIntegral (lineNum - 1) in
     case (pcFix comment) of
-    Nothing -> ""
+    Nothing -> [""]
     Just rs ->
-        applyReplacement (fixReplacements rs) line 0
+        -- apply replacements in sorted order by end position
+        -- assert no overlaps, or maybe remove overlaps?
+        let sorted = (reverse . sort) (fixReplacements rs)
+            (start, end) = calculateOverlap sorted 1 1
+        in
+        -- applyReplacement returns the full update file, we really only care about the changed lines
+        -- so we calculate overlapping lines using replacements
+        -- TODO separate this logic of printing affected lines out
+        -- since for some output we might want to have the full file output
+        drop (fromIntegral start) $ take (fromIntegral end) $ applyReplacement sorted fileLines
         where
-            applyReplacement [] s _ = s
-            applyReplacement (rep:xs) s offset =
-                let replacementString = repString rep
-                    start = (posColumn . repStartPos) rep
-                    end = (posColumn . repEndPos) rep
-                    z = doReplace start end s replacementString
-                    len_r = (fromIntegral . length) replacementString in
-                applyReplacement xs z (offset + (end - start) + len_r)
-
--- FIXME: Work correctly with tabs
--- start and end comes from pos, which is 1 based
--- doReplace 0 0 "1234" "A" -> "A1234" -- technically not valid
--- doReplace 1 1 "1234" "A" -> "A1234"
--- doReplace 1 2 "1234" "A" -> "A234"
--- doReplace 3 3 "1234" "A" -> "12A34"
--- doReplace 4 4 "1234" "A" -> "123A4"
--- doReplace 5 5 "1234" "A" -> "1234A"
-doReplace start end o r =
-    let si = fromIntegral (start-1)
-        ei = fromIntegral (end-1)
-        (x, xs) = splitAt si o
-        (y, z) = splitAt (ei - si) xs
-    in
-    x ++ r ++ z
+            applyReplacement [] s = s
+            applyReplacement (rep:xs) s =
+                let result = replaceMultiLines rep s
+                in
+                applyReplacement xs result
+            calculateOverlap [] s e = (s, e)
+            calculateOverlap (rep:xs) s e =
+                calculateOverlap xs (min s (posLine (repStartPos rep))) (max e (posLine (repEndPos rep)))
 
 -- A replacement that spans multiple line is applied by:
 -- 1. merging the affected lines into a single string using `unlines`
@@ -206,9 +202,9 @@ doReplace start end o r =
 -- Multiline replacements completely overwrite new lines in the original string.
 -- e.g. if the replacement spans 2 lines, but the replacement string does not
 -- have a '\n', then the number of replaced lines will be 1 shorter.
-replaceMultiLines fileLines rep =
+replaceMultiLines rep fileLines = -- this can replace doReplace
     let startRow = fromIntegral $ (posLine . repStartPos) rep
-        endRow = fromIntegral $ (posLine . repEndPos) rep
+        endRow =  fromIntegral $ (posLine . repEndPos) rep
         (ys, zs) = splitAt endRow fileLines
         (xs, toReplaceLines) = splitAt (startRow-1) ys
         lengths = fromIntegral $ sum (map length (init toReplaceLines))
@@ -219,6 +215,27 @@ replaceMultiLines fileLines rep =
         replacedLines = (lines $ doReplace startCol endCol original (repString rep))
     in
     xs ++ replacedLines ++ zs
+
+-- FIXME: Work correctly with tabs
+-- start and end comes from pos, which is 1 based
+-- doReplace 0 0 "1234" "A" -> "A1234" -- technically not valid
+-- doReplace 1 1 "1234" "A" -> "A1234"
+-- doReplace 1 2 "1234" "A" -> "A234"
+-- doReplace 3 3 "1234" "A" -> "12A34"
+-- doReplace 4 4 "1234" "A" -> "123A4"
+-- doReplace 5 5 "1234" "A" -> "1234A"
+doReplace start end o r =
+    let si = fromIntegral (start-1)
+        ei = fromIntegral (end-1)
+        (x, xs) = splitAt si o
+        (y, z) = splitAt (ei - si) xs
+    in
+    x ++ r ++ z
+
+start = newPosition { posLine = 2, posColumn = 3 }
+end = newPosition { posLine = 2, posColumn = 4 }
+r = newReplacement { repStartPos = start, repEndPos = end, repString = "hello" }
+filelines = ["first", "second", "third", "fourth"]
 
 cuteIndent :: PositionedComment -> String
 cuteIndent comment =
