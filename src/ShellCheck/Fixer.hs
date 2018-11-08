@@ -6,12 +6,26 @@ import Data.List
 
 applyFix fix fileLines =
     -- apply replacements in sorted order by end position
-    -- assert no overlaps, or maybe remove overlaps?
-    let sorted = (reverse . sort) (fixReplacements fix) in
+    let sorted = (removeOverlap . reverse . sort) (fixReplacements fix) in
     applyReplacement sorted fileLines
     where
         applyReplacement [] s = s
         applyReplacement (rep:xs) s = applyReplacement xs $ replaceMultiLines rep s
+        -- prereq: list is already sorted by start position
+        removeOverlap [] = []
+        removeOverlap (x:xs) = checkoverlap x xs
+        checkoverlap :: Replacement -> [Replacement] -> [Replacement]
+        checkoverlap x [] = x:[]
+        checkoverlap x (y:ys) =
+            if overlap x y then x:(removeOverlap ys) else x:y:(removeOverlap ys)
+        -- two position overlaps when
+        overlap x y =
+            (yStart >= xStart && yStart <= xEnd) || (yStart < xStart && yStart > xStart)
+            where
+                yStart = repStartPos y
+                xStart = repStartPos x
+                xEnd = repEndPos x
+
 
 -- A replacement that spans multiple line is applied by:
 -- 1. merging the affected lines into a single string using `unlines`
