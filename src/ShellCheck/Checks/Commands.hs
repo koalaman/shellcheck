@@ -92,6 +92,7 @@ commandChecks = [
     ,checkWhich
     ,checkSudoRedirect
     ,checkSudoArgs
+    ,checkSourceArgs
     ]
 
 buildCommandMap :: [CommandCheck] -> Map.Map CommandName (Token -> Analysis)
@@ -1007,6 +1008,17 @@ checkSudoArgs = CommandCheck (Basename "sudo") f
     builtins = [ "cd", "eval", "export", "history", "read", "source", "wait" ]
     -- This mess is why ShellCheck prefers not to know.
     parseOpts = getBsdOpts "vAknSbEHPa:g:h:p:u:c:T:r:"
+
+prop_checkSourceArgs1 = verify checkSourceArgs "#!/bin/sh\n. script arg"
+prop_checkSourceArgs2 = verifyNot checkSourceArgs "#!/bin/sh\n. script"
+prop_checkSourceArgs3 = verifyNot checkSourceArgs "#!/bin/bash\n. script arg"
+checkSourceArgs = CommandCheck (Exactly ".") f
+  where
+    f t = whenShell [Sh, Dash] $
+        case arguments t of
+            (file:arg1:_) -> warn (getId arg1) 2240 $
+                "The dot command does not support arguments in sh/dash. Set them as variables."
+            _ -> return ()
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
