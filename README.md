@@ -133,6 +133,10 @@ On OS X with homebrew:
 
     brew install shellcheck
 
+On OpenBSD:
+
+    pkg_add shellcheck
+
 On openSUSE
 
     zypper in ShellCheck
