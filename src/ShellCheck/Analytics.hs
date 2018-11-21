@@ -876,8 +876,8 @@ prop_checkUnquotedN2 = verify checkUnquotedN "[ -n $cow ]"
 prop_checkUnquotedN3 = verifyNot checkUnquotedN "[[ -n $foo ]] && echo cow"
 prop_checkUnquotedN4 = verify checkUnquotedN "[ -n $cow -o -t 1 ]"
 prop_checkUnquotedN5 = verifyNot checkUnquotedN "[ -n \"$@\" ]"
-checkUnquotedN _ (TC_Unary _ SingleBracket "-n" (T_NormalWord id [t])) | willSplit t =
-       err id 2070 "-n doesn't work with unquoted arguments. Quote or use [[ ]]."
+checkUnquotedN _ (TC_Unary _ SingleBracket op (T_NormalWord id [t])) | willSplit t && op `elem` unaryTestOps =
+       err id 2070 (op ++ " doesn't work with unquoted arguments. Quote or use [[ ]].")
 checkUnquotedN _ _ = return ()
 
 prop_checkNumberComparisons1 = verify checkNumberComparisons "[[ $foo < 3 ]]"
