@@ -33,4 +33,4 @@ myPreSDist _ _ = do
   putStrLn $ "pandoc exited with " ++ show result
   return emptyHookedBuildInfo
   where
-    pandoc_cmd = "pandoc -s -t man shellcheck.1.md -o shellcheck.1"
+    pandoc_cmd = "pandoc -s -f markdown-smart -t man shellcheck.1.md -o shellcheck.1"
