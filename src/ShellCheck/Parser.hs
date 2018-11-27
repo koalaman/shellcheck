@@ -1916,8 +1916,9 @@ readNewlineList =
   where
     checkBadBreak = optional $ do
                 pos <- getPosition
-                try $ lookAhead (oneOf "|&") -- |, || or &&
-                parseProblemAt pos ErrorC 1133 "Unexpected start of line. If breaking lines, |/||/&& should be at the end of the previous one."
+                try $ lookAhead (oneOf "|&") --  See if the next thing could be |, || or &&
+                parseProblemAt pos ErrorC 1133
+                    "Unexpected start of line. If breaking lines, |/||/&& should be at the end of the previous one."
 readLineBreak = optional readNewlineList
 
 prop_readSeparator1 = isWarning readScript "a &; b"
