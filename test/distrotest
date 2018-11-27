@@ -16,10 +16,14 @@ and is still highly experimental.
 
 Make sure you're plugged in and have screen/tmux in place,
 then re-run with $0 --run to continue.
+
+Also note that 'dist' will be deleted.
 EOF
 exit 0
 }
 
+echo "Deleting 'dist'..."
+rm -rf dist
 
 log=$(mktemp) || die "Can't create temp file"
 date >> "$log" || die "Can't write to log"
@@ -63,7 +67,8 @@ opensuse:latest       zypper install -y cabal-install ghc
 ubuntu:18.04          apt-get update && apt-get install -y cabal-install
 ubuntu:17.10          apt-get update && apt-get install -y cabal-install
 
-# Misc
+# Misc Haskell including current and latest Stack build
+ubuntu:18.10          set -e; apt-get update && apt-get install -y curl && curl -sSL https://get.haskellstack.org/ | sh -s - -f && cd /mnt && exec test/stacktest
 haskell:latest        true
 
 # Known to currently fail
