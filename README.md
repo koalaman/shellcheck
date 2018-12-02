@@ -172,6 +172,11 @@ Alternatively, you can download pre-compiled binaries for the latest release her
 
 or see the [storage bucket listing](https://shellcheck.storage.googleapis.com/index.html) for checksums, older versions and the latest daily builds.
 
+Distro packages already come with a `man` page. If you are building from source, it can be installed with:
+
+    pandoc -s -t man shellcheck.1.md -o shellcheck.1
+    sudo mv shellcheck.1 /usr/share/man/man1
+
 ## Travis CI
 
 Travis CI has now integrated ShellCheck by default, so you don't need to manually install it.
