@@ -1,4 +1,4 @@
-## ???
+## v0.6.0 - 2018-12-02
 ### Added
 - Command line option --severity/-S for filtering by minimum severity
 - Command line option --wiki-link-count/-W for showing wiki links
