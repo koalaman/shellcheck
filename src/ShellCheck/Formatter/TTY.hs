@@ -94,7 +94,7 @@ outputWiki errRef = do
   where
     showErr (_, code, msg) =
         putStrLn $ "  " ++ wikiLink ++ "SC" ++ show code ++ " -- " ++ shorten msg
-    limit = 40
+    limit = 36
     shorten msg =
         if length msg < limit
         then msg
