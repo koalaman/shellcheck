@@ -28,6 +28,8 @@ Extra-Source-Files:
     shellcheck.1.md
     -- built with a cabal sdist hook
     shellcheck.1
+    -- convenience script for stripping tests
+    striptests
     -- tests
     test/shellcheck.hs
 
