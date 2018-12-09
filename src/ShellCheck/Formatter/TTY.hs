@@ -130,8 +130,7 @@ outputForFile color sys comments = do
         putStrLn (color "source" line)
         mapM_ (\c -> putStrLn (color (severityText c) $ cuteIndent c)) commentsForLine
         putStrLn ""
-        -- FIXME: Enable when reasonably stable
-        -- showFixedString color comments lineNum line
+        showFixedString color comments lineNum line
       ) groups
 
 hasApplicableFix lineNum comment = fromMaybe False $ do
