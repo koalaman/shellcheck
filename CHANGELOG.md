@@ -1,3 +1,7 @@
+## Since previous release
+### Added
+- Preliminary support for fix suggestions
+
 ## v0.6.0 - 2018-12-02
 ### Added
 - Command line option --severity/-S for filtering by minimum severity
