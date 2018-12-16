@@ -20,9 +20,10 @@ applyFix fix fileLines =
             if overlap x y then x:(removeOverlap ys) else x:y:(removeOverlap ys)
         -- two position overlaps when
         overlap x y =
-            (yStart >= xStart && yStart <= xEnd) || (yStart < xStart && yStart > xStart)
+            (yStart >= xStart && yStart < xEnd) || (yStart < xStart && yEnd > xStart)
             where
                 yStart = repStartPos y
+                yEnd = repEndPos y
                 xStart = repStartPos x
                 xEnd = repEndPos x
 
