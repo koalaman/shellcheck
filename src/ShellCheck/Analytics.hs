@@ -199,8 +199,9 @@ checkUnqualifiedCommand _ _ _ = return ()
 checkNode f = producesComments (runNodeAnalysis f)
 producesComments :: (Parameters -> Token -> [TokenComment]) -> String -> Maybe Bool
 producesComments f s = do
-        root <- pScript s
-        return . not . null $ runList (defaultSpec root) [f]
+        let pr = pScript s
+        prRoot pr
+        return . not . null $ runList (defaultSpec pr) [f]
 
 -- Copied from https://wiki.haskell.org/Edit_distance
 dist :: Eq a => [a] -> [a] -> Int

@@ -85,7 +85,7 @@ data Parameters = Parameters {
     shellTypeSpecified :: Bool,    -- True if shell type was forced via flags
     rootNode           :: Token,              -- The root node of the AST
     tokenPositions     :: Map.Map Id (Position, Position) -- map from token id to start and end position
-    }
+    } deriving (Show)
 
 -- TODO: Cache results of common AST ops here
 data Cache = Cache {}
@@ -112,11 +112,12 @@ data DataSource =
 
 data VariableState = Dead Token String | Alive deriving (Show)
 
-defaultSpec root = spec {
+defaultSpec pr = spec {
     asShellType = Nothing,
     asCheckSourced = False,
-    asExecutionMode = Executed
-} where spec = newAnalysisSpec root
+    asExecutionMode = Executed,
+    asTokenPositions = prTokenPositions pr
+} where spec = newAnalysisSpec (fromJust $ prRoot pr)
 
 pScript s =
   let
@@ -124,13 +125,14 @@ pScript s =
         psFilename = "script",
         psScript = s
     }
-  in prRoot . runIdentity $ parseScript (mockedSystemInterface []) pSpec
+  in runIdentity $ parseScript (mockedSystemInterface []) pSpec
 
 -- For testing. If parsed, returns whether there are any comments
 producesComments :: Checker -> String -> Maybe Bool
 producesComments c s = do
-        root <- pScript s
-        let spec = defaultSpec root
+        let pr = pScript s
+        prRoot pr
+        let spec = defaultSpec pr
         let params = makeParameters spec
         return . not . null $ runChecker params c
 
@@ -214,16 +216,16 @@ containsLastpipe root =
                 _ -> False
 
 
-prop_determineShell0 = determineShell (fromJust $ pScript "#!/bin/sh") == Sh
-prop_determineShell1 = determineShell (fromJust $ pScript "#!/usr/bin/env ksh") == Ksh
-prop_determineShell2 = determineShell (fromJust $ pScript "") == Bash
-prop_determineShell3 = determineShell (fromJust $ pScript "#!/bin/sh -e") == Sh
-prop_determineShell4 = determineShell (fromJust $ pScript
-    "#!/bin/ksh\n#shellcheck shell=sh\nfoo") == Sh
-prop_determineShell5 = determineShell (fromJust $ pScript
-    "#shellcheck shell=sh\nfoo") == Sh
-prop_determineShell6 = determineShell (fromJust $ pScript "#! /bin/sh") == Sh
-prop_determineShell7 = determineShell (fromJust $ pScript "#! /bin/ash") == Dash
+prop_determineShell0 = determineShellTest "#!/bin/sh" == Sh
+prop_determineShell1 = determineShellTest "#!/usr/bin/env ksh" == Ksh
+prop_determineShell2 = determineShellTest "" == Bash
+prop_determineShell3 = determineShellTest "#!/bin/sh -e" == Sh
+prop_determineShell4 = determineShellTest "#!/bin/ksh\n#shellcheck shell=sh\nfoo" == Sh
+prop_determineShell5 = determineShellTest "#shellcheck shell=sh\nfoo" == Sh
+prop_determineShell6 = determineShellTest "#! /bin/sh" == Sh
+prop_determineShell7 = determineShellTest "#! /bin/ash" == Dash
+
+determineShellTest = determineShell . fromJust . prRoot . pScript
 determineShell t = fromMaybe Bash $ do
     shellString <- foldl mplus Nothing $ getCandidates t
     shellForExecutable shellString
