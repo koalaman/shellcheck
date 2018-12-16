@@ -1,7 +1,7 @@
 #### For bugs
 - Rule Id (if any, e.g. SC1000): 
 - My shellcheck version (`shellcheck --version` or "online"): 
-- [ ] I read the issue's wiki page, e.g. https://github.com/koalaman/shellcheck/wiki/SC2086
+- [ ] The rule's wiki page does not already cover this (e.g. https://shellcheck.net/wiki/SC2086)
 - [ ] I tried on shellcheck.net and verified that this is still a problem on the latest commit
 
 #### For new checks and feature suggestions
