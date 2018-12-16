@@ -11,7 +11,7 @@
   ,ShellCheck.Checks.Commands.runTests
   ,ShellCheck.Checks.ShellSupport.runTests
   ,ShellCheck.AnalyzerLib.runTests
-    ]' | tr -d '\n' | cabal repl 2>&1 | tee /dev/stderr)
+    ]' | tr -d '\n' | cabal repl ShellCheck 2>&1 | tee /dev/stderr)
 if [[ $var == *$'\nTrue'* ]]
 then
   exit 0
