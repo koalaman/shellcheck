@@ -2692,7 +2692,7 @@ checkRedirectedNowhere params token =
         case drop 1 $ getPath (parentMap params) t of
             T_DollarExpansion _ [_] : _ -> True
             T_Backticked _ [_] : _ -> True
-            T_Annotation _ _ u : _ -> isInExpansion u
+            t@T_Annotation {} : _ -> isInExpansion t
             _ -> False
     getDanglingRedirect token =
         case token of

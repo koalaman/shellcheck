@@ -231,5 +231,7 @@ prop_filewideAnnotation8 = null $
 prop_sourcePartOfOriginalScript = -- #1181: -x disabled posix warning for 'source'
     2039 `elem` checkWithIncludes [("./saywhat.sh", "echo foo")] "#!/bin/sh\nsource ./saywhat.sh"
 
+prop_spinBug1413 = null $ check "fun() {\n# shellcheck disable=SC2188\n> /dev/null\n}\n"
+
 return []
 runTests = $quickCheckAll
