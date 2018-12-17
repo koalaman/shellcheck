@@ -150,7 +150,6 @@ showFixedString color comments lineNum fileLines =
             -- in the spirit of error prone
             putStrLn $ color "message" "Did you mean: "
             putStrLn $ unlines $ fixedString first fileLines
-            putStrLn ""
         _ -> return ()
 
 fixedString :: PositionedComment -> [String] -> [String]
