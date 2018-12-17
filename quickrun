@@ -3,3 +3,10 @@
 # This allows testing changes without recompiling.
 
 runghc -isrc -idist/build/autogen shellcheck.hs "$@"
+
+# Note: with new-build you can
+#
+# % cabal new-run --disable-optimization -- shellcheck "$@"
+#
+# This does build the executable, but as the optimisation is disabled,
+# the build is quite fast.

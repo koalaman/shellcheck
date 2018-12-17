@@ -28,16 +28,14 @@ Extra-Source-Files:
     shellcheck.1.md
     -- built with a cabal sdist hook
     shellcheck.1
-    -- convenience script for stripping tests
-    striptests
-    -- tests
-    test/shellcheck.hs
 
 custom-setup
   setup-depends:
-    base    >= 4    && <5,
-    process >= 1.0  && <1.7,
-    Cabal   >= 1.10 && <2.5
+    base          >= 4     && <5,
+    directory     >= 1.2   && <1.4,
+    process       >= 1.0   && <1.7,
+    cabal-doctest >= 1.0.6 && <1.1,
+    Cabal         >= 1.10  && <2.5
 
 source-repository head
     type: git
@@ -60,7 +58,6 @@ library
       mtl >= 2.2.1,
       parsec,
       regex-tdfa,
-      QuickCheck >= 2.7.4,
       -- When cabal supports it, move this to setup-depends:
       process
     exposed-modules:
@@ -98,23 +95,23 @@ executable shellcheck
       directory,
       mtl >= 2.2.1,
       parsec >= 3.0,
-      QuickCheck >= 2.7.4,
       regex-tdfa
     main-is: shellcheck.hs
 
-test-suite test-shellcheck
-    type: exitcode-stdio-1.0
-    build-depends:
-      aeson,
-      base >= 4 && < 5,
-      bytestring,
-      deepseq >= 1.4.0.0,
-      ShellCheck,
-      containers,
-      directory,
-      mtl >= 2.2.1,
-      parsec,
-      QuickCheck >= 2.7.4,
-      regex-tdfa
-    main-is: test/shellcheck.hs
+    -- Marker to add flags for static linking
+    -- STATIC
 
+test-suite doctests
+  type:                exitcode-stdio-1.0
+  main-is:             doctests.hs
+  build-depends:
+    base,
+    doctest >= 0.16.0 && <0.17,
+    QuickCheck >=2.11 && <2.13,
+    ShellCheck,
+    template-haskell
+
+  x-doctest-options: --fast
+
+  ghc-options:         -Wall -threaded
+  hs-source-dirs:      test

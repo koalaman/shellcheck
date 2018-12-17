@@ -17,8 +17,7 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -}
-{-# LANGUAGE TemplateHaskell #-}
-module ShellCheck.Checker (checkScript, ShellCheck.Checker.runTests) where
+module ShellCheck.Checker (checkScript) where
 
 import ShellCheck.Interface
 import ShellCheck.Parser
@@ -34,8 +33,6 @@ import qualified Data.Map as Map
 import qualified System.IO
 import Prelude hiding (readFile)
 import Control.Monad
-
-import Test.QuickCheck.All
 
 tokenToPosition startMap t = fromMaybe fail $ do
     span <- Map.lookup (tcId t) startMap
@@ -125,113 +122,132 @@ checkRecursive includes src =
         csCheckSourced = True
     }
 
-prop_findsParseIssue = check "echo \"$12\"" == [1037]
-
-prop_commentDisablesParseIssue1 =
-    null $ check "#shellcheck disable=SC1037\necho \"$12\""
-prop_commentDisablesParseIssue2 =
-    null $ check "#shellcheck disable=SC1037\n#lol\necho \"$12\""
-
-prop_findsAnalysisIssue =
-    check "echo $1" == [2086]
-prop_commentDisablesAnalysisIssue1 =
-    null $ check "#shellcheck disable=SC2086\necho $1"
-prop_commentDisablesAnalysisIssue2 =
-    null $ check "#shellcheck disable=SC2086\n#lol\necho $1"
-
-prop_optionDisablesIssue1 =
-    null $ getErrors
-                (mockedSystemInterface [])
-                emptyCheckSpec {
-                    csScript = "echo $1",
-                    csExcludedWarnings = [2148, 2086]
-                }
-
-prop_optionDisablesIssue2 =
-    null $ getErrors
-                (mockedSystemInterface [])
-                emptyCheckSpec {
-                    csScript = "echo \"$10\"",
-                    csExcludedWarnings = [2148, 1037]
-                }
-
-prop_wontParseBadShell =
-    [1071] == check "#!/usr/bin/python\ntrue $1\n"
-
-prop_optionDisablesBadShebang =
-    null $ getErrors
-                (mockedSystemInterface [])
-                emptyCheckSpec {
-                    csScript = "#!/usr/bin/python\ntrue\n",
-                    csShellTypeOverride = Just Sh
-                }
-
-prop_annotationDisablesBadShebang =
-    [] == check "#!/usr/bin/python\n# shellcheck shell=sh\ntrue\n"
-
-
-prop_canParseDevNull =
-    [] == check "source /dev/null"
-
-prop_failsWhenNotSourcing =
-    [1091, 2154] == check "source lol; echo \"$bar\""
-
-prop_worksWhenSourcing =
-    null $ checkWithIncludes [("lib", "bar=1")] "source lib; echo \"$bar\""
-
-prop_worksWhenDotting =
-    null $ checkWithIncludes [("lib", "bar=1")] ". lib; echo \"$bar\""
-
-prop_noInfiniteSourcing =
-    [] == checkWithIncludes  [("lib", "source lib")] "source lib"
-
-prop_canSourceBadSyntax =
-    [1094, 2086] == checkWithIncludes [("lib", "for f; do")] "source lib; echo $1"
-
-prop_cantSourceDynamic =
-    [1090] == checkWithIncludes [("lib", "")] ". \"$1\""
-
-prop_cantSourceDynamic2 =
-    [1090] == checkWithIncludes [("lib", "")] "source ~/foo"
-
-prop_canSourceDynamicWhenRedirected =
-    null $ checkWithIncludes [("lib", "")] "#shellcheck source=lib\n. \"$1\""
-
-prop_recursiveAnalysis =
-    [2086] == checkRecursive [("lib", "echo $1")] "source lib"
-
-prop_recursiveParsing =
-    [1037] == checkRecursive [("lib", "echo \"$10\"")] "source lib"
-
-prop_sourceDirectiveDoesntFollowFile =
-    null $ checkWithIncludes
-                [("foo", "source bar"), ("bar", "baz=3")]
-                "#shellcheck source=foo\n. \"$1\"; echo \"$baz\""
-
-prop_filewideAnnotationBase = [2086] == check "#!/bin/sh\necho $1"
-prop_filewideAnnotation1 = null $
-    check "#!/bin/sh\n# shellcheck disable=2086\necho $1"
-prop_filewideAnnotation2 = null $
-    check "#!/bin/sh\n# shellcheck disable=2086\ntrue\necho $1"
-prop_filewideAnnotation3 = null $
-    check "#!/bin/sh\n#unrelated\n# shellcheck disable=2086\ntrue\necho $1"
-prop_filewideAnnotation4 = null $
-    check "#!/bin/sh\n# shellcheck disable=2086\n#unrelated\ntrue\necho $1"
-prop_filewideAnnotation5 = null $
-    check "#!/bin/sh\n\n\n\n#shellcheck disable=2086\ntrue\necho $1"
-prop_filewideAnnotation6 = null $
-    check "#shellcheck shell=sh\n#unrelated\n#shellcheck disable=2086\ntrue\necho $1"
-prop_filewideAnnotation7 = null $
-    check "#!/bin/sh\n# shellcheck disable=2086\n#unrelated\ntrue\necho $1"
-
-prop_filewideAnnotationBase2 = [2086, 2181] == check "true\n[ $? == 0 ] && echo $1"
-prop_filewideAnnotation8 = null $
-    check "# Disable $? warning\n#shellcheck disable=SC2181\n# Disable quoting warning\n#shellcheck disable=2086\ntrue\n[ $? == 0 ] && echo $1"
-
-prop_sourcePartOfOriginalScript = -- #1181: -x disabled posix warning for 'source'
-    2039 `elem` checkWithIncludes [("./saywhat.sh", "echo foo")] "#!/bin/sh\nsource ./saywhat.sh"
-
-prop_spinBug1413 = null $ check "fun() {\n# shellcheck disable=SC2188\n> /dev/null\n}\n"
-
-return []
-runTests = $quickCheckAll
+-- | Dummy binding for doctest to run
+--
+-- >>> check "echo \"$12\""
+-- [1037]
+--
+-- >>> check "#shellcheck disable=SC1037\necho \"$12\""
+-- []
+--
+-- >>> check "#shellcheck disable=SC1037\n#lol\necho \"$12\""
+-- []
+--
+-- >>> check "echo $1"
+-- [2086]
+--
+-- >>> check "#shellcheck disable=SC2086\necho $1"
+-- []
+--
+-- >>> check "#shellcheck disable=SC2086\n#lol\necho $1"
+-- []
+--
+-- >>> :{
+--  getErrors
+--     (mockedSystemInterface [])
+--     emptyCheckSpec {
+--         csScript = "echo $1",
+--         csExcludedWarnings = [2148, 2086]
+--     }
+-- :}
+-- []
+--
+-- >>> :{
+--   getErrors
+--     (mockedSystemInterface [])
+--     emptyCheckSpec {
+--         csScript = "echo \"$10\"",
+--         csExcludedWarnings = [2148, 1037]
+--     }
+-- :}
+-- []
+--
+-- >>> check "#!/usr/bin/python\ntrue $1\n"
+-- [1071]
+--
+-- >>> :{
+--   getErrors
+--     (mockedSystemInterface [])
+--     emptyCheckSpec {
+--         csScript = "#!/usr/bin/python\ntrue\n",
+--         csShellTypeOverride = Just Sh
+--     }
+-- :}
+-- []
+--
+-- >>> check "#!/usr/bin/python\n# shellcheck shell=sh\ntrue\n"
+-- []
+--
+-- >>> check "source /dev/null"
+-- []
+--
+-- >>> check "source lol; echo \"$bar\""
+-- [1091,2154]
+--
+-- >>> checkWithIncludes [("lib", "bar=1")] "source lib; echo \"$bar\""
+-- []
+--
+-- >>> checkWithIncludes [("lib", "bar=1")] ". lib; echo \"$bar\""
+-- []
+--
+-- >>> checkWithIncludes  [("lib", "source lib")] "source lib"
+-- []
+--
+-- >>> checkWithIncludes [("lib", "for f; do")] "source lib; echo $1"
+-- [1094,2086]
+--
+-- >>> checkWithIncludes [("lib", "")] ". \"$1\""
+-- [1090]
+--
+-- >>> checkWithIncludes [("lib", "")] "source ~/foo"
+-- [1090]
+--
+-- >>> checkWithIncludes [("lib", "")] "#shellcheck source=lib\n. \"$1\""
+-- []
+--
+-- >>> checkRecursive [("lib", "echo $1")] "source lib"
+-- [2086]
+--
+-- >>> checkRecursive [("lib", "echo \"$10\"")] "source lib"
+-- [1037]
+--
+-- >>> checkWithIncludes [("foo", "source bar"), ("bar", "baz=3")] "#shellcheck source=foo\n. \"$1\"; echo \"$baz\""
+-- []
+--
+-- >>> check "#!/bin/sh\necho $1"
+-- [2086]
+--
+-- >>> check "#!/bin/sh\n# shellcheck disable=2086\necho $1"
+-- []
+--
+-- >>> check "#!/bin/sh\n# shellcheck disable=2086\ntrue\necho $1"
+-- []
+--
+-- >>> check "#!/bin/sh\n#unrelated\n# shellcheck disable=2086\ntrue\necho $1"
+-- []
+--
+-- >>> check "#!/bin/sh\n# shellcheck disable=2086\n#unrelated\ntrue\necho $1"
+-- []
+--
+-- >>> check "#!/bin/sh\n\n\n\n#shellcheck disable=2086\ntrue\necho $1"
+-- []
+--
+-- >>> check "#shellcheck shell=sh\n#unrelated\n#shellcheck disable=2086\ntrue\necho $1"
+-- []
+--
+-- >>> check "#!/bin/sh\n# shellcheck disable=2086\n#unrelated\ntrue\necho $1"
+-- []
+--
+-- check "true\n[ $? == 0 ] && echo $1"
+-- [2086, 2181]
+--
+-- check "# Disable $? warning\n#shellcheck disable=SC2181\n# Disable quoting warning\n#shellcheck disable=2086\ntrue\n[ $? == 0 ] && echo $1"
+-- []
+--
+-- >>> 2039 `elem` checkWithIncludes [("./saywhat.sh", "echo foo")] "#!/bin/sh\nsource ./saywhat.sh"
+-- True
+--
+-- >>> check "fun() {\n# shellcheck disable=SC2188\n> /dev/null\n}\n"
+-- []
+doctests :: ()
+doctests = ()

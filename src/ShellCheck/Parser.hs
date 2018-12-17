@@ -17,11 +17,10 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiWayIf #-}
-module ShellCheck.Parser (parseScript, runTests) where
+module ShellCheck.Parser (parseScript) where
 
 import ShellCheck.AST
 import ShellCheck.ASTLib
@@ -48,7 +47,9 @@ import qualified Control.Monad.Reader as Mr
 import qualified Control.Monad.State as Ms
 import qualified Data.Map as Map
 
-import Test.QuickCheck.All (quickCheckAll)
+prop :: Bool -> IO ()
+prop False = putStrLn "FAIL"
+prop True  = return ()
 
 type SCBase m = Mr.ReaderT (Environment m) (Ms.StateT SystemState m)
 type SCParser m v = ParsecT String UserState (SCBase m) v
@@ -87,7 +88,8 @@ extglobStart = oneOf extglobStartChars
 unicodeDoubleQuotes = "\x201C\x201D\x2033\x2036"
 unicodeSingleQuotes = "\x2018\x2019"
 
-prop_spacing = isOk spacing "  \\\n # Comment"
+-- |
+-- >>> prop $ isOk spacing "  \\\n # Comment"
 spacing = do
     x <- many (many1 linewhitespace <|> try (string "\\\n" >> return ""))
     optional readComment
@@ -98,9 +100,10 @@ spacing1 = do
     when (null spacing) $ fail "Expected whitespace"
     return spacing
 
-prop_allspacing = isOk allspacing "#foo"
-prop_allspacing2 = isOk allspacing " #foo\n # bar\n#baz\n"
-prop_allspacing3 = isOk allspacing "#foo\n#bar\n#baz\n"
+-- |
+-- >>> prop $ isOk allspacing "#foo"
+-- >>> prop $ isOk allspacing " #foo\n # bar\n#baz\n"
+-- >>> prop $ isOk allspacing "#foo\n#bar\n#baz\n"
 allspacing = do
     s <- spacing
     more <- option False (linefeed >> return True)
@@ -673,29 +676,30 @@ readConditionContents single =
     readCondContents = readCondOr
 
 
-prop_a1 = isOk readArithmeticContents " n++ + ++c"
-prop_a2 = isOk readArithmeticContents "$N*4-(3,2)"
-prop_a3 = isOk readArithmeticContents "n|=2<<1"
-prop_a4 = isOk readArithmeticContents "n &= 2 **3"
-prop_a5 = isOk readArithmeticContents "1 |= 4 && n >>= 4"
-prop_a6 = isOk readArithmeticContents " 1 | 2 ||3|4"
-prop_a7 = isOk readArithmeticContents "3*2**10"
-prop_a8 = isOk readArithmeticContents "3"
-prop_a9 = isOk readArithmeticContents "a^!-b"
-prop_a10= isOk readArithmeticContents "! $?"
-prop_a11= isOk readArithmeticContents "10#08 * 16#f"
-prop_a12= isOk readArithmeticContents "\"$((3+2))\" + '37'"
-prop_a13= isOk readArithmeticContents "foo[9*y+x]++"
-prop_a14= isOk readArithmeticContents "1+`echo 2`"
-prop_a15= isOk readArithmeticContents "foo[`echo foo | sed s/foo/4/g` * 3] + 4"
-prop_a16= isOk readArithmeticContents "$foo$bar"
-prop_a17= isOk readArithmeticContents "i<(0+(1+1))"
-prop_a18= isOk readArithmeticContents "a?b:c"
-prop_a19= isOk readArithmeticContents "\\\n3 +\\\n  2"
-prop_a20= isOk readArithmeticContents "a ? b ? c : d : e"
-prop_a21= isOk readArithmeticContents "a ? b : c ? d : e"
-prop_a22= isOk readArithmeticContents "!!a"
-prop_a23= isOk readArithmeticContents "~0"
+-- |
+-- >>> prop $ isOk readArithmeticContents " n++ + ++c"
+-- >>> prop $ isOk readArithmeticContents "$N*4-(3,2)"
+-- >>> prop $ isOk readArithmeticContents "n|=2<<1"
+-- >>> prop $ isOk readArithmeticContents "n &= 2 **3"
+-- >>> prop $ isOk readArithmeticContents "1 |= 4 && n >>= 4"
+-- >>> prop $ isOk readArithmeticContents " 1 | 2 ||3|4"
+-- >>> prop $ isOk readArithmeticContents "3*2**10"
+-- >>> prop $ isOk readArithmeticContents "3"
+-- >>> prop $ isOk readArithmeticContents "a^!-b"
+-- >>> prop $ isOk readArithmeticContents "! $?"
+-- >>> prop $ isOk readArithmeticContents "10#08 * 16#f"
+-- >>> prop $ isOk readArithmeticContents "\"$((3+2))\" + '37'"
+-- >>> prop $ isOk readArithmeticContents "foo[9*y+x]++"
+-- >>> prop $ isOk readArithmeticContents "1+`echo 2`"
+-- >>> prop $ isOk readArithmeticContents "foo[`echo foo | sed s/foo/4/g` * 3] + 4"
+-- >>> prop $ isOk readArithmeticContents "$foo$bar"
+-- >>> prop $ isOk readArithmeticContents "i<(0+(1+1))"
+-- >>> prop $ isOk readArithmeticContents "a?b:c"
+-- >>> prop $ isOk readArithmeticContents "\\\n3 +\\\n  2"
+-- >>> prop $ isOk readArithmeticContents "a ? b ? c : d : e"
+-- >>> prop $ isOk readArithmeticContents "a ? b : c ? d : e"
+-- >>> prop $ isOk readArithmeticContents "!!a"
+-- >>> prop $ isOk readArithmeticContents "~0"
 readArithmeticContents :: Monad m => SCParser m Token
 readArithmeticContents =
     readSequence
@@ -876,33 +880,34 @@ readArithmeticContents =
 
 
 
-prop_readCondition   = isOk readCondition "[ \\( a = b \\) -a \\( c = d \\) ]"
-prop_readCondition2  = isOk readCondition "[[ (a = b) || (c = d) ]]"
-prop_readCondition3  = isOk readCondition "[[ $c = [[:alpha:].~-] ]]"
-prop_readCondition4  = isOk readCondition "[[ $c =~ *foo* ]]"
-prop_readCondition5  = isOk readCondition "[[ $c =~ f( ]] )* ]]"
-prop_readCondition5a = isOk readCondition "[[ $c =~ a(b) ]]"
-prop_readCondition5b = isOk readCondition "[[ $c =~ f( ($var ]]) )* ]]"
-prop_readCondition6  = isOk readCondition "[[ $c =~ ^[yY]$ ]]"
-prop_readCondition7  = isOk readCondition "[[ ${line} =~ ^[[:space:]]*# ]]"
-prop_readCondition8  = isOk readCondition "[[ $l =~ ogg|flac ]]"
-prop_readCondition9  = isOk readCondition "[ foo -a -f bar ]"
-prop_readCondition10 = isOk readCondition "[[\na == b\n||\nc == d ]]"
-prop_readCondition10a= isOk readCondition "[[\na == b  ||\nc == d ]]"
-prop_readCondition10b= isOk readCondition "[[ a == b\n||\nc == d ]]"
-prop_readCondition11 = isOk readCondition "[[ a == b ||\n c == d ]]"
-prop_readCondition12 = isWarning readCondition "[ a == b \n -o c == d ]"
-prop_readCondition13 = isOk readCondition "[[ foo =~ ^fo{1,3}$ ]]"
-prop_readCondition14 = isOk readCondition "[ foo '>' bar ]"
-prop_readCondition15 = isOk readCondition "[ foo \">=\" bar ]"
-prop_readCondition16 = isOk readCondition "[ foo \\< bar ]"
-prop_readCondition17 = isOk readCondition "[[ ${file::1} = [-.\\|/\\\\] ]]"
-prop_readCondition18 = isOk readCondition "[ ]"
-prop_readCondition19 = isOk readCondition "[ '(' x \")\" ]"
-prop_readCondition20 = isOk readCondition "[[ echo_rc -eq 0 ]]"
-prop_readCondition21 = isOk readCondition "[[ $1 =~ ^(a\\ b)$ ]]"
-prop_readCondition22 = isOk readCondition "[[ $1 =~ \\.a\\.(\\.b\\.)\\.c\\. ]]"
-prop_readCondition23 = isOk readCondition "[[ -v arr[$var] ]]"
+-- |
+-- >>> prop $ isOk readCondition "[ \\( a = b \\) -a \\( c = d \\) ]"
+-- >>> prop $ isOk readCondition "[[ (a = b) || (c = d) ]]"
+-- >>> prop $ isOk readCondition "[[ $c = [[:alpha:].~-] ]]"
+-- >>> prop $ isOk readCondition "[[ $c =~ *foo* ]]"
+-- >>> prop $ isOk readCondition "[[ $c =~ f( ]] )* ]]"
+-- >>> prop $ isOk readCondition "[[ $c =~ a(b) ]]"
+-- >>> prop $ isOk readCondition "[[ $c =~ f( ($var ]]) )* ]]"
+-- >>> prop $ isOk readCondition "[[ $c =~ ^[yY]$ ]]"
+-- >>> prop $ isOk readCondition "[[ ${line} =~ ^[[:space:]]*# ]]"
+-- >>> prop $ isOk readCondition "[[ $l =~ ogg|flac ]]"
+-- >>> prop $ isOk readCondition "[ foo -a -f bar ]"
+-- >>> prop $ isOk readCondition "[[\na == b\n||\nc == d ]]"
+-- >>> prop $ isOk readCondition "[[\na == b  ||\nc == d ]]"
+-- >>> prop $ isOk readCondition "[[ a == b\n||\nc == d ]]"
+-- >>> prop $ isOk readCondition "[[ a == b ||\n c == d ]]"
+-- >>> prop $ isWarning readCondition "[ a == b \n -o c == d ]"
+-- >>> prop $ isOk readCondition "[[ foo =~ ^fo{1,3}$ ]]"
+-- >>> prop $ isOk readCondition "[ foo '>' bar ]"
+-- >>> prop $ isOk readCondition "[ foo \">=\" bar ]"
+-- >>> prop $ isOk readCondition "[ foo \\< bar ]"
+-- >>> prop $ isOk readCondition "[[ ${file::1} = [-.\\|/\\\\] ]]"
+-- >>> prop $ isOk readCondition "[ ]"
+-- >>> prop $ isOk readCondition "[ '(' x \")\" ]"
+-- >>> prop $ isOk readCondition "[[ echo_rc -eq 0 ]]"
+-- >>> prop $ isOk readCondition "[[ $1 =~ ^(a\\ b)$ ]]"
+-- >>> prop $ isOk readCondition "[[ $1 =~ \\.a\\.(\\.b\\.)\\.c\\. ]]"
+-- >>> prop $ isOk readCondition "[[ -v arr[$var] ]]"
 readCondition = called "test expression" $ do
     opos <- getPosition
     start <- startSpan
@@ -940,12 +945,13 @@ readAnnotationPrefix = do
     many linewhitespace
     string "shellcheck"
 
-prop_readAnnotation1 = isOk readAnnotation "# shellcheck disable=1234,5678\n"
-prop_readAnnotation2 = isOk readAnnotation "# shellcheck disable=SC1234 disable=SC5678\n"
-prop_readAnnotation3 = isOk readAnnotation "# shellcheck disable=SC1234 source=/dev/null disable=SC5678\n"
-prop_readAnnotation4 = isWarning readAnnotation "# shellcheck cats=dogs disable=SC1234\n"
-prop_readAnnotation5 = isOk readAnnotation "# shellcheck disable=SC2002 # All cats are precious\n"
-prop_readAnnotation6 = isOk readAnnotation "# shellcheck disable=SC1234 # shellcheck foo=bar\n"
+-- |
+-- >>> prop $ isOk readAnnotation "# shellcheck disable=1234,5678\n"
+-- >>> prop $ isOk readAnnotation "# shellcheck disable=SC1234 disable=SC5678\n"
+-- >>> prop $ isOk readAnnotation "# shellcheck disable=SC1234 source=/dev/null disable=SC5678\n"
+-- >>> prop $ isWarning readAnnotation "# shellcheck cats=dogs disable=SC1234\n"
+-- >>> prop $ isOk readAnnotation "# shellcheck disable=SC2002 # All cats are precious\n"
+-- >>> prop $ isOk readAnnotation "# shellcheck disable=SC1234 # shellcheck foo=bar\n"
 readAnnotation = called "shellcheck directive" $ do
     try readAnnotationPrefix
     many1 linewhitespace
@@ -1002,18 +1008,19 @@ readAnyComment = do
     char '#'
     many $ noneOf "\r\n"
 
-prop_readNormalWord = isOk readNormalWord "'foo'\"bar\"{1..3}baz$(lol)"
-prop_readNormalWord2 = isOk readNormalWord "foo**(foo)!!!(@@(bar))"
-prop_readNormalWord3 = isOk readNormalWord "foo#"
-prop_readNormalWord4 = isOk readNormalWord "$\"foo\"$'foo\nbar'"
-prop_readNormalWord5 = isWarning readNormalWord "${foo}}"
-prop_readNormalWord6 = isOk readNormalWord "foo/{}"
-prop_readNormalWord7 = isOk readNormalWord "foo\\\nbar"
-prop_readNormalWord8 = isWarning readSubshell "(foo\\ \nbar)"
-prop_readNormalWord9 = isOk readSubshell "(foo\\ ;\nbar)"
-prop_readNormalWord10 = isWarning readNormalWord "\x201Chello\x201D"
-prop_readNormalWord11 = isWarning readNormalWord "\x2018hello\x2019"
-prop_readNormalWord12 = isWarning readNormalWord "hello\x2018"
+-- |
+-- >>> prop $ isOk readNormalWord "'foo'\"bar\"{1..3}baz$(lol)"
+-- >>> prop $ isOk readNormalWord "foo**(foo)!!!(@@(bar))"
+-- >>> prop $ isOk readNormalWord "foo#"
+-- >>> prop $ isOk readNormalWord "$\"foo\"$'foo\nbar'"
+-- >>> prop $ isWarning readNormalWord "${foo}}"
+-- >>> prop $ isOk readNormalWord "foo/{}"
+-- >>> prop $ isOk readNormalWord "foo\\\nbar"
+-- >>> prop $ isWarning readSubshell "(foo\\ \nbar)"
+-- >>> prop $ isOk readSubshell "(foo\\ ;\nbar)"
+-- >>> prop $ isWarning readNormalWord "\x201Chello\x201D"
+-- >>> prop $ isWarning readNormalWord "\x2018hello\x2019"
+-- >>> prop $ isWarning readNormalWord "hello\x2018"
 readNormalWord = readNormalishWord ""
 
 readNormalishWord end = do
@@ -1111,9 +1118,10 @@ readParamSubSpecialChar = do
     id <- endSpan start
     return $ T_ParamSubSpecialChar id x
 
-prop_readProcSub1 = isOk readProcSub "<(echo test | wc -l)"
-prop_readProcSub2 = isOk readProcSub "<(  if true; then true; fi )"
-prop_readProcSub3 = isOk readProcSub "<( # nothing here \n)"
+-- |
+-- >>> prop $ isOk readProcSub "<(echo test | wc -l)"
+-- >>> prop $ isOk readProcSub "<(  if true; then true; fi )"
+-- >>> prop $ isOk readProcSub "<( # nothing here \n)"
 readProcSub = called "process substitution" $ do
     start <- startSpan
     dir <- try $ do
@@ -1126,13 +1134,14 @@ readProcSub = called "process substitution" $ do
     id <- endSpan start
     return $ T_ProcSub id dir list
 
-prop_readSingleQuoted = isOk readSingleQuoted "'foo bar'"
-prop_readSingleQuoted2 = isWarning readSingleQuoted "'foo bar\\'"
-prop_readSingleQuoted4 = isWarning readNormalWord "'it's"
-prop_readSingleQuoted5 = isWarning readSimpleCommand "foo='bar\ncow 'arg"
-prop_readSingleQuoted6 = isOk readSimpleCommand "foo='bar cow 'arg"
-prop_readSingleQuoted7 = isOk readSingleQuoted "'foo\x201C\&bar'"
-prop_readSingleQuoted8 = isWarning readSingleQuoted "'foo\x2018\&bar'"
+-- |
+-- >>> prop $ isOk readSingleQuoted "'foo bar'"
+-- >>> prop $ isWarning readSingleQuoted "'foo bar\\'"
+-- >>> prop $ isWarning readNormalWord "'it's"
+-- >>> prop $ isWarning readSimpleCommand "foo='bar\ncow 'arg"
+-- >>> prop $ isOk readSimpleCommand "foo='bar cow 'arg"
+-- >>> prop $ isOk readSingleQuoted "'foo\x201C\&bar'"
+-- >>> prop $ isWarning readSingleQuoted "'foo\x2018\&bar'"
 readSingleQuoted = called "single quoted string" $ do
     start <- startSpan
     startPos <- getPosition
@@ -1174,14 +1183,15 @@ readSingleQuotedPart =
         return [x]
 
 
-prop_readBackTicked = isOk (readBackTicked False) "`ls *.mp3`"
-prop_readBackTicked2 = isOk (readBackTicked False) "`grep \"\\\"\"`"
-prop_readBackTicked3 = isWarning (readBackTicked False) "´grep \"\\\"\"´"
-prop_readBackTicked4 = isOk readSimpleCommand "`echo foo\necho bar`"
-prop_readBackTicked5 = isOk readSimpleCommand "echo `foo`bar"
-prop_readBackTicked6 = isWarning readSimpleCommand "echo `foo\necho `bar"
-prop_readBackTicked7 = isOk readSimpleCommand "`#inline comment`"
-prop_readBackTicked8 = isOk readSimpleCommand "echo `#comment` \\\nbar baz"
+-- |
+-- >>> prop $ isOk (readBackTicked False) "`ls *.mp3`"
+-- >>> prop $ isOk (readBackTicked False) "`grep \"\\\"\"`"
+-- >>> prop $ isWarning (readBackTicked False) "´grep \"\\\"\"´"
+-- >>> prop $ isOk readSimpleCommand "`echo foo\necho bar`"
+-- >>> prop $ isOk readSimpleCommand "echo `foo`bar"
+-- >>> prop $ isWarning readSimpleCommand "echo `foo\necho `bar"
+-- >>> prop $ isOk readSimpleCommand "`#inline comment`"
+-- >>> prop $ isOk readSimpleCommand "echo `#comment` \\\nbar baz"
 readQuotedBackTicked = readBackTicked True
 readUnquotedBackTicked = readBackTicked False
 readBackTicked quoted = called "backtick expansion" $ do
@@ -1247,15 +1257,16 @@ parseForgettingContext alsoOnSuccess parser = do
         Ms.put c
         fail ""
 
-prop_readDoubleQuoted = isOk readDoubleQuoted "\"Hello $FOO\""
-prop_readDoubleQuoted2 = isOk readDoubleQuoted "\"$'\""
-prop_readDoubleQuoted3 = isOk readDoubleQuoted "\"\x2018hello\x2019\""
-prop_readDoubleQuoted4 = isWarning readSimpleCommand "\"foo\nbar\"foo"
-prop_readDoubleQuoted5 = isOk readSimpleCommand "lol \"foo\nbar\" etc"
-prop_readDoubleQuoted6 = isOk readSimpleCommand "echo \"${ ls; }\""
-prop_readDoubleQuoted7 = isOk readSimpleCommand "echo \"${ ls;}bar\""
-prop_readDoubleQuoted8 = isWarning readDoubleQuoted "\"\x201Chello\x201D\""
-prop_readDoubleQuoted10 = isOk readDoubleQuoted "\"foo\\\\n\""
+-- |
+-- >>> prop $ isOk readDoubleQuoted "\"Hello $FOO\""
+-- >>> prop $ isOk readDoubleQuoted "\"$'\""
+-- >>> prop $ isOk readDoubleQuoted "\"\x2018hello\x2019\""
+-- >>> prop $ isWarning readSimpleCommand "\"foo\nbar\"foo"
+-- >>> prop $ isOk readSimpleCommand "lol \"foo\nbar\" etc"
+-- >>> prop $ isOk readSimpleCommand "echo \"${ ls; }\""
+-- >>> prop $ isOk readSimpleCommand "echo \"${ ls;}bar\""
+-- >>> prop $ isWarning readDoubleQuoted "\"\x201Chello\x201D\""
+-- >>> prop $ isOk readDoubleQuoted "\"foo\\\\n\""
 readDoubleQuoted = called "double quoted string" $ do
     start <- startSpan
     startPos <- getPosition
@@ -1308,14 +1319,15 @@ readNormalLiteral end = do
     id <- endSpan start
     return $ T_Literal id (concat s)
 
-prop_readGlob1 = isOk readGlob "*"
-prop_readGlob2 = isOk readGlob "[^0-9]"
-prop_readGlob3 = isOk readGlob "[a[:alpha:]]"
-prop_readGlob4 = isOk readGlob "[[:alnum:]]"
-prop_readGlob5 = isOk readGlob "[^[:alpha:]1-9]"
-prop_readGlob6 = isOk readGlob "[\\|]"
-prop_readGlob7 = isOk readGlob "[^[]"
-prop_readGlob8 = isOk readGlob "[*?]"
+-- |
+-- >>> prop $ isOk readGlob "*"
+-- >>> prop $ isOk readGlob "[^0-9]"
+-- >>> prop $ isOk readGlob "[a[:alpha:]]"
+-- >>> prop $ isOk readGlob "[[:alnum:]]"
+-- >>> prop $ isOk readGlob "[^[:alpha:]1-9]"
+-- >>> prop $ isOk readGlob "[\\|]"
+-- >>> prop $ isOk readGlob "[^[]"
+-- >>> prop $ isOk readGlob "[*?]"
 readGlob = readExtglob <|> readSimple <|> readClass <|> readGlobbyLiteral
     where
         readSimple = do
@@ -1383,13 +1395,14 @@ readNormalEscaped = called "escaped char" $ do
         parseProblemAt pos ErrorC 1101 "Delete trailing spaces after \\ to break line (or use quotes for literal space)."
 
 
-prop_readExtglob1 = isOk readExtglob "!(*.mp3)"
-prop_readExtglob2 = isOk readExtglob "!(*.mp3|*.wmv)"
-prop_readExtglob4 = isOk readExtglob "+(foo \\) bar)"
-prop_readExtglob5 = isOk readExtglob "+(!(foo *(bar)))"
-prop_readExtglob6 = isOk readExtglob "*(((||))|())"
-prop_readExtglob7 = isOk readExtglob "*(<>)"
-prop_readExtglob8 = isOk readExtglob "@(|*())"
+-- |
+-- >>> prop $ isOk readExtglob "!(*.mp3)"
+-- >>> prop $ isOk readExtglob "!(*.mp3|*.wmv)"
+-- >>> prop $ isOk readExtglob "+(foo \\) bar)"
+-- >>> prop $ isOk readExtglob "+(!(foo *(bar)))"
+-- >>> prop $ isOk readExtglob "*(((||))|())"
+-- >>> prop $ isOk readExtglob "*(<>)"
+-- >>> prop $ isOk readExtglob "@(|*())"
 readExtglob = called "extglob" $ do
     start <- startSpan
     c <- try $ do
@@ -1465,14 +1478,15 @@ readGenericEscaped = do
     x <- anyChar
     return $ if x == '\n' then [] else ['\\', x]
 
-prop_readBraced = isOk readBraced "{1..4}"
-prop_readBraced2 = isOk readBraced "{foo,bar,\"baz lol\"}"
-prop_readBraced3 = isOk readBraced "{1,\\},2}"
-prop_readBraced4 = isOk readBraced "{1,{2,3}}"
-prop_readBraced5 = isOk readBraced "{JP{,E}G,jp{,e}g}"
-prop_readBraced6 = isOk readBraced "{foo,bar,$((${var}))}"
-prop_readBraced7 = isNotOk readBraced "{}"
-prop_readBraced8 = isNotOk readBraced "{foo}"
+-- |
+-- >>> prop $ isOk readBraced "{1..4}"
+-- >>> prop $ isOk readBraced "{foo,bar,\"baz lol\"}"
+-- >>> prop $ isOk readBraced "{1,\\},2}"
+-- >>> prop $ isOk readBraced "{1,{2,3}}"
+-- >>> prop $ isOk readBraced "{JP{,E}G,jp{,e}g}"
+-- >>> prop $ isOk readBraced "{foo,bar,$((${var}))}"
+-- >>> prop $ isNotOk readBraced "{}"
+-- >>> prop $ isNotOk readBraced "{foo}"
 readBraced = try braceExpansion
   where
     braceExpansion =
@@ -1512,9 +1526,10 @@ readDoubleQuotedDollar = do
     readDollarExp <|> readDollarLonely
 
 
-prop_readDollarExpression1 = isOk readDollarExpression "$(((1) && 3))"
-prop_readDollarExpression2 = isWarning readDollarExpression "$(((1)) && 3)"
-prop_readDollarExpression3 = isWarning readDollarExpression "$((\"$@\" &); foo;)"
+-- |
+-- >>> prop $ isOk readDollarExpression "$(((1) && 3))"
+-- >>> prop $ isWarning readDollarExpression "$(((1)) && 3)"
+-- >>> prop $ isWarning readDollarExpression "$((\"$@\" &); foo;)"
 readDollarExpression :: Monad m => SCParser m Token
 readDollarExpression = do
     ensureDollar
@@ -1525,7 +1540,8 @@ readDollarExp = arithmetic <|> readDollarExpansion <|> readDollarBracket <|> rea
     arithmetic = readAmbiguous "$((" readDollarArithmetic readDollarExpansion (\pos ->
         parseNoteAt pos WarningC 1102 "Shells disambiguate $(( differently or not at all. For $(command substition), add space after $( . For $((arithmetics)), fix parsing errors.")
 
-prop_readDollarSingleQuote = isOk readDollarSingleQuote "$'foo\\\'lol'"
+-- |
+-- >>> prop $ isOk readDollarSingleQuote "$'foo\\\'lol'"
 readDollarSingleQuote = called "$'..' expression" $ do
     start <- startSpan
     try $ string "$'"
@@ -1534,7 +1550,8 @@ readDollarSingleQuote = called "$'..' expression" $ do
     id <- endSpan start
     return $ T_DollarSingleQuoted id str
 
-prop_readDollarDoubleQuote = isOk readDollarDoubleQuote "$\"hello\""
+-- |
+-- >>> prop $ isOk readDollarDoubleQuote "$\"hello\""
 readDollarDoubleQuote = do
     lookAhead . try $ string "$\""
     start <- startSpan
@@ -1545,8 +1562,9 @@ readDollarDoubleQuote = do
     id <- endSpan start
     return $ T_DollarDoubleQuoted id x
 
-prop_readDollarArithmetic = isOk readDollarArithmetic "$(( 3 * 4 +5))"
-prop_readDollarArithmetic2 = isOk readDollarArithmetic "$(((3*4)+(1*2+(3-1))))"
+-- |
+-- >>> prop $ isOk readDollarArithmetic "$(( 3 * 4 +5))"
+-- >>> prop $ isOk readDollarArithmetic "$(((3*4)+(1*2+(3-1))))"
 readDollarArithmetic = called "$((..)) expression" $ do
     start <- startSpan
     try (string "$((")
@@ -1565,7 +1583,8 @@ readDollarBracket = called "$[..] expression" $ do
     id <- endSpan start
     return (T_DollarBracket id c)
 
-prop_readArithmeticExpression = isOk readArithmeticExpression "((a?b:c))"
+-- |
+-- >>> prop $ isOk readArithmeticExpression "((a?b:c))"
 readArithmeticExpression = called "((..)) command" $ do
     start <- startSpan
     try (string "((")
@@ -1588,8 +1607,9 @@ readAmbiguous prefix expected alternative warner = do
         warner pos
         return t
 
-prop_readDollarBraceCommandExpansion1 = isOk readDollarBraceCommandExpansion "${ ls; }"
-prop_readDollarBraceCommandExpansion2 = isOk readDollarBraceCommandExpansion "${\nls\n}"
+-- |
+-- >>> prop $ isOk readDollarBraceCommandExpansion "${ ls; }"
+-- >>> prop $ isOk readDollarBraceCommandExpansion "${\nls\n}"
 readDollarBraceCommandExpansion = called "ksh ${ ..; } command expansion" $ do
     start <- startSpan
     try $ do
@@ -1601,10 +1621,11 @@ readDollarBraceCommandExpansion = called "ksh ${ ..; } command expansion" $ do
     id <- endSpan start
     return $ T_DollarBraceCommandExpansion id term
 
-prop_readDollarBraced1 = isOk readDollarBraced "${foo//bar/baz}"
-prop_readDollarBraced2 = isOk readDollarBraced "${foo/'{cow}'}"
-prop_readDollarBraced3 = isOk readDollarBraced "${foo%%$(echo cow\\})}"
-prop_readDollarBraced4 = isOk readDollarBraced "${foo#\\}}"
+-- |
+-- >>> prop $ isOk readDollarBraced "${foo//bar/baz}"
+-- >>> prop $ isOk readDollarBraced "${foo/'{cow}'}"
+-- >>> prop $ isOk readDollarBraced "${foo%%$(echo cow\\})}"
+-- >>> prop $ isOk readDollarBraced "${foo#\\}}"
 readDollarBraced = called "parameter expansion" $ do
     start <- startSpan
     try (string "${")
@@ -1613,9 +1634,10 @@ readDollarBraced = called "parameter expansion" $ do
     id <- endSpan start
     return $ T_DollarBraced id word
 
-prop_readDollarExpansion1= isOk readDollarExpansion "$(echo foo; ls\n)"
-prop_readDollarExpansion2= isOk readDollarExpansion "$(  )"
-prop_readDollarExpansion3= isOk readDollarExpansion "$( command \n#comment \n)"
+-- |
+-- >>> prop $ isOk readDollarExpansion "$(echo foo; ls\n)"
+-- >>> prop $ isOk readDollarExpansion "$(  )"
+-- >>> prop $ isOk readDollarExpansion "$( command \n#comment \n)"
 readDollarExpansion = called "command expansion" $ do
     start <- startSpan
     try (string "$(")
@@ -1624,12 +1646,12 @@ readDollarExpansion = called "command expansion" $ do
     id <- endSpan start
     return $ T_DollarExpansion id cmds
 
-prop_readDollarVariable = isOk readDollarVariable "$@"
-prop_readDollarVariable2 = isOk (readDollarVariable >> anyChar) "$?!"
-prop_readDollarVariable3 = isWarning (readDollarVariable >> anyChar) "$10"
-prop_readDollarVariable4 = isWarning (readDollarVariable >> string "[@]") "$arr[@]"
-prop_readDollarVariable5 = isWarning (readDollarVariable >> string "[f") "$arr[f"
-
+-- |
+-- >>> prop $ isOk readDollarVariable "$@"
+-- >>> prop $ isOk (readDollarVariable >> anyChar) "$?!"
+-- >>> prop $ isWarning (readDollarVariable >> anyChar) "$10"
+-- >>> prop $ isWarning (readDollarVariable >> string "[@]") "$arr[@]"
+-- >>> prop $ isWarning (readDollarVariable >> string "[f") "$arr[f"
 readDollarVariable :: Monad m => SCParser m Token
 readDollarVariable = do
     start <- startSpan
@@ -1678,25 +1700,26 @@ readDollarLonely = do
     n <- lookAhead (anyChar <|> (eof >> return '_'))
     return $ T_Literal id "$"
 
-prop_readHereDoc = isOk readScript "cat << foo\nlol\ncow\nfoo"
-prop_readHereDoc2 = isNotOk readScript "cat <<- EOF\n  cow\n  EOF"
-prop_readHereDoc3 = isOk readScript "cat << foo\n$\"\nfoo"
-prop_readHereDoc4 = isNotOk readScript "cat << foo\n`\nfoo"
-prop_readHereDoc5 = isOk readScript "cat <<- !foo\nbar\n!foo"
-prop_readHereDoc6 = isOk readScript "cat << foo\\ bar\ncow\nfoo bar"
-prop_readHereDoc7 = isOk readScript "cat << foo\n\\$(f ())\nfoo"
-prop_readHereDoc8 = isOk readScript "cat <<foo>>bar\netc\nfoo"
-prop_readHereDoc9 = isOk readScript "if true; then cat << foo; fi\nbar\nfoo\n"
-prop_readHereDoc10= isOk readScript "if true; then cat << foo << bar; fi\nfoo\nbar\n"
-prop_readHereDoc11= isOk readScript "cat << foo $(\nfoo\n)lol\nfoo\n"
-prop_readHereDoc12= isOk readScript "cat << foo|cat\nbar\nfoo"
-prop_readHereDoc13= isOk readScript "cat <<'#!'\nHello World\n#!\necho Done"
-prop_readHereDoc14= isWarning readScript "cat << foo\nbar\nfoo \n"
-prop_readHereDoc15= isWarning readScript "cat <<foo\nbar\nfoo bar\nfoo"
-prop_readHereDoc16= isOk readScript "cat <<- ' foo'\nbar\n foo\n"
-prop_readHereDoc17= isWarning readScript "cat <<- ' foo'\nbar\n  foo\n foo\n"
-prop_readHereDoc20= isWarning readScript "cat << foo\n  foo\n()\nfoo\n"
-prop_readHereDoc21= isOk readScript "# shellcheck disable=SC1039\ncat << foo\n  foo\n()\nfoo\n"
+-- |
+-- >>> prop $ isOk readScript "cat << foo\nlol\ncow\nfoo"
+-- >>> prop $ isNotOk readScript "cat <<- EOF\n  cow\n  EOF"
+-- >>> prop $ isOk readScript "cat << foo\n$\"\nfoo"
+-- >>> prop $ isNotOk readScript "cat << foo\n`\nfoo"
+-- >>> prop $ isOk readScript "cat <<- !foo\nbar\n!foo"
+-- >>> prop $ isOk readScript "cat << foo\\ bar\ncow\nfoo bar"
+-- >>> prop $ isOk readScript "cat << foo\n\\$(f ())\nfoo"
+-- >>> prop $ isOk readScript "cat <<foo>>bar\netc\nfoo"
+-- >>> prop $ isOk readScript "if true; then cat << foo; fi\nbar\nfoo\n"
+-- >>> prop $ isOk readScript "if true; then cat << foo << bar; fi\nfoo\nbar\n"
+-- >>> prop $ isOk readScript "cat << foo $(\nfoo\n)lol\nfoo\n"
+-- >>> prop $ isOk readScript "cat << foo|cat\nbar\nfoo"
+-- >>> prop $ isOk readScript "cat <<'#!'\nHello World\n#!\necho Done"
+-- >>> prop $ isWarning readScript "cat << foo\nbar\nfoo \n"
+-- >>> prop $ isWarning readScript "cat <<foo\nbar\nfoo bar\nfoo"
+-- >>> prop $ isOk readScript "cat <<- ' foo'\nbar\n foo\n"
+-- >>> prop $ isWarning readScript "cat <<- ' foo'\nbar\n  foo\n foo\n"
+-- >>> prop $ isWarning readScript "cat << foo\n  foo\n()\nfoo\n"
+-- >>> prop $ isOk readScript "# shellcheck disable=SC1039\ncat << foo\n  foo\n()\nfoo\n"
 readHereDoc = called "here document" $ do
     pos <- getPosition
     try $ string "<<"
@@ -1864,7 +1887,8 @@ readIoDuplicate = try $ do
         return $ str ++ dash
 
 
-prop_readIoFile = isOk readIoFile ">> \"$(date +%YYmmDD)\""
+-- |
+-- >>> prop $ isOk readIoFile ">> \"$(date +%YYmmDD)\""
 readIoFile = called "redirection" $ do
     start <- startSpan
     op <- readIoFileOp
@@ -1884,13 +1908,14 @@ readIoSource = try $ do
     lookAhead $ void readIoFileOp <|> void (string "<<")
     return x
 
-prop_readIoRedirect = isOk readIoRedirect "3>&2"
-prop_readIoRedirect2 = isOk readIoRedirect "2> lol"
-prop_readIoRedirect3 = isOk readIoRedirect "4>&-"
-prop_readIoRedirect4 = isOk readIoRedirect "&> lol"
-prop_readIoRedirect5 = isOk readIoRedirect "{foo}>&2"
-prop_readIoRedirect6 = isOk readIoRedirect "{foo}<&-"
-prop_readIoRedirect7 = isOk readIoRedirect "{foo}>&1-"
+-- |
+-- >>> prop $ isOk readIoRedirect "3>&2"
+-- >>> prop $ isOk readIoRedirect "2> lol"
+-- >>> prop $ isOk readIoRedirect "4>&-"
+-- >>> prop $ isOk readIoRedirect "&> lol"
+-- >>> prop $ isOk readIoRedirect "{foo}>&2"
+-- >>> prop $ isOk readIoRedirect "{foo}<&-"
+-- >>> prop $ isOk readIoRedirect "{foo}>&1-"
 readIoRedirect = do
     start <- startSpan
     n <- readIoSource
@@ -1902,7 +1927,8 @@ readIoRedirect = do
 
 readRedirectList = many1 readIoRedirect
 
-prop_readHereString = isOk readHereString "<<< \"Hello $world\""
+-- |
+-- >>> prop $ isOk readHereString "<<< \"Hello $world\""
 readHereString = called "here string" $ do
     start <- startSpan
     try $ string "<<<"
@@ -1921,11 +1947,12 @@ readNewlineList =
                     "Unexpected start of line. If breaking lines, |/||/&& should be at the end of the previous one."
 readLineBreak = optional readNewlineList
 
-prop_readSeparator1 = isWarning readScript "a &; b"
-prop_readSeparator2 = isOk readScript "a & b"
-prop_readSeparator3 = isWarning readScript "a &amp; b"
-prop_readSeparator4 = isWarning readScript "a &gt; file; b"
-prop_readSeparator5 = isWarning readScript "curl https://example.com/?foo=moo&bar=cow"
+-- |
+-- >>> prop $ isWarning readScript "a &; b"
+-- >>> prop $ isOk readScript "a & b"
+-- >>> prop $ isWarning readScript "a &amp; b"
+-- >>> prop $ isWarning readScript "a &gt; file; b"
+-- >>> prop $ isWarning readScript "curl https://example.com/?foo=moo&bar=cow"
 readSeparatorOp = do
     notFollowedBy2 (void g_AND_IF <|> void readCaseSeparator)
     notFollowedBy2 (string "&>")
@@ -1969,20 +1996,21 @@ readSeparator =
             end <- getPosition
             return ('\n', (start, end))
 
-prop_readSimpleCommand = isOk readSimpleCommand "echo test > file"
-prop_readSimpleCommand2 = isOk readSimpleCommand "cmd &> file"
-prop_readSimpleCommand3 = isOk readSimpleCommand "export foo=(bar baz)"
-prop_readSimpleCommand4 = isOk readSimpleCommand "typeset -a foo=(lol)"
-prop_readSimpleCommand5 = isOk readSimpleCommand "time if true; then echo foo; fi"
-prop_readSimpleCommand6 = isOk readSimpleCommand "time -p ( ls -l; )"
-prop_readSimpleCommand7 = isOk readSimpleCommand "\\ls"
-prop_readSimpleCommand8 = isWarning readSimpleCommand "// Lol"
-prop_readSimpleCommand9 = isWarning readSimpleCommand "/* Lolbert */"
-prop_readSimpleCommand10 = isWarning readSimpleCommand "/**** Lolbert */"
-prop_readSimpleCommand11 = isOk readSimpleCommand "/\\* foo"
-prop_readSimpleCommand12 = isWarning readSimpleCommand "elsif foo"
-prop_readSimpleCommand13 = isWarning readSimpleCommand "ElseIf foo"
-prop_readSimpleCommand14 = isWarning readSimpleCommand "elseif[$i==2]"
+-- |
+-- >>> prop $ isOk readSimpleCommand "echo test > file"
+-- >>> prop $ isOk readSimpleCommand "cmd &> file"
+-- >>> prop $ isOk readSimpleCommand "export foo=(bar baz)"
+-- >>> prop $ isOk readSimpleCommand "typeset -a foo=(lol)"
+-- >>> prop $ isOk readSimpleCommand "time if true; then echo foo; fi"
+-- >>> prop $ isOk readSimpleCommand "time -p ( ls -l; )"
+-- >>> prop $ isOk readSimpleCommand "\\ls"
+-- >>> prop $ isWarning readSimpleCommand "// Lol"
+-- >>> prop $ isWarning readSimpleCommand "/* Lolbert */"
+-- >>> prop $ isWarning readSimpleCommand "/**** Lolbert */"
+-- >>> prop $ isOk readSimpleCommand "/\\* foo"
+-- >>> prop $ isWarning readSimpleCommand "elsif foo"
+-- >>> prop $ isWarning readSimpleCommand "ElseIf foo"
+-- >>> prop $ isWarning readSimpleCommand "elseif[$i==2]"
 readSimpleCommand = called "simple command" $ do
     prefix <- option [] readCmdPrefix
     skipAnnotationAndWarn
@@ -2108,9 +2136,10 @@ readSource t@(T_Redirecting _ _ (T_SimpleCommand cmdId _ (cmd:file:_))) = do
 readSource t = return t
 
 
-prop_readPipeline = isOk readPipeline "! cat /etc/issue | grep -i ubuntu"
-prop_readPipeline2 = isWarning readPipeline "!cat /etc/issue | grep -i ubuntu"
-prop_readPipeline3 = isOk readPipeline "for f; do :; done|cat"
+-- |
+-- >>> prop $ isOk readPipeline "! cat /etc/issue | grep -i ubuntu"
+-- >>> prop $ isWarning readPipeline "!cat /etc/issue | grep -i ubuntu"
+-- >>> prop $ isOk readPipeline "for f; do :; done|cat"
 readPipeline = do
     unexpecting "keyword/token" readKeyword
     do
@@ -2120,9 +2149,10 @@ readPipeline = do
       <|>
         readPipeSequence
 
-prop_readAndOr = isOk readAndOr "grep -i lol foo || exit 1"
-prop_readAndOr1 = isOk readAndOr "# shellcheck disable=1\nfoo"
-prop_readAndOr2 = isOk readAndOr "# shellcheck disable=1\n# lol\n# shellcheck disable=3\nfoo"
+-- |
+-- >>> prop $ isOk readAndOr "grep -i lol foo || exit 1"
+-- >>> prop $ isOk readAndOr "# shellcheck disable=1\nfoo"
+-- >>> prop $ isOk readAndOr "# shellcheck disable=1\n# lol\n# shellcheck disable=3\nfoo"
 readAndOr = do
     start <- startSpan
     apos <- getPosition
@@ -2150,7 +2180,8 @@ readTermOrNone = do
         eof
         return []
 
-prop_readTerm = isOk readTerm "time ( foo; bar; )"
+-- |
+-- >>> prop $ isOk readTerm "time ( foo; bar; )"
 readTerm = do
     allspacing
     m <- readAndOr
@@ -2221,11 +2252,12 @@ skipAnnotationAndWarn = optional $ do
         parseProblem ErrorC 1126 "Place shellcheck directives before commands, not after."
         readAnyComment
 
-prop_readIfClause = isOk readIfClause "if false; then foo; elif true; then stuff; more stuff; else cows; fi"
-prop_readIfClause2 = isWarning readIfClause "if false; then; echo oo; fi"
-prop_readIfClause3 = isWarning readIfClause "if false; then true; else; echo lol; fi"
-prop_readIfClause4 = isWarning readIfClause "if false; then true; else if true; then echo lol; fi; fi"
-prop_readIfClause5 = isOk readIfClause "if false; then true; else\nif true; then echo lol; fi; fi"
+-- |
+-- >>> prop $ isOk readIfClause "if false; then foo; elif true; then stuff; more stuff; else cows; fi"
+-- >>> prop $ isWarning readIfClause "if false; then; echo oo; fi"
+-- >>> prop $ isWarning readIfClause "if false; then true; else; echo lol; fi"
+-- >>> prop $ isWarning readIfClause "if false; then true; else if true; then echo lol; fi; fi"
+-- >>> prop $ isOk readIfClause "if false; then true; else\nif true; then echo lol; fi; fi"
 readIfClause = called "if expression" $ do
     start <- startSpan
     pos <- getPosition
@@ -2300,7 +2332,8 @@ ifNextToken parser action =
         try . lookAhead $ parser
         action
 
-prop_readSubshell = isOk readSubshell "( cd /foo; tar cf stuff.tar * )"
+-- |
+-- >>> prop $ isOk readSubshell "( cd /foo; tar cf stuff.tar * )"
 readSubshell = called "explicit subshell" $ do
     start <- startSpan
     char '('
@@ -2311,9 +2344,10 @@ readSubshell = called "explicit subshell" $ do
     id <- endSpan start
     return $ T_Subshell id list
 
-prop_readBraceGroup = isOk readBraceGroup "{ a; b | c | d; e; }"
-prop_readBraceGroup2 = isWarning readBraceGroup "{foo;}"
-prop_readBraceGroup3 = isOk readBraceGroup "{(foo)}"
+-- |
+-- >>> prop $ isOk readBraceGroup "{ a; b | c | d; e; }"
+-- >>> prop $ isWarning readBraceGroup "{foo;}"
+-- >>> prop $ isOk readBraceGroup "{(foo)}"
 readBraceGroup = called "brace group" $ do
     start <- startSpan
     char '{'
@@ -2331,7 +2365,8 @@ readBraceGroup = called "brace group" $ do
     id <- endSpan start
     return $ T_BraceGroup id list
 
-prop_readWhileClause = isOk readWhileClause "while [[ -e foo ]]; do sleep 1; done"
+-- |
+-- >>> prop $ isOk readWhileClause "while [[ -e foo ]]; do sleep 1; done"
 readWhileClause = called "while loop" $ do
     start <- startSpan
     kwId <- getId <$> g_While
@@ -2340,7 +2375,8 @@ readWhileClause = called "while loop" $ do
     id <- endSpan start
     return $ T_WhileExpression id condition statements
 
-prop_readUntilClause = isOk readUntilClause "until kill -0 $PID; do sleep 1; done"
+-- |
+-- >>> prop $ isOk readUntilClause "until kill -0 $PID; do sleep 1; done"
 readUntilClause = called "until loop" $ do
     start <- startSpan
     kwId <- getId <$> g_Until
@@ -2373,17 +2409,18 @@ readDoGroup kwId = do
     return commands
 
 
-prop_readForClause = isOk readForClause "for f in *; do rm \"$f\"; done"
-prop_readForClause3 = isOk readForClause "for f; do foo; done"
-prop_readForClause4 = isOk readForClause "for((i=0; i<10; i++)); do echo $i; done"
-prop_readForClause5 = isOk readForClause "for ((i=0;i<10 && n>x;i++,--n))\ndo \necho $i\ndone"
-prop_readForClause6 = isOk readForClause "for ((;;))\ndo echo $i\ndone"
-prop_readForClause7 = isOk readForClause "for ((;;)) do echo $i\ndone"
-prop_readForClause8 = isOk readForClause "for ((;;)) ; do echo $i\ndone"
-prop_readForClause9 = isOk readForClause "for i do true; done"
-prop_readForClause10= isOk readForClause "for ((;;)) { true; }"
-prop_readForClause12= isWarning readForClause "for $a in *; do echo \"$a\"; done"
-prop_readForClause13= isOk readForClause "for foo\nin\\\n  bar\\\n  baz\ndo true; done"
+-- |
+-- >>> prop $ isOk readForClause "for f in *; do rm \"$f\"; done"
+-- >>> prop $ isOk readForClause "for f; do foo; done"
+-- >>> prop $ isOk readForClause "for((i=0; i<10; i++)); do echo $i; done"
+-- >>> prop $ isOk readForClause "for ((i=0;i<10 && n>x;i++,--n))\ndo \necho $i\ndone"
+-- >>> prop $ isOk readForClause "for ((;;))\ndo echo $i\ndone"
+-- >>> prop $ isOk readForClause "for ((;;)) do echo $i\ndone"
+-- >>> prop $ isOk readForClause "for ((;;)) ; do echo $i\ndone"
+-- >>> prop $ isOk readForClause "for i do true; done"
+-- >>> prop $ isOk readForClause "for ((;;)) { true; }"
+-- >>> prop $ isWarning readForClause "for $a in *; do echo \"$a\"; done"
+-- >>> prop $ isOk readForClause "for foo\nin\\\n  bar\\\n  baz\ndo true; done"
 readForClause = called "for loop" $ do
     pos <- getPosition
     (T_For id) <- g_For
@@ -2416,8 +2453,9 @@ readForClause = called "for loop" $ do
         group <- readDoGroup id
         return $ T_ForIn id name values group
 
-prop_readSelectClause1 = isOk readSelectClause "select foo in *; do echo $foo; done"
-prop_readSelectClause2 = isOk readSelectClause "select foo; do echo $foo; done"
+-- |
+-- >>> prop $ isOk readSelectClause "select foo in *; do echo $foo; done"
+-- >>> prop $ isOk readSelectClause "select foo; do echo $foo; done"
 readSelectClause = called "select loop" $ do
     (T_Select id) <- g_Select
     spacing
@@ -2446,11 +2484,12 @@ readInClause = do
 
     return things
 
-prop_readCaseClause = isOk readCaseClause "case foo in a ) lol; cow;; b|d) fooo; esac"
-prop_readCaseClause2 = isOk readCaseClause "case foo\n in * ) echo bar;; esac"
-prop_readCaseClause3 = isOk readCaseClause "case foo\n in * ) echo bar & ;; esac"
-prop_readCaseClause4 = isOk readCaseClause "case foo\n in *) echo bar ;& bar) foo; esac"
-prop_readCaseClause5 = isOk readCaseClause "case foo\n in *) echo bar;;& foo) baz;; esac"
+-- |
+-- >>> prop $ isOk readCaseClause "case foo in a ) lol; cow;; b|d) fooo; esac"
+-- >>> prop $ isOk readCaseClause "case foo\n in * ) echo bar;; esac"
+-- >>> prop $ isOk readCaseClause "case foo\n in * ) echo bar & ;; esac"
+-- >>> prop $ isOk readCaseClause "case foo\n in *) echo bar ;& bar) foo; esac"
+-- >>> prop $ isOk readCaseClause "case foo\n in *) echo bar;;& foo) baz;; esac"
 readCaseClause = called "case expression" $ do
     start <- startSpan
     g_Case
@@ -2494,18 +2533,19 @@ readCaseSeparator = choice [
     lookAhead (readLineBreak >> g_Esac) >> return CaseBreak
     ]
 
-prop_readFunctionDefinition = isOk readFunctionDefinition "foo() { command foo --lol \"$@\"; }"
-prop_readFunctionDefinition1 = isOk readFunctionDefinition "foo   (){ command foo --lol \"$@\"; }"
-prop_readFunctionDefinition4 = isWarning readFunctionDefinition "foo(a, b) { true; }"
-prop_readFunctionDefinition5 = isOk readFunctionDefinition ":(){ :|:;}"
-prop_readFunctionDefinition6 = isOk readFunctionDefinition "?(){ foo; }"
-prop_readFunctionDefinition7 = isOk readFunctionDefinition "..(){ cd ..; }"
-prop_readFunctionDefinition8 = isOk readFunctionDefinition "foo() (ls)"
-prop_readFunctionDefinition9 = isOk readFunctionDefinition "function foo { true; }"
-prop_readFunctionDefinition10= isOk readFunctionDefinition "function foo () { true; }"
-prop_readFunctionDefinition11= isWarning readFunctionDefinition "function foo{\ntrue\n}"
-prop_readFunctionDefinition12= isOk readFunctionDefinition "function []!() { true; }"
-prop_readFunctionDefinition13= isOk readFunctionDefinition "@require(){ true; }"
+-- |
+-- >>> prop $ isOk readFunctionDefinition "foo() { command foo --lol \"$@\"; }"
+-- >>> prop $ isOk readFunctionDefinition "foo   (){ command foo --lol \"$@\"; }"
+-- >>> prop $ isWarning readFunctionDefinition "foo(a, b) { true; }"
+-- >>> prop $ isOk readFunctionDefinition ":(){ :|:;}"
+-- >>> prop $ isOk readFunctionDefinition "?(){ foo; }"
+-- >>> prop $ isOk readFunctionDefinition "..(){ cd ..; }"
+-- >>> prop $ isOk readFunctionDefinition "foo() (ls)"
+-- >>> prop $ isOk readFunctionDefinition "function foo { true; }"
+-- >>> prop $ isOk readFunctionDefinition "function foo () { true; }"
+-- >>> prop $ isWarning readFunctionDefinition "function foo{\ntrue\n}"
+-- >>> prop $ isOk readFunctionDefinition "function []!() { true; }"
+-- >>> prop $ isOk readFunctionDefinition "@require(){ true; }"
 readFunctionDefinition = called "function" $ do
     start <- startSpan
     functionSignature <- try readFunctionSignature
@@ -2547,9 +2587,10 @@ readFunctionDefinition = called "function" $ do
                 g_Rparen
             return ()
 
-prop_readCoProc1 = isOk readCoProc "coproc foo { echo bar; }"
-prop_readCoProc2 = isOk readCoProc "coproc { echo bar; }"
-prop_readCoProc3 = isOk readCoProc "coproc echo bar"
+-- |
+-- >>> prop $ isOk readCoProc "coproc foo { echo bar; }"
+-- >>> prop $ isOk readCoProc "coproc { echo bar; }"
+-- >>> prop $ isOk readCoProc "coproc echo bar"
 readCoProc = called "coproc" $ do
     start <- startSpan
     try $ do
@@ -2576,7 +2617,8 @@ readCoProc = called "coproc" $ do
 
 readPattern = (readNormalWord `thenSkip` spacing) `sepBy1` (char '|' `thenSkip` spacing)
 
-prop_readCompoundCommand = isOk readCompoundCommand "{ echo foo; }>/dev/null"
+-- |
+-- >>> prop $ isOk readCompoundCommand "{ echo foo; }>/dev/null"
 readCompoundCommand = do
     cmd <- choice [
         readBraceGroup,
@@ -2668,24 +2710,26 @@ readLiteralForParser parser = do
     id <- endSpan start
     return $ T_Literal id str
 
-prop_readAssignmentWord = isOk readAssignmentWord "a=42"
-prop_readAssignmentWord2 = isOk readAssignmentWord "b=(1 2 3)"
-prop_readAssignmentWord3 = isWarning readAssignmentWord "$b = 13"
-prop_readAssignmentWord4 = isWarning readAssignmentWord "b = $(lol)"
-prop_readAssignmentWord5 = isOk readAssignmentWord "b+=lol"
-prop_readAssignmentWord6 = isWarning readAssignmentWord "b += (1 2 3)"
-prop_readAssignmentWord7 = isOk readAssignmentWord "a[3$n'']=42"
-prop_readAssignmentWord8 = isOk readAssignmentWord "a[4''$(cat foo)]=42"
-prop_readAssignmentWord9 = isOk readAssignmentWord "IFS= "
-prop_readAssignmentWord9a= isOk readAssignmentWord "foo="
-prop_readAssignmentWord9b= isOk readAssignmentWord "foo=  "
-prop_readAssignmentWord9c= isOk readAssignmentWord "foo=  #bar"
-prop_readAssignmentWord10= isWarning readAssignmentWord "foo$n=42"
-prop_readAssignmentWord11= isOk readAssignmentWord "foo=([a]=b [c] [d]= [e f )"
-prop_readAssignmentWord12= isOk readAssignmentWord "a[b <<= 3 + c]='thing'"
-prop_readAssignmentWord13= isOk readAssignmentWord "var=( (1 2) (3 4) )"
-prop_readAssignmentWord14= isOk readAssignmentWord "var=( 1 [2]=(3 4) )"
-prop_readAssignmentWord15= isOk readAssignmentWord "var=(1 [2]=(3 4))"
+-- |
+-- >>> prop $ isOk readAssignmentWord "a=42"
+-- >>> prop $ isOk readAssignmentWord "b=(1 2 3)"
+-- >>> prop $ isWarning readAssignmentWord "$b = 13"
+-- >>> prop $ isWarning readAssignmentWord "b = $(lol)"
+-- >>> prop $ isOk readAssignmentWord "b+=lol"
+-- >>> prop $ isWarning readAssignmentWord "b += (1 2 3)"
+-- >>> prop $ isOk readAssignmentWord "a[3$n'']=42"
+-- >>> prop $ isOk readAssignmentWord "a[4''$(cat foo)]=42"
+-- >>> prop $ isOk readAssignmentWord "IFS= "
+-- >>> prop $ isOk readAssignmentWord "foo="
+-- >>> prop $ isOk readAssignmentWord "foo=  "
+-- >>> prop $ isOk readAssignmentWord "foo=  #bar"
+-- >>> prop $ isWarning readAssignmentWord "foo$n=42"
+-- >>> prop $ isOk readAssignmentWord "foo=([a]=b [c] [d]= [e f )"
+-- >>> prop $ isOk readAssignmentWord "a[b <<= 3 + c]='thing'"
+-- >>> prop $ isOk readAssignmentWord "var=( (1 2) (3 4) )"
+-- >>> prop $ isOk readAssignmentWord "var=( 1 [2]=(3 4) )"
+-- >>> prop $ isOk readAssignmentWord "var=(1 [2]=(3 4))"
+
 readAssignmentWord = readAssignmentWordExt True
 readWellFormedAssignment = readAssignmentWordExt False
 readAssignmentWordExt lenient = try $ do
@@ -2879,13 +2923,14 @@ readKeyword = choice [ g_Then, g_Else, g_Elif, g_Fi, g_Do, g_Done, g_Esac, g_Rbr
 ifParse p t f =
     (lookAhead (try p) >> t) <|> f
 
-prop_readShebang1 = isOk readShebang "#!/bin/sh\n"
-prop_readShebang2 = isWarning readShebang "!# /bin/sh\n"
-prop_readShebang3 = isNotOk readShebang "#shellcheck shell=/bin/sh\n"
-prop_readShebang4 = isWarning readShebang "! /bin/sh"
-prop_readShebang5 = isWarning readShebang "\n#!/bin/sh"
-prop_readShebang6 = isWarning readShebang " # Copyright \n!#/bin/bash"
-prop_readShebang7 = isNotOk readShebang "# Copyright \nfoo\n#!/bin/bash"
+-- |
+-- >>> prop $ isOk readShebang "#!/bin/sh\n"
+-- >>> prop $ isWarning readShebang "!# /bin/sh\n"
+-- >>> prop $ isNotOk readShebang "#shellcheck shell=/bin/sh\n"
+-- >>> prop $ isWarning readShebang "! /bin/sh"
+-- >>> prop $ isWarning readShebang "\n#!/bin/sh"
+-- >>> prop $ isWarning readShebang " # Copyright \n!#/bin/bash"
+-- >>> prop $ isNotOk readShebang "# Copyright \nfoo\n#!/bin/bash"
 readShebang = do
     anyShebang <|> try readMissingBang <|> withHeader
     many linewhitespace
@@ -2968,11 +3013,12 @@ verifyEof = eof <|> choice [
         try (lookAhead p)
         action
 
-prop_readScript1 = isOk readScriptFile "#!/bin/bash\necho hello world\n"
-prop_readScript2 = isWarning readScriptFile "#!/bin/bash\r\necho hello world\n"
-prop_readScript3 = isWarning readScriptFile "#!/bin/bash\necho hello\xA0world"
-prop_readScript4 = isWarning readScriptFile "#!/usr/bin/perl\nfoo=("
-prop_readScript5 = isOk readScriptFile "#!/bin/bash\n#This is an empty script\n\n"
+-- |
+-- >>> prop $ isOk readScriptFile "#!/bin/bash\necho hello world\n"
+-- >>> prop $ isWarning readScriptFile "#!/bin/bash\r\necho hello world\n"
+-- >>> prop $ isWarning readScriptFile "#!/bin/bash\necho hello\xA0world"
+-- >>> prop $ isWarning readScriptFile "#!/usr/bin/perl\nfoo=("
+-- >>> prop $ isOk readScriptFile "#!/bin/bash\n#This is an empty script\n\n"
 readScriptFile = do
     start <- startSpan
     pos <- getPosition
@@ -3295,7 +3341,3 @@ tryWithErrors parser = do
         endInput <- getInput
         endState <- getState
         return (result, endPos, endInput, endState)
-
-return []
-runTests = $quickCheckAll
-

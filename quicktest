@@ -1,22 +1,21 @@
-#!/usr/bin/env bash
-# quicktest runs the ShellCheck unit tests in an interpreted mode.
-# This allows running tests without compiling, which can be faster.
+#!/bin/bash
+# shellcheck disable=SC2091
+
+# quicktest runs the ShellCheck unit tests.
+# Once `doctests` test executable is build, we can just run it
+# This allows running tests without compiling library, which is faster.
 # 'cabal test' remains the source of truth.
 
-(
- var=$(echo 'liftM and $ sequence [
-  ShellCheck.Analytics.runTests
-  ,ShellCheck.Parser.runTests
-  ,ShellCheck.Checker.runTests
-  ,ShellCheck.Checks.Commands.runTests
-  ,ShellCheck.Checks.ShellSupport.runTests
-  ,ShellCheck.AnalyzerLib.runTests
-    ]' | tr -d '\n' | cabal repl ShellCheck 2>&1 | tee /dev/stderr)
-if [[ $var == *$'\nTrue'* ]]
-then
-  exit 0
-else
-  grep -C 3 -e "Fail" -e "Tracing" <<< "$var"
-  exit 1
-fi
-) 2>&1
+$(find dist -type f -name doctests)
+
+# Note: if you have build the project with new-build
+#
+#   % cabal new-build -w ghc-8.4.3 --enable-tests
+#
+# and have cabal-plan installed (e.g. with cabal new-install cabal-plan),
+# then you can quicktest with
+#
+#   % $(cabal-plan list-bin doctests)
+#
+# Once the test executable exists, we can simply run it to perform doctests
+# which use GHCi under the hood.
