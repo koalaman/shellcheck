@@ -24,6 +24,7 @@ import ShellCheck.Interface
 import ShellCheck.Formatter.Format
 
 import Control.Monad
+import Data.Ord
 import Data.IORef
 import Data.List
 import Data.Maybe
@@ -156,16 +157,15 @@ fixedString :: PositionedComment -> [String] -> [String]
 fixedString comment fileLines =
     case (pcFix comment) of
     Nothing -> [""]
-    Just fix ->
-        let (start, end) = affectedRange (fixReplacements fix) in
-        -- applyReplacement returns the full update file, we really only care about the changed lines
-        -- so we calculate overlapping lines using replacements
-        drop start $ take end $ applyFix fix fileLines
-        where
-            affectedRange rs = _affectedRange rs 1 1
-            _affectedRange [] s e = (fromIntegral s, fromIntegral e)
-            _affectedRange (rep:xs) s e =
-                _affectedRange xs (min s (posLine (repStartPos rep))) (max e (posLine (repEndPos rep)))
+    Just fix -> case (fixReplacements fix) of
+        [] -> []
+        reps ->
+            -- applyReplacement returns the full update file, we really only care about the changed lines
+            -- so we calculate overlapping lines using replacements
+            drop start $ take end $ applyFix fix fileLines
+            where
+                start = (fromIntegral $ minimum $ map (posLine . repStartPos) reps) - 1
+                end = fromIntegral $ maximum $ map (posLine . repEndPos) reps
 
 cuteIndent :: PositionedComment -> String
 cuteIndent comment =
