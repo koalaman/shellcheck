@@ -180,7 +180,7 @@ data Position = Position {
     posFile :: String,    -- Filename
     posLine :: Integer,   -- 1 based source line
     posColumn :: Integer  -- 1 based source column, where tabs are 8
-} deriving (Show, Eq, Generic, NFData)
+} deriving (Show, Eq, Generic, NFData, Ord)
 
 newPosition :: Position
 newPosition = Position {
@@ -208,6 +208,9 @@ data Replacement = Replacement {
     repEndPos :: Position,
     repString :: String
 } deriving (Show, Eq, Generic, NFData)
+
+instance Ord Replacement where
+    compare r1 r2 = (repStartPos r1) `compare` (repStartPos r2)
 
 newReplacement = Replacement {
     repStartPos = newPosition,

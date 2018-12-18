@@ -19,10 +19,12 @@
 -}
 module ShellCheck.Formatter.TTY (format) where
 
+import ShellCheck.Fixer
 import ShellCheck.Interface
 import ShellCheck.Formatter.Format
 
 import Control.Monad
+import Data.Ord
 import Data.IORef
 import Data.List
 import Data.Maybe
@@ -130,7 +132,7 @@ outputForFile color sys comments = do
         putStrLn (color "source" line)
         mapM_ (\c -> putStrLn (color (severityText c) $ cuteIndent c)) commentsForLine
         putStrLn ""
-        showFixedString color comments lineNum line
+        showFixedString color comments lineNum fileLines
       ) groups
 
 hasApplicableFix lineNum comment = fromMaybe False $ do
@@ -141,47 +143,29 @@ hasApplicableFix lineNum comment = fromMaybe False $ do
     onSameLine pos = posLine pos == lineNum
 
 -- FIXME: Work correctly with multiple replacements
-showFixedString color comments lineNum line =
+showFixedString color comments lineNum fileLines =
+    let line = fileLines !! fromIntegral (lineNum - 1) in
+    -- need to check overlaps
     case filter (hasApplicableFix lineNum) comments of
         (first:_) -> do
             -- in the spirit of error prone
             putStrLn $ color "message" "Did you mean: "
-            putStrLn $ fixedString first line
-            putStrLn ""
+            putStrLn $ unlines $ fixedString first fileLines
         _ -> return ()
 
--- need to do something smart about sorting by end index
-fixedString :: PositionedComment -> String -> String
-fixedString comment line =
+fixedString :: PositionedComment -> [String] -> [String]
+fixedString comment fileLines =
     case (pcFix comment) of
-    Nothing -> ""
-    Just rs ->
-        applyReplacement (fixReplacements rs) line 0
-        where
-            applyReplacement [] s _ = s
-            applyReplacement (rep:xs) s offset =
-                let replacementString = repString rep
-                    start = (posColumn . repStartPos) rep
-                    end = (posColumn . repEndPos) rep
-                    z = doReplace start end s replacementString
-                    len_r = (fromIntegral . length) replacementString in
-                applyReplacement xs z (offset + (end - start) + len_r)
-
--- FIXME: Work correctly with tabs
--- start and end comes from pos, which is 1 based
--- doReplace 0 0 "1234" "A" -> "A1234" -- technically not valid
--- doReplace 1 1 "1234" "A" -> "A1234"
--- doReplace 1 2 "1234" "A" -> "A234"
--- doReplace 3 3 "1234" "A" -> "12A34"
--- doReplace 4 4 "1234" "A" -> "123A4"
--- doReplace 5 5 "1234" "A" -> "1234A"
-doReplace start end o r =
-    let si = fromIntegral (start-1)
-        ei = fromIntegral (end-1)
-        (x, xs) = splitAt si o
-        (y, z) = splitAt (ei - si) xs
-    in
-    x ++ r ++ z
+    Nothing -> [""]
+    Just fix -> case (fixReplacements fix) of
+        [] -> []
+        reps ->
+            -- applyReplacement returns the full update file, we really only care about the changed lines
+            -- so we calculate overlapping lines using replacements
+            drop start $ take end $ applyFix fix fileLines
+            where
+                start = (fromIntegral $ minimum $ map (posLine . repStartPos) reps) - 1
+                end = fromIntegral $ maximum $ map (posLine . repEndPos) reps
 
 cuteIndent :: PositionedComment -> String
 cuteIndent comment =

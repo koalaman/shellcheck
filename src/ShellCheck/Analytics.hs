@@ -256,15 +256,13 @@ replaceStart id params n r =
         repString = r
     }
 replaceEnd id params n r =
-    -- because of the way we count columns 1-based
-    -- we have to offset end columns by 1
     let tp = tokenPositions params
         (_, end) = tp Map.! id
         new_start = end {
-            posColumn = posColumn end - n + 1
+            posColumn = posColumn end - n
         }
         new_end = end {
-            posColumn = posColumn end + 1
+            posColumn = posColumn end
         }
     in
     newReplacement {
