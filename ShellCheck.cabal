@@ -73,6 +73,7 @@ library
       ShellCheck.Checks.Commands
       ShellCheck.Checks.ShellSupport
       ShellCheck.Data
+      ShellCheck.Fixer
       ShellCheck.Formatter.Format
       ShellCheck.Formatter.CheckStyle
       ShellCheck.Formatter.GCC
