@@ -30,7 +30,7 @@ import Text.Regex.TDFA
 -- Precompile the regex
 mkRegex :: String -> Regex
 mkRegex str =
-    let make :: RegexMaker Regex CompOption ExecOption String => String -> Regex
+    let make :: String -> Regex
         make = makeRegex
     in
         make str
