@@ -14,18 +14,9 @@ applyFix fix fileLines =
         -- prereq: list is already sorted by start position
         removeOverlap [] = []
         removeOverlap (x:xs) = checkoverlap x xs
-        checkoverlap :: Replacement -> [Replacement] -> [Replacement]
         checkoverlap x [] = x:[]
         checkoverlap x (y:ys) =
             if overlap x y then x:(removeOverlap ys) else x:y:(removeOverlap ys)
-        -- two position overlaps when
-        overlap x y =
-            (yStart >= xStart && yStart < xEnd) || (yStart < xStart && yEnd > xStart)
-            where
-                yStart = repStartPos y
-                yEnd = repEndPos y
-                xStart = repStartPos x
-                xEnd = repEndPos x
 
 
 -- A replacement that spans multiple line is applied by:

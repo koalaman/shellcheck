@@ -54,13 +54,17 @@ module ShellCheck.Interface
     , newFix
     , Replacement(repStartPos, repEndPos, repString)
     , newReplacement
+    , Ranged(overlap)
     ) where
 
 import ShellCheck.AST
 
 import Control.DeepSeq
 import Control.Monad.Identity
+import Data.List
 import Data.Monoid
+import Data.Ord
+import Data.Semigroup
 import GHC.Generics (Generic)
 import qualified Data.Map as Map
 
@@ -270,3 +274,36 @@ mockedSystemInterface files = SystemInterface {
             [] -> return $ Left "File not included in mock."
             [(_, contents)] -> return $ Right contents
 
+-- The Ranged class is used for types that has a start and end position.
+class Ranged a where
+    start   :: a -> Position
+    end     :: a -> Position
+    overlap :: a -> a -> Bool
+    overlap x y =
+        (yStart >= xStart && yStart < xEnd) || (yStart < xStart && yEnd > xStart)
+        where
+            yStart = start y
+            yEnd = end y
+            xStart = start x
+            xEnd = end x
+
+instance Ranged Replacement where
+    start = repStartPos
+    end   = repEndPos
+
+instance Ranged a => Ranged [a] where
+    start [] = newPosition
+    start xs = (minimum . map start) xs
+    end []   = newPosition
+    end xs   = (maximum . map end) xs
+
+instance Ranged Fix where
+    start = start . fixReplacements
+    end   = end . fixReplacements
+
+-- The Monoid instance for Fix merges replacements that do not overlap.
+instance Monoid Fix where
+    mempty = newFix
+    f1 `mappend` f2 = if overlap f1 f2 then f1 else newFix {
+            fixReplacements = fixReplacements f1 ++ fixReplacements f2
+        }

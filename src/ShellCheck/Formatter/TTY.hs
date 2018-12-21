@@ -24,6 +24,7 @@ import ShellCheck.Interface
 import ShellCheck.Formatter.Format
 
 import Control.Monad
+import Data.Foldable
 import Data.Ord
 import Data.IORef
 import Data.List
@@ -147,17 +148,19 @@ showFixedString color comments lineNum fileLines =
     let line = fileLines !! fromIntegral (lineNum - 1) in
     -- need to check overlaps
     case filter (hasApplicableFix lineNum) comments of
-        (first:_) -> do
+        [] -> return ()
+        -- all the fixes are single-line only, but there could be multiple
+        -- fixes for that single line. We can fold the fixes (which removes
+        -- overlaps), and apply it as a single fix with multiple replacements.
+        applicableComments -> do
+            let mergedFix = (fold . catMaybes . (map pcFix)) applicableComments
             -- in the spirit of error prone
             putStrLn $ color "message" "Did you mean: "
-            putStrLn $ unlines $ fixedString first fileLines
-        _ -> return ()
+            putStrLn $ unlines $ fixedString mergedFix fileLines
 
-fixedString :: PositionedComment -> [String] -> [String]
-fixedString comment fileLines =
-    case (pcFix comment) of
-    Nothing -> [""]
-    Just fix -> case (fixReplacements fix) of
+fixedString :: Fix -> [String] -> [String]
+fixedString fix fileLines =
+    case (fixReplacements fix) of
         [] -> []
         reps ->
             -- applyReplacement returns the full update file, we really only care about the changed lines
