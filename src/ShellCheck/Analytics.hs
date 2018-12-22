@@ -170,6 +170,7 @@ nodeChecks = [
     ,checkSubshelledTests
     ,checkInvertedStringTest
     ,checkRedirectionToCommand
+    ,checkNullaryExpansionTest
     ]
 
 
@@ -3094,6 +3095,22 @@ checkRedirectionToCommand _ t =
         T_IoFile _ _ (T_NormalWord id [T_Literal _ str]) | str `elem` commonCommands ->
             unless (str == "file") $ -- This would be confusing
                 warn id 2238 "Redirecting to/from command name instead of file. Did you want pipes/xargs (or quote to ignore)?"
+        _ -> return ()
+
+prop_checkNullaryExpansionTest1 = verify checkNullaryExpansionTest "[[ $(a) ]]"
+prop_checkNullaryExpansionTest2 = verify checkNullaryExpansionTest "[[ $a ]]"
+prop_checkNullaryExpansionTest3 = verifyNot checkNullaryExpansionTest "[[ $a=1 ]]"
+prop_checkNullaryExpansionTest4 = verifyNot checkNullaryExpansionTest "[[ -n $(a) ]]"
+checkNullaryExpansionTest _ t =
+    case t of
+        TC_Nullary _ _ (T_NormalWord id [T_DollarExpansion _ [T_Pipeline _ [] [x]]]) ->
+            when (isJust (getCommand x)) $
+                style id 2243 (
+                "To check for the exit code of a command, remove the conditional expression, e.g. if foo; ...")
+        TC_Nullary _ _ (T_NormalWord id [t2]) ->
+                when ((not . isConstant) t2) $
+                    style id 2244 (
+                    "Use -n to check for null string, e.g. [[ -n $var ]].")
         _ -> return ()
 
 return []
