@@ -2,6 +2,7 @@ module ShellCheck.Fixer (applyFix , replaceMultiLines, Ranged(..)) where
 
 import ShellCheck.Interface
 import Data.List
+import Data.Semigroup
 
 -- The Ranged class is used for types that has a start and end position.
 class Ranged a where
@@ -33,6 +34,7 @@ instance Ranged Fix where
 -- The Monoid instance for Fix merges replacements that do not overlap.
 instance Monoid Fix where
     mempty = newFix
+    mappend = (<>)
 
 instance Semigroup Fix where
     f1 <> f2 = if overlap f1 f2 then f1 else newFix {
