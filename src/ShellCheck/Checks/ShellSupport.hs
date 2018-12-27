@@ -136,6 +136,8 @@ prop_checkBashisms53= verifyNot checkBashisms "#!/bin/sh\nprintf -- -f\n"
 prop_checkBashisms54= verify checkBashisms "#!/bin/sh\nfoo+=bar"
 prop_checkBashisms55= verify checkBashisms "#!/bin/sh\necho ${@%foo}"
 prop_checkBashisms56= verifyNot checkBashisms "#!/bin/sh\necho ${##}"
+prop_checkBashisms57= verifyNot checkBashisms "#!/bin/dash\nulimit -c 0"
+prop_checkBashisms58= verify checkBashisms "#!/bin/sh\nulimit -c 0"
 checkBashisms = ForShell [Sh, Dash] $ \t -> do
     params <- ask
     kludge params t
@@ -283,7 +285,7 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
             ("export", ["-p"]),
             ("printf", []),
             ("read", if isDash then ["r", "p"] else ["r"]),
-            ("ulimit", ["f"])
+            ("ulimit", if isDash then ["H", "S", "t", "f", "d", "s", "c", "m", "l", "p", "n"] else ["f"])
             ]
     bashism t@(T_SourceCommand id src _) =
         let name = fromMaybe "" $ getCommandName src
