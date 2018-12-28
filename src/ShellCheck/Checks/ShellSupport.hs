@@ -141,6 +141,8 @@ prop_checkBashisms58= verify checkBashisms "#!/bin/sh\nulimit -c 0"
 prop_checkBashisms59 = verify checkBashisms "#!/bin/sh\njobs -s"
 prop_checkBashisms60 = verifyNot checkBashisms "#!/bin/sh\njobs -p"
 prop_checkBashisms61 = verifyNot checkBashisms "#!/bin/sh\njobs -lp"
+prop_checkBashisms62 = verify checkBashisms "#!/bin/sh\nexport -f foo"
+prop_checkBashisms63 = verifyNot checkBashisms "#!/bin/sh\nexport -p"
 
 checkBashisms = ForShell [Sh, Dash] $ \t -> do
     params <- ask
@@ -286,7 +288,7 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
             ] ++ if not isDash then ["local"] else []
         allowedFlags = Map.fromList [
             ("exec", []),
-            ("export", ["-p"]),
+            ("export", ["p"]),
             ("jobs", ["l", "p"]),
             ("printf", []),
             ("read", if isDash then ["r", "p"] else ["r"]),
