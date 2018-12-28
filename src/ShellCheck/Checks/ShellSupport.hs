@@ -138,6 +138,10 @@ prop_checkBashisms55= verify checkBashisms "#!/bin/sh\necho ${@%foo}"
 prop_checkBashisms56= verifyNot checkBashisms "#!/bin/sh\necho ${##}"
 prop_checkBashisms57= verifyNot checkBashisms "#!/bin/dash\nulimit -c 0"
 prop_checkBashisms58= verify checkBashisms "#!/bin/sh\nulimit -c 0"
+prop_checkBashisms59 = verify checkBashisms "#!/bin/sh\njobs -s"
+prop_checkBashisms60 = verifyNot checkBashisms "#!/bin/sh\njobs -p"
+prop_checkBashisms61 = verifyNot checkBashisms "#!/bin/sh\njobs -lp"
+
 checkBashisms = ForShell [Sh, Dash] $ \t -> do
     params <- ask
     kludge params t
@@ -283,6 +287,7 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
         allowedFlags = Map.fromList [
             ("exec", []),
             ("export", ["-p"]),
+            ("jobs", ["l", "p"]),
             ("printf", []),
             ("read", if isDash then ["r", "p"] else ["r"]),
             ("ulimit", if isDash then ["H", "S", "t", "f", "d", "s", "c", "m", "l", "p", "n"] else ["f"])
