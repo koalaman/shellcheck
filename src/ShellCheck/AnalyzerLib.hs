@@ -155,11 +155,14 @@ err   id code str = addComment $ makeComment ErrorC id code str
 info  id code str = addComment $ makeComment InfoC id code str
 style id code str = addComment $ makeComment StyleC id code str
 
-warnWithFix id code str fix = addComment $
-    let comment = makeComment WarningC id code str in
-    comment {
-        tcFix = Just fix
-    }
+warnWithFix :: MonadWriter [TokenComment] m => Id -> Code -> String -> Fix -> m ()
+warnWithFix  = addCommentWithFix WarningC
+styleWithFix :: MonadWriter [TokenComment] m => Id -> Code -> String -> Fix -> m ()
+styleWithFix = addCommentWithFix StyleC
+
+addCommentWithFix :: MonadWriter [TokenComment] m => Severity -> Id -> Code -> String -> Fix -> m ()
+addCommentWithFix severity id code str fix =
+    addComment $ makeCommentWithFix severity id code str fix
 
 makeCommentWithFix :: Severity -> Id -> Code -> String -> Fix -> TokenComment
 makeCommentWithFix severity id code str fix =

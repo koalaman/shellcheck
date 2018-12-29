@@ -170,6 +170,7 @@ nodeChecks = [
     ,checkSubshelledTests
     ,checkInvertedStringTest
     ,checkRedirectionToCommand
+    ,checkNullaryExpansionTest
     ]
 
 
@@ -3094,6 +3095,28 @@ checkRedirectionToCommand _ t =
         T_IoFile _ _ (T_NormalWord id [T_Literal _ str]) | str `elem` commonCommands ->
             unless (str == "file") $ -- This would be confusing
                 warn id 2238 "Redirecting to/from command name instead of file. Did you want pipes/xargs (or quote to ignore)?"
+        _ -> return ()
+
+prop_checkNullaryExpansionTest1 = verify checkNullaryExpansionTest "[[ $(a) ]]"
+prop_checkNullaryExpansionTest2 = verify checkNullaryExpansionTest "[[ $a ]]"
+prop_checkNullaryExpansionTest3 = verifyNot checkNullaryExpansionTest "[[ $a=1 ]]"
+prop_checkNullaryExpansionTest4 = verifyNot checkNullaryExpansionTest "[[ -n $(a) ]]"
+prop_checkNullaryExpansionTest5 = verify checkNullaryExpansionTest "[[ \"$a$b\" ]]"
+prop_checkNullaryExpansionTest6 = verify checkNullaryExpansionTest "[[ `x` ]]"
+checkNullaryExpansionTest params t =
+    case t of
+        TC_Nullary _ _ word ->
+            case getWordParts word of
+                [t] | isCommandSubstitution t ->
+                    styleWithFix id 2243 "Prefer explicit -n to check for output (or run command without [/[[ to check for success)." fix
+
+                -- If they're constant, you get SC2157 &co
+                x | all (not . isConstant) x ->
+                    styleWithFix id 2244 "Prefer explicit -n to check non-empty string (or use =/-ne to check boolean/integer)." fix
+                _ -> return ()
+            where
+                id = getId word
+                fix = fixWith [replaceStart id params 0 "-n "]
         _ -> return ()
 
 return []
