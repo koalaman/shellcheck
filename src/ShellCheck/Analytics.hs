@@ -3101,16 +3101,22 @@ prop_checkNullaryExpansionTest1 = verify checkNullaryExpansionTest "[[ $(a) ]]"
 prop_checkNullaryExpansionTest2 = verify checkNullaryExpansionTest "[[ $a ]]"
 prop_checkNullaryExpansionTest3 = verifyNot checkNullaryExpansionTest "[[ $a=1 ]]"
 prop_checkNullaryExpansionTest4 = verifyNot checkNullaryExpansionTest "[[ -n $(a) ]]"
-checkNullaryExpansionTest _ t =
+prop_checkNullaryExpansionTest5 = verify checkNullaryExpansionTest "[[ \"$a$b\" ]]"
+prop_checkNullaryExpansionTest6 = verify checkNullaryExpansionTest "[[ `x` ]]"
+checkNullaryExpansionTest params t =
     case t of
-        TC_Nullary _ _ (T_NormalWord id [T_DollarExpansion _ [T_Pipeline _ [] [x]]]) ->
-            when (isJust (getCommand x)) $
-                style id 2243 (
-                "To check for the exit code of a command, remove the conditional expression, e.g. if foo; ...")
-        TC_Nullary _ _ (T_NormalWord id [t2]) ->
-                when ((not . isConstant) t2) $
-                    style id 2244 (
-                    "Use -n to check for null string, e.g. [[ -n $var ]].")
+        TC_Nullary _ _ word ->
+            case getWordParts word of
+                [t] | isCommandSubstitution t ->
+                    styleWithFix id 2243 "Prefer explicit -n to check for output (or run command without [/[[ to check for success)." fix
+
+                -- If they're constant, you get SC2157 &co
+                x | all (not . isConstant) x ->
+                    styleWithFix id 2244 "Prefer explicit -n to check non-empty string (or use =/-ne to check boolean/integer)." fix
+                _ -> return ()
+            where
+                id = getId word
+                fix = fixWith [replaceStart id params 0 "-n "]
         _ -> return ()
 
 return []

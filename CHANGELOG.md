@@ -1,6 +1,7 @@
 ## Since previous release
 ### Added
 - Preliminary support for fix suggestions
+- SC2243/SC2244: Suggest using explicit -n for `[ $foo ]`
 
 ## v0.6.0 - 2018-12-02
 ### Added

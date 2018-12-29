@@ -485,8 +485,11 @@ wordsCanBeEqual x y = fromMaybe True $
 -- Is this an expansion that can be quoted,
 -- e.g. $(foo) `foo` $foo (but not {foo,})?
 isQuoteableExpansion t = case t of
+    T_DollarBraced {} -> True
+    _ -> isCommandSubstitution t
+
+isCommandSubstitution t = case t of
     T_DollarExpansion {} -> True
     T_DollarBraceCommandExpansion {} -> True
     T_Backticked {} -> True
-    T_DollarBraced {} -> True
     _ -> False
