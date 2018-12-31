@@ -325,30 +325,44 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
                 _ -> False
 
 prop_checkEchoSed1 = verify checkEchoSed "FOO=$(echo \"$cow\" | sed 's/foo/bar/g')"
+prop_checkEchoSed1b= verify checkEchoSed "FOO=$(sed 's/foo/bar/g' <<< \"$cow\")"
 prop_checkEchoSed2 = verify checkEchoSed "rm $(echo $cow | sed -e 's,foo,bar,')"
+prop_checkEchoSed2b= verify checkEchoSed "rm $(sed -e 's,foo,bar,' <<< $cow)"
 checkEchoSed = ForShell [Bash, Ksh] f
   where
+    f (T_Redirecting id lefts r) =
+        when (any redirectHereString lefts) $
+            checkSed id rcmd
+      where
+        redirectHereString :: Token -> Bool
+        redirectHereString t = case t of
+            (T_FdRedirect _ _ T_HereString{}) -> True
+            _                                 -> False
+        rcmd = oversimplify r
+
     f (T_Pipeline id _ [a, b]) =
         when (acmd == ["echo", "${VAR}"]) $
-            case bcmd of
-                ["sed", v] -> checkIn v
-                ["sed", "-e", v] -> checkIn v
-                _ -> return ()
+            checkSed id bcmd
       where
-        -- This should have used backreferences, but TDFA doesn't support them
-        sedRe = mkRegex "^s(.)([^\n]*)g?$"
-        isSimpleSed s = fromMaybe False $ do
-            [first,rest] <- matchRegex sedRe s
-            let delimiters = filter (== head first) rest
-            guard $ length delimiters == 2
-            return True
-
         acmd = oversimplify a
         bcmd = oversimplify b
-        checkIn s =
-            when (isSimpleSed s) $
-                style id 2001 "See if you can use ${variable//search/replace} instead."
+
     f _ = return ()
+
+    checkSed id ["sed", v]       = checkIn id v
+    checkSed id ["sed", "-e", v] = checkIn id v
+    checkSed _ _                 = return ()
+
+    -- This should have used backreferences, but TDFA doesn't support them
+    sedRe = mkRegex "^s(.)([^\n]*)g?$"
+    isSimpleSed s = fromMaybe False $ do
+        [first,rest] <- matchRegex sedRe s
+        let delimiters = filter (== head first) rest
+        guard $ length delimiters == 2
+        return True
+    checkIn id s =
+        when (isSimpleSed s) $
+            style id 2001 "See if you can use ${variable//search/replace} instead."
 
 
 prop_checkBraceExpansionVars1 = verify checkBraceExpansionVars "echo {1..$n}"
