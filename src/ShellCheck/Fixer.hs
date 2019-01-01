@@ -16,20 +16,38 @@ class Ranged a where
             yEnd = end y
             xStart = start x
             xEnd = end x
+    -- Set a new start and end position on a Ranged
+    setRange :: (Position, Position) -> a -> a
+
+instance Ranged PositionedComment where
+    start = pcStartPos
+    end = pcEndPos
+    setRange (s, e) pc = pc {
+        pcStartPos = s,
+        pcEndPos = e
+    }
 
 instance Ranged Replacement where
     start = repStartPos
     end   = repEndPos
+    setRange (s, e) r = r {
+        repStartPos = s,
+        repEndPos = e
+    }
 
 instance Ranged a => Ranged [a] where
     start [] = newPosition
     start xs = (minimum . map start) xs
     end []   = newPosition
     end xs   = (maximum . map end) xs
+    setRange (s, e) rs = map (setRange (s, e)) rs
 
 instance Ranged Fix where
     start = start . fixReplacements
     end   = end . fixReplacements
+    setRange (s, e) f = f {
+        fixReplacements = setRange (s, e) (fixReplacements f)
+    }
 
 -- The Monoid instance for Fix merges replacements that do not overlap.
 instance Monoid Fix where

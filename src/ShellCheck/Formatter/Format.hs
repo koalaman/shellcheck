@@ -21,6 +21,7 @@ module ShellCheck.Formatter.Format where
 
 import ShellCheck.Data
 import ShellCheck.Interface
+import ShellCheck.Fixer
 
 -- A formatter that carries along an arbitrary piece of data
 data Formatter = Formatter {
@@ -51,20 +52,29 @@ makeNonVirtual comments contents =
     map fix comments
   where
     ls = lines contents
-    fix c = c {
-        pcStartPos = (pcStartPos c) {
-            posColumn = realignColumn lineNo colNo c
-        }
-      , pcEndPos = (pcEndPos c) {
-            posColumn = realignColumn endLineNo endColNo c
-        }
-    }
+    fix c =  realign c ls
+
+-- Realign a Ranged from a tabstop of 8 to 1
+realign :: Ranged a => a -> [String] -> a
+realign range ls =
+    let startColumn = realignColumn lineNo colNo range
+        endColumn = realignColumn endLineNo endColNo range
+        startPosition = (start range) { posColumn = startColumn }
+        endPosition = (end range) { posColumn = endColumn } in
+    setRange (startPosition, endPosition) range
+  where
     realignColumn lineNo colNo c =
       if lineNo c > 0 && lineNo c <= fromIntegral (length ls)
       then real (ls !! fromIntegral (lineNo c - 1)) 0 0 (colNo c)
       else colNo c
     real _ r v target | target <= v = r
-    real [] r v _ = r -- should never happen
-    real ('\t':rest) r v target =
-        real rest (r+1) (v + 8 - (v `mod` 8)) target
+    -- hit this case at the end of line, and if we don't hit the target
+    -- return real + (target - v)
+    real [] r v target = r + (target - v)
+    real ('\t':rest) r v target = real rest (r+1) (v + 8 - (v `mod` 8)) target
     real (_:rest) r v target = real rest (r+1) (v+1) target
+    lineNo = posLine . start
+    endLineNo = posLine . end
+    colNo = posColumn . start
+    endColNo = posColumn . end
+

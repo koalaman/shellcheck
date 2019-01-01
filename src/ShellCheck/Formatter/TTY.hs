@@ -153,10 +153,13 @@ showFixedString color comments lineNum fileLines =
         -- fixes for that single line. We can fold the fixes (which removes
         -- overlaps), and apply it as a single fix with multiple replacements.
         applicableComments -> do
-            let mergedFix = (fold . catMaybes . (map pcFix)) applicableComments
+            let mergedFix = (realignFix . fold . catMaybes . (map pcFix)) applicableComments
             -- in the spirit of error prone
             putStrLn $ color "message" "Did you mean: "
             putStrLn $ unlines $ fixedString mergedFix fileLines
+        where
+            realignFix f = f { fixReplacements = map fix (fixReplacements f) }
+            fix r = realign r fileLines
 
 fixedString :: Fix -> [String] -> [String]
 fixedString fix fileLines =
