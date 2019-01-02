@@ -2750,7 +2750,7 @@ prop_checkUnmatchableCases6 = verifyNot checkUnmatchableCases "case $f in ?*) tr
 prop_checkUnmatchableCases7 = verifyNot checkUnmatchableCases "case $f in $(x)) true;; asdf) false;; esac"
 prop_checkUnmatchableCases8 = verify checkUnmatchableCases "case $f in cow) true;; bar|cow) false;; esac"
 prop_checkUnmatchableCases9 = verifyNot checkUnmatchableCases "case $f in x) true;;& x) false;; esac"
-checkUnmatchableCases _ t =
+checkUnmatchableCases params t =
     case t of
         T_CaseExpression _ word list -> do
             -- Check all patterns for whether they can ever match
@@ -2775,6 +2775,7 @@ checkUnmatchableCases _ t =
   where
     fst3 (x,_,_) = x
     snd3 (_,x,_) = x
+    tp = tokenPositions params
     check target candidate = potentially $ do
         candidateGlob <- wordToPseudoGlob candidate
         guard . not $ pseudoGlobsCanOverlap target candidateGlob
@@ -2785,10 +2786,16 @@ checkUnmatchableCases _ t =
     checkDoms ((glob, Just x), rest) =
         case filter (\(_, p) -> x `pseudoGlobIsSuperSetof` p) valids of
             ((first,_):_) -> do
-                warn (getId glob) 2221 "This pattern always overrides a later one."
-                warn (getId first) 2222 "This pattern never matches because of a previous pattern."
+                warn (getId glob) 2221 $ "This pattern always overrides a later one" <> patternContext (getId first)
+                warn (getId first) 2222 $ "This pattern never matches because of a previous pattern" <> patternContext (getId glob)
             _ -> return ()
       where
+        patternContext :: Id -> String
+        patternContext id =
+            case posLine . fst <$> Map.lookup id tp of
+              Just l -> " on line " <> show l <> "."
+              _      -> "."
+
         valids = concatMap f rest
         f (x, Just y) = [(x,y)]
         f _ = []
