@@ -102,10 +102,13 @@ options = [
         (NoArg $ Flag "version" "true") "Print version information",
     Option "W" ["wiki-link-count"]
         (ReqArg (Flag "wiki-link-count") "NUM")
-        "The number of wiki links to show, when applicable.",
+        "The number of wiki links to show, when applicable",
     Option "x" ["external-sources"]
-        (NoArg $ Flag "externals" "true") "Allow 'source' outside of FILES"
+        (NoArg $ Flag "externals" "true") "Allow 'source' outside of FILES",
+    Option "" ["help"]
+        (NoArg $ Flag "help" "true") "Show this usage summary and exit"
     ]
+getUsageInfo = usageInfo usageHeader options
 
 printErr = lift . hPutStrLn stderr
 
@@ -114,7 +117,7 @@ parseArguments argv =
     case getOpt Permute options argv of
         (opts, files, []) -> return (opts, files)
         (_, _, errors) -> do
-            printErr $ concat errors ++ "\n" ++ usageInfo usageHeader options
+            printErr $ concat errors ++ "\n" ++ getUsageInfo
             throwError SyntaxFailure
 
 formats :: FormatterOptions -> Map.Map String (IO Formatter)
@@ -269,6 +272,10 @@ parseOption flag options =
 
         Flag "version" _ -> do
             liftIO printVersion
+            throwError NoProblems
+
+        Flag "help" _ -> do
+            liftIO $ putStrLn getUsageInfo
             throwError NoProblems
 
         Flag "externals" _ ->
