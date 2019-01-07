@@ -1245,6 +1245,7 @@ prop_checkCommarrays3 = verifyNot checkCommarrays "cow=(1 \"foo,bar\" 3)"
 prop_checkCommarrays4 = verifyNot checkCommarrays "cow=('one,' 'two')"
 prop_checkCommarrays5 = verify checkCommarrays "a=([a]=b, [c]=d)"
 prop_checkCommarrays6 = verify checkCommarrays "a=([a]=b,[c]=d,[e]=f)"
+prop_checkCommarrays7 = verify checkCommarrays "a=(1,2)"
 checkCommarrays _ (T_Array id l) =
     when (any (isCommaSeparated . literal) l) $
         warn id 2054 "Use spaces, not commas, to separate array elements."
@@ -1252,9 +1253,9 @@ checkCommarrays _ (T_Array id l) =
     literal (T_IndexedElement _ _ l) = literal l
     literal (T_NormalWord _ l) = concatMap literal l
     literal (T_Literal _ str) = str
-    literal _ = "str"
+    literal _ = ""
 
-    isCommaSeparated str = "," `isSuffixOf` str || length (filter (== ',') str) > 1
+    isCommaSeparated = elem ','
 checkCommarrays _ _ = return ()
 
 prop_checkOrNeq1 = verify checkOrNeq "if [[ $lol -ne cow || $lol -ne foo ]]; then echo foo; fi"
