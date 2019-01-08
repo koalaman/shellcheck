@@ -1468,17 +1468,18 @@ prop_checkSpuriousExec5 = verifyNot checkSpuriousExec "exec > file; cmd"
 prop_checkSpuriousExec6 = verify checkSpuriousExec "exec foo > file; cmd"
 prop_checkSpuriousExec7 = verifyNot checkSpuriousExec "exec file; echo failed; exit 3"
 prop_checkSpuriousExec8 = verifyNot checkSpuriousExec "exec {origout}>&1- >tmp.log 2>&1; bar"
+prop_checkSpuriousExec9 = verify checkSpuriousExec "for file in rc.d/*; do exec \"$file\"; done"
 checkSpuriousExec _ = doLists
   where
-    doLists (T_Script _ _ cmds) = doList cmds
-    doLists (T_BraceGroup _ cmds) = doList cmds
-    doLists (T_WhileExpression _ _ cmds) = doList cmds
-    doLists (T_UntilExpression _ _ cmds) = doList cmds
-    doLists (T_ForIn _ _ _ cmds) = doList cmds
-    doLists (T_ForArithmetic _ _ _ _ cmds) = doList cmds
+    doLists (T_Script _ _ cmds) = doList cmds False
+    doLists (T_BraceGroup _ cmds) = doList cmds False
+    doLists (T_WhileExpression _ _ cmds) = doList cmds True
+    doLists (T_UntilExpression _ _ cmds) = doList cmds True
+    doLists (T_ForIn _ _ _ cmds) = doList cmds True
+    doLists (T_ForArithmetic _ _ _ _ cmds) = doList cmds True
     doLists (T_IfExpression _ thens elses) = do
-        mapM_ (\(_, l) -> doList l) thens
-        doList elses
+        mapM_ (\(_, l) -> doList l False) thens
+        doList elses False
     doLists _ = return ()
 
     stripCleanup = reverse . dropWhile cleanup . reverse
@@ -1487,10 +1488,15 @@ checkSpuriousExec _ = doLists
     cleanup _ = False
 
     doList = doList' . stripCleanup
-    doList' t@(current:following:_) = do
+    -- The second parameter is True if we are in a loop
+    -- In that case we should emit the warning also if `exec' is the last statement
+    doList' t@(current:following:_) False = do
         commentIfExec current
-        doList (tail t)
-    doList' _ = return ()
+        doList (tail t) False
+    doList' (current:tail) True = do
+        commentIfExec current
+        doList tail True
+    doList' _ _ = return ()
 
     commentIfExec (T_Pipeline id _ list) =
       mapM_ commentIfExec $ take 1 list
