@@ -4,15 +4,8 @@
 # 'cabal test' remains the source of truth.
 
 (
- var=$(echo 'liftM and $ sequence [
-  ShellCheck.Analytics.runTests
-  ,ShellCheck.Parser.runTests
-  ,ShellCheck.Checker.runTests
-  ,ShellCheck.Checks.Commands.runTests
-  ,ShellCheck.Checks.ShellSupport.runTests
-  ,ShellCheck.AnalyzerLib.runTests
-    ]' | tr -d '\n' | cabal repl ShellCheck 2>&1 | tee /dev/stderr)
-if [[ $var == *$'\nTrue'* ]]
+var=$(echo 'main' | ghci test/shellcheck.hs 2>&1 | tee /dev/stderr)
+if [[ $var == *ExitSuccess* ]]
 then
   exit 0
 else
