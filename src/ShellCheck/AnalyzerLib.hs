@@ -380,10 +380,6 @@ isParentOf tree parent child =
 
 parents params = getPath (parentMap params)
 
-pathTo t = do
-    parents <- reader parentMap
-    return $ getPath parents t
-
 -- Find the first match in a list where the predicate is Just True.
 -- Stops if it's Just False and ignores Nothing.
 findFirst :: (a -> Maybe Bool) -> [a] -> Maybe a

@@ -484,7 +484,7 @@ prop_checkInteractiveSu4 = verifyNot checkInteractiveSu "su root < script"
 checkInteractiveSu = CommandCheck (Basename "su") f
   where
     f cmd = when (length (arguments cmd) <= 1) $ do
-        path <- pathTo cmd
+        path <- getPathM cmd
         when (all undirected path) $
             info (getId cmd) 2117
                 "To run commands as another user, use su -c or sudo."
