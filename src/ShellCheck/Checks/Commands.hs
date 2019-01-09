@@ -208,6 +208,10 @@ prop_checkGrepRe12= verifyNot checkGrepRe "grep -F 'Foo*' file"
 prop_checkGrepRe13= verifyNot checkGrepRe "grep -- -foo bar*"
 prop_checkGrepRe14= verifyNot checkGrepRe "grep -e -foo bar*"
 prop_checkGrepRe15= verifyNot checkGrepRe "grep --regex -foo bar*"
+prop_checkGrepRe16= verifyNot checkGrepRe "grep --include 'Foo*' file"
+prop_checkGrepRe17= verifyNot checkGrepRe "grep --exclude 'Foo*' file"
+prop_checkGrepRe18= verifyNot checkGrepRe "grep --exclude-dir 'Foo*' file"
+prop_checkGrepRe19= verify checkGrepRe "grep -- 'Foo*' file"
 
 checkGrepRe = CommandCheck (Basename "grep") check where
     check cmd = f cmd (arguments cmd)
@@ -230,7 +234,7 @@ checkGrepRe = CommandCheck (Basename "grep") check where
         when (isGlob re) $
             warn (getId re) 2062 "Quote the grep pattern so the shell won't interpret it."
 
-        unless (cmd `hasFlag` "F") $ do
+        unless (any (hasFlag cmd) grepGlobFlags) $ do
             let string = concat $ oversimplify re
             if isConfusedGlobRegex string then
                 warn (getId re) 2063 "Grep uses regex, but this looks like a glob."
@@ -238,6 +242,8 @@ checkGrepRe = CommandCheck (Basename "grep") check where
                 char <- getSuspiciousRegexWildcard string
                 return $ info (getId re) 2022 $
                     "Note that unlike globs, " ++ [char] ++ "* here matches '" ++ [char, char, char] ++ "' but not '" ++ wordStartingWith char ++ "'."
+      where
+        grepGlobFlags = ["F", "include", "exclude", "exclude-dir"]
 
     wordStartingWith c =
         head . filter ([c] `isPrefixOf`) $ candidates
