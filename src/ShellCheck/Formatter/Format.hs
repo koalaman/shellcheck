@@ -22,6 +22,7 @@ module ShellCheck.Formatter.Format where
 import ShellCheck.Data
 import ShellCheck.Interface
 import ShellCheck.Fixer
+import Data.Array
 
 -- A formatter that carries along an arbitrary piece of data
 data Formatter = Formatter {
@@ -51,11 +52,12 @@ severityText pc =
 makeNonVirtual comments contents =
     map fix comments
   where
-    ls = lines contents
-    fix c =  realign c ls
+    list = lines contents
+    arr = listArray (1, length list) list
+    fix c =  realign c arr
 
 -- Realign a Ranged from a tabstop of 8 to 1
-realign :: Ranged a => a -> [String] -> a
+realign :: Ranged a => a -> Array Int String -> a
 realign range ls =
     let startColumn = realignColumn lineNo colNo range
         endColumn = realignColumn endLineNo endColNo range
@@ -65,7 +67,7 @@ realign range ls =
   where
     realignColumn lineNo colNo c =
       if lineNo c > 0 && lineNo c <= fromIntegral (length ls)
-      then real (ls !! fromIntegral (lineNo c - 1)) 0 0 (colNo c)
+      then real (ls ! fromIntegral (lineNo c)) 0 0 (colNo c)
       else colNo c
     real _ r v target | target <= v = r
     -- hit this case at the end of line, and if we don't hit the target

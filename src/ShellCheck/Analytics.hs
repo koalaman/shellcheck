@@ -250,11 +250,14 @@ replaceStart id params n r =
         new_end = start {
             posColumn = posColumn start + n
         }
+        depth = length $ getPath (parentMap params) (T_EOF id)
     in
     newReplacement {
         repStartPos = start,
         repEndPos = new_end,
-        repString = r
+        repString = r,
+        repPrecedence = depth,
+        repInsertionPoint = InsertAfter
     }
 replaceEnd id params n r =
     let tp = tokenPositions params
@@ -265,11 +268,14 @@ replaceEnd id params n r =
         new_end = end {
             posColumn = posColumn end
         }
+        depth = length $ getPath (parentMap params) (T_EOF id)
     in
     newReplacement {
         repStartPos = new_start,
         repEndPos = new_end,
-        repString = r
+        repString = r,
+        repPrecedence = depth,
+        repInsertionPoint = InsertBefore
     }
 surroundWidth id params s = fixWith [replaceStart id params 0 s, replaceEnd id params 0 s]
 fixWith fixes = newFix { fixReplacements = fixes }
@@ -1676,9 +1682,8 @@ checkSpacefulness params t =
                     "This default assignment may cause DoS due to globbing. Quote it."
             else
                 makeCommentWithFix InfoC (getId token) 2086
-                    "Double quote to prevent globbing and word splitting." (surroundWidth (getId token) params "\"")
-                -- makeComment InfoC (getId token) 2086
-                --     "Double quote to prevent globbing and word splitting."
+                    "Double quote to prevent globbing and word splitting."
+                        (surroundWidth (getId token) params "\"")
 
     writeF _ _ name (DataString SourceExternal) = setSpaces name True >> return []
     writeF _ _ name (DataString SourceInteger) = setSpaces name False >> return []

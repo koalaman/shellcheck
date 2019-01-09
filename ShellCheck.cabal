@@ -49,9 +49,10 @@ library
       build-depends:
         semigroups
     build-depends:
+      aeson,
+      array,
       -- GHC 7.6.3 (base 4.6.0.1) is buggy (#1131, #1119) in optimized mode.
       -- Just disable that version entirely to fail fast.
-      aeson,
       base > 4.6.0.1 && < 5,
       bytestring,
       containers >= 0.5,
@@ -91,6 +92,7 @@ executable shellcheck
         semigroups
     build-depends:
       aeson,
+      array,
       base >= 4 && < 5,
       bytestring,
       deepseq >= 1.4.0.0,
@@ -107,6 +109,7 @@ test-suite test-shellcheck
     type: exitcode-stdio-1.0
     build-depends:
       aeson,
+      array,
       base >= 4 && < 5,
       bytestring,
       deepseq >= 1.4.0.0,

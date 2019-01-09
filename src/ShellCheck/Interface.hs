@@ -52,7 +52,8 @@ module ShellCheck.Interface
     , newComment
     , Fix(fixReplacements)
     , newFix
-    , Replacement(repStartPos, repEndPos, repString)
+    , InsertionPoint(InsertBefore, InsertAfter)
+    , Replacement(repStartPos, repEndPos, repString, repPrecedence, repInsertionPoint)
     , newReplacement
     ) where
 
@@ -209,8 +210,15 @@ newComment = Comment {
 data Replacement = Replacement {
     repStartPos :: Position,
     repEndPos :: Position,
-    repString :: String
+    repString :: String,
+    -- Order in which the replacements should happen: highest precedence first.
+    repPrecedence :: Int,
+    -- Whether to insert immediately before or immediately after the specified region.
+    repInsertionPoint :: InsertionPoint
 } deriving (Show, Eq, Generic, NFData)
+
+data InsertionPoint = InsertBefore | InsertAfter
+    deriving (Show, Eq, Generic, NFData)
 
 instance Ord Replacement where
     compare r1 r2 = (repStartPos r1) `compare` (repStartPos r2)
@@ -218,7 +226,9 @@ instance Ord Replacement where
 newReplacement = Replacement {
     repStartPos = newPosition,
     repEndPos = newPosition,
-    repString = ""
+    repString = "",
+    repPrecedence = 1,
+    repInsertionPoint = InsertAfter
 }
 
 data Fix = Fix {

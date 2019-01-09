@@ -24,6 +24,7 @@ import ShellCheck.Interface
 import ShellCheck.Formatter.Format
 
 import Control.Monad
+import Data.Array
 import Data.Foldable
 import Data.Ord
 import Data.IORef
@@ -37,6 +38,8 @@ wikiLink = "https://www.shellcheck.net/wiki/"
 
 -- An arbitrary Ord thing to order warnings
 type Ranking = (Char, Severity, Integer)
+-- Ansi coloring function
+type ColorFunc = (String -> String -> String)
 
 format :: FormatterOptions -> IO Formatter
 format options = do
@@ -119,59 +122,66 @@ outputForFile color sys comments = do
     let fileName = sourceFile (head comments)
     result <- (siReadFile sys) fileName
     let contents = either (const "") id result
-    let fileLines = lines contents
-    let lineCount = fromIntegral $ length fileLines
+    let fileLinesList = lines contents
+    let lineCount = length fileLinesList
+    let fileLines = listArray (1, lineCount) fileLinesList
     let groups = groupWith lineNo comments
     mapM_ (\commentsForLine -> do
-        let lineNum = lineNo (head commentsForLine)
+        let lineNum = fromIntegral $ lineNo (head commentsForLine)
         let line = if lineNum < 1 || lineNum > lineCount
                         then ""
-                        else fileLines !! fromIntegral (lineNum - 1)
+                        else fileLines ! fromIntegral lineNum
         putStrLn ""
         putStrLn $ color "message" $
            "In " ++ fileName ++" line " ++ show lineNum ++ ":"
         putStrLn (color "source" line)
         mapM_ (\c -> putStrLn (color (severityText c) $ cuteIndent c)) commentsForLine
         putStrLn ""
-        showFixedString color comments lineNum fileLines
+        showFixedString color commentsForLine (fromIntegral lineNum) fileLines
       ) groups
 
-hasApplicableFix lineNum comment = fromMaybe False $ do
-    replacements <- fixReplacements <$> pcFix comment
-    guard $ all (\c -> onSameLine (repStartPos c) && onSameLine (repEndPos c)) replacements
-    return True
+-- Pick out only the lines necessary to show a fix in action
+sliceFile :: Fix -> Array Int String -> (Fix, Array Int String)
+sliceFile fix lines =
+    (mapPositions adjust fix, sliceLines lines)
   where
-    onSameLine pos = posLine pos == lineNum
+    (minLine, maxLine) =
+        foldl (\(mm, mx) pos -> ((min mm $ fromIntegral $ posLine pos), (max mx $ fromIntegral $ posLine pos)))
+                (maxBound, minBound) $
+            concatMap (\x -> [repStartPos x, repEndPos x]) $ fixReplacements fix
+    sliceLines :: Array Int String -> Array Int String
+    sliceLines = ixmap (1, maxLine - minLine + 1) (\x -> x + minLine - 1)
+    adjust pos =
+        pos {
+            posLine = posLine pos - (fromIntegral minLine) + 1
+        }
 
--- FIXME: Work correctly with multiple replacements
+showFixedString :: ColorFunc -> [PositionedComment] -> Int -> Array Int String -> IO ()
 showFixedString color comments lineNum fileLines =
-    let line = fileLines !! fromIntegral (lineNum - 1) in
-    -- need to check overlaps
-    case filter (hasApplicableFix lineNum) comments of
+    let line = fileLines ! fromIntegral lineNum in
+    case mapMaybe pcFix comments of
         [] -> return ()
-        -- all the fixes are single-line only, but there could be multiple
-        -- fixes for that single line. We can fold the fixes (which removes
-        -- overlaps), and apply it as a single fix with multiple replacements.
-        applicableComments -> do
-            let mergedFix = (realignFix . fold . catMaybes . (map pcFix)) applicableComments
+        fixes -> do
+            -- Folding automatically removes overlap
+            let mergedFix = realignFix $ fold fixes
+            -- We show the complete, associated fixes, whether or not it includes this and/or unrelated lines.
+            let (excerptFix, excerpt) = sliceFile mergedFix fileLines
             -- in the spirit of error prone
             putStrLn $ color "message" "Did you mean: "
-            putStrLn $ unlines $ fixedString mergedFix fileLines
+            putStrLn $ unlines $ fixedString excerptFix excerpt
         where
+            -- FIXME: This should be handled by Fixer
             realignFix f = f { fixReplacements = map fix (fixReplacements f) }
             fix r = realign r fileLines
 
-fixedString :: Fix -> [String] -> [String]
+fixedString :: Fix -> Array Int String -> [String]
 fixedString fix fileLines =
     case (fixReplacements fix) of
         [] -> []
         reps ->
             -- applyReplacement returns the full update file, we really only care about the changed lines
             -- so we calculate overlapping lines using replacements
-            drop start $ take end $ applyFix fix fileLines
-            where
-                start = (fromIntegral $ minimum $ map (posLine . repStartPos) reps) - 1
-                end = fromIntegral $ maximum $ map (posLine . repEndPos) reps
+            applyFix fix fileLines
 
 cuteIndent :: PositionedComment -> String
 cuteIndent comment =
@@ -187,6 +197,7 @@ cuteIndent comment =
 
 code num = "SC" ++ show num
 
+getColorFunc :: ColorOption -> IO ColorFunc
 getColorFunc colorOption = do
     term <- hIsTerminalDevice stdout
     let windows = "mingw" `isPrefixOf` os
