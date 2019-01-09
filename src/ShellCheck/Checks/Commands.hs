@@ -234,7 +234,7 @@ checkGrepRe = CommandCheck (Basename "grep") check where
         when (isGlob re) $
             warn (getId re) 2062 "Quote the grep pattern so the shell won't interpret it."
 
-        unless (any (hasFlag cmd) grepGlobFlags) $ do
+        unless (any (`elem` flags) grepGlobFlags) $ do
             let string = concat $ oversimplify re
             if isConfusedGlobRegex string then
                 warn (getId re) 2063 "Grep uses regex, but this looks like a glob."
@@ -243,6 +243,7 @@ checkGrepRe = CommandCheck (Basename "grep") check where
                 return $ info (getId re) 2022 $
                     "Note that unlike globs, " ++ [char] ++ "* here matches '" ++ [char, char, char] ++ "' but not '" ++ wordStartingWith char ++ "'."
       where
+        flags = map snd $ getAllFlags cmd
         grepGlobFlags = ["F", "include", "exclude", "exclude-dir"]
 
     wordStartingWith c =
