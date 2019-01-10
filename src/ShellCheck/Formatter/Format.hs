@@ -54,29 +54,5 @@ makeNonVirtual comments contents =
   where
     list = lines contents
     arr = listArray (1, length list) list
-    fix c =  realign c arr
-
--- Realign a Ranged from a tabstop of 8 to 1
-realign :: Ranged a => a -> Array Int String -> a
-realign range ls =
-    let startColumn = realignColumn lineNo colNo range
-        endColumn = realignColumn endLineNo endColNo range
-        startPosition = (start range) { posColumn = startColumn }
-        endPosition = (end range) { posColumn = endColumn } in
-    setRange (startPosition, endPosition) range
-  where
-    realignColumn lineNo colNo c =
-      if lineNo c > 0 && lineNo c <= fromIntegral (length ls)
-      then real (ls ! fromIntegral (lineNo c)) 0 0 (colNo c)
-      else colNo c
-    real _ r v target | target <= v = r
-    -- hit this case at the end of line, and if we don't hit the target
-    -- return real + (target - v)
-    real [] r v target = r + (target - v)
-    real ('\t':rest) r v target = real rest (r+1) (v + 8 - (v `mod` 8)) target
-    real (_:rest) r v target = real rest (r+1) (v+1) target
-    lineNo = posLine . start
-    endLineNo = posLine . end
-    colNo = posColumn . start
-    endColNo = posColumn . end
+    fix c = removeTabStops c arr
 

@@ -163,25 +163,13 @@ showFixedString color comments lineNum fileLines =
         [] -> return ()
         fixes -> do
             -- Folding automatically removes overlap
-            let mergedFix = realignFix $ fold fixes
-            -- We show the complete, associated fixes, whether or not it includes this and/or unrelated lines.
+            let mergedFix = fold fixes
+            -- We show the complete, associated fixes, whether or not it includes this
+            -- and/or other unrelated lines.
             let (excerptFix, excerpt) = sliceFile mergedFix fileLines
             -- in the spirit of error prone
             putStrLn $ color "message" "Did you mean: "
-            putStrLn $ unlines $ fixedString excerptFix excerpt
-        where
-            -- FIXME: This should be handled by Fixer
-            realignFix f = f { fixReplacements = map fix (fixReplacements f) }
-            fix r = realign r fileLines
-
-fixedString :: Fix -> Array Int String -> [String]
-fixedString fix fileLines =
-    case (fixReplacements fix) of
-        [] -> []
-        reps ->
-            -- applyReplacement returns the full update file, we really only care about the changed lines
-            -- so we calculate overlapping lines using replacements
-            applyFix fix fileLines
+            putStrLn $ unlines $ applyFix excerptFix excerpt
 
 cuteIndent :: PositionedComment -> String
 cuteIndent comment =

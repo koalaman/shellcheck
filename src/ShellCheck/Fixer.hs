@@ -19,7 +19,7 @@
 -}
 
 {-# LANGUAGE TemplateHaskell #-}
-module ShellCheck.Fixer (applyFix, mapPositions, Ranged(..), runTests) where
+module ShellCheck.Fixer (applyFix, removeTabStops, mapPositions, Ranged(..), runTests) where
 
 import ShellCheck.Interface
 import Control.Monad.State
@@ -111,6 +111,30 @@ mapPositions f = adjustFix
             fixReplacements = map adjustReplacement $ fixReplacements fix
         }
 
+-- Rewrite a Ranged from a tabstop of 8 to 1
+removeTabStops :: Ranged a => a -> Array Int String -> a
+removeTabStops range ls =
+    let startColumn = realignColumn lineNo colNo range
+        endColumn = realignColumn endLineNo endColNo range
+        startPosition = (start range) { posColumn = startColumn }
+        endPosition = (end range) { posColumn = endColumn } in
+    setRange (startPosition, endPosition) range
+  where
+    realignColumn lineNo colNo c =
+      if lineNo c > 0 && lineNo c <= fromIntegral (length ls)
+      then real (ls ! fromIntegral (lineNo c)) 0 0 (colNo c)
+      else colNo c
+    real _ r v target | target <= v = r
+    -- hit this case at the end of line, and if we don't hit the target
+    -- return real + (target - v)
+    real [] r v target = r + (target - v)
+    real ('\t':rest) r v target = real rest (r+1) (v + 8 - (v `mod` 8)) target
+    real (_:rest) r v target = real rest (r+1) (v+1) target
+    lineNo = posLine . start
+    endLineNo = posLine . end
+    colNo = posColumn . start
+    endColNo = posColumn . end
+
 
 -- A replacement that spans multiple line is applied by:
 -- 1. merging the affected lines into a single string using `unlines`
@@ -154,8 +178,15 @@ multiToSingleLine fixes lines =
 -- the function does not return an array.
 applyFix :: Fix -> Array Int String -> [String]
 applyFix fix fileLines =
-    let (adjustedFixes, singleLine) = multiToSingleLine [fix] fileLines
-    in lines . runFixer $ applyFixes2 adjustedFixes singleLine
+    let
+        untabbed = fix {
+            fixReplacements =
+                map (\c -> removeTabStops c fileLines) $
+                    fixReplacements fix
+            }
+        (adjustedFixes, singleLine) = multiToSingleLine [untabbed] fileLines
+    in
+        lines . runFixer $ applyFixes2 adjustedFixes singleLine
 
 
 -- start and end comes from pos, which is 1 based
