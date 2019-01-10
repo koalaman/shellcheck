@@ -45,11 +45,16 @@ instance ToJSON Replacement where
             end = repEndPos replacement
             str = repString replacement in
         object [
+          "precedence" .= repPrecedence replacement,
+          "insertionPoint"  .=
+            case repInsertionPoint replacement of
+                InsertBefore -> "beforeStart" :: String
+                InsertAfter  -> "afterEnd",
           "line" .= posLine start,
-          "endLine" .= posLine end,
           "column" .= posColumn start,
+          "endLine" .= posLine end,
           "endColumn" .= posColumn end,
-          "replaceWith" .= str
+          "replacement" .= str
         ]
 
 instance ToJSON PositionedComment where
