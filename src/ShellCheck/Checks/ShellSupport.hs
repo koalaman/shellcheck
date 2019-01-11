@@ -145,6 +145,7 @@ prop_checkBashisms62 = verify checkBashisms "#!/bin/sh\nexport -f foo"
 prop_checkBashisms63 = verifyNot checkBashisms "#!/bin/sh\nexport -p"
 prop_checkBashisms64 = verify checkBashisms "#!/bin/sh\nreadonly -a"
 prop_checkBashisms65 = verifyNot checkBashisms "#!/bin/sh\nreadonly -p"
+prop_checkBashisms66 = verifyNot checkBashisms "#!/bin/sh\necho \"-n foo\""
 checkBashisms = ForShell [Sh, Dash] $ \t -> do
     params <- ask
     kludge params t
@@ -231,7 +232,7 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
         warnMsg id "`<file` to read files is"
 
     bashism t@(T_SimpleCommand _ _ (cmd:arg:_))
-        | t `isCommand` "echo" && "-" `isPrefixOf` argString =
+        | t `isCommand` "echo" && elem argString echoFlags =
             unless ("--" `isPrefixOf` argString) $ -- echo "-----"
                 if isDash
                 then
@@ -239,7 +240,9 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
                         warnMsg (getId arg) "echo flags besides -n"
                 else
                     warnMsg (getId arg) "echo flags are"
-      where argString = concat $ oversimplify arg
+      where
+          argString = concat $ oversimplify arg
+          echoFlags = ["-e", "-E", "-s", "-n"]
     bashism t@(T_SimpleCommand _ _ (cmd:arg:_))
         | t `isCommand` "exec" && "-" `isPrefixOf` concat (oversimplify arg) =
             warnMsg (getId arg) "exec flags are"
