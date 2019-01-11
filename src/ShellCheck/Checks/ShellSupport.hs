@@ -143,7 +143,8 @@ prop_checkBashisms60 = verifyNot checkBashisms "#!/bin/sh\njobs -p"
 prop_checkBashisms61 = verifyNot checkBashisms "#!/bin/sh\njobs -lp"
 prop_checkBashisms62 = verify checkBashisms "#!/bin/sh\nexport -f foo"
 prop_checkBashisms63 = verifyNot checkBashisms "#!/bin/sh\nexport -p"
-
+prop_checkBashisms64 = verify checkBashisms "#!/bin/sh\nreadonly -a"
+prop_checkBashisms65 = verifyNot checkBashisms "#!/bin/sh\nreadonly -p"
 checkBashisms = ForShell [Sh, Dash] $ \t -> do
     params <- ask
     kludge params t
@@ -292,6 +293,7 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
             ("jobs", ["l", "p"]),
             ("printf", []),
             ("read", if isDash then ["r", "p"] else ["r"]),
+            ("readonly", ["p"]),
             ("ulimit", if isDash then ["H", "S", "t", "f", "d", "s", "c", "m", "l", "p", "n"] else ["f"])
             ]
     bashism t@(T_SourceCommand id src _) =
