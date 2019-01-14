@@ -2466,8 +2466,10 @@ prop_checkTestArgumentSplitting13 = verify checkTestArgumentSplitting "[ \"$@\" 
 prop_checkTestArgumentSplitting14 = verify checkTestArgumentSplitting "[[ \"$@\" == \"\" ]]"
 prop_checkTestArgumentSplitting15 = verifyNot checkTestArgumentSplitting "[[ \"$*\" == \"\" ]]"
 prop_checkTestArgumentSplitting16 = verifyNot checkTestArgumentSplitting "[[ -v foo[123] ]]"
+prop_checkTestArgumentSplitting17 = verifyNot checkTestArgumentSplitting "#!/bin/ksh\n[ -e foo* ]"
+prop_checkTestArgumentSplitting18 = verify checkTestArgumentSplitting "#!/bin/ksh\n[ -d foo* ]"
 checkTestArgumentSplitting :: Parameters -> Token -> Writer [TokenComment] ()
-checkTestArgumentSplitting _ t =
+checkTestArgumentSplitting params t =
     case t of
         (TC_Unary _ typ op token) | isGlob token ->
             if op == "-v"
@@ -2476,8 +2478,16 @@ checkTestArgumentSplitting _ t =
                     err (getId token) 2208 $
                       "Use [[ ]] or quote arguments to -v to avoid glob expansion."
             else
-                err (getId token) 2144 $
-                   op ++ " doesn't work with globs. Use a for loop."
+                if (typ == SingleBracket && shellType params == Ksh)
+                then
+                    -- Ksh appears to stop processing after unrecognized tokens, so operators
+                    -- will effectively work with globs, but only the first match.
+                    when (op `elem` ['-':c:[] | c <- "bcdfgkprsuwxLhNOGRS" ]) $
+                        warn (getId token) 2245 $
+                            op ++ " only applies to the first expansion of this glob. Use a loop to check any/all."
+                else
+                    err (getId token) 2144 $
+                       op ++ " doesn't work with globs. Use a for loop."
 
         (TC_Nullary _ typ token) -> do
             checkBraces typ token

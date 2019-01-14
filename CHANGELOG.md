@@ -1,6 +1,7 @@
 ## Since previous release
 ### Added
 - Preliminary support for fix suggestions
+- SC2245: Warn that Ksh ignores all but the first glob result in `[`
 - SC2243/SC2244: Suggest using explicit -n for `[ $foo ]`
 
 ## v0.6.0 - 2018-12-02
