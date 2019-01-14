@@ -474,6 +474,8 @@ prop_checkShebang7 = verifyNotTree checkShebang "#!/usr/bin/env ash\n# shellchec
 prop_checkShebang8 = verifyTree checkShebang "#!bin/sh\ntrue"
 prop_checkShebang9 = verifyNotTree checkShebang "# shellcheck shell=sh\ntrue"
 prop_checkShebang10= verifyNotTree checkShebang "#!foo\n# shellcheck shell=sh ignore=SC2239\ntrue"
+prop_checkShebang11= verifyTree checkShebang "#!/bin/sh/\ntrue"
+prop_checkShebang12= verifyTree checkShebang "#!/bin/sh/ -xe\ntrue"
 checkShebang params (T_Annotation _ list t) =
     if any isOverride list then [] else checkShebang params t
   where
@@ -485,8 +487,13 @@ checkShebang params (T_Script id sb _) = execWriter $ do
             err id 2148 "Tips depend on target shell and yours is unknown. Add a shebang."
         when (executableFromShebang sb == "ash") $
             warn id 2187 "Ash scripts will be checked as Dash. Add '# shellcheck shell=dash' to silence."
-    unless (null sb || "/" `isPrefixOf` sb) $
-        err id 2239 "Ensure the shebang uses an absolute path to the interpreter."
+    unless (null sb) $ do
+        unless ("/" `isPrefixOf` sb) $
+            err id 2239 "Ensure the shebang uses an absolute path to the interpreter."
+        case words sb of
+            first:_ ->
+                when ("/" `isSuffixOf` first) $
+                    err id 2246 "This shebang specifies a directory. Ensure the interpreter is a file."
 
 
 prop_checkForInQuoted = verify checkForInQuoted "for f in \"$(ls)\"; do echo foo; done"
