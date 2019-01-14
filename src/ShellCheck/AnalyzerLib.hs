@@ -184,7 +184,7 @@ makeParameters spec =
                 Sh   -> False
                 Ksh  -> True,
 
-        shellTypeSpecified = isJust $ asShellType spec,
+        shellTypeSpecified = isJust (asShellType spec) || isJust (asFallbackShell spec),
         parentMap = getParentTree root,
         variableFlow = getVariableFlow params root,
         tokenPositions = asTokenPositions spec
