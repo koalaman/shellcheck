@@ -145,6 +145,8 @@ prop_checkBashisms62 = verify checkBashisms "#!/bin/sh\nexport -f foo"
 prop_checkBashisms63 = verifyNot checkBashisms "#!/bin/sh\nexport -p"
 prop_checkBashisms64 = verify checkBashisms "#!/bin/sh\nreadonly -a"
 prop_checkBashisms65 = verifyNot checkBashisms "#!/bin/sh\nreadonly -p"
+prop_checkBashisms66 = verifyNot checkBashisms "#!/bin/sh\ncd -P ."
+prop_checkBashisms67 = verify checkBashisms "#!/bin/sh\ncd -P -e ."
 checkBashisms = ForShell [Sh, Dash] $ \t -> do
     params <- ask
     kludge params t
@@ -288,6 +290,7 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
             "typeset"
             ] ++ if not isDash then ["local"] else []
         allowedFlags = Map.fromList [
+            ("cd", ["L", "P"]),
             ("exec", []),
             ("export", ["p"]),
             ("jobs", ["l", "p"]),
