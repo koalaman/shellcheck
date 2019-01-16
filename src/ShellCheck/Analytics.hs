@@ -171,6 +171,7 @@ nodeChecks = [
     ,checkInvertedStringTest
     ,checkRedirectionToCommand
     ,checkNullaryExpansionTest
+    ,checkFgAndBgJobControl
     ]
 
 
@@ -3154,6 +3155,18 @@ checkNullaryExpansionTest params t =
                 id = getId word
                 fix = fixWith [replaceStart id params 0 "-n "]
         _ -> return ()
+
+prop_checkFgAndBgJobControl1 = verifyNot checkFgAndBgJobControl "set -m; fg"
+prop_checkFgAndBgJobControl2 = verify checkFgAndBgJobControl "bg"
+checkFgAndBgJobControl params t
+  | hasSetM params = return ()
+  | otherwise =
+      case t of
+          T_Literal id cmd -> when (cmd == "fg" || cmd == "bg") $
+                                warn id 2247 $
+                                  "Enable job control before calling " ++ cmd ++ ". Use set -m."
+          _                -> return ()
+
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

@@ -79,6 +79,7 @@ composeAnalyzers f g x = f x >> g x
 data Parameters = Parameters {
     hasLastpipe        :: Bool,           -- Whether this script has the 'lastpipe' option set/default.
     hasSetE            :: Bool,           -- Whether this script has 'set -e' anywhere.
+    hasSetM            :: Bool,           -- Whether this script has 'set -m' anywhere.
     variableFlow       :: [StackData],   -- A linear (bad) analysis of data flow
     parentMap          :: Map.Map Id Token, -- A map from Id to parent Token
     shellType          :: Shell,            -- The shell type, such as Bash or Ksh
@@ -176,7 +177,8 @@ makeParameters spec =
     let params = Parameters {
         rootNode = root,
         shellType = fromMaybe (determineShell root) $ asShellType spec,
-        hasSetE = containsSetE root,
+        hasSetE = containsSetOption "e" root,
+        hasSetM = containsSetOption "m" root,
         hasLastpipe =
             case shellType params of
                 Bash -> containsLastpipe root
@@ -192,19 +194,20 @@ makeParameters spec =
   where root = asScript spec
 
 
--- Does this script mention 'set -e' anywhere?
--- Used as a hack to disable certain warnings.
-containsSetE root = isNothing $ doAnalysis (guard . not . isSetE) root
+-- Does this script mention 'set -e' (or other option) anywhere?
+-- Used as a hack to disable or enable certain warnings.
+containsSetOption :: String -> Token -> Bool
+containsSetOption opt root = isNothing $ doAnalysis (guard . not . isSet) root
   where
-    isSetE t =
+    isSet t =
         case t of
             T_Script _ str _ -> str `matches` re
             T_SimpleCommand {}  ->
                 t `isUnqualifiedCommand` "set" &&
                     ("errexit" `elem` oversimplify t ||
-                        "e" `elem` map snd (getAllFlags t))
+                        opt `elem` map snd (getAllFlags t))
             _ -> False
-    re = mkRegex "[[:space:]]-[^-]*e"
+    re = mkRegex $ "[[:space:]]-[^-]*" ++ opt
 
 -- Does this script mention 'shopt -s lastpipe' anywhere?
 -- Also used as a hack.
