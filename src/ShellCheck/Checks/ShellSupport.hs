@@ -149,6 +149,7 @@ prop_checkBashisms66 = verifyNot checkBashisms "#!/bin/sh\ncd -P ."
 prop_checkBashisms67 = verify checkBashisms "#!/bin/sh\ncd -P -e ."
 prop_checkBashisms68 = verify checkBashisms "#!/bin/sh\numask -p"
 prop_checkBashisms69 = verifyNot checkBashisms "#!/bin/sh\numask -S"
+prop_checkBashisms70 = verify checkBashisms "#!/bin/sh\ntrap -l"
 checkBashisms = ForShell [Sh, Dash] $ \t -> do
     params <- ask
     kludge params t
@@ -300,6 +301,7 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
             ("printf", Just []),
             ("read", Just $ if isDash then ["r", "p"] else ["r"]),
             ("readonly", Just ["p"]),
+            ("trap", Just []),
             ("ulimit", if isDash then Nothing else Just ["f"]),
             ("umask", Just ["S"])
             ]
