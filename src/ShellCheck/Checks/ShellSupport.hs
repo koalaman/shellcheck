@@ -257,7 +257,8 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
             when (name `elem` unsupportedCommands) $
                 warnMsg id $ "'" ++ name ++ "' is"
             potentially $ do
-                allowed <- Map.lookup name allowedFlags
+                allowed' <- Map.lookup name allowedFlags
+                allowed <- allowed'
                 (word, flag) <- listToMaybe $
                     filter (\x -> (not . null . snd $ x) && snd x `notElem` allowed) flags
                 return . warnMsg (getId word) $ name ++ " -" ++ flag ++ " is"
@@ -292,20 +293,19 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
             "typeset"
             ] ++ if not isDash then ["local"] else []
         allowedFlags = Map.fromList [
-            ("cd", ["L", "P"]),
-            ("exec", []),
-            ("export", ["p"]),
-            ("jobs", ["l", "p"]),
-            ("printf", []),
-            ("read", if isDash then ["r", "p"] else ["r"]),
-            ("readonly", ["p"]),
-            ("ulimit", if isDash then ["H", "S", "t", "f", "d", "s", "c", "m", "l", "p", "n"] else ["f"]),
-            ("umask", ["S"])
+            ("cd", Just ["L", "P"]),
+            ("exec", Just []),
+            ("export", Just ["p"]),
+            ("jobs", Just ["l", "p"]),
+            ("printf", Just []),
+            ("read", Just $ if isDash then ["r", "p"] else ["r"]),
+            ("readonly", Just ["p"]),
+            ("ulimit", if isDash then Nothing else Just ["f"]),
+            ("umask", Just ["S"])
             ]
     bashism t@(T_SourceCommand id src _) =
         let name = fromMaybe "" $ getCommandName src
-        in do
-            when (name == "source") $ warnMsg id "'source' in place of '.' is"
+        in when (name == "source") $ warnMsg id "'source' in place of '.' is"
     bashism _ = return ()
 
     varChars="_0-9a-zA-Z"
