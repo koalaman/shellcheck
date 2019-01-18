@@ -484,7 +484,7 @@ checkShebang params (T_Annotation _ list t) =
 checkShebang params (T_Script id sb _) = execWriter $ do
     unless (shellTypeSpecified params) $ do
         when (sb == "") $
-            err id 2148 "Tips depend on target shell and yours is unknown. Add a shebang or an extension to the filename."
+            err id 2148 "Tips depend on target shell and yours is unknown. Add a shebang or a .bash, .ksh, .dash extension to the filename."
         when (executableFromShebang sb == "ash") $
             warn id 2187 "Ash scripts will be checked as Dash. Add '# shellcheck shell=dash' to silence."
     unless (null sb) $ do

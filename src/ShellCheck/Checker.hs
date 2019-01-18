@@ -51,9 +51,10 @@ tokenToPosition startMap t = fromMaybe fail $ do
 shellFromFilename filename = foldl mplus Nothing candidates
   where
     shellExtensions = [(".ksh", Ksh)
-                      ,(".sh", Sh)
                       ,(".bash", Bash)
                       ,(".dash", Dash)]
+                      -- The `.sh` is too generic to determine the shell:
+                      -- We fallback to Bash in this case and emit SC2148 if there is no shebang
     candidates =
         map (\(ext,sh) -> if ext `isSuffixOf` filename then Just sh else Nothing) shellExtensions
 
