@@ -44,6 +44,13 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
     is *auto*. **--color** without an argument is equivalent to
     **--color=always**.
 
+**-i**\ *CODE1*[,*CODE2*...],\ **--include=***CODE1*[,*CODE2*...]
+
+:   Explicitly include only the specified codes in the report. Subsequent **-i**
+    options are cumulative, but all the codes can be specified at once,
+    comma-separated as a single argument. Include options override any provided
+    exclude options.
+
 **-e**\ *CODE1*[,*CODE2*...],\ **--exclude=***CODE1*[,*CODE2*...]
 
 :   Explicitly exclude the specified codes from the report. Subsequent **-e**

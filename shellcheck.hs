@@ -87,6 +87,8 @@ options = [
     Option "C" ["color"]
         (OptArg (maybe (Flag "color" "always") (Flag "color")) "WHEN")
         "Use color (auto, always, never)",
+    Option "i" ["include"]
+        (ReqArg (Flag "include") "CODE1,CODE2..") "Consider only given types of warnings",
     Option "e" ["exclude"]
         (ReqArg (Flag "exclude") "CODE1,CODE2..") "Exclude types of warnings",
     Option "f" ["format"]
@@ -267,6 +269,18 @@ parseOption flag options =
             return options {
                 checkSpec = (checkSpec options) {
                     csExcludedWarnings = new ++ old
+                }
+            }
+
+        Flag "include" str -> do
+            new <- mapM parseNum $ filter (not . null) $ split ',' str
+            let old = csIncludedWarnings . checkSpec $ options
+            return options {
+                checkSpec = (checkSpec options) {
+                    csIncludedWarnings =
+                      if null new
+                        then old
+                        else Just new `mappend` old
                 }
             }
 

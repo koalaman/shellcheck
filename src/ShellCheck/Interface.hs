@@ -21,7 +21,7 @@
 module ShellCheck.Interface
     (
     SystemInterface(..)
-    , CheckSpec(csFilename, csScript, csCheckSourced, csExcludedWarnings, csShellTypeOverride, csMinSeverity)
+    , CheckSpec(csFilename, csScript, csCheckSourced, csIncludedWarnings, csExcludedWarnings, csShellTypeOverride, csMinSeverity)
     , CheckResult(crFilename, crComments)
     , ParseSpec(psFilename, psScript, psCheckSourced, psShellTypeOverride)
     , ParseResult(prComments, prTokenPositions, prRoot)
@@ -80,6 +80,7 @@ data CheckSpec = CheckSpec {
     csScript :: String,
     csCheckSourced :: Bool,
     csExcludedWarnings :: [Integer],
+    csIncludedWarnings :: Maybe [Integer],
     csShellTypeOverride :: Maybe Shell,
     csMinSeverity :: Severity
 } deriving (Show, Eq)
@@ -101,6 +102,7 @@ emptyCheckSpec = CheckSpec {
     csScript = "",
     csCheckSourced = False,
     csExcludedWarnings = [],
+    csIncludedWarnings = Nothing,
     csShellTypeOverride = Nothing,
     csMinSeverity = StyleC
 }
