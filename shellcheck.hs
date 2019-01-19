@@ -27,6 +27,7 @@ import           ShellCheck.Formatter.Format
 import qualified ShellCheck.Formatter.GCC
 import qualified ShellCheck.Formatter.JSON
 import qualified ShellCheck.Formatter.TTY
+import qualified ShellCheck.Formatter.Quiet
 
 import           Control.Exception
 import           Control.Monad
@@ -125,7 +126,8 @@ formats options = Map.fromList [
     ("checkstyle", ShellCheck.Formatter.CheckStyle.format),
     ("gcc",  ShellCheck.Formatter.GCC.format),
     ("json", ShellCheck.Formatter.JSON.format),
-    ("tty",  ShellCheck.Formatter.TTY.format options)
+    ("tty",  ShellCheck.Formatter.TTY.format options),
+    ("quiet",  ShellCheck.Formatter.Quiet.format options)
     ]
 
 formatList = intercalate ", " names
