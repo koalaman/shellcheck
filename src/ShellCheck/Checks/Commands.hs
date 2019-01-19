@@ -212,6 +212,7 @@ prop_checkGrepRe16= verifyNot checkGrepRe "grep --include 'Foo*' file"
 prop_checkGrepRe17= verifyNot checkGrepRe "grep --exclude 'Foo*' file"
 prop_checkGrepRe18= verifyNot checkGrepRe "grep --exclude-dir 'Foo*' file"
 prop_checkGrepRe19= verify checkGrepRe "grep -- 'Foo*' file"
+prop_checkGrepRe20= verifyNot checkGrepRe "grep --fixed-strings 'Foo*' file"
 
 checkGrepRe = CommandCheck (Basename "grep") check where
     check cmd = f cmd (arguments cmd)
@@ -244,7 +245,7 @@ checkGrepRe = CommandCheck (Basename "grep") check where
                     "Note that unlike globs, " ++ [char] ++ "* here matches '" ++ [char, char, char] ++ "' but not '" ++ wordStartingWith char ++ "'."
       where
         flags = map snd $ getAllFlags cmd
-        grepGlobFlags = ["F", "include", "exclude", "exclude-dir"]
+        grepGlobFlags = ["fixed-strings", "F", "include", "exclude", "exclude-dir"]
 
     wordStartingWith c =
         head . filter ([c] `isPrefixOf`) $ candidates
