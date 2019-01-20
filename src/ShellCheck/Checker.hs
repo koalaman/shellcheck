@@ -244,5 +244,35 @@ prop_sourcePartOfOriginalScript = -- #1181: -x disabled posix warning for 'sourc
 
 prop_spinBug1413 = null $ check "fun() {\n# shellcheck disable=SC2188\n> /dev/null\n}\n"
 
+prop_deducesTypeFromExtension = null result
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "file.ksh",
+        csScript = "(( 3.14 ))"
+    }
+
+prop_deducesTypeFromExtension2 = result == [2079]
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "file.bash",
+        csScript = "(( 3.14 ))"
+    }
+
+prop_shExtensionDoesntMatter = result == [2148]
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "file.sh",
+        csScript = "echo 'hello world'"
+    }
+
+prop_sourcedFileUsesOriginalShellExtension = result == [2079]
+  where
+    result = checkWithSpec [("file.ksh", "(( 3.14 ))")] emptyCheckSpec {
+        csFilename = "file.bash",
+        csScript = "source file.ksh",
+        csCheckSourced = True
+    }
+
+
 return []
 runTests = $quickCheckAll
