@@ -48,6 +48,16 @@ tokenToPosition startMap t = fromMaybe fail $ do
   where
     fail = error "Internal shellcheck error: id doesn't exist. Please report!"
 
+shellFromFilename filename = foldl mplus Nothing candidates
+  where
+    shellExtensions = [(".ksh", Ksh)
+                      ,(".bash", Bash)
+                      ,(".dash", Dash)]
+                      -- The `.sh` is too generic to determine the shell:
+                      -- We fallback to Bash in this case and emit SC2148 if there is no shebang
+    candidates =
+        map (\(ext,sh) -> if ext `isSuffixOf` filename then Just sh else Nothing) shellExtensions
+
 checkScript :: Monad m => SystemInterface m -> CheckSpec -> m CheckResult
 checkScript sys spec = do
     results <- checkScript (csScript spec)
@@ -69,6 +79,7 @@ checkScript sys spec = do
                 as {
                     asScript = root,
                     asShellType = csShellTypeOverride spec,
+                    asFallbackShell = shellFromFilename $ csFilename spec,
                     asCheckSourced = csCheckSourced spec,
                     asExecutionMode = Executed,
                     asTokenPositions = tokenPositions

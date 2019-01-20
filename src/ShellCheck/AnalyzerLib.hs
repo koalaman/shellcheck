@@ -175,7 +175,7 @@ makeCommentWithFix severity id code str fix =
 makeParameters spec =
     let params = Parameters {
         rootNode = root,
-        shellType = fromMaybe (determineShell root) $ asShellType spec,
+        shellType = fromMaybe (determineShell (asFallbackShell spec) root) $ asShellType spec,
         hasSetE = containsSetE root,
         hasLastpipe =
             case shellType params of
@@ -184,7 +184,7 @@ makeParameters spec =
                 Sh   -> False
                 Ksh  -> True,
 
-        shellTypeSpecified = isJust $ asShellType spec,
+        shellTypeSpecified = isJust (asShellType spec) || isJust (asFallbackShell spec),
         parentMap = getParentTree root,
         variableFlow = getVariableFlow params root,
         tokenPositions = asTokenPositions spec
@@ -227,11 +227,13 @@ prop_determineShell4 = determineShellTest "#!/bin/ksh\n#shellcheck shell=sh\nfoo
 prop_determineShell5 = determineShellTest "#shellcheck shell=sh\nfoo" == Sh
 prop_determineShell6 = determineShellTest "#! /bin/sh" == Sh
 prop_determineShell7 = determineShellTest "#! /bin/ash" == Dash
+prop_determineShell8 = determineShellTest' (Just Ksh) "#!/bin/sh" == Sh
 
-determineShellTest = determineShell . fromJust . prRoot . pScript
-determineShell t = fromMaybe Bash $ do
+determineShellTest = determineShellTest' Nothing
+determineShellTest' fallbackShell = determineShell fallbackShell . fromJust . prRoot . pScript
+determineShell fallbackShell t = fromMaybe Bash $ do
     shellString <- foldl mplus Nothing $ getCandidates t
-    shellForExecutable shellString
+    shellForExecutable shellString `mplus` fallbackShell
   where
     forAnnotation t =
         case t of

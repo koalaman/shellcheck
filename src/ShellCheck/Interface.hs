@@ -25,7 +25,7 @@ module ShellCheck.Interface
     , CheckResult(crFilename, crComments)
     , ParseSpec(psFilename, psScript, psCheckSourced, psShellTypeOverride)
     , ParseResult(prComments, prTokenPositions, prRoot)
-    , AnalysisSpec(asScript, asShellType, asExecutionMode, asCheckSourced, asTokenPositions)
+    , AnalysisSpec(asScript, asShellType, asFallbackShell, asExecutionMode, asCheckSourced, asTokenPositions)
     , AnalysisResult(arComments)
     , FormatterOptions(foColorOption, foWikiLinkCount)
     , Shell(Ksh, Sh, Bash, Dash)
@@ -138,6 +138,7 @@ newParseResult = ParseResult {
 data AnalysisSpec = AnalysisSpec {
     asScript :: Token,
     asShellType :: Maybe Shell,
+    asFallbackShell :: Maybe Shell,
     asExecutionMode :: ExecutionMode,
     asCheckSourced :: Bool,
     asTokenPositions :: Map.Map Id (Position, Position)
@@ -146,6 +147,7 @@ data AnalysisSpec = AnalysisSpec {
 newAnalysisSpec token = AnalysisSpec {
     asScript = token,
     asShellType = Nothing,
+    asFallbackShell = Nothing,
     asExecutionMode = Executed,
     asCheckSourced = False,
     asTokenPositions = Map.empty
