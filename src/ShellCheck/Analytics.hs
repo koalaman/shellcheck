@@ -2605,15 +2605,17 @@ checkUncheckedCdPushdPopd params root =
         []
     else execWriter $ doAnalysis checkElement root
   where
-    checkElement t@T_SimpleCommand {} =
-        when(name t `elem` ["cd", "pushd", "popd"]
+    checkElement t@T_SimpleCommand {} = do
+        let name = getName t
+        when(name `elem` ["cd", "pushd", "popd"]
             && not (isSafeDir t)
-            && not (name t `elem` ["pushd", "popd"] && ("n" `elem` map snd (getAllFlags t)))
+            && not (name `elem` ["pushd", "popd"] && ("n" `elem` map snd (getAllFlags t)))
             && not (isCondition $ getPath (parentMap params) t)) $
-                warnWithFix (getId t) 2164 "Use 'cd ... || exit' or 'cd ... || return' in case cd fails."
+                warnWithFix (getId t) 2164
+                    ("Use '" ++ name ++ " ... || exit' or '" ++ name ++ " ... || return' in case " ++ name ++ " fails.")
                     (fixWith [replaceEnd (getId t) params 0 " || exit"])
     checkElement _ = return ()
-    name t = fromMaybe "" $ getCommandName t
+    getName t = fromMaybe "" $ getCommandName t
     isSafeDir t = case oversimplify t of
           [_, ".."] -> True;
           _ -> False
