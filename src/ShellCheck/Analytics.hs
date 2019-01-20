@@ -2145,6 +2145,8 @@ prop_checkCdAndBack2 = verifyNot checkCdAndBack "for f in *; do cd $f || continu
 prop_checkCdAndBack3 = verifyNot checkCdAndBack "while [[ $PWD != / ]]; do cd ..; done"
 prop_checkCdAndBack4 = verify checkCdAndBack "cd $tmp; foo; cd -"
 prop_checkCdAndBack5 = verifyNot checkCdAndBack "cd ..; foo; cd .."
+prop_checkCdAndBack6 = verify checkCdAndBack "for dir in */; do cd \"$dir\"; some_cmd; cd ..; done"
+prop_checkCdAndBack7 = verifyNot checkCdAndBack "set -e; for dir in */; do cd \"$dir\"; some_cmd; cd ..; done"
 checkCdAndBack params = doLists
   where
     shell = shellType params
@@ -2175,14 +2177,13 @@ checkCdAndBack params = doLists
                 else findCdPair (b:rest)
             _ -> Nothing
 
-
     doList list =
-        let cds = filter ((== Just "cd") . getCmd) list in
-            potentially $ do
-                cd <- findCdPair cds
-                return $ info cd 2103 message
-
-    message = "Use a ( subshell ) to avoid having to cd back."
+        if hasSetE params
+        then return ()
+        else let cds = filter ((== Just "cd") . getCmd) list
+             in  potentially $ do
+                     cd <- findCdPair cds
+                     return $ info cd 2103 "Use a ( subshell ) to avoid having to cd back."
 
 prop_checkLoopKeywordScope1 = verify checkLoopKeywordScope "continue 2"
 prop_checkLoopKeywordScope2 = verify checkLoopKeywordScope "for f; do ( break; ); done"
