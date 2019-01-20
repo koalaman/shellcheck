@@ -351,6 +351,14 @@ isOnlyRedirection t =
 
 isFunction t = case t of T_Function {} -> True; _ -> False
 
+-- Bats tests are functions for the purpose of 'local' and such
+isFunctionLike t =
+    case t of
+        T_Function {} -> True
+        T_BatsTest {} -> True
+        _ -> False
+
+
 isBraceExpansion t = case t of T_BraceExpansion {} -> True; _ -> False
 
 -- Get the lists of commands from tokens that contain them, such as

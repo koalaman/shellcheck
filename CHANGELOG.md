@@ -1,6 +1,7 @@
 ## Since previous release
 ### Added
 - Preliminary support for fix suggestions
+- Files containing Bats tests can now be checked
 - SC2246: Warn if a shebang's interpreter ends with /
 - SC2245: Warn that Ksh ignores all but the first glob result in `[`
 - SC2243/SC2244: Suggest using explicit -n for `[ $foo ]`

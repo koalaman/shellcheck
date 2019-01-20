@@ -52,6 +52,7 @@ shellFromFilename filename = foldl mplus Nothing candidates
   where
     shellExtensions = [(".ksh", Ksh)
                       ,(".bash", Bash)
+                      ,(".bats", Bash)
                       ,(".dash", Dash)]
                       -- The `.sh` is too generic to determine the shell:
                       -- We fallback to Bash in this case and emit SC2148 if there is no shebang

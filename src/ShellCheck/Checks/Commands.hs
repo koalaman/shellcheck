@@ -770,7 +770,7 @@ prop_checkLocalScope2 = verifyNot checkLocalScope "f() { local foo=3; }"
 checkLocalScope = CommandCheck (Exactly "local") $ \t ->
     whenShell [Bash, Dash] $ do -- Ksh allows it, Sh doesn't support local
         path <- getPathM t
-        unless (any isFunction path) $
+        unless (any isFunctionLike path) $
             err (getId $ getCommandTokenOrThis t) 2168 "'local' is only valid in functions."
 
 prop_checkDeprecatedTempfile1 = verify checkDeprecatedTempfile "var=$(tempfile)"
