@@ -139,6 +139,7 @@ data Token =
     | T_CoProcBody Id Token
     | T_Include Id Token
     | T_SourceCommand Id Token Token
+    | T_BatsTest Id Token Token
     deriving (Show)
 
 data Annotation =
@@ -276,6 +277,7 @@ analyze f g i =
     delve (T_CoProcBody id t) = d1 t $ T_CoProcBody id
     delve (T_Include id script) = d1 script $ T_Include id
     delve (T_SourceCommand id includer t_include) = d2 includer t_include $ T_SourceCommand id
+    delve (T_BatsTest id name t) = d2 name t $ T_BatsTest id
     delve t = return t
 
 getId :: Token -> Id
@@ -380,6 +382,7 @@ getId t = case t of
         T_UnparsedIndex id _ _ -> id
         TC_Empty id _ -> id
         TA_Variable id _ _ -> id
+        T_BatsTest id _ _ -> id
 
 blank :: Monad m => Token -> m ()
 blank = const $ return ()

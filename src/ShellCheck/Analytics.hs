@@ -232,7 +232,9 @@ hasFloatingPoint params = shellType params == Ksh
 isCondition [] = False
 isCondition [_] = False
 isCondition (child:parent:rest) =
-    getId child `elem` map getId (getConditionChildren parent) || isCondition (parent:rest)
+    case child of
+        T_BatsTest {} -> True -- count anything in a @test as conditional
+        _ -> getId child `elem` map getId (getConditionChildren parent) || isCondition (parent:rest)
   where
     getConditionChildren t =
         case t of
@@ -1580,6 +1582,7 @@ prop_subshellAssignmentCheck16 = verifyNotTree subshellAssignmentCheck "(set -e)
 prop_subshellAssignmentCheck17 = verifyNotTree subshellAssignmentCheck "foo=${ { bar=$(baz); } 2>&1; }; echo $foo $bar"
 prop_subshellAssignmentCheck18 = verifyTree subshellAssignmentCheck "( exec {n}>&2; ); echo $n"
 prop_subshellAssignmentCheck19 = verifyNotTree subshellAssignmentCheck "#!/bin/bash\nshopt -s lastpipe; echo a | read -r b; echo \"$b\""
+prop_subshellAssignmentCheck20 = verifyTree subshellAssignmentCheck "@test 'foo' { a=1; }\n@test 'bar' { echo $a; }\n"
 subshellAssignmentCheck params t =
     let flow = variableFlow params
         check = findSubshelled flow [("oops",[])] Map.empty
@@ -1666,6 +1669,7 @@ prop_checkSpacefulness33= verifyTree checkSpacefulness "for file; do echo $file;
 prop_checkSpacefulness34= verifyTree checkSpacefulness "declare foo$n=$1"
 prop_checkSpacefulness35= verifyNotTree checkSpacefulness "echo ${1+\"$1\"}"
 prop_checkSpacefulness36= verifyNotTree checkSpacefulness "arg=$#; echo $arg"
+prop_checkSpacefulness37= verifyNotTree checkSpacefulness "@test 'status' {\n [ $status -eq 0 ]\n}"
 
 checkSpacefulness params t =
     doVariableFlowAnalysis readF writeF (Map.fromList defaults) (variableFlow params)
@@ -1891,6 +1895,7 @@ prop_checkUnused37= verifyNotTree checkUnusedAssignments "fd=2; exec {fd}>&-"
 prop_checkUnused38= verifyTree checkUnusedAssignments "(( a=42 ))"
 prop_checkUnused39= verifyNotTree checkUnusedAssignments "declare -x -f foo"
 prop_checkUnused40= verifyNotTree checkUnusedAssignments "arr=(1 2); num=2; echo \"${arr[@]:num}\""
+prop_checkUnused41= verifyNotTree checkUnusedAssignments "@test 'foo' {\ntrue\n}\n"
 checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
     flow = variableFlow params
