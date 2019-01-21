@@ -2599,6 +2599,10 @@ prop_checkUncheckedPopd6 = verifyTree checkUncheckedCdPushdPopd "popd"
 prop_checkUncheckedPopd7 = verifyNotTree checkUncheckedCdPushdPopd "#!/bin/bash -e\npopd\nrm bar"
 prop_checkUncheckedPopd8 = verifyNotTree checkUncheckedCdPushdPopd "set -o errexit; popd; rm bar"
 prop_checkUncheckedPopd9 = verifyNotTree checkUncheckedCdPushdPopd "popd -n foo"
+prop_checkUncheckedPopd10 = verifyNotTree checkUncheckedCdPushdPopd "cd ../.."
+prop_checkUncheckedPopd11 = verifyNotTree checkUncheckedCdPushdPopd "cd ../.././.."
+prop_checkUncheckedPopd12 = verifyNotTree checkUncheckedCdPushdPopd "cd /"
+prop_checkUncheckedPopd13 = verifyTree checkUncheckedCdPushdPopd "cd ../../.../.."
 
 checkUncheckedCdPushdPopd params root =
     if hasSetE params then
@@ -2617,8 +2621,9 @@ checkUncheckedCdPushdPopd params root =
     checkElement _ = return ()
     getName t = fromMaybe "" $ getCommandName t
     isSafeDir t = case oversimplify t of
-          [_, ".."] -> True;
+          [_, str] -> str `matches` regex
           _ -> False
+    regex = mkRegex "^/*((\\.|\\.\\.)/+)*(\\.|\\.\\.)?$"
 
 prop_checkLoopVariableReassignment1 = verify checkLoopVariableReassignment "for i in *; do for i in *.bar; do true; done; done"
 prop_checkLoopVariableReassignment2 = verify checkLoopVariableReassignment "for i in *; do for((i=0; i<3; i++)); do true; done; done"
