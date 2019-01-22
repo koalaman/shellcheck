@@ -64,8 +64,8 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 **-s**\ *shell*,\ **--shell=***shell*
 
 :   Specify Bourne shell dialect. Valid values are *sh*, *bash*, *dash* and *ksh*.
-    The default is to use the file's shebang, or *bash* if the target shell
-    can't be determined.
+    The default is to deduce the shell from the file's `shell` directive,
+    shebang, or `.bash/.bats/.dash/.ksh` extension, in that order.
 
 **-V**,\ **--version**
 

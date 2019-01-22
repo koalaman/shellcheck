@@ -6,6 +6,10 @@
 - SC2245: Warn that Ksh ignores all but the first glob result in `[`
 - SC2243/SC2244: Suggest using explicit -n for `[ $foo ]`
 
+### Changed
+- If a directive or shebang is not specified, a `.bash/.bats/.dash/.ksh`
+  extension will be used to infer the shell type when present.
+
 ## v0.6.0 - 2018-12-02
 ### Added
 - Command line option --severity/-S for filtering by minimum severity
