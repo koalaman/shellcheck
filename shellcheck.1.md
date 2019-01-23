@@ -137,6 +137,12 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
           ...
         ]
 
+*quiet*
+
+:   Suppress all normal output. Exit with zero if no issues are found,
+    otherwise exit with one. Stops processing after the first issue.
+
+
 # DIRECTIVES
 ShellCheck directives can be specified as comments in the shell script
 before a command or block:

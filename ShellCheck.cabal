@@ -80,6 +80,7 @@ library
       ShellCheck.Formatter.GCC
       ShellCheck.Formatter.JSON
       ShellCheck.Formatter.TTY
+      ShellCheck.Formatter.Quiet
       ShellCheck.Interface
       ShellCheck.Parser
       ShellCheck.Regex
