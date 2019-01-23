@@ -284,19 +284,19 @@ prop_sourcedFileUsesOriginalShellExtension = result == [2079]
     }
 
 prop_optionIncludes1 =
-    -- expect 2086, but not included, so not reported
+    -- expect 2086, but not included, so nothing reported
     null $ checkOptionIncludes (Just [2080]) "#!/bin/sh\n var='a b'\n echo $var"
 
 prop_optionIncludes2 =
-    -- expect 2086, included, so its reported
+    -- expect 2086, included, so it is reported
     [2086] == checkOptionIncludes (Just [2086]) "#!/bin/sh\n var='a b'\n echo $var"
 
 prop_optionIncludes3 =
-    -- expect 2086, no inclusions provided, so its reported
+    -- expect 2086, no inclusions provided, so it is reported
     [2086] == checkOptionIncludes Nothing "#!/bin/sh\n var='a b'\n echo $var"
 
 prop_optionIncludes4 =
-    -- expect 2086 & 2154, only 2154 included, so only its reported
+    -- expect 2086 & 2154, only 2154 included, so only that's reported
     [2154] == checkOptionIncludes (Just [2154]) "#!/bin/sh\n var='a b'\n echo $var\n echo $bar"
 
 return []
