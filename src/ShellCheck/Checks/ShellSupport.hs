@@ -152,6 +152,8 @@ prop_checkBashisms69 = verifyNot checkBashisms "#!/bin/sh\numask -S"
 prop_checkBashisms70 = verify checkBashisms "#!/bin/sh\ntrap -l"
 prop_checkBashisms71 = verify checkBashisms "#!/bin/sh\ntype -a ls"
 prop_checkBashisms72 = verifyNot checkBashisms "#!/bin/sh\ntype ls"
+prop_checkBashisms73 = verify checkBashisms "#!/bin/sh\nunset -n namevar"
+prop_checkBashisms74 = verifyNot checkBashisms "#!/bin/sh\nunset -f namevar"
 checkBashisms = ForShell [Sh, Dash] $ \t -> do
     params <- ask
     kludge params t
@@ -306,7 +308,8 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
             ("trap", Just []),
             ("type", Just []),
             ("ulimit", if isDash then Nothing else Just ["f"]),
-            ("umask", Just ["S"])
+            ("umask", Just ["S"]),
+            ("unset", Just ["f", "v"])
             ]
     bashism t@(T_SourceCommand id src _) =
         let name = fromMaybe "" $ getCommandName src
