@@ -158,6 +158,9 @@ prop_checkBashisms75 = verifyNot checkBashisms "#!/bin/sh\necho \"-n foo\""
 prop_checkBashisms76 = verifyNot checkBashisms "#!/bin/sh\necho \"-ne foo\""
 prop_checkBashisms77 = verifyNot checkBashisms "#!/bin/sh\necho -Q foo"
 prop_checkBashisms78 = verify checkBashisms "#!/bin/sh\necho -ne foo"
+prop_checkBashisms79 = verify checkBashisms "#!/bin/sh\nhash -l"
+prop_checkBashisms80 = verifyNot checkBashisms "#!/bin/sh\nhash -r"
+prop_checkBashisms81 = verifyNot checkBashisms "#!/bin/dash\nhash -v"
 checkBashisms = ForShell [Sh, Dash] $ \t -> do
     params <- ask
     kludge params t
@@ -307,6 +310,7 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
             ("cd", Just ["L", "P"]),
             ("exec", Just []),
             ("export", Just ["p"]),
+            ("hash", Just $ if isDash then ["r", "v"] else ["r"]),
             ("jobs", Just ["l", "p"]),
             ("printf", Just []),
             ("read", Just $ if isDash then ["r", "p"] else ["r"]),
