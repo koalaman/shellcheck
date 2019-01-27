@@ -154,6 +154,10 @@ prop_checkBashisms71 = verify checkBashisms "#!/bin/sh\ntype -a ls"
 prop_checkBashisms72 = verifyNot checkBashisms "#!/bin/sh\ntype ls"
 prop_checkBashisms73 = verify checkBashisms "#!/bin/sh\nunset -n namevar"
 prop_checkBashisms74 = verifyNot checkBashisms "#!/bin/sh\nunset -f namevar"
+prop_checkBashisms75 = verifyNot checkBashisms "#!/bin/sh\necho \"-n foo\""
+prop_checkBashisms76 = verifyNot checkBashisms "#!/bin/sh\necho \"-ne foo\""
+prop_checkBashisms77 = verifyNot checkBashisms "#!/bin/sh\necho -Q foo"
+prop_checkBashisms78 = verify checkBashisms "#!/bin/sh\necho -ne foo"
 checkBashisms = ForShell [Sh, Dash] $ \t -> do
     params <- ask
     kludge params t
@@ -240,15 +244,17 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
         warnMsg id "`<file` to read files is"
 
     bashism t@(T_SimpleCommand _ _ (cmd:arg:_))
-        | t `isCommand` "echo" && "-" `isPrefixOf` argString =
-            unless ("--" `isPrefixOf` argString) $ -- echo "-----"
-                if isDash
-                then
-                    when (argString /= "-n") $
-                        warnMsg (getId arg) "echo flags besides -n"
-                else
-                    warnMsg (getId arg) "echo flags are"
-      where argString = concat $ oversimplify arg
+        | t `isCommand` "echo" && argString `matches` flagRegex =
+            if isDash
+            then
+                when (argString /= "-n") $
+                    warnMsg (getId arg) "echo flags besides -n"
+            else
+                warnMsg (getId arg) "echo flags are"
+      where
+          argString = concat $ oversimplify arg
+          flagRegex = mkRegex "^-[eEsn]+$"
+
     bashism t@(T_SimpleCommand _ _ (cmd:arg:_))
         | t `isCommand` "exec" && "-" `isPrefixOf` concat (oversimplify arg) =
             warnMsg (getId arg) "exec flags are"
