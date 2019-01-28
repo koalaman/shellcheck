@@ -33,6 +33,7 @@ import Data.Char
 import Data.List
 import Data.Maybe
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 import Test.QuickCheck.All (forAllProperties)
 import Test.QuickCheck.Test (quickCheckWithResult, stdArgs, maxSuccess)
 
@@ -161,6 +162,14 @@ prop_checkBashisms78 = verify checkBashisms "#!/bin/sh\necho -ne foo"
 prop_checkBashisms79 = verify checkBashisms "#!/bin/sh\nhash -l"
 prop_checkBashisms80 = verifyNot checkBashisms "#!/bin/sh\nhash -r"
 prop_checkBashisms81 = verifyNot checkBashisms "#!/bin/dash\nhash -v"
+prop_checkBashisms82 = verifyNot checkBashisms "#!/bin/sh\nset -v +o allexport -o errexit -C"
+prop_checkBashisms83 = verifyNot checkBashisms "#!/bin/sh\nset --"
+prop_checkBashisms84 = verify checkBashisms "#!/bin/sh\nset -o pipefail"
+prop_checkBashisms85 = verify checkBashisms "#!/bin/sh\nset -B"
+prop_checkBashisms86 = verifyNot checkBashisms "#!/bin/dash\nset -o emacs"
+prop_checkBashisms87 = verify checkBashisms "#!/bin/sh\nset -o emacs"
+prop_checkBashisms88 = verifyNot checkBashisms "#!/bin/sh\nset -- wget -o foo 'https://some.url'"
+prop_checkBashisms89 = verifyNot checkBashisms "#!/bin/sh\nopts=$-\nset -\"$opts\""
 checkBashisms = ForShell [Sh, Dash] $ \t -> do
     params <- ask
     kludge params t
@@ -263,6 +272,51 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
             warnMsg (getId arg) "exec flags are"
     bashism t@(T_SimpleCommand id _ _)
         | t `isCommand` "let" = warnMsg id "'let' is"
+    bashism t@(T_SimpleCommand _ _ (cmd:arg:rest))
+        | t `isCommand` "set" = unless isDash $ checkOptions (arg:rest)
+      where
+        -- Check a flag-option pair (such as -o errexit)
+        checkOptions (flag:opt:rest)
+            | flag' `matches` oFlagRegex = do
+                when (opt' `notElem` longOptions) $
+                  warnMsg (getId opt) $ "set option " <> opt' <> " is"
+                checkFlags (flag:rest)
+            | otherwise = checkFlags (flag:opt:rest)
+          where
+            flag' = concat $ getLiteralString flag
+            opt'  = concat $ getLiteralString opt
+        checkOptions (flag:rest) = checkFlags (flag:rest)
+        checkOptions _           = return ()
+
+        -- Check that each option in a sequence of flags
+        -- (such as -aveo) is valid
+        checkFlags (flag:rest)
+            | startsOption flag' = do
+                unless (flag' `matches` validFlagsRegex) $
+                  forM_ (tail flag') $ \letter ->
+                    when (letter `notElem` optionsSet) $
+                      warnMsg (getId flag) $ "set flag " <> ('-':letter:" is")
+                checkOptions rest
+            | beginsWithDoubleDash flag' = do
+                warnMsg (getId flag) $ "set flag " <> flag' <> " is"
+                checkOptions rest
+            -- Either a word that doesn't start with a dash, or simply '--',
+            -- so stop checking.
+            | otherwise = return ()
+          where
+            flag' = concat $ getLiteralString flag
+        checkFlags [] = return ()
+
+        options              = "abCefhmnuvxo"
+        optionsSet           = Set.fromList options
+        startsOption         = (`matches` mkRegex "^(\\+|-[^-])")
+        oFlagRegex           = mkRegex $ "^[-+][" <> options <> "]*o$"
+        validFlagsRegex      = mkRegex $ "^[-+]([" <> options <> "]+o?|o)$"
+        beginsWithDoubleDash = (`matches` mkRegex "^--.+$")
+        longOptions          = Set.fromList
+            [ "allexport", "errexit", "ignoreeof", "monitor", "noclobber"
+            , "noexec", "noglob", "nolog", "notify" , "nounset", "verbose"
+            , "vi", "xtrace" ]
 
     bashism t@(T_SimpleCommand id _ (cmd:rest)) =
         let name = fromMaybe "" $ getCommandName t
