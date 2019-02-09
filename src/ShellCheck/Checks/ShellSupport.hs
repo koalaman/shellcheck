@@ -170,6 +170,7 @@ prop_checkBashisms86 = verifyNot checkBashisms "#!/bin/dash\nset -o emacs"
 prop_checkBashisms87 = verify checkBashisms "#!/bin/sh\nset -o emacs"
 prop_checkBashisms88 = verifyNot checkBashisms "#!/bin/sh\nset -- wget -o foo 'https://some.url'"
 prop_checkBashisms89 = verifyNot checkBashisms "#!/bin/sh\nopts=$-\nset -\"$opts\""
+prop_checkBashisms90 = verifyNot checkBashisms "#!/bin/sh\nset -o \"$opt\""
 checkBashisms = ForShell [Sh, Dash] $ \t -> do
     params <- ask
     kludge params t
@@ -272,39 +273,43 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
             warnMsg (getId arg) "exec flags are"
     bashism t@(T_SimpleCommand id _ _)
         | t `isCommand` "let" = warnMsg id "'let' is"
-    bashism t@(T_SimpleCommand _ _ (cmd:arg:rest))
-        | t `isCommand` "set" = unless isDash $ checkOptions (arg:rest)
+    bashism t@(T_SimpleCommand _ _ (cmd:args))
+        | t `isCommand` "set" = unless isDash $
+            checkOptions $ getLiteralArgs args
       where
+        -- Get the literal options from a list of arguments,
+        -- up until the first non-literal one
+        getLiteralArgs :: [Token] -> [(Id, String)]
+        getLiteralArgs (first:rest) = fromMaybe [] $ do
+            str <- getLiteralString first
+            return $ (getId first, str) : getLiteralArgs rest
+        getLiteralArgs [] = []
+
         -- Check a flag-option pair (such as -o errexit)
-        checkOptions (flag:opt:rest)
+        checkOptions (flag@(fid,flag') : opt@(oid,opt') : rest)
             | flag' `matches` oFlagRegex = do
                 when (opt' `notElem` longOptions) $
-                  warnMsg (getId opt) $ "set option " <> opt' <> " is"
+                  warnMsg oid $ "set option " <> opt' <> " is"
                 checkFlags (flag:rest)
             | otherwise = checkFlags (flag:opt:rest)
-          where
-            flag' = concat $ getLiteralString flag
-            opt'  = concat $ getLiteralString opt
         checkOptions (flag:rest) = checkFlags (flag:rest)
         checkOptions _           = return ()
 
         -- Check that each option in a sequence of flags
         -- (such as -aveo) is valid
-        checkFlags (flag:rest)
+        checkFlags (flag@(fid, flag'):rest)
             | startsOption flag' = do
                 unless (flag' `matches` validFlagsRegex) $
                   forM_ (tail flag') $ \letter ->
                     when (letter `notElem` optionsSet) $
-                      warnMsg (getId flag) $ "set flag " <> ('-':letter:" is")
+                      warnMsg fid $ "set flag " <> ('-':letter:" is")
                 checkOptions rest
             | beginsWithDoubleDash flag' = do
-                warnMsg (getId flag) $ "set flag " <> flag' <> " is"
+                warnMsg fid $ "set flag " <> flag' <> " is"
                 checkOptions rest
             -- Either a word that doesn't start with a dash, or simply '--',
             -- so stop checking.
             | otherwise = return ()
-          where
-            flag' = concat $ getLiteralString flag
         checkFlags [] = return ()
 
         options              = "abCefhmnuvxo"
