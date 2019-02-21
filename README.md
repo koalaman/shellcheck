@@ -180,6 +180,7 @@ Distro packages already come with a `man` page. If you are building from source,
 ## Travis CI & GitLab
 
 Travis CI has now intergrated ShellCheck by default, so you don't need to manually install it.
+
 GitLab does not intergrate ShellCheck by default, so you need to manually install it or pick what distro package to use.
 
 If you still want to do so in order to upgrade at your leisure or ensure the latest release, follow the steps to install the shellcheck binary, bellow.
