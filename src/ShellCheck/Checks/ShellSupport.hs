@@ -171,6 +171,7 @@ prop_checkBashisms87 = verify checkBashisms "#!/bin/sh\nset -o emacs"
 prop_checkBashisms88 = verifyNot checkBashisms "#!/bin/sh\nset -- wget -o foo 'https://some.url'"
 prop_checkBashisms89 = verifyNot checkBashisms "#!/bin/sh\nopts=$-\nset -\"$opts\""
 prop_checkBashisms90 = verifyNot checkBashisms "#!/bin/sh\nset -o \"$opt\""
+prop_checkBashisms91 = verify checkBashisms "#!/bin/sh\nwait -n"
 checkBashisms = ForShell [Sh, Dash] $ \t -> do
     params <- ask
     kludge params t
@@ -378,7 +379,8 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
             ("type", Just []),
             ("ulimit", if isDash then Nothing else Just ["f"]),
             ("umask", Just ["S"]),
-            ("unset", Just ["f", "v"])
+            ("unset", Just ["f", "v"]),
+            ("wait", Just [])
             ]
     bashism t@(T_SourceCommand id src _) =
         let name = fromMaybe "" $ getCommandName src
