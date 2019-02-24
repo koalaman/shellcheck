@@ -109,7 +109,6 @@ On Debian based distros:
 On Arch Linux based distros:
 
     pacman -S shellcheck
-    
 or get the dependency free [shellcheck-static](https://aur.archlinux.org/packages/shellcheck-static/) from the AUR.
 
 On Gentoo based distros:
