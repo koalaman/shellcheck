@@ -25,6 +25,7 @@ See [the gallery of bad code](README.md#user-content-gallery-of-bad-code) for ex
   - [On the web](#on-the-web)
   - [From your terminal](#from-your-terminal)
   - [In your editor](#in-your-editor)
+  - [With sonarqube](#with-sonarqube)
   - [In your build or test suites](#in-your-build-or-test-suites)
 - [Installing](#installing)
 - [Travis CI](#travis-ci)
@@ -81,6 +82,10 @@ You can see ShellCheck suggestions directly in a variety of editors.
 * VSCode, through [vscode-shellcheck](https://github.com/timonwong/vscode-shellcheck).
 
 * Most other editors, through [GCC error compatibility](shellcheck.1.md#user-content-formats).
+
+### With sonarqube
+
+You can see ShellCheck reports using [this plugin for sonarqube](https://github.com/emerald-squad/sonar-shellcheck-plugin)
 
 ### In your build or test suites
 
