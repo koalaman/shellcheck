@@ -27,7 +27,6 @@ See [the gallery of bad code](README.md#user-content-gallery-of-bad-code) for ex
   - [In your editor](#in-your-editor)
   - [In your build or test suites](#in-your-build-or-test-suites)
 - [Installing](#installing)
-- [Travis CI](#travis-ci)
 - [Compiling from source](#compiling-from-source)
   - [Installing Cabal](#installing-cabal)
   - [Compiling ShellCheck](#compiling-shellcheck)
@@ -85,8 +84,45 @@ You can see ShellCheck suggestions directly in a variety of editors.
 ### In your build or test suites
 
 While ShellCheck is mostly intended for interactive use, it can easily be added to builds or test suites.
+It makes canonical use of exit codes, so you can just add a `shellcheck` command as part of the process.
 
-ShellCheck makes canonical use of exit codes, and can output simple JSON, CheckStyle compatible XML, GCC compatible warnings as well as human readable text (with or without ANSI colors). See the [Integration](https://github.com/koalaman/shellcheck/wiki/Integration) wiki page for more documentation.
+For example, in a Makefile:
+
+```
+check-scripts:
+    # Fail if any of these files have warnings
+    shellcheck myscripts/*.sh
+```
+
+or in a Travis CI `.travis.yml` file:
+
+```
+script:
+  # Fail if any of these files have warnings
+  - shellcheck myscripts/*.sh
+```
+
+Services and platforms that have ShellCheck pre-installed and ready to use:
+
+* [Travis CI](https://travis-ci.org/)
+* [Codacy](https://www.codacy.com/)
+* [Code Climate](https://codeclimate.com/)
+* [Code Factor](https://www.codefactor.io/)
+
+Services and platforms with third party plugins:
+
+* [SonarQube](https://www.sonarqube.org/) through [sonar-shellcheck-plugin](https://github.com/emerald-squad/sonar-shellcheck-plugin)
+
+Most other services, including [GitLab](https://about.gitlab.com/), let you install
+ShellCheck yourself, either through the system's package manager (see [Installing](#installing)), 
+or by downloading and unpacking a [binary release](#installing-the-shellcheck-binary).
+
+It's a good idea to manually install a specific ShellCheck version regardless. This avoids
+any surprise build breaks when a new version with new warnings is published.
+
+For customized filtering or reporting, ShellCheck can output simple JSON, CheckStyle compatible XML,
+GCC compatible warnings as well as human readable text (with or without ANSI colors). See the 
+[Integration](https://github.com/koalaman/shellcheck/wiki/Integration) wiki page for more documentation.
 
 ## Installing
 
