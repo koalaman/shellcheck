@@ -649,7 +649,11 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal 
 
     getPrintfVariable list = f $ map (\x -> (x, getLiteralString x)) list
       where
-        f ((_, Just "-v") : (t, Just var) : _) = return (base, t, var, DataString $ SourceFrom list)
+        f ((_, Just "-v") : (t, Just var) : _) = return (base, t, varName, varType $ SourceFrom list)
+            where
+                (varName, varType) = case elemIndex '[' var of
+                    Just i -> (take i var, DataArray)
+                    Nothing -> (var, DataString)
         f (_:rest) = f rest
         f [] = fail "not found"
 
