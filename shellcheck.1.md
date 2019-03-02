@@ -36,7 +36,7 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 
 :   Emit warnings in sourced files. Normally, `shellcheck` will only warn
     about issues in the specified files. With this option, any issues in
-    sourced files files will also be reported.
+    sourced files will also be reported.
 
 **-C**[*WHEN*],\ **--color**[=*WHEN*]
 
