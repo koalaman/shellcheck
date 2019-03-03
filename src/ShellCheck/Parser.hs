@@ -1200,7 +1200,7 @@ readBackTicked quoted = called "backtick expansion" $ do
             suggestForgotClosingQuote startPos endPos "backtick expansion"
 
     -- Result positions may be off due to escapes
-    result <- subParse subStart subParser (unEscape subString)
+    result <- subParse subStart (tryWithErrors subParser <|> return []) (unEscape subString)
     return $ T_Backticked id result
   where
     unEscape [] = []
