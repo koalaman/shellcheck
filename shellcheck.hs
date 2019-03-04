@@ -47,6 +47,7 @@ import           System.Console.GetOpt
 import           System.Directory
 import           System.Environment
 import           System.Exit
+import           System.FilePath
 import           System.IO
 
 data Flag = Flag String String
@@ -95,6 +96,8 @@ options = [
     Option "f" ["format"]
         (ReqArg (Flag "format") "FORMAT") $
         "Output format (" ++ formatList ++ ")",
+    Option "" ["norc"]
+        (NoArg $ Flag "norc" "true") "Don't look for .shellcheckrc files",
     Option "s" ["shell"]
         (ReqArg (Flag "shell") "SHELLNAME")
         "Specify dialect (sh, bash, dash, ksh)",
@@ -330,7 +333,16 @@ parseOption flag options =
                 }
             }
 
-        _ -> return options
+        Flag "norc" _ ->
+            return options {
+                checkSpec = (checkSpec options) {
+                    csIgnoreRC = True
+                }
+            }
+
+        Flag str _ -> do
+            printErr $ "Internal error for --" ++ str ++ ". Please file a bug :("
+            return options
   where
     die s = do
         printErr s
@@ -345,12 +357,15 @@ parseOption flag options =
 ioInterface options files = do
     inputs <- mapM normalize files
     cache <- newIORef emptyCache
+    configCache <- newIORef ("", Nothing)
     return SystemInterface {
-        siReadFile = get cache inputs
+        siReadFile = get cache inputs,
+        siGetConfig = getConfig configCache
     }
   where
     emptyCache :: Map.Map FilePath String
     emptyCache = Map.empty
+
     get cache inputs file = do
         map <- readIORef cache
         case Map.lookup file map of
@@ -367,7 +382,6 @@ ioInterface options files = do
             return $ Right contents
             ) `catch` handler
           else return $ Left (file ++ " was not specified as input (see shellcheck -x).")
-
       where
         handler :: IOException -> IO (Either ErrorMessage String)
         handler ex = return . Left $ show ex
@@ -384,6 +398,58 @@ ioInterface options files = do
       where
         fallback :: FilePath -> IOException -> IO FilePath
         fallback path _ = return path
+
+    -- Returns the name and contents of .shellcheckrc for the given file
+    getConfig cache filename = do
+        path <- normalize filename
+        let dir = takeDirectory path
+        (previousPath, result) <- readIORef cache
+        if dir == previousPath
+          then return result
+          else do
+            paths <- getConfigPaths dir
+            result <- findConfig paths
+            writeIORef cache (dir, result)
+            return result
+
+    findConfig paths =
+        case paths of
+            (file:rest) -> do
+                contents <- readConfig file
+                if isJust contents
+                  then return contents
+                  else findConfig rest
+            [] -> return Nothing
+
+    -- Get a list of candidate filenames. This includes .shellcheckrc
+    -- in all parent directories, plus the user's home dir and xdg dir.
+    -- The dot is optional for Windows and Snap users.
+    getConfigPaths dir = do
+        let next = takeDirectory dir
+        rest <- if next /= dir
+                then getConfigPaths next
+                else defaultPaths `catch`
+                        ((const $ return []) :: IOException -> IO [FilePath])
+        return $ (dir </> ".shellcheckrc") : (dir </> "shellcheckrc") : rest
+
+    defaultPaths = do
+        home <- getAppUserDataDirectory "shellcheckrc"
+        xdg <- getXdgDirectory XdgConfig "shellcheckrc"
+        return [home, xdg]
+
+    readConfig file = do
+        exists <- doesPathExist file
+        if exists
+          then do
+            (contents, _) <- inputFile file `catch` handler file
+            return $ Just (file, contents)
+          else
+            return Nothing
+      where
+        handler :: FilePath -> IOException -> IO (String, Bool)
+        handler file err = do
+            putStrLn $ file ++ ": " ++ show err
+            return ("", True)
 
 inputFile file = do
     (handle, shouldCache) <-

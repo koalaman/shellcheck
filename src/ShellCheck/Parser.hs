@@ -113,6 +113,7 @@ allspacing = do
 allspacingOrFail = do
     s <- allspacing
     when (null s) $ fail "Expected whitespace"
+    return s
 
 readUnicodeQuote = do
     start <- startSpan
@@ -306,6 +307,8 @@ initialSystemState = SystemState {
 data Environment m = Environment {
     systemInterface :: SystemInterface m,
     checkSourced :: Bool,
+    ignoreRC :: Bool,
+    currentFilename :: String,
     shellTypeOverride :: Maybe Shell
 }
 
@@ -949,9 +952,12 @@ prop_readAnnotation6 = isOk readAnnotation "# shellcheck disable=SC1234 # shellc
 readAnnotation = called "shellcheck directive" $ do
     try readAnnotationPrefix
     many1 linewhitespace
+    readAnnotationWithoutPrefix
+
+readAnnotationWithoutPrefix = do
     values <- many1 readKey
     optional readAnyComment
-    void linefeed <|> do
+    void linefeed <|> eof <|> do
         parseNote ErrorC 1125 "Invalid key=value pair? Ignoring the rest of this directive starting here."
         many (noneOf "\n")
         void linefeed <|> eof
@@ -2104,7 +2110,7 @@ readSource t@(T_Redirecting _ _ (T_SimpleCommand cmdId _ (cmd:file:_))) = do
     subRead name script =
         withContext (ContextSource name) $
             inSeparateContext $
-                subParse (initialPos name) readScript script
+                subParse (initialPos name) (readScriptFile True) script
 readSource t = return t
 
 
@@ -2980,12 +2986,55 @@ verifyEof = eof <|> choice [
         try (lookAhead p)
         action
 
-prop_readScript1 = isOk readScriptFile "#!/bin/bash\necho hello world\n"
-prop_readScript2 = isWarning readScriptFile "#!/bin/bash\r\necho hello world\n"
-prop_readScript3 = isWarning readScriptFile "#!/bin/bash\necho hello\xA0world"
-prop_readScript4 = isWarning readScriptFile "#!/usr/bin/perl\nfoo=("
-prop_readScript5 = isOk readScriptFile "#!/bin/bash\n#This is an empty script\n\n"
-readScriptFile = do
+
+readConfigFile :: Monad m => FilePath -> SCParser m [Annotation]
+readConfigFile filename = do
+    shouldIgnore <- Mr.asks ignoreRC
+    if shouldIgnore then return [] else read' filename
+  where
+    read' filename = do
+        sys <- Mr.asks systemInterface
+        contents <- system $ siGetConfig sys filename
+        case contents of
+            Nothing -> return []
+            Just (file, str) -> readConfig file str
+
+    readConfig filename contents = do
+        result <- lift $ runParserT readConfigKVs initialUserState filename contents
+        case result of
+            Right result ->
+                return result
+
+            Left err -> do
+                parseProblem ErrorC 1134 $ errorFor filename err
+                return []
+
+    errorFor filename err =
+        let line = "line " ++ (show . sourceLine $ errorPos err)
+            suggestion = getStringFromParsec $ errorMessages err
+        in
+            "Failed to process " ++ filename ++ ", " ++ line ++ ": "
+                ++ suggestion
+
+prop_readConfigKVs1 = isOk readConfigKVs "disable=1234"
+prop_readConfigKVs2 = isOk readConfigKVs "# Comment\ndisable=1234 # Comment\n"
+prop_readConfigKVs3 = isOk readConfigKVs ""
+prop_readConfigKVs4 = isOk readConfigKVs "\n\n\n\n\t \n"
+prop_readConfigKVs5 = isOk readConfigKVs "# shellcheck accepts annotation-like comments in rc files\ndisable=1234"
+readConfigKVs = do
+    anySpacingOrComment
+    annotations <- many (readAnnotationWithoutPrefix <* anySpacingOrComment)
+    eof
+    return $ concat annotations
+anySpacingOrComment =
+    many (void allspacingOrFail <|> void readAnyComment)
+
+prop_readScript1 = isOk readScript "#!/bin/bash\necho hello world\n"
+prop_readScript2 = isWarning readScript "#!/bin/bash\r\necho hello world\n"
+prop_readScript3 = isWarning readScript "#!/bin/bash\necho hello\xA0world"
+prop_readScript4 = isWarning readScript "#!/usr/bin/perl\nfoo=("
+prop_readScript5 = isOk readScript "#!/bin/bash\n#This is an empty script\n\n"
+readScriptFile sourced = do
     start <- startSpan
     pos <- getPosition
     optional $ do
@@ -2995,7 +3044,13 @@ readScriptFile = do
     sb <- option "" readShebang
     allspacing
     annotationStart <- startSpan
-    annotations <- readAnnotations
+    fileAnnotations <- readAnnotations
+    rcAnnotations <- if sourced
+                     then return []
+                     else do
+                        filename <- Mr.asks currentFilename
+                        readConfigFile filename
+    let annotations = fileAnnotations ++ rcAnnotations
     annotationId <- endSpan annotationStart
     let shellAnnotationSpecified =
             any (\x -> case x of ShellOverride {} -> True; _ -> False) annotations
@@ -3065,7 +3120,7 @@ readScriptFile = do
 
     readUtf8Bom = called "Byte Order Mark" $ string "\xFEFF"
 
-readScript = readScriptFile
+readScript = readScriptFile False
 
 -- Interactively run a specific parser in ghci:
 -- debugParse readSimpleCommand "echo 'hello world'"
@@ -3100,6 +3155,8 @@ testEnvironment =
     Environment {
         systemInterface = (mockedSystemInterface []),
         checkSourced = False,
+        currentFilename = "myscript",
+        ignoreRC = False,
         shellTypeOverride = Nothing
     }
 
@@ -3275,6 +3332,8 @@ parseScript sys spec =
     env = Environment {
         systemInterface = sys,
         checkSourced = psCheckSourced spec,
+        currentFilename = psFilename spec,
+        ignoreRC = psIgnoreRC spec,
         shellTypeOverride = psShellTypeOverride spec
     }
 

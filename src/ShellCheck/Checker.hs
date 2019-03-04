@@ -72,6 +72,7 @@ checkScript sys spec = do
             psFilename = csFilename spec,
             psScript = contents,
             psCheckSourced = csCheckSourced spec,
+            psIgnoreRC = csIgnoreRC spec,
             psShellTypeOverride = csShellTypeOverride spec
         }
         let parseMessages = prComments result
@@ -145,6 +146,9 @@ checkOptionIncludes includes src =
         csIncludedWarnings = includes,
         csCheckSourced = True
     }
+
+checkWithRc rc = getErrors
+    (mockRcFile rc $ mockedSystemInterface [])
 
 prop_findsParseIssue = check "echo \"$12\"" == [1037]
 
@@ -298,6 +302,35 @@ prop_optionIncludes3 =
 prop_optionIncludes4 =
     -- expect 2086 & 2154, only 2154 included, so only that's reported
     [2154] == checkOptionIncludes (Just [2154]) "#!/bin/sh\n var='a b'\n echo $var\n echo $bar"
+
+
+prop_readsRcFile = result == []
+  where
+    result = checkWithRc "disable=2086" emptyCheckSpec {
+        csScript = "#!/bin/sh\necho $1",
+        csIgnoreRC = False
+    }
+
+prop_canUseNoRC = result == [2086]
+  where
+    result = checkWithRc "disable=2086" emptyCheckSpec {
+        csScript = "#!/bin/sh\necho $1",
+        csIgnoreRC = True
+    }
+
+prop_NoRCWontLookAtFile = result == [2086]
+  where
+    result = checkWithRc (error "Fail") emptyCheckSpec {
+        csScript = "#!/bin/sh\necho $1",
+        csIgnoreRC = True
+    }
+
+prop_brokenRcGetsWarning = result == [1134, 2086]
+  where
+    result = checkWithRc "rofl" emptyCheckSpec {
+        csScript = "#!/bin/sh\necho $1",
+        csIgnoreRC = False
+    }
 
 return []
 runTests = $quickCheckAll

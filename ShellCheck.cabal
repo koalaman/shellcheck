@@ -96,14 +96,15 @@ executable shellcheck
       array,
       base >= 4 && < 5,
       bytestring,
-      deepseq >= 1.4.0.0,
-      ShellCheck,
       containers,
+      deepseq >= 1.4.0.0,
       directory,
       mtl >= 2.2.1,
+      filepath,
       parsec >= 3.0,
       QuickCheck >= 2.7.4,
-      regex-tdfa
+      regex-tdfa,
+      ShellCheck
     main-is: shellcheck.hs
 
 test-suite test-shellcheck
@@ -113,13 +114,14 @@ test-suite test-shellcheck
       array,
       base >= 4 && < 5,
       bytestring,
-      deepseq >= 1.4.0.0,
-      ShellCheck,
       containers,
+      deepseq >= 1.4.0.0,
       directory,
       mtl >= 2.2.1,
+      filepath,
       parsec,
       QuickCheck >= 2.7.4,
-      regex-tdfa
+      regex-tdfa,
+      ShellCheck
     main-is: test/shellcheck.hs
 

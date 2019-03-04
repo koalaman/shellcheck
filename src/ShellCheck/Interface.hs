@@ -21,9 +21,9 @@
 module ShellCheck.Interface
     (
     SystemInterface(..)
-    , CheckSpec(csFilename, csScript, csCheckSourced, csIncludedWarnings, csExcludedWarnings, csShellTypeOverride, csMinSeverity)
+    , CheckSpec(csFilename, csScript, csCheckSourced, csIncludedWarnings, csExcludedWarnings, csShellTypeOverride, csMinSeverity, csIgnoreRC)
     , CheckResult(crFilename, crComments)
-    , ParseSpec(psFilename, psScript, psCheckSourced, psShellTypeOverride)
+    , ParseSpec(psFilename, psScript, psCheckSourced, psIgnoreRC, psShellTypeOverride)
     , ParseResult(prComments, prTokenPositions, prRoot)
     , AnalysisSpec(asScript, asShellType, asFallbackShell, asExecutionMode, asCheckSourced, asTokenPositions)
     , AnalysisResult(arComments)
@@ -46,6 +46,7 @@ module ShellCheck.Interface
     , newPosition
     , newTokenComment
     , mockedSystemInterface
+    , mockRcFile
     , newParseSpec
     , emptyCheckSpec
     , newPositionedComment
@@ -69,9 +70,11 @@ import GHC.Generics (Generic)
 import qualified Data.Map as Map
 
 
-newtype SystemInterface m = SystemInterface {
+data SystemInterface m = SystemInterface {
     -- Read a file by filename, or return an error
-    siReadFile :: String -> m (Either ErrorMessage String)
+    siReadFile :: String -> m (Either ErrorMessage String),
+    -- Get the configuration file (name, contents) for a filename
+    siGetConfig :: String -> m (Maybe (FilePath, String))
 }
 
 -- ShellCheck input and output
@@ -79,6 +82,7 @@ data CheckSpec = CheckSpec {
     csFilename :: String,
     csScript :: String,
     csCheckSourced :: Bool,
+    csIgnoreRC :: Bool,
     csExcludedWarnings :: [Integer],
     csIncludedWarnings :: Maybe [Integer],
     csShellTypeOverride :: Maybe Shell,
@@ -101,6 +105,7 @@ emptyCheckSpec = CheckSpec {
     csFilename = "",
     csScript = "",
     csCheckSourced = False,
+    csIgnoreRC = False,
     csExcludedWarnings = [],
     csIncludedWarnings = Nothing,
     csShellTypeOverride = Nothing,
@@ -112,6 +117,7 @@ newParseSpec = ParseSpec {
     psFilename = "",
     psScript = "",
     psCheckSourced = False,
+    psIgnoreRC = False,
     psShellTypeOverride = Nothing
 }
 
@@ -120,6 +126,7 @@ data ParseSpec = ParseSpec {
     psFilename :: String,
     psScript :: String,
     psCheckSourced :: Bool,
+    psIgnoreRC :: Bool,
     psShellTypeOverride :: Maybe Shell
 } deriving (Show, Eq)
 
@@ -279,11 +286,16 @@ data ColorOption =
 -- For testing
 mockedSystemInterface :: [(String, String)] -> SystemInterface Identity
 mockedSystemInterface files = SystemInterface {
-    siReadFile = rf
+    siReadFile = rf,
+    siGetConfig = const $ return Nothing
 }
   where
     rf file =
         case filter ((== file) . fst) files of
             [] -> return $ Left "File not included in mock."
             [(_, contents)] -> return $ Right contents
+
+mockRcFile rcfile mock = mock {
+    siGetConfig = const . return $ Just (".shellcheckrc", rcfile)
+}
 
