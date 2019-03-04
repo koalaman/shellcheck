@@ -211,7 +211,7 @@ Here is an example `.shellcheckrc`:
 
 If no `.shellcheckrc` is found in any of the parent directories, ShellCheck
 will look in `~/.shellcheckrc` followed by the XDG config directory
-(usually `~/.config/shellcheckrc`) on Unix, or %APPDATA%/shellcheckrc` on
+(usually `~/.config/shellcheckrc`) on Unix, or `%APPDATA%/shellcheckrc` on
 Windows. Only the first file found will be used.
 
 Note for Snap users: the Snap sandbox disallows access to hidden files.
