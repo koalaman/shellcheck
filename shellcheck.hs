@@ -438,7 +438,7 @@ ioInterface options files = do
         return [home, xdg]
 
     readConfig file = do
-        exists <- doesPathExist file
+        exists <- doesFileExist file
         if exists
           then do
             (contents, _) <- inputFile file `catch` handler file
