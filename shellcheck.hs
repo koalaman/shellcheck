@@ -340,6 +340,9 @@ parseOption flag options =
                 }
             }
 
+        -- This flag is handled specially in 'process'
+        Flag "format" _ -> return options
+
         Flag str _ -> do
             printErr $ "Internal error for --" ++ str ++ ". Please file a bug :("
             return options
