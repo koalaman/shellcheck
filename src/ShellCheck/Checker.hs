@@ -204,6 +204,9 @@ prop_failsWhenNotSourcing =
 prop_worksWhenSourcing =
     null $ checkWithIncludes [("lib", "bar=1")] "source lib; echo \"$bar\""
 
+prop_worksWhenSourcingWithDashDash =
+    null $ checkWithIncludes [("lib", "bar=1")] "source -- lib; echo \"$bar\""
+
 prop_worksWhenDotting =
     null $ checkWithIncludes [("lib", "bar=1")] ". lib; echo \"$bar\""
 

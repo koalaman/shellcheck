@@ -2062,7 +2062,8 @@ readSimpleCommand = called "simple command" $ do
 
 
 readSource :: Monad m => Token -> SCParser m Token
-readSource t@(T_Redirecting _ _ (T_SimpleCommand cmdId _ (cmd:file:_))) = do
+readSource t@(T_Redirecting _ _ (T_SimpleCommand cmdId _ (cmd:file':rest'))) = do
+    let file = getFile file' rest'
     override <- getSourceOverride
     let literalFile = do
         name <- override `mplus` getLiteralString file
@@ -2107,6 +2108,13 @@ readSource t@(T_Redirecting _ _ (T_SimpleCommand cmdId _ (cmd:file:_))) = do
 
                         included <|> failed
   where
+    getFile :: Token -> [Token] -> Token
+    getFile file (next:rest) =
+        case getLiteralString file of
+            Just "--" -> next
+            x -> file
+    getFile file _ = file
+
     subRead name script =
         withContext (ContextSource name) $
             inSeparateContext $
