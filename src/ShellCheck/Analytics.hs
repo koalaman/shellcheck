@@ -171,6 +171,7 @@ nodeChecks = [
     ,checkInvertedStringTest
     ,checkRedirectionToCommand
     ,checkNullaryExpansionTest
+    ,checkDollarQuoteParen
     ]
 
 
@@ -3168,6 +3169,19 @@ checkNullaryExpansionTest params t =
                 id = getId word
                 fix = fixWith [replaceStart id params 0 "-n "]
         _ -> return ()
+
+
+prop_checkDollarQuoteParen1 = verify checkDollarQuoteParen "$\"(foo)\""
+prop_checkDollarQuoteParen2 = verify checkDollarQuoteParen "$\"{foo}\""
+prop_checkDollarQuoteParen3 = verifyNot checkDollarQuoteParen "\"$(foo)\""
+prop_checkDollarQuoteParen4 = verifyNot checkDollarQuoteParen "$\"..\""
+checkDollarQuoteParen params t =
+    case t of
+        T_DollarDoubleQuoted id ((T_Literal _ (c:_)):_) | c `elem` "({" ->
+            warnWithFix id 2247 "Flip leading $ and \" if this should be a quoted substitution." (fix id)
+        _ -> return ()
+  where
+    fix id = fixWith [replaceStart id params 2 "\"$"]
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
