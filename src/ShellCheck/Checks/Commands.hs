@@ -69,6 +69,7 @@ commandChecks = [
     ,checkMkdirDashPM
     ,checkNonportableSignals
     ,checkInteractiveSu
+    ,checkBasename
     ,checkSshCommandString
     ,checkPrintfVar
     ,checkUuoeCmd
@@ -494,6 +495,28 @@ checkInteractiveSu = CommandCheck (Basename "su") f
     -- This should really just be modifications to stdin, but meh
     undirected (T_Redirecting _ list _) = null list
     undirected _ = True
+
+
+prop_checkBasename1 = verifyNot checkBasename "basename /path/to/file"
+prop_checkBasename2 = verifyNot checkBasename "basename -- -file"
+prop_checkBasename3 = verifyNot checkBasename "basename -- $file"
+prop_checkBasename4 = verifyNot checkBasename "basename"
+prop_checkBasename5 = verify checkBasename "basename $file"
+prop_checkBasename6 = verify checkBasename "basename -file"
+prop_checkBasename7 = verify checkBasename "basename first -second"
+checkBasename = CommandCheck (Basename "basename") f
+  where
+    f cmd =
+        case tail $ oversimplify cmd of
+            []       -> return ()
+            ("--":_) -> return ()
+            args     -> when (any suspicious args) $
+                            info (getId cmd) 2248 msg
+
+    msg = "Use '--' so that basename will not interpret filenames as options."
+
+    suspicious "--" = False
+    suspicious arg = any (`isPrefixOf` arg) ["-", "$"]
 
 
 -- This is hard to get right without properly parsing ssh args
