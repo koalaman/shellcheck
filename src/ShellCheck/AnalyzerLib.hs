@@ -159,6 +159,8 @@ warnWithFix :: MonadWriter [TokenComment] m => Id -> Code -> String -> Fix -> m 
 warnWithFix  = addCommentWithFix WarningC
 styleWithFix :: MonadWriter [TokenComment] m => Id -> Code -> String -> Fix -> m ()
 styleWithFix = addCommentWithFix StyleC
+verboseWithFix :: MonadWriter [TokenComment] m => Id -> Code -> String -> Fix -> m ()
+verboseWithFix = addCommentWithFix VerboseC
 
 addCommentWithFix :: MonadWriter [TokenComment] m => Severity -> Id -> Code -> String -> Fix -> m ()
 addCommentWithFix severity id code str fix =
