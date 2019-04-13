@@ -103,7 +103,7 @@ options = [
         "Specify dialect (sh, bash, dash, ksh)",
     Option "S" ["severity"]
         (ReqArg (Flag "severity") "SEVERITY")
-        "Minimum severity of errors to consider (error, warning, info, style)",
+        "Minimum severity of errors to consider (error, warning, info, style, verbose)",
     Option "V" ["version"]
         (NoArg $ Flag "version" "true") "Print version information",
     Option "W" ["wiki-link-count"]
@@ -254,7 +254,8 @@ parseSeverityOption value =
         ("error",   ErrorC),
         ("warning", WarningC),
         ("info",    InfoC),
-        ("style",   StyleC)
+        ("style",   StyleC),
+        ("verbose", VerboseC)
         ]
 
 parseOption flag options =

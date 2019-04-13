@@ -57,6 +57,7 @@ colorForLevel level =
         "warning" -> 33 -- yellow
         "info"    -> 32 -- green
         "style"   -> 32 -- green
+        "verbose" -> 32 -- green
         "message" -> 1 -- bold
         "source"  -> 0 -- none
         _ -> 0         -- none

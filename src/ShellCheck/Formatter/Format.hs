@@ -47,6 +47,7 @@ severityText pc =
         WarningC -> "warning"
         InfoC    -> "info"
         StyleC   -> "style"
+        VerboseC -> "verbose"
 
 -- Realign comments from a tabstop of 8 to 1
 makeNonVirtual comments contents =

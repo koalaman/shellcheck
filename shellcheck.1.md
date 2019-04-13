@@ -69,8 +69,9 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 
 **-S**\ *SEVERITY*,\ **--severity=***severity*
 
-:   Specify minimum severity of errors to consider. Valid values are *error*,
-    *warning*, *info* and *style*.    The default is *style*.
+:   Specify minimum severity of errors to consider. Valid values in order of
+    severity are *error*, *warning*, *info*, *style* and *verbose*.
+    The default is *style*.
 
 **-s**\ *shell*,\ **--shell=***shell*
 

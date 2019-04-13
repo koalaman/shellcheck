@@ -32,7 +32,7 @@ module ShellCheck.Interface
     , ExecutionMode(Executed, Sourced)
     , ErrorMessage
     , Code
-    , Severity(ErrorC, WarningC, InfoC, StyleC)
+    , Severity(ErrorC, WarningC, InfoC, StyleC, VerboseC)
     , Position(posFile, posLine, posColumn)
     , Comment(cSeverity, cCode, cMessage)
     , PositionedComment(pcStartPos , pcEndPos , pcComment, pcFix)
@@ -189,7 +189,7 @@ data ExecutionMode = Executed | Sourced deriving (Show, Eq)
 type ErrorMessage = String
 type Code = Integer
 
-data Severity = ErrorC | WarningC | InfoC | StyleC
+data Severity = ErrorC | WarningC | InfoC | StyleC | VerboseC
     deriving (Show, Eq, Ord, Generic, NFData)
 data Position = Position {
     posFile :: String,    -- Filename
