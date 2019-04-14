@@ -154,6 +154,7 @@ warn  id code str = addComment $ makeComment WarningC id code str
 err   id code str = addComment $ makeComment ErrorC id code str
 info  id code str = addComment $ makeComment InfoC id code str
 style id code str = addComment $ makeComment StyleC id code str
+verbose id code str = addComment $ makeComment VerboseC id code str
 
 warnWithFix :: MonadWriter [TokenComment] m => Id -> Code -> String -> Fix -> m ()
 warnWithFix  = addCommentWithFix WarningC

@@ -172,6 +172,7 @@ nodeChecks = [
     ,checkRedirectionToCommand
     ,checkNullaryExpansionTest
     ,checkDollarQuoteParen
+    ,checkDefaultCase
     ]
 
 
@@ -3201,6 +3202,23 @@ checkDollarQuoteParen params t =
         _ -> return ()
   where
     fix id = fixWith [replaceStart id params 2 "\"$"]
+
+prop_checkDefaultCase1 = verify checkDefaultCase "case $1 in a) true ;; esac"
+prop_checkDefaultCase2 = verify checkDefaultCase "case $1 in ?*?) true ;; *? ) true ;; esac"
+prop_checkDefaultCase3 = verifyNot checkDefaultCase "case $1 in x|*) true ;; esac"
+prop_checkDefaultCase4 = verifyNot checkDefaultCase "case $1 in **) true ;; esac"
+checkDefaultCase _ t =
+    case t of
+        T_CaseExpression id _ list ->
+            unless (any canMatchAny list) $
+                verbose id 2249 "Consider adding a default *) case, even if it just exits with error."
+        _ -> return ()
+  where
+    canMatchAny (_, list, _) = any canMatchAny' list
+    -- hlint objects to 'pattern' as a variable name
+    canMatchAny' pat = fromMaybe False $ do
+        pg <- wordToExactPseudoGlob pat
+        return $ pseudoGlobIsSuperSetof pg [PGMany]
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
