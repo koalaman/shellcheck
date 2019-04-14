@@ -4,6 +4,7 @@
 - Files containing Bats tests can now be checked
 - Directory wide directives can now be placed in a `.shellcheckrc`
 - Verbose mode: Use `-S verbose` for especially pedantic suggestions
+- SC2248: Warn about unquoted variables without special chars (verbose)
 - SC2247: Warn about $"(cmd)" and $"{var}"
 - SC2246: Warn if a shebang's interpreter ends with /
 - SC2245: Warn that Ksh ignores all but the first glob result in `[`

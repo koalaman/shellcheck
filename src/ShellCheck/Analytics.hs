@@ -53,7 +53,7 @@ treeChecks = [
         (\p t -> (mapM_ ((\ f -> f t) . (\ f -> f p))
             nodeChecks))
     ,subshellAssignmentCheck
-    ,checkSpacefulness
+    ,checkVerboseSpacefulness
     ,checkQuotesInLiterals
     ,checkShebangParameters
     ,checkFunctionsUsedExternally
@@ -1639,10 +1639,12 @@ prop_checkSpacefulness2 = verifyNotTree checkSpacefulness "a='cow moo'; [[ $a ]]
 prop_checkSpacefulness3 = verifyNotTree checkSpacefulness "a='cow*.mp3'; echo \"$a\""
 prop_checkSpacefulness4 = verifyTree checkSpacefulness "for f in *.mp3; do echo $f; done"
 prop_checkSpacefulness4a= verifyNotTree checkSpacefulness "foo=3; foo=$(echo $foo)"
+prop_checkSpacefulness4v= verifyTree checkVerboseSpacefulness "foo=3; foo=$(echo $foo)"
 prop_checkSpacefulness5 = verifyTree checkSpacefulness "a='*'; b=$a; c=lol${b//foo/bar}; echo $c"
 prop_checkSpacefulness6 = verifyTree checkSpacefulness "a=foo$(lol); echo $a"
 prop_checkSpacefulness7 = verifyTree checkSpacefulness "a=foo\\ bar; rm $a"
 prop_checkSpacefulness8 = verifyNotTree checkSpacefulness "a=foo\\ bar; a=foo; rm $a"
+prop_checkSpacefulness8v= verifyTree checkVerboseSpacefulness "a=foo\\ bar; a=foo; rm $a"
 prop_checkSpacefulness10= verifyTree checkSpacefulness "rm $1"
 prop_checkSpacefulness11= verifyTree checkSpacefulness "rm ${10//foo/bar}"
 prop_checkSpacefulness12= verifyNotTree checkSpacefulness "(( $1 + 3 ))"
@@ -1662,6 +1664,7 @@ prop_checkSpacefulness25= verifyTree checkSpacefulness "a='s/[0-9]//g'; sed $a"
 prop_checkSpacefulness26= verifyTree checkSpacefulness "a='foo bar'; echo {1,2,$a}"
 prop_checkSpacefulness27= verifyNotTree checkSpacefulness "echo ${a:+'foo'}"
 prop_checkSpacefulness28= verifyNotTree checkSpacefulness "exec {n}>&1; echo $n"
+prop_checkSpacefulness28v = verifyTree checkVerboseSpacefulness "exec {n}>&1; echo $n"
 prop_checkSpacefulness29= verifyNotTree checkSpacefulness "n=$(stuff); exec {n}>&-;"
 prop_checkSpacefulness30= verifyTree checkSpacefulness "file='foo bar'; echo foo > $file;"
 prop_checkSpacefulness31= verifyNotTree checkSpacefulness "echo \"`echo \\\"$1\\\"`\""
@@ -1670,9 +1673,15 @@ prop_checkSpacefulness33= verifyTree checkSpacefulness "for file; do echo $file;
 prop_checkSpacefulness34= verifyTree checkSpacefulness "declare foo$n=$1"
 prop_checkSpacefulness35= verifyNotTree checkSpacefulness "echo ${1+\"$1\"}"
 prop_checkSpacefulness36= verifyNotTree checkSpacefulness "arg=$#; echo $arg"
+prop_checkSpacefulness36v = verifyTree checkVerboseSpacefulness "arg=$#; echo $arg"
 prop_checkSpacefulness37= verifyNotTree checkSpacefulness "@test 'status' {\n [ $status -eq 0 ]\n}"
+prop_checkSpacefulness37v = verifyTree checkVerboseSpacefulness "@test 'status' {\n [ $status -eq 0 ]\n}"
 
-checkSpacefulness params t =
+-- This is slightly awkward because we want the tests to
+-- discriminate between normal and verbose output.
+checkSpacefulness params t = checkSpacefulness' False params t
+checkVerboseSpacefulness params t = checkSpacefulness' True params t
+checkSpacefulness' alsoVerbose params t =
     doVariableFlowAnalysis readF writeF (Map.fromList defaults) (variableFlow params)
   where
     defaults = zip variablesWithoutSpaces (repeat False)
@@ -1686,23 +1695,33 @@ checkSpacefulness params t =
 
     readF _ token name = do
         spaces <- hasSpaces name
-        return [warning |
-                  isExpansion token && spaces
+        let needsQuoting =
+                  isExpansion token
                   && not (isArrayExpansion token) -- There's another warning for this
                   && not (isCountingReference token)
                   && not (isQuoteFree parents token)
                   && not (isQuotedAlternativeReference token)
-                  && not (usedAsCommandName parents token)]
-      where
-        warning =
-            if isDefaultAssignment (parentMap params) token
+                  && not (usedAsCommandName parents token)
+
+        return . execWriter $ when needsQuoting $
+            if spaces
             then
-                makeComment InfoC (getId token) 2223
-                    "This default assignment may cause DoS due to globbing. Quote it."
+                if isDefaultAssignment (parentMap params) token
+                then
+                    emit $ makeComment InfoC (getId token) 2223
+                             "This default assignment may cause DoS due to globbing. Quote it."
+                else
+                    emit $ makeCommentWithFix InfoC (getId token) 2086
+                             "Double quote to prevent globbing and word splitting."
+                             (fixFor token)
             else
-                makeCommentWithFix InfoC (getId token) 2086
-                    "Double quote to prevent globbing and word splitting."
-                        (surroundWidth (getId token) params "\"")
+                when (alsoVerbose && name `notElem` specialVariablesWithoutSpaces) $
+                    emit $ makeCommentWithFix VerboseC (getId token) 2248
+                            "Prefer double quoting even when variables don't contain special characters."
+                            (fixFor token)
+      where
+        fixFor token = (surroundWidth (getId token) params "\"")
+        emit x = tell [x]
 
     writeF _ _ name (DataString SourceExternal) = setSpaces name True >> return []
     writeF _ _ name (DataString SourceInteger) = setSpaces name False >> return []
