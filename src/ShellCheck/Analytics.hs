@@ -1833,29 +1833,51 @@ checkQuotesInLiterals params t =
 prop_checkFunctionsUsedExternally1 =
   verifyTree checkFunctionsUsedExternally "foo() { :; }; sudo foo"
 prop_checkFunctionsUsedExternally2 =
-  verifyTree checkFunctionsUsedExternally "alias f='a'; xargs -n 1 f"
+  verifyTree checkFunctionsUsedExternally "alias f='a'; xargs -0 f"
+prop_checkFunctionsUsedExternally2b=
+  verifyNotTree checkFunctionsUsedExternally "alias f='a'; find . -type f"
+prop_checkFunctionsUsedExternally2c=
+  verifyTree checkFunctionsUsedExternally "alias f='a'; find . -type f -exec f +"
 prop_checkFunctionsUsedExternally3 =
   verifyNotTree checkFunctionsUsedExternally "f() { :; }; echo f"
 prop_checkFunctionsUsedExternally4 =
   verifyNotTree checkFunctionsUsedExternally "foo() { :; }; sudo \"foo\""
+prop_checkFunctionsUsedExternally5 =
+  verifyTree checkFunctionsUsedExternally "foo() { :; }; ssh host foo"
+prop_checkFunctionsUsedExternally6 =
+  verifyNotTree checkFunctionsUsedExternally "foo() { :; }; ssh host echo foo"
+prop_checkFunctionsUsedExternally7 =
+  verifyNotTree checkFunctionsUsedExternally "install() { :; }; sudo apt-get install foo"
 checkFunctionsUsedExternally params t =
     runNodeAnalysis checkCommand params t
   where
-    invokingCmds = [
-        "chroot",
-        "find",
-        "screen",
-        "ssh",
-        "su",
-        "sudo",
-        "xargs"
-        ]
     checkCommand _ t@(T_SimpleCommand _ _ (cmd:args)) =
-        let name = fromMaybe "" $ getCommandBasename t in
-          when (name `elem` invokingCmds) $
-            mapM_ (checkArg name) args
+        case getCommandBasename t of
+            Just name -> do
+                let argStrings = map (\x -> (fromMaybe "" $ getLiteralString x, x)) args
+                let candidates = getPotentialCommands name argStrings
+                mapM_ (checkArg name) candidates
+            _ -> return ()
     checkCommand _ _ = return ()
 
+    -- Try to pick out the argument[s] that may be commands
+    getPotentialCommands name argAndString =
+        case name of
+            "chroot" -> firstNonFlag
+            "screen" -> firstNonFlag
+            "sudo" -> firstNonFlag
+            "xargs" -> firstNonFlag
+            "tmux" -> firstNonFlag
+            "ssh" -> take 1 $ drop 1 $ dropFlags argAndString
+            "find" -> take 1 $ drop 1 $
+                dropWhile (\x -> fst x `notElem` findExecFlags) argAndString
+            _ -> []
+      where
+        firstNonFlag = take 1 $ dropFlags argAndString
+        findExecFlags = ["-exec", "-execdir", "-ok"]
+        dropFlags = dropWhile (\x -> "-" `isPrefixOf` fst x)
+
+    -- Make a map from functions/aliases to definition IDs
     analyse f t = execState (doAnalysis f t) []
     functions = Map.fromList $ analyse findFunctions t
     findFunctions (T_Function id _ _ name _) = modify ((name, id):)
@@ -1863,10 +1885,11 @@ checkFunctionsUsedExternally params t =
         | t `isUnqualifiedCommand` "alias" = mapM_ getAlias args
     findFunctions _ = return ()
     getAlias arg =
-        let string = concat $ oversimplify arg
+        let string = onlyLiteralString arg
         in when ('=' `elem` string) $
             modify ((takeWhile (/= '=') string, getId arg):)
-    checkArg cmd arg = potentially $ do
+
+    checkArg cmd (_, arg) = potentially $ do
         literalArg <- getUnquotedLiteral arg  -- only consider unquoted literals
         definitionId <- Map.lookup literalArg functions
         return $ do
