@@ -34,7 +34,7 @@ apps:
 parts:
   shellcheck:
     plugin: dump
-    source: ./
+    source: .
     build-packages:
       - cabal-install
       - squid3
