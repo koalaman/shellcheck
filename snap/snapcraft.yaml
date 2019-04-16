@@ -23,6 +23,7 @@ description: |
       # snap connect shellcheck:removable-media
   
 version: git
+base: core18
 grade: stable
 confinement: strict
 
@@ -37,7 +38,7 @@ parts:
     source: .
     build-packages:
       - cabal-install
-      - squid3
+      - squid
     override-build: |
       # See comments in .snapsquid.conf
       [ "$http_proxy" ] && {
