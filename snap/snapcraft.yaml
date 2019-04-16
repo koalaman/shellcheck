@@ -23,7 +23,7 @@ description: |
       # snap connect shellcheck:removable-media
   
 version: git
-grade: devel
+grade: stable
 confinement: strict
 
 apps:
