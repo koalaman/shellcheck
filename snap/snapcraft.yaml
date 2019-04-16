@@ -38,7 +38,7 @@ parts:
     build-packages:
       - cabal-install
       - squid3
-    build: |
+    override-build: |
       # See comments in .snapsquid.conf
       [ "$http_proxy" ] && {
         squid3 -f .snapsquid.conf
@@ -48,6 +48,6 @@ parts:
       cabal sandbox init
       cabal update || cat /var/log/squid/*
       cabal install -j
-    install: |
+
       install -d $SNAPCRAFT_PART_INSTALL/usr/bin
       install .cabal-sandbox/bin/shellcheck $SNAPCRAFT_PART_INSTALL/usr/bin
