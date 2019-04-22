@@ -2087,7 +2087,9 @@ readSource t@(T_Redirecting _ _ (T_SimpleCommand cmdId _ (cmd:file':rest'))) = d
                 input <-
                     if filename == "/dev/null" -- always allow /dev/null
                     then return (Right "")
-                    else system $ siReadFile sys filename
+                    else do
+                        filename' <- system $ siFindSource sys filename
+                        system $ siReadFile sys filename'
                 case input of
                     Left err -> do
                         parseNoteAtId (getId file) InfoC 1091 $

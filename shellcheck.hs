@@ -69,6 +69,7 @@ instance Monoid Status where
 data Options = Options {
     checkSpec        :: CheckSpec,
     externalSources  :: Bool,
+    rootPaths        :: [FilePath],
     formatterOptions :: FormatterOptions,
     minSeverity      :: Severity
 }
@@ -76,6 +77,7 @@ data Options = Options {
 defaultOptions = Options {
     checkSpec = emptyCheckSpec,
     externalSources = False,
+    rootPaths = [],
     formatterOptions = newFormatterOptions {
         foColorOption = ColorAuto
     },
@@ -98,6 +100,9 @@ options = [
         "Output format (" ++ formatList ++ ")",
     Option "" ["norc"]
         (NoArg $ Flag "norc" "true") "Don't look for .shellcheckrc files",
+    Option "r" ["root"]
+        (ReqArg (Flag "root") "ROOTPATHS")
+        "Specify alternate root path(s) when looking for sources (colon separated)",
     Option "s" ["shell"]
         (ReqArg (Flag "shell") "SHELLNAME")
         "Specify dialect (sh, bash, dash, ksh)",
@@ -311,6 +316,12 @@ parseOption flag options =
                 }
             }
 
+        Flag "root" str -> do
+            let paths = filter (not . null) $ split ':' str
+            return options {
+                rootPaths = paths
+            }
+
         Flag "sourced" _ ->
             return options {
                 checkSpec = (checkSpec options) {
@@ -362,8 +373,10 @@ ioInterface options files = do
     inputs <- mapM normalize files
     cache <- newIORef emptyCache
     configCache <- newIORef ("", Nothing)
+    let rootPathsCache = rootPaths options
     return SystemInterface {
         siReadFile = get cache inputs,
+        siFindSource = findSourceFile rootPathsCache,
         siGetConfig = getConfig configCache
     }
   where
@@ -454,6 +467,23 @@ ioInterface options files = do
         handler file err = do
             putStrLn $ file ++ ": " ++ show err
             return ("", True)
+
+    findSourceFile rootPaths file = do
+        case file of
+            ('/':root) -> do
+                source <- find root
+                return source
+            _ ->
+                return file
+        where
+            find root = do
+                sources <- filterM doesFileExist paths
+                case sources of
+                    [] -> return file
+                    (first:_) -> return first
+                where
+                    paths = map join rootPaths
+                    join path = joinPath [path, root]
 
 inputFile file = do
     (handle, shouldCache) <-
