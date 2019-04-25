@@ -67,6 +67,14 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 
 :   Don't try to look for .shellcheckrc configuration files.
 
+**-P**\ *SOURCEPATH*,\ **--source-path=***SOURCEPATH*
+
+:   Specify paths to search for sourced files, separated by `:` on Unix and
+    `;` on Windows. Absolute paths will also be rooted in these. The special
+    path `SCRIPTDIR` can be used to specify the currently checked script's
+    directory, as in `-P SCRIPTDIR` or `-P SCRIPTDIR/../libs`. Subsequent
+    `-P` flags accumulate and take predecence.
+
 **-S**\ *SEVERITY*,\ **--severity=***severity*
 
 :   Specify minimum severity of errors to consider. Valid values in order of

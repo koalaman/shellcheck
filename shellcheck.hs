@@ -69,6 +69,7 @@ instance Monoid Status where
 data Options = Options {
     checkSpec        :: CheckSpec,
     externalSources  :: Bool,
+    sourcePaths      :: [FilePath],
     formatterOptions :: FormatterOptions,
     minSeverity      :: Severity
 }
@@ -76,6 +77,7 @@ data Options = Options {
 defaultOptions = Options {
     checkSpec = emptyCheckSpec,
     externalSources = False,
+    sourcePaths = [],
     formatterOptions = newFormatterOptions {
         foColorOption = ColorAuto
     },
@@ -98,6 +100,9 @@ options = [
         "Output format (" ++ formatList ++ ")",
     Option "" ["norc"]
         (NoArg $ Flag "norc" "true") "Don't look for .shellcheckrc files",
+    Option "P" ["source-path"]
+        (ReqArg (Flag "source-path") "SOURCEPATHS")
+        "Specify path when looking for sourced files (\"SCRIPTDIR\" for script's dir)",
     Option "s" ["shell"]
         (ReqArg (Flag "shell") "SHELLNAME")
         "Specify dialect (sh, bash, dash, ksh)",
@@ -311,6 +316,12 @@ parseOption flag options =
                 }
             }
 
+        Flag "source-path" str -> do
+            let paths = splitSearchPath str
+            return options {
+                sourcePaths = (sourcePaths options) ++ paths
+            }
+
         Flag "sourced" _ ->
             return options {
                 checkSpec = (checkSpec options) {
@@ -364,6 +375,7 @@ ioInterface options files = do
     configCache <- newIORef ("", Nothing)
     return SystemInterface {
         siReadFile = get cache inputs,
+        siFindSource = findSourceFile inputs (sourcePaths options),
         siGetConfig = getConfig configCache
     }
   where
@@ -454,6 +466,30 @@ ioInterface options files = do
         handler file err = do
             putStrLn $ file ++ ": " ++ show err
             return ("", True)
+
+    andM a b arg = do
+        first <- a arg
+        if not first then return False else b arg
+
+    findSourceFile inputs sourcePaths currentScript original =
+        if isAbsolute original
+        then
+            let (_, relative) = splitDrive original
+            in find relative original
+        else
+            find original original
+      where
+        find filename deflt = do
+            sources <- filterM ((allowable inputs) `andM` doesFileExist)
+                        (map (</> filename) $ map adjustPath sourcePaths)
+            case sources of
+                [] -> return deflt
+                (first:_) -> return first
+        scriptdir = dropFileName currentScript
+        adjustPath str =
+            case (splitDirectories str) of
+                ("SCRIPTDIR":rest) -> joinPath (scriptdir:rest)
+                _ -> str
 
 inputFile file = do
     (handle, shouldCache) <-
