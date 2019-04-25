@@ -69,7 +69,7 @@ variableChars = upper <|> lower <|> digit <|> oneOf "_"
 functionChars = variableChars <|> oneOf ":+?-./^@"
 -- Chars to allow in functions using the 'function' keyword
 extendedFunctionChars = functionChars <|> oneOf "[]*=!"
-specialVariable = oneOf "@*#?-$!"
+specialVariable = oneOf (concat specialVariables)
 paramSubSpecialChars = oneOf "/:+-=%"
 quotableChars = "|&;<>()\\ '\t\n\r\xA0" ++ doubleQuotableChars
 quotable = almostSpace <|> oneOf quotableChars

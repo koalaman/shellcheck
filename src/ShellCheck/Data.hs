@@ -47,6 +47,8 @@ variablesWithoutSpaces = specialVariablesWithoutSpaces ++ [
     "COLUMNS", "HISTFILESIZE", "HISTSIZE", "LINES"
   ]
 
+specialVariables = specialVariablesWithoutSpaces ++ ["@", "*"]
+
 arrayVariables = [
     "BASH_ALIASES", "BASH_ARGC", "BASH_ARGV", "BASH_CMDS", "BASH_LINENO",
     "BASH_REMATCH", "BASH_SOURCE", "BASH_VERSINFO", "COMP_WORDS", "COPROC",
