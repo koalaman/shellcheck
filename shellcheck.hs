@@ -69,7 +69,7 @@ instance Monoid Status where
 data Options = Options {
     checkSpec        :: CheckSpec,
     externalSources  :: Bool,
-    rootPaths        :: [FilePath],
+    sourcePaths      :: [FilePath],
     formatterOptions :: FormatterOptions,
     minSeverity      :: Severity
 }
@@ -77,7 +77,7 @@ data Options = Options {
 defaultOptions = Options {
     checkSpec = emptyCheckSpec,
     externalSources = False,
-    rootPaths = [],
+    sourcePaths = [],
     formatterOptions = newFormatterOptions {
         foColorOption = ColorAuto
     },
@@ -100,9 +100,9 @@ options = [
         "Output format (" ++ formatList ++ ")",
     Option "" ["norc"]
         (NoArg $ Flag "norc" "true") "Don't look for .shellcheckrc files",
-    Option "r" ["root"]
-        (ReqArg (Flag "root") "ROOTPATHS")
-        "Specify alternate root path(s) when looking for sources (colon separated)",
+    Option "P" ["source-path"]
+        (ReqArg (Flag "source-path") "SOURCEPATHS")
+        "Specify path when looking for sourced files (\"SCRIPTDIR\" for script's dir)",
     Option "s" ["shell"]
         (ReqArg (Flag "shell") "SHELLNAME")
         "Specify dialect (sh, bash, dash, ksh)",
@@ -316,10 +316,10 @@ parseOption flag options =
                 }
             }
 
-        Flag "root" str -> do
-            let paths = filter (not . null) $ split ':' str
+        Flag "source-path" str -> do
+            let paths = splitSearchPath str
             return options {
-                rootPaths = paths
+                sourcePaths = (sourcePaths options) ++ paths
             }
 
         Flag "sourced" _ ->
@@ -373,10 +373,9 @@ ioInterface options files = do
     inputs <- mapM normalize files
     cache <- newIORef emptyCache
     configCache <- newIORef ("", Nothing)
-    let rootPathsCache = rootPaths options
     return SystemInterface {
         siReadFile = get cache inputs,
-        siFindSource = findSourceFile rootPathsCache,
+        siFindSource = findSourceFile inputs (sourcePaths options),
         siGetConfig = getConfig configCache
     }
   where
@@ -468,22 +467,29 @@ ioInterface options files = do
             putStrLn $ file ++ ": " ++ show err
             return ("", True)
 
-    findSourceFile rootPaths file = do
-        case file of
-            ('/':root) -> do
-                source <- find root
-                return source
-            _ ->
-                return file
-        where
-            find root = do
-                sources <- filterM doesFileExist paths
-                case sources of
-                    [] -> return file
-                    (first:_) -> return first
-                where
-                    paths = map join rootPaths
-                    join path = joinPath [path, root]
+    andM a b arg = do
+        first <- a arg
+        if not first then return False else b arg
+
+    findSourceFile inputs sourcePaths currentScript original =
+        if isAbsolute original
+        then
+            let (_, relative) = splitDrive original
+            in find relative original
+        else
+            find original original
+      where
+        find filename deflt = do
+            sources <- filterM ((allowable inputs) `andM` doesFileExist)
+                        (map (</> filename) $ map adjustPath sourcePaths)
+            case sources of
+                [] -> return deflt
+                (first:_) -> return first
+        scriptdir = dropFileName currentScript
+        adjustPath str =
+            case (splitDirectories str) of
+                ("SCRIPTDIR":rest) -> joinPath (scriptdir:rest)
+                _ -> str
 
 inputFile file = do
     (handle, shouldCache) <-

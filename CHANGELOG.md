@@ -4,6 +4,7 @@
 - Files containing Bats tests can now be checked
 - Directory wide directives can now be placed in a `.shellcheckrc`
 - Verbose mode: Use `-S verbose` for especially pedantic suggestions
+- Source paths: Use `-P dir1:dir2` to specify path for sourced files
 - SC2249: Warn about `case` with missing default case (verbose)
 - SC2248: Warn about unquoted variables without special chars (verbose)
 - SC2247: Warn about $"(cmd)" and $"{var}"

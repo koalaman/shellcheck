@@ -150,6 +150,11 @@ checkOptionIncludes includes src =
 checkWithRc rc = getErrors
     (mockRcFile rc $ mockedSystemInterface [])
 
+checkWithIncludesAndSourcePath includes mapper = getErrors
+    (mockedSystemInterface includes) {
+        siFindSource = mapper
+    }
+
 prop_findsParseIssue = check "echo \"$12\"" == [1037]
 
 prop_commentDisablesParseIssue1 =
@@ -333,6 +338,25 @@ prop_brokenRcGetsWarning = result == [1134, 2086]
     result = checkWithRc "rofl" emptyCheckSpec {
         csScript = "#!/bin/sh\necho $1",
         csIgnoreRC = False
+    }
+
+prop_sourcePathRedirectsName = result == [2086]
+  where
+    f "dir/myscript" "lib" = return "foo/lib"
+    result = checkWithIncludesAndSourcePath [("foo/lib", "echo $1")] f emptyCheckSpec {
+        csScript = "#!/bin/bash\nsource lib",
+        csFilename = "dir/myscript",
+        csCheckSourced = True
+    }
+
+prop_sourcePathRedirectsDirective = result == [2086]
+  where
+    f "dir/myscript" "lib" = return "foo/lib"
+    f _ _ = return "/dev/null"
+    result = checkWithIncludesAndSourcePath [("foo/lib", "echo $1")] f emptyCheckSpec {
+        csScript = "#!/bin/bash\n# shellcheck source=lib\nsource kittens",
+        csFilename = "dir/myscript",
+        csCheckSourced = True
     }
 
 return []

@@ -73,8 +73,8 @@ import qualified Data.Map as Map
 data SystemInterface m = SystemInterface {
     -- Read a file by filename, or return an error
     siReadFile :: String -> m (Either ErrorMessage String),
-    -- Find source file in alternate root paths
-    siFindSource :: String -> m (FilePath),
+    -- Given the current script and a sourced file, find the sourced file
+    siFindSource :: String -> String -> m FilePath,
     -- Get the configuration file (name, contents) for a filename
     siGetConfig :: String -> m (Maybe (FilePath, String))
 }
@@ -297,7 +297,7 @@ mockedSystemInterface files = SystemInterface {
         case filter ((== file) . fst) files of
             [] -> return $ Left "File not included in mock."
             [(_, contents)] -> return $ Right contents
-    fs file = return file
+    fs _ file = return file
 
 mockRcFile rcfile mock = mock {
     siGetConfig = const . return $ Just (".shellcheckrc", rcfile)
