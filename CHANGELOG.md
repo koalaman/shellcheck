@@ -15,6 +15,7 @@
 ### Changed
 - If a directive or shebang is not specified, a `.bash/.bats/.dash/.ksh`
   extension will be used to infer the shell type when present.
+- Disabling SC2120 on a function now disables SC2119 on call sites
 
 ## v0.6.0 - 2018-12-02
 ### Added

@@ -882,15 +882,14 @@ filterByAnnotation asSpec params =
     shouldIgnore note =
         any (shouldIgnoreFor (getCode note)) $
             getPath parents (T_Bang $ tcId note)
-    shouldIgnoreFor num (T_Annotation _ anns _) =
-        any hasNum anns
-      where
-        hasNum (DisableComment ts) = num == ts
-        hasNum _                   = False
     shouldIgnoreFor _ T_Include {} = not $ asCheckSourced asSpec
-    shouldIgnoreFor _ _ = False
+    shouldIgnoreFor code t = isAnnotationIgnoringCode code t
     parents = parentMap params
     getCode = cCode . tcComment
+
+shouldIgnoreCode params code t =
+    any (isAnnotationIgnoringCode code) $
+        getPath (parentMap params) t
 
 -- Is this a ${#anything}, to get string length or array count?
 isCountingReference (T_DollarBraced id token) =

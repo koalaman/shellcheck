@@ -501,3 +501,13 @@ isCommandSubstitution t = case t of
     T_DollarBraceCommandExpansion {} -> True
     T_Backticked {} -> True
     _ -> False
+
+
+-- Is this a T_Annotation that ignores a specific code?
+isAnnotationIgnoringCode code t =
+    case t of
+        T_Annotation _ anns _ -> any hasNum anns
+        _ -> False
+  where
+    hasNum (DisableComment ts) = code == ts
+    hasNum _                   = False

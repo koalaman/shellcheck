@@ -2304,6 +2304,7 @@ prop_checkUnpassedInFunctions9 = verifyNotTree checkUnpassedInFunctions "foo() {
 prop_checkUnpassedInFunctions10= verifyNotTree checkUnpassedInFunctions "foo() { echo $!; }; foo;"
 prop_checkUnpassedInFunctions11= verifyNotTree checkUnpassedInFunctions "foo() { bar() { echo $1; }; bar baz; }; foo;"
 prop_checkUnpassedInFunctions12= verifyNotTree checkUnpassedInFunctions "foo() { echo ${!var*}; }; foo;"
+prop_checkUnpassedInFunctions13= verifyNotTree checkUnpassedInFunctions "# shellcheck disable=SC2120\nfoo() { echo $1; }\nfoo\n"
 checkUnpassedInFunctions params root =
     execWriter $ mapM_ warnForGroup referenceGroups
   where
@@ -2355,16 +2356,23 @@ checkUnpassedInFunctions params root =
     updateWith x@(name, _, _) = Map.insertWith (++) name [x]
 
     warnForGroup group =
-        when (all isArgumentless group) $ do
-            mapM_ suggestParams group
-            warnForDeclaration group
+        when (all isArgumentless group) $
+            -- Allow ignoring SC2120 on the function to ignore all calls
+            let (name, func) = getFunction group
+                ignoring = shouldIgnoreCode params 2120 func
+            in unless ignoring $ do
+                mapM_ suggestParams group
+                warnForDeclaration func name
 
     suggestParams (name, _, thing) =
         info (getId thing) 2119 $
             "Use " ++ name ++ " \"$@\" if function's $1 should mean script's $1."
-    warnForDeclaration ((name, _, _):_) =
-        warn (getId . fromJust $ Map.lookup name functionMap) 2120 $
+    warnForDeclaration func name =
+        warn (getId func) 2120 $
             name ++ " references arguments, but none are ever passed."
+
+    getFunction ((name, _, _):_) =
+        (name, fromJust $ Map.lookup name functionMap)
 
 
 prop_checkOverridingPath1 = verify checkOverridingPath "PATH=\"$var/$foo\""
