@@ -940,5 +940,7 @@ getOpts flagTokenizer string cmd = process flags
                 more <- process rest2
                 return $ (flag1, token1) : more
 
+supportsArrays shell = shell == Bash || shell == Ksh
+
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

@@ -1822,12 +1822,16 @@ checkQuotesInLiterals params t =
               && not (isQuoteFree parents expr)
               && not (squashesQuotes expr)
               then [
-                  makeComment WarningC (fromJust assignment) 2089
-                      "Quotes/backslashes will be treated literally. Use an array.",
+                  makeComment WarningC (fromJust assignment) 2089 $
+                      "Quotes/backslashes will be treated literally. " ++ suggestion,
                   makeComment WarningC (getId expr) 2090
                       "Quotes/backslashes in this variable will not be respected."
                 ]
               else [])
+    suggestion =
+        if supportsArrays (shellType params)
+        then "Use an array."
+        else "Rewrite using set/\"$@\" or functions."
 
 
 prop_checkFunctionsUsedExternally1 =
