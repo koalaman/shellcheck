@@ -75,17 +75,18 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
     directory, as in `-P SCRIPTDIR` or `-P SCRIPTDIR/../libs`. Subsequent
     `-P` flags accumulate and take predecence.
 
+**-s**\ *shell*,\ **--shell=***shell*
+
+:   Specify Bourne shell dialect. Valid values are *sh*, *bash*, *dash* and *ksh*.
+    The default is to deduce the shell from the file's `shell` directive,
+    shebang, or `.bash/.bats/.dash/.ksh` extension, in that order. *sh* refers to
+    POSIX `sh` (not the system's), and will warn of portability issues.
+
 **-S**\ *SEVERITY*,\ **--severity=***severity*
 
 :   Specify minimum severity of errors to consider. Valid values in order of
     severity are *error*, *warning*, *info*, *style* and *verbose*.
     The default is *style*.
-
-**-s**\ *shell*,\ **--shell=***shell*
-
-:   Specify Bourne shell dialect. Valid values are *sh*, *bash*, *dash* and *ksh*.
-    The default is to deduce the shell from the file's `shell` directive,
-    shebang, or `.bash/.bats/.dash/.ksh` extension, in that order.
 
 **-V**,\ **--version**
 
