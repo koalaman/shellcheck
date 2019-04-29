@@ -242,9 +242,7 @@ ShellCheck is built and packaged using Cabal. Install the package `cabal-install
 
 On MacOS (OS X), you can do a fast install of Cabal using brew, which takes a couple of minutes instead of more than 30 minutes if you try to compile it from source.
 
-    brew install cask
-    brew cask install haskell-platform
-    cabal install cabal-install
+    brew install ghc cabal-install
 
 On MacPorts, the package is instead called `hs-cabal-install`, while native Windows users should install the latest version of the Haskell platform from https://www.haskell.org/platform/
 
