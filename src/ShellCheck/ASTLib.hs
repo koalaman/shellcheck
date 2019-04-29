@@ -81,7 +81,7 @@ oversimplify token =
         (T_NormalWord _ l) -> [concat (concatMap oversimplify l)]
         (T_DoubleQuoted _ l) -> [concat (concatMap oversimplify l)]
         (T_SingleQuoted _ s) -> [s]
-        (T_DollarBraced _ _) -> ["${VAR}"]
+        (T_DollarBraced _ _ _) -> ["${VAR}"]
         (T_DollarArithmetic _ _) -> ["${VAR}"]
         (T_DollarExpansion _ _) -> ["${VAR}"]
         (T_Backticked _ _) -> ["${VAR}"]
@@ -133,11 +133,11 @@ isUnquotedFlag token = fromMaybe False $ do
     return $ "-" `isPrefixOf` str
 
 -- Given a T_DollarBraced, return a simplified version of the string contents.
-bracedString (T_DollarBraced _ l) = concat $ oversimplify l
+bracedString (T_DollarBraced _ _ l) = concat $ oversimplify l
 bracedString _ = error "Internal shellcheck error, please report! (bracedString on non-variable)"
 
 -- Is this an expansion of multiple items of an array?
-isArrayExpansion t@(T_DollarBraced _ _) =
+isArrayExpansion t@(T_DollarBraced _ _ _) =
     let string = bracedString t in
         "@" `isPrefixOf` string ||
             not ("#" `isPrefixOf` string) && "[@]" `isInfixOf` string
@@ -146,7 +146,7 @@ isArrayExpansion _ = False
 -- Is it possible that this arg becomes multiple args?
 mayBecomeMultipleArgs t = willBecomeMultipleArgs t || f t
   where
-    f t@(T_DollarBraced _ _) =
+    f t@(T_DollarBraced _ _ _) =
         let string = bracedString t in
             "!" `isPrefixOf` string
     f (T_DoubleQuoted _ parts) = any f parts

@@ -76,7 +76,7 @@ data Token =
     | T_DSEMI Id
     | T_Do Id
     | T_DollarArithmetic Id Token
-    | T_DollarBraced Id Token
+    | T_DollarBraced Id Bool Token
     | T_DollarBracket Id Token
     | T_DollarDoubleQuoted Id [Token]
     | T_DollarExpansion Id [Token]
@@ -253,7 +253,7 @@ analyze f g i =
     delve (T_Function id a b name body) = d1 body $ T_Function id a b name
     delve (T_Condition id typ token) = d1 token $ T_Condition id typ
     delve (T_Extglob id str l) = dl l $ T_Extglob id str
-    delve (T_DollarBraced id op) = d1 op $ T_DollarBraced id
+    delve (T_DollarBraced id braced op) = d1 op $ T_DollarBraced id braced
     delve (T_HereDoc id d q str l) = dl l $ T_HereDoc id d q str
 
     delve (TC_And id typ str t1 t2) = d2 t1 t2 $ TC_And id typ str
@@ -323,7 +323,7 @@ getId t = case t of
         T_NormalWord id _  -> id
         T_DoubleQuoted id _  -> id
         T_DollarExpansion id _  -> id
-        T_DollarBraced id _  -> id
+        T_DollarBraced id _ _ -> id
         T_DollarArithmetic id _  -> id
         T_BraceExpansion id _  -> id
         T_ParamSubSpecialChar id _ -> id

@@ -1634,7 +1634,7 @@ readDollarBraced = called "parameter expansion" $ do
     word <- readDollarBracedWord
     char '}'
     id <- endSpan start
-    return $ T_DollarBraced id word
+    return $ T_DollarBraced id True word
 
 prop_readDollarExpansion1= isOk readDollarExpansion "$(echo foo; ls\n)"
 prop_readDollarExpansion2= isOk readDollarExpansion "$(  )"
@@ -1661,7 +1661,7 @@ readDollarVariable = do
     let singleCharred p = do
         value <- wrapString ((:[]) <$> p)
         id <- endSpan start
-        return $ (T_DollarBraced id value)
+        return $ (T_DollarBraced id False value)
 
     let positional = do
         value <- singleCharred digit
@@ -1674,7 +1674,7 @@ readDollarVariable = do
     let regular = do
         value <- wrapString readVariableName
         id <- endSpan start
-        return (T_DollarBraced id value) `attempting` do
+        return (T_DollarBraced id False value) `attempting` do
             lookAhead $ char '['
             parseNoteAt pos ErrorC 1087 "Use braces when expanding arrays, e.g. ${array[idx]} (or ${var}[.. to quiet)."
 
