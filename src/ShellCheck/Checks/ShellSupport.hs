@@ -172,6 +172,8 @@ prop_checkBashisms88 = verifyNot checkBashisms "#!/bin/sh\nset -- wget -o foo 'h
 prop_checkBashisms89 = verifyNot checkBashisms "#!/bin/sh\nopts=$-\nset -\"$opts\""
 prop_checkBashisms90 = verifyNot checkBashisms "#!/bin/sh\nset -o \"$opt\""
 prop_checkBashisms91 = verify checkBashisms "#!/bin/sh\nwait -n"
+prop_checkBashisms92 = verify checkBashisms "#!/bin/sh\necho $((16#FF))"
+prop_checkBashisms93 = verify checkBashisms "#!/bin/sh\necho $(( 10#$(date +%m) ))"
 checkBashisms = ForShell [Sh, Dash] $ \t -> do
     params <- ask
     kludge params t
@@ -385,6 +387,10 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
     bashism t@(T_SourceCommand id src _) =
         let name = fromMaybe "" $ getCommandName src
         in when (name == "source") $ warnMsg id "'source' in place of '.' is"
+    bashism (TA_Expansion _ (T_Literal id str : _)) | str `matches` radix =
+        when (str `matches` radix) $ warnMsg id "arithmetic base conversion is"
+      where
+        radix = mkRegex "^[0-9]+#"
     bashism _ = return ()
 
     varChars="_0-9a-zA-Z"
