@@ -2737,7 +2737,7 @@ checkTrailingBracket _ token =
                     parameters = oversimplify command
                 guard $ opposite `notElem` parameters
                 return $ warn id 2171 $
-                    "Found trailing " ++ str ++ " outside test. Missing " ++ opposite ++ "?"
+                    "Found trailing " ++ str ++ " outside test. Add missing " ++ opposite ++ " or quote if intentional."
             _ -> return ()
     invert s =
         case s of
