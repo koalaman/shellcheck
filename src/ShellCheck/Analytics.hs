@@ -1424,7 +1424,8 @@ prop_checkInexplicablyUnquoted5 = verifyNot checkInexplicablyUnquoted "\"$dir\"/
 prop_checkInexplicablyUnquoted6 = verifyNot checkInexplicablyUnquoted "\"$dir\"some_stuff\"$file\""
 prop_checkInexplicablyUnquoted7 = verifyNot checkInexplicablyUnquoted "${dir/\"foo\"/\"bar\"}"
 prop_checkInexplicablyUnquoted8 = verifyNot checkInexplicablyUnquoted "  'foo'\\\n  'bar'"
-checkInexplicablyUnquoted _ (T_NormalWord id tokens) = mapM_ check (tails tokens)
+prop_checkInexplicablyUnquoted9 = verifyNot checkInexplicablyUnquoted "[[ $x =~ \"foo\"(\"bar\"|\"baz\") ]]"
+checkInexplicablyUnquoted params (T_NormalWord id tokens) = mapM_ check (tails tokens)
   where
     check (T_SingleQuoted _ _:T_Literal id str:_)
         | not (null str) && all isAlphaNum str =
@@ -1435,11 +1436,20 @@ checkInexplicablyUnquoted _ (T_NormalWord id tokens) = mapM_ check (tails tokens
             T_DollarExpansion id _ -> warnAboutExpansion id
             T_DollarBraced id _ -> warnAboutExpansion id
             T_Literal id s ->
-                unless (quotesSingleThing a && quotesSingleThing b) $
+                unless (quotesSingleThing a && quotesSingleThing b || isRegex (getPath (parentMap params) trapped)) $
                     warnAboutLiteral id
             _ -> return ()
 
     check _ = return ()
+
+    -- Regexes for [[ .. =~ re ]] are parsed with metacharacters like ()| as unquoted
+    -- literals, so avoid overtriggering on these.
+    isRegex t =
+        case t of
+            (T_Redirecting {} : _) -> False
+            (a:(TC_Binary _ _ "=~" lhs rhs):rest) -> getId a == getId rhs
+            _:rest -> isRegex rest
+            _ -> False
 
     -- If the surrounding quotes quote single things, like "$foo"_and_then_some_"$stuff",
     -- the quotes were probably intentional and harmless.
