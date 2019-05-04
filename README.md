@@ -210,8 +210,10 @@ or see the [storage bucket listing](https://shellcheck.storage.googleapis.com/in
 
 Distro packages already come with a `man` page. If you are building from source, it can be installed with:
 
-    pandoc -s -t man shellcheck.1.md -o shellcheck.1
-    sudo mv shellcheck.1 /usr/share/man/man1
+```console
+pandoc -s -f markdown-smart -t man shellcheck.1.md -o shellcheck.1
+sudo mv shellcheck.1 /usr/share/man/man1
+```
 
 ## Travis CI
 
