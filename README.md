@@ -21,12 +21,15 @@ See [the gallery of bad code](README.md#user-content-gallery-of-bad-code) for ex
 
 ## Table of Contents
 
+- [Table of Contents](#table-of-contents)
 - [How to use](#how-to-use)
   - [On the web](#on-the-web)
   - [From your terminal](#from-your-terminal)
   - [In your editor](#in-your-editor)
   - [In your build or test suites](#in-your-build-or-test-suites)
 - [Installing](#installing)
+- [Travis CI](#travis-ci)
+- [Installing the shellcheck binary](#installing-the-shellcheck-binary)
 - [Compiling from source](#compiling-from-source)
   - [Installing Cabal](#installing-cabal)
   - [Compiling ShellCheck](#compiling-shellcheck)
@@ -46,6 +49,7 @@ See [the gallery of bad code](README.md#user-content-gallery-of-bad-code) for ex
 - [Reporting bugs](#reporting-bugs)
 - [Contributing](#contributing)
 - [Copyright](#copyright)
+- [Other Resources](#other-resources)
 
 ## How to use
 
@@ -53,7 +57,7 @@ There are a number of ways to use ShellCheck!
 
 ### On the web
 
-Paste a shell script on https://www.shellcheck.net for instant feedback.
+Paste a shell script on <https://www.shellcheck.net> for instant feedback.
 
 [ShellCheck.net](https://www.shellcheck.net) is always synchronized to the latest git commit, and is the easiest way to give ShellCheck a go. Tell your friends!
 
@@ -88,7 +92,7 @@ It makes canonical use of exit codes, so you can just add a `shellcheck` command
 
 For example, in a Makefile:
 
-```
+```Makefile
 check-scripts:
     # Fail if any of these files have warnings
     shellcheck myscripts/*.sh
@@ -96,7 +100,7 @@ check-scripts:
 
 or in a Travis CI `.travis.yml` file:
 
-```
+```yaml
 script:
   # Fail if any of these files have warnings
   - shellcheck myscripts/*.sh
@@ -182,10 +186,18 @@ Or use OneClickInstall - https://software.opensuse.org/package/ShellCheck
 On Solus:
 
     eopkg install shellcheck
-    
-On Windows (via [scoop](http://scoop.sh)):
 
-    scoop install shellcheck
+On Windows (via [chocolatey](https://chocolatey.org/packages/shellcheck)):
+
+```cmd
+C:\> choco install shellcheck
+```
+
+Or Windows (via [scoop](http://scoop.sh)):
+
+```cmd
+C:\> scoop install shellcheck
+```
 
 From Snap Store:
 
@@ -210,8 +222,10 @@ or see the [storage bucket listing](https://shellcheck.storage.googleapis.com/in
 
 Distro packages already come with a `man` page. If you are building from source, it can be installed with:
 
-    pandoc -s -t man shellcheck.1.md -o shellcheck.1
-    sudo mv shellcheck.1 /usr/share/man/man1
+```console
+pandoc -s -t man shellcheck.1.md -o shellcheck.1
+sudo mv shellcheck.1 /usr/share/man/man1
+```
 
 ## Travis CI
 
@@ -282,12 +296,16 @@ may use a legacy codepage. In `cmd.exe`, `powershell.exe` and Powershell ISE,
 make sure to use a TrueType font, not a Raster font, and set the active
 codepage to UTF-8 (65001) with `chcp`:
 
-    > chcp 65001
-    Active code page: 65001
+```cmd
+chcp 65001
+Active code page: 65001
+```
 
 In Powershell ISE, you may need to additionally update the output encoding:
 
-    > [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+```
 
 ### Running tests
 
@@ -456,7 +474,7 @@ while getopts "a" f; do case $f in "b") # Unhandled getopts flags
 
 ## Testimonials
 
-> At first you're like "shellcheck is awesome" but then you're like "wtf are we still using bash"
+> 🔉 At first you're like "shellcheck is awesome" but then you're like "wtf are we still using bash"
 
 Alexander Tarasikov,
 [via Twitter](https://twitter.com/astarasikov/status/568825996532707330)
@@ -465,13 +483,13 @@ Alexander Tarasikov,
 
 Issues can be ignored via environmental variable, command line, individually or globally within a file:
 
-https://github.com/koalaman/shellcheck/wiki/Ignore
+<https://github.com/koalaman/shellcheck/wiki/Ignore>
 
 ## Reporting bugs
 
 Please use the GitHub issue tracker for any bugs or feature suggestions:
 
-https://github.com/koalaman/shellcheck/issues
+<https://github.com/koalaman/shellcheck/issues>
 
 ## Contributing
 
@@ -490,7 +508,7 @@ Copyright 2012-2018, Vidar 'koala_man' Holen and contributors.
 
 Happy ShellChecking!
 
-
 ## Other Resources                                                                          
+
 * The wiki has [long form descriptions](https://github.com/koalaman/shellcheck/wiki/Checks) for each warning, e.g. [SC2221](https://github.com/koalaman/shellcheck/wiki/SC2221).
 * ShellCheck does not attempt to enforce any kind of formatting or indenting style, so also check out [shfmt](https://github.com/mvdan/sh)!
