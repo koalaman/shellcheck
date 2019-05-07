@@ -141,7 +141,8 @@ formats :: FormatterOptions -> Map.Map String (IO Formatter)
 formats options = Map.fromList [
     ("checkstyle", ShellCheck.Formatter.CheckStyle.format),
     ("gcc",  ShellCheck.Formatter.GCC.format),
-    ("json", ShellCheck.Formatter.JSON.format),
+    ("json", ShellCheck.Formatter.JSON.format False),  -- JSON with 8-char tabs
+    ("json1", ShellCheck.Formatter.JSON.format True), -- JSON with 1-char tabs
     ("tty",  ShellCheck.Formatter.TTY.format options),
     ("quiet",  ShellCheck.Formatter.Quiet.format options)
     ]

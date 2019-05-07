@@ -22,6 +22,7 @@ module ShellCheck.Formatter.Format where
 import ShellCheck.Data
 import ShellCheck.Interface
 import ShellCheck.Fixer
+import Control.Monad
 import Data.Array
 
 -- A formatter that carries along an arbitrary piece of data
@@ -54,5 +55,10 @@ makeNonVirtual comments contents =
   where
     list = lines contents
     arr = listArray (1, length list) list
-    fix c = removeTabStops c arr
+    untabbedFix f = newFix {
+      fixReplacements = map (\r -> removeTabStops r arr) (fixReplacements f)
+    }
+    fix c = (removeTabStops c arr) {
+      pcFix = liftM untabbedFix (pcFix c)
+    }
 

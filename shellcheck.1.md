@@ -153,7 +153,7 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 
 :   Json is a popular serialization format that is more suitable for web
     applications. ShellCheck's json is compact and contains only the bare
-    minimum.
+    minimum.  Tabs are 8 characters.
 
         [
           {
@@ -166,6 +166,11 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
           },
           ...
         ]
+
+**json1**
+
+:   This is the same as shellcheck's json format, but tabs are treated as
+    single characters instead of 8-character tabstops.
 
 *quiet*
 
