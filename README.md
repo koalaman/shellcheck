@@ -28,8 +28,6 @@ See [the gallery of bad code](README.md#user-content-gallery-of-bad-code) for ex
   - [In your editor](#in-your-editor)
   - [In your build or test suites](#in-your-build-or-test-suites)
 - [Installing](#installing)
-- [Travis CI](#travis-ci)
-- [Installing the shellcheck binary](#installing-the-shellcheck-binary)
 - [Compiling from source](#compiling-from-source)
   - [Installing Cabal](#installing-cabal)
   - [Compiling ShellCheck](#compiling-shellcheck)
@@ -227,22 +225,26 @@ pandoc -s -t man shellcheck.1.md -o shellcheck.1
 sudo mv shellcheck.1 /usr/share/man/man1
 ```
 
-## Travis CI
+### Travis CI
 
 Travis CI has now integrated ShellCheck by default, so you don't need to manually install it.
 
-If you still want to do so in order to upgrade at your leisure or ensure the latest release, follow the steps to install the shellcheck binary, bellow.
+If you still want to do so in order to upgrade at your leisure or ensure you're
+using the latest release, follow the steps below to install a binary version.
 
-## Installing the shellcheck binary
+### Installing a pre-compiled binary
 
-*Pre-requisite*: the program 'xz' needs to be installed on the system.  
-To install it on debian/ubuntu/linux mint, run `apt install xz-utils`.  
-To install it on Redhat/Fedora/CentOS, run `yum -y install xz`.  
+The pre-compiled binaries come in `tar.xz` files. To decompress them, make sure
+`xz` is installed.
+On Debian/Ubuntu/Mint, you can `apt install xz-utils`.
+On Redhat/Fedora/CentOS, `yum -y install xz`.
+
+A simple installer may do something like:
 
 ```bash
-export scversion="stable" # or "v0.4.7", or "latest"
-wget -qO- "https://storage.googleapis.com/shellcheck/shellcheck-"${scversion}".linux.x86_64.tar.xz" | tar -xJv
-cp shellcheck-"${scversion}"/shellcheck /usr/bin/
+scversion="stable" # or "v0.4.7", or "latest"
+wget -qO- "https://storage.googleapis.com/shellcheck/shellcheck-${scversion?}.linux.x86_64.tar.xz" | tar -xJv
+cp "shellcheck-${scversion}/shellcheck" /usr/bin/
 shellcheck --version
 ```
 
@@ -298,7 +300,6 @@ codepage to UTF-8 (65001) with `chcp`:
 
 ```cmd
 chcp 65001
-Active code page: 65001
 ```
 
 In Powershell ISE, you may need to additionally update the output encoding:
@@ -474,7 +475,7 @@ while getopts "a" f; do case $f in "b") # Unhandled getopts flags
 
 ## Testimonials
 
-> 🔉 At first you're like "shellcheck is awesome" but then you're like "wtf are we still using bash"
+> At first you're like "shellcheck is awesome" but then you're like "wtf are we still using bash"
 
 Alexander Tarasikov,
 [via Twitter](https://twitter.com/astarasikov/status/568825996532707330)
