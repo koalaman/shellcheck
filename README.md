@@ -205,7 +205,7 @@ From Docker Hub:
 
 ```sh
 docker pull koalaman/shellcheck:stable  # Or :v0.4.7 for that version, or :latest for daily builds
-docker run -v "$PWD:/mnt" koalaman/shellcheck myscript
+docker run --rm -v "$PWD:/mnt" koalaman/shellcheck myscript
 ```
 
 or use `koalaman/shellcheck-alpine` if you want a larger Alpine Linux based image to extend. It works exactly like a regular Alpine image, but has shellcheck preinstalled.
