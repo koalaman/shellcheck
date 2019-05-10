@@ -116,14 +116,14 @@ Services and platforms with third party plugins:
 * [SonarQube](https://www.sonarqube.org/) through [sonar-shellcheck-plugin](https://github.com/emerald-squad/sonar-shellcheck-plugin)
 
 Most other services, including [GitLab](https://about.gitlab.com/), let you install
-ShellCheck yourself, either through the system's package manager (see [Installing](#installing)), 
+ShellCheck yourself, either through the system's package manager (see [Installing](#installing)),
 or by downloading and unpacking a [binary release](#installing-the-shellcheck-binary).
 
 It's a good idea to manually install a specific ShellCheck version regardless. This avoids
 any surprise build breaks when a new version with new warnings is published.
 
 For customized filtering or reporting, ShellCheck can output simple JSON, CheckStyle compatible XML,
-GCC compatible warnings as well as human readable text (with or without ANSI colors). See the 
+GCC compatible warnings as well as human readable text (with or without ANSI colors). See the
 [Integration](https://github.com/koalaman/shellcheck/wiki/Integration) wiki page for more documentation.
 
 ## Installing
@@ -509,7 +509,7 @@ Copyright 2012-2018, Vidar 'koala_man' Holen and contributors.
 
 Happy ShellChecking!
 
-## Other Resources                                                                          
+## Other Resources
 
 * The wiki has [long form descriptions](https://github.com/koalaman/shellcheck/wiki/Checks) for each warning, e.g. [SC2221](https://github.com/koalaman/shellcheck/wiki/SC2221).
 * ShellCheck does not attempt to enforce any kind of formatting or indenting style, so also check out [shfmt](https://github.com/mvdan/sh)!
