@@ -70,10 +70,8 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 **-P**\ *SOURCEPATH*,\ **--source-path=***SOURCEPATH*
 
 :   Specify paths to search for sourced files, separated by `:` on Unix and
-    `;` on Windows. Absolute paths will also be rooted in these. The special
-    path `SCRIPTDIR` can be used to specify the currently checked script's
-    directory, as in `-P SCRIPTDIR` or `-P SCRIPTDIR/../libs`. Subsequent
-    `-P` flags accumulate and take predecence.
+    `;` on Windows. This is equivalent to specifying `search-path`
+    directives.
 
 **-s**\ *shell*,\ **--shell=***shell*
 
@@ -201,6 +199,14 @@ Valid keys are:
     used to tell shellcheck where to look for a file whose name is determined
     at runtime, or to skip a source by telling it to use `/dev/null`.
 
+**source-path**
+:   Add a directory to the search path for `source`/`.` statements (by default,
+    only ShellCheck's working directory is included). Absolute paths will also
+    be rooted in these paths. The special path `SCRIPTDIR` can be used to
+    specify the currently checked script's directory, as in
+    `source-path=SCRIPTDIR` or `source-path=SCRIPTDIR/../libs`. Multiple
+    paths accumulate, and `-P` takes precedence over them.
+
 **shell**
 :   Overrides the shell detected from the shebang.  This is useful for
     files meant to be included (and thus lacking a shebang), or possibly
@@ -213,8 +219,10 @@ it will read `key=value` pairs from it and treat them as file-wide directives.
 
 Here is an example `.shellcheckrc`:
 
-    # Don't suggest using -n in [ $var ]
-    disable=SC2244
+    # Look for 'source'd files relative to the checked script,
+    # and also look for absolute paths in /mnt/chroot
+    source-path=SCRIPTDIR
+    source-path=/mnt/chroot
 
     # Allow using `which` since it gives full paths and is common enough
     disable=SC2230

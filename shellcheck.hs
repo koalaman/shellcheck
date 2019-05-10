@@ -471,7 +471,7 @@ ioInterface options files = do
         first <- a arg
         if not first then return False else b arg
 
-    findSourceFile inputs sourcePaths currentScript original =
+    findSourceFile inputs sourcePathFlag currentScript sourcePathAnnotation original =
         if isAbsolute original
         then
             let (_, relative) = splitDrive original
@@ -481,7 +481,7 @@ ioInterface options files = do
       where
         find filename deflt = do
             sources <- filterM ((allowable inputs) `andM` doesFileExist)
-                        (map (</> filename) $ map adjustPath sourcePaths)
+                        (map (</> filename) $ map adjustPath $ sourcePathFlag ++ sourcePathAnnotation)
             case sources of
                 [] -> return deflt
                 (first:_) -> return first

@@ -264,6 +264,15 @@ shouldIgnoreCode code = do
     disabling' (DisableComment n) = code == n
     disabling' _ = False
 
+getCurrentAnnotations includeSource =
+    concatMap get . takeWhile (not . isBoundary) <$> getCurrentContexts
+  where
+    get (ContextAnnotation list) = list
+    get _ = []
+    isBoundary (ContextSource _) = not includeSource
+    isBoundary _ = False
+
+
 shouldFollow file = do
     context <- getCurrentContexts
     if any isThisFile context
@@ -966,7 +975,7 @@ readAnnotationWithoutPrefix = do
   where
     readKey = do
         keyPos <- getPosition
-        key <- many1 letter
+        key <- many1 (letter <|> char '-')
         char '=' <|> fail "Expected '=' after directive key"
         annotations <- case key of
             "disable" -> readCode `sepBy` char ','
@@ -979,6 +988,10 @@ readAnnotationWithoutPrefix = do
             "source" -> do
                 filename <- many1 $ noneOf " \n"
                 return [SourceOverride filename]
+
+            "source-path" -> do
+                dirname <- many1 $ noneOf " \n"
+                return [SourcePath dirname]
 
             "shell" -> do
                 pos <- getPosition
@@ -2079,6 +2092,7 @@ readSource t@(T_Redirecting _ _ (T_SimpleCommand cmdId _ (cmd:file':rest'))) = d
             proceed <- shouldFollow filename
             if not proceed
               then do
+                -- FIXME: This actually gets squashed without -a
                 parseNoteAtId (getId file) InfoC 1093
                     "This file appears to be recursively sourced. Ignoring."
                 return t
@@ -2089,7 +2103,8 @@ readSource t@(T_Redirecting _ _ (T_SimpleCommand cmdId _ (cmd:file':rest'))) = d
                     then return (Right "")
                     else do
                         currentScript <- Mr.asks currentFilename
-                        filename' <- system $ siFindSource sys currentScript filename
+                        paths <- mapMaybe getSourcePath <$> getCurrentAnnotations True
+                        filename' <- system $ siFindSource sys currentScript paths filename
                         system $ siReadFile sys filename'
                 case input of
                     Left err -> do
@@ -2117,6 +2132,11 @@ readSource t@(T_Redirecting _ _ (T_SimpleCommand cmdId _ (cmd:file':rest'))) = d
             Just "--" -> next
             x -> file
     getFile file _ = file
+
+    getSourcePath t =
+        case t of
+            SourcePath x -> Just x
+            _ -> Nothing
 
     subRead name script =
         withContext (ContextSource name) $

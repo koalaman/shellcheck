@@ -215,6 +215,7 @@ prop_worksWhenSourcingWithDashDash =
 prop_worksWhenDotting =
     null $ checkWithIncludes [("lib", "bar=1")] ". lib; echo \"$bar\""
 
+-- FIXME: This should really be giving [1093], "recursively sourced"
 prop_noInfiniteSourcing =
     [] == checkWithIncludes  [("lib", "source lib")] "source lib"
 
@@ -235,6 +236,12 @@ prop_recursiveAnalysis =
 
 prop_recursiveParsing =
     [1037] == checkRecursive [("lib", "echo \"$10\"")] "source lib"
+
+prop_nonRecursiveAnalysis =
+    [] == checkWithIncludes [("lib", "echo $1")] "source lib"
+
+prop_nonRecursiveParsing =
+    [] == checkWithIncludes [("lib", "echo \"$10\"")] "source lib"
 
 prop_sourceDirectiveDoesntFollowFile =
     null $ checkWithIncludes
@@ -342,17 +349,26 @@ prop_brokenRcGetsWarning = result == [1134, 2086]
 
 prop_sourcePathRedirectsName = result == [2086]
   where
-    f "dir/myscript" "lib" = return "foo/lib"
+    f "dir/myscript" _ "lib" = return "foo/lib"
     result = checkWithIncludesAndSourcePath [("foo/lib", "echo $1")] f emptyCheckSpec {
         csScript = "#!/bin/bash\nsource lib",
         csFilename = "dir/myscript",
         csCheckSourced = True
     }
 
+prop_sourcePathAddsAnnotation = result == [2086]
+  where
+    f "dir/myscript" ["mypath"] "lib" = return "foo/lib"
+    result = checkWithIncludesAndSourcePath [("foo/lib", "echo $1")] f emptyCheckSpec {
+        csScript = "#!/bin/bash\n# shellcheck source-path=mypath\nsource lib",
+        csFilename = "dir/myscript",
+        csCheckSourced = True
+    }
+
 prop_sourcePathRedirectsDirective = result == [2086]
   where
-    f "dir/myscript" "lib" = return "foo/lib"
-    f _ _ = return "/dev/null"
+    f "dir/myscript" _ "lib" = return "foo/lib"
+    f _ _ _ = return "/dev/null"
     result = checkWithIncludesAndSourcePath [("foo/lib", "echo $1")] f emptyCheckSpec {
         csScript = "#!/bin/bash\n# shellcheck source=lib\nsource kittens",
         csFilename = "dir/myscript",

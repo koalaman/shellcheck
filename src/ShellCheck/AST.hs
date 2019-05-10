@@ -146,6 +146,7 @@ data Annotation =
     DisableComment Integer
     | SourceOverride String
     | ShellOverride String
+    | SourcePath String
     deriving (Show, Eq)
 data ConditionType = DoubleBracket | SingleBracket deriving (Show, Eq)
 
