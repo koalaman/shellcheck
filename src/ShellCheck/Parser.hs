@@ -2098,14 +2098,15 @@ readSource t@(T_Redirecting _ _ (T_SimpleCommand cmdId _ (cmd:file':rest'))) = d
                 return t
               else do
                 sys <- Mr.asks systemInterface
-                input <-
+                (input, resolvedFile) <-
                     if filename == "/dev/null" -- always allow /dev/null
-                    then return (Right "")
+                    then return (Right "", filename)
                     else do
                         currentScript <- Mr.asks currentFilename
                         paths <- mapMaybe getSourcePath <$> getCurrentAnnotations True
-                        filename' <- system $ siFindSource sys currentScript paths filename
-                        system $ siReadFile sys filename'
+                        resolved <- system $ siFindSource sys currentScript paths filename
+                        contents <- system $ siReadFile sys resolved
+                        return (contents, resolved)
                 case input of
                     Left err -> do
                         parseNoteAtId (getId file) InfoC 1091 $
@@ -2116,7 +2117,7 @@ readSource t@(T_Redirecting _ _ (T_SimpleCommand cmdId _ (cmd:file':rest'))) = d
                         id2 <- getNewIdFor cmdId
 
                         let included = do
-                            src <- subRead filename script
+                            src <- subRead resolvedFile script
                             return $ T_SourceCommand id1 t (T_Include id2 src)
 
                         let failed = do
