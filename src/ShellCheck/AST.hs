@@ -144,6 +144,7 @@ data Token =
 
 data Annotation =
     DisableComment Integer
+    | EnableComment String
     | SourceOverride String
     | ShellOverride String
     | SourcePath String

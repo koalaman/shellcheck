@@ -985,6 +985,10 @@ readAnnotationWithoutPrefix = do
                     int <- many1 digit
                     return $ DisableComment (read int)
 
+            "enable" -> readName `sepBy` char ','
+              where
+                readName = EnableComment <$> many1 (letter <|> char '-')
+
             "source" -> do
                 filename <- many1 $ noneOf " \n"
                 return [SourceOverride filename]

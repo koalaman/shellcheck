@@ -17,6 +17,7 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -}
+import qualified ShellCheck.Analyzer
 import           ShellCheck.Checker
 import           ShellCheck.Data
 import           ShellCheck.Interface
@@ -98,8 +99,13 @@ options = [
     Option "f" ["format"]
         (ReqArg (Flag "format") "FORMAT") $
         "Output format (" ++ formatList ++ ")",
+    Option "" ["list-optional"]
+        (NoArg $ Flag "list-optional" "true") "List checks disabled by default",
     Option "" ["norc"]
         (NoArg $ Flag "norc" "true") "Don't look for .shellcheckrc files",
+    Option "o" ["enable"]
+        (ReqArg (Flag "enable") "check1,check2..")
+        "List of optional checks to enable (or 'all')",
     Option "P" ["source-path"]
         (ReqArg (Flag "source-path") "SOURCEPATHS")
         "Specify path when looking for sourced files (\"SCRIPTDIR\" for script's dir)",
@@ -108,7 +114,7 @@ options = [
         "Specify dialect (sh, bash, dash, ksh)",
     Option "S" ["severity"]
         (ReqArg (Flag "severity") "SEVERITY")
-        "Minimum severity of errors to consider (error, warning, info, style, verbose)",
+        "Minimum severity of errors to consider (error, warning, info, style)",
     Option "V" ["version"]
         (NoArg $ Flag "version" "true") "Print version information",
     Option "W" ["wiki-link-count"]
@@ -259,8 +265,7 @@ parseSeverityOption value =
         ("error",   ErrorC),
         ("warning", WarningC),
         ("info",    InfoC),
-        ("style",   StyleC),
-        ("verbose", VerboseC)
+        ("style",   StyleC)
         ]
 
 parseOption flag options =
@@ -297,6 +302,10 @@ parseOption flag options =
 
         Flag "version" _ -> do
             liftIO printVersion
+            throwError NoProblems
+
+        Flag "list-optional" _ -> do
+            liftIO printOptional
             throwError NoProblems
 
         Flag "help" _ -> do
@@ -349,6 +358,13 @@ parseOption flag options =
             return options {
                 checkSpec = (checkSpec options) {
                     csIgnoreRC = True
+                }
+            }
+
+        Flag "enable" value ->
+            let cs = checkSpec options in return options {
+                checkSpec = cs {
+                    csOptionalChecks = (csOptionalChecks cs) ++ split ',' value
                 }
             }
 
@@ -547,3 +563,14 @@ printVersion = do
     putStrLn $ "version: " ++ shellcheckVersion
     putStrLn   "license: GNU General Public License, version 3"
     putStrLn   "website: https://www.shellcheck.net"
+
+printOptional = do
+    mapM f list
+  where
+    list = sortOn cdName ShellCheck.Analyzer.optionalChecks
+    f item = do
+        putStrLn $ "name:    " ++ cdName item
+        putStrLn $ "desc:    " ++ cdDescription item
+        putStrLn $ "example: " ++ cdPositive item
+        putStrLn $ "fix:     " ++ cdNegative item
+        putStrLn ""

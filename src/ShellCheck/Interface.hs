@@ -21,18 +21,18 @@
 module ShellCheck.Interface
     (
     SystemInterface(..)
-    , CheckSpec(csFilename, csScript, csCheckSourced, csIncludedWarnings, csExcludedWarnings, csShellTypeOverride, csMinSeverity, csIgnoreRC)
+    , CheckSpec(csFilename, csScript, csCheckSourced, csIncludedWarnings, csExcludedWarnings, csShellTypeOverride, csMinSeverity, csIgnoreRC, csOptionalChecks)
     , CheckResult(crFilename, crComments)
     , ParseSpec(psFilename, psScript, psCheckSourced, psIgnoreRC, psShellTypeOverride)
     , ParseResult(prComments, prTokenPositions, prRoot)
-    , AnalysisSpec(asScript, asShellType, asFallbackShell, asExecutionMode, asCheckSourced, asTokenPositions)
+    , AnalysisSpec(asScript, asShellType, asFallbackShell, asExecutionMode, asCheckSourced, asTokenPositions, asOptionalChecks)
     , AnalysisResult(arComments)
     , FormatterOptions(foColorOption, foWikiLinkCount)
     , Shell(Ksh, Sh, Bash, Dash)
     , ExecutionMode(Executed, Sourced)
     , ErrorMessage
     , Code
-    , Severity(ErrorC, WarningC, InfoC, StyleC, VerboseC)
+    , Severity(ErrorC, WarningC, InfoC, StyleC)
     , Position(posFile, posLine, posColumn)
     , Comment(cSeverity, cCode, cMessage)
     , PositionedComment(pcStartPos , pcEndPos , pcComment, pcFix)
@@ -56,6 +56,8 @@ module ShellCheck.Interface
     , InsertionPoint(InsertBefore, InsertAfter)
     , Replacement(repStartPos, repEndPos, repString, repPrecedence, repInsertionPoint)
     , newReplacement
+    , CheckDescription(cdName, cdDescription, cdPositive, cdNegative)
+    , newCheckDescription
     ) where
 
 import ShellCheck.AST
@@ -92,7 +94,8 @@ data CheckSpec = CheckSpec {
     csExcludedWarnings :: [Integer],
     csIncludedWarnings :: Maybe [Integer],
     csShellTypeOverride :: Maybe Shell,
-    csMinSeverity :: Severity
+    csMinSeverity :: Severity,
+    csOptionalChecks :: [String]
 } deriving (Show, Eq)
 
 data CheckResult = CheckResult {
@@ -115,7 +118,8 @@ emptyCheckSpec = CheckSpec {
     csExcludedWarnings = [],
     csIncludedWarnings = Nothing,
     csShellTypeOverride = Nothing,
-    csMinSeverity = StyleC
+    csMinSeverity = StyleC,
+    csOptionalChecks = []
 }
 
 newParseSpec :: ParseSpec
@@ -156,6 +160,7 @@ data AnalysisSpec = AnalysisSpec {
     asFallbackShell :: Maybe Shell,
     asExecutionMode :: ExecutionMode,
     asCheckSourced :: Bool,
+    asOptionalChecks :: [String],
     asTokenPositions :: Map.Map Id (Position, Position)
 }
 
@@ -165,6 +170,7 @@ newAnalysisSpec token = AnalysisSpec {
     asFallbackShell = Nothing,
     asExecutionMode = Executed,
     asCheckSourced = False,
+    asOptionalChecks = [],
     asTokenPositions = Map.empty
 }
 
@@ -187,6 +193,19 @@ newFormatterOptions = FormatterOptions {
     foWikiLinkCount = 3
 }
 
+data CheckDescription = CheckDescription {
+    cdName :: String,
+    cdDescription :: String,
+    cdPositive :: String,
+    cdNegative :: String
+    }
+
+newCheckDescription = CheckDescription {
+    cdName = "",
+    cdDescription = "",
+    cdPositive = "",
+    cdNegative = ""
+    }
 
 -- Supporting data types
 data Shell = Ksh | Sh | Bash | Dash deriving (Show, Eq)
@@ -195,7 +214,7 @@ data ExecutionMode = Executed | Sourced deriving (Show, Eq)
 type ErrorMessage = String
 type Code = Integer
 
-data Severity = ErrorC | WarningC | InfoC | StyleC | VerboseC
+data Severity = ErrorC | WarningC | InfoC | StyleC
     deriving (Show, Eq, Ord, Generic, NFData)
 data Position = Position {
     posFile :: String,    -- Filename

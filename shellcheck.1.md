@@ -63,9 +63,20 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
     standard output. Subsequent **-f** options are ignored, see **FORMATS**
     below for more information.
 
+**--list-optional**
+
+:   Output a list of known optional checks. These can be enabled with **-o**
+    flags or **enable** directives.
+
 **--norc**
 
 :   Don't try to look for .shellcheckrc configuration files.
+
+**-o**\ *NAME1*[,*NAME2*...],\ **--enable=***NAME1*[,*NAME2*...]
+
+:   Enable optional checks. The special name *all* enables all of them.
+    Subsequent **-o** options accumulate. This is equivalent to specifying
+    **enable** directives.
 
 **-P**\ *SOURCEPATH*,\ **--source-path=***SOURCEPATH*
 
@@ -83,7 +94,7 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 **-S**\ *SEVERITY*,\ **--severity=***severity*
 
 :   Specify minimum severity of errors to consider. Valid values in order of
-    severity are *error*, *warning*, *info*, *style* and *verbose*.
+    severity are *error*, *warning*, *info* and *style*.
     The default is *style*.
 
 **-V**,\ **--version**
@@ -163,8 +174,9 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 
 
 # DIRECTIVES
-ShellCheck directives can be specified as comments in the shell script
-before a command or block:
+ShellCheck directives can be specified as comments in the shell script.
+If they appear before the first command, they are considered file-wide.
+Otherwise, they apply to the immediately following command or block:
 
     # shellcheck key=value key=value
     command-or-structure
@@ -193,6 +205,10 @@ Valid keys are:
 :   Disables a comma separated list of error codes for the following command.
     The command can be a simple command like `echo foo`, or a compound command
     like a function definition, subshell block or loop.
+
+**enable**
+:   Enable an optional check by name, as listed with **--list-optional**.
+    Only file-wide `enable` directives are considered.
 
 **source**
 :   Overrides the filename included by a `source`/`.` statement. This can be
@@ -223,6 +239,9 @@ Here is an example `.shellcheckrc`:
     # and also look for absolute paths in /mnt/chroot
     source-path=SCRIPTDIR
     source-path=/mnt/chroot
+
+    # Turn on warnings for unquoted variables with safe values
+    enable=quote-safe-variables
 
     # Allow using `which` since it gives full paths and is common enough
     disable=SC2230

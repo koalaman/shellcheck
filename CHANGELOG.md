@@ -3,7 +3,8 @@
 - Preliminary support for fix suggestions
 - Files containing Bats tests can now be checked
 - Directory wide directives can now be placed in a `.shellcheckrc`
-- Verbose mode: Use `-S verbose` for especially pedantic suggestions
+- Optional checks: Use `--list-optional` to show a list of tests,
+                   Enable with `-o` flags or `enable=name` directives
 - Source paths: Use `-P dir1:dir2` or a `source-path=dir1` directive
                 to specify search paths for sourced files.
 - SC2249: Warn about `case` with missing default case (verbose)

@@ -77,14 +77,22 @@ composeAnalyzers :: (a -> Analysis) -> (a -> Analysis) -> a -> Analysis
 composeAnalyzers f g x = f x >> g x
 
 data Parameters = Parameters {
-    hasLastpipe        :: Bool,           -- Whether this script has the 'lastpipe' option set/default.
-    hasSetE            :: Bool,           -- Whether this script has 'set -e' anywhere.
-    variableFlow       :: [StackData],   -- A linear (bad) analysis of data flow
-    parentMap          :: Map.Map Id Token, -- A map from Id to parent Token
-    shellType          :: Shell,            -- The shell type, such as Bash or Ksh
-    shellTypeSpecified :: Bool,    -- True if shell type was forced via flags
-    rootNode           :: Token,              -- The root node of the AST
-    tokenPositions     :: Map.Map Id (Position, Position) -- map from token id to start and end position
+    -- Whether this script has the 'lastpipe' option set/default.
+    hasLastpipe        :: Bool,
+    -- Whether this script has 'set -e' anywhere.
+    hasSetE            :: Bool,
+    -- A linear (bad) analysis of data flow
+    variableFlow       :: [StackData],
+    -- A map from Id to parent Token
+    parentMap          :: Map.Map Id Token,
+    -- The shell type, such as Bash or Ksh
+    shellType          :: Shell,
+    -- True if shell type was forced via flags
+    shellTypeSpecified :: Bool,
+    -- The root node of the AST
+    rootNode           :: Token,
+    -- map from token id to start and end position
+    tokenPositions     :: Map.Map Id (Position, Position)
     } deriving (Show)
 
 -- TODO: Cache results of common AST ops here
@@ -154,14 +162,11 @@ warn  id code str = addComment $ makeComment WarningC id code str
 err   id code str = addComment $ makeComment ErrorC id code str
 info  id code str = addComment $ makeComment InfoC id code str
 style id code str = addComment $ makeComment StyleC id code str
-verbose id code str = addComment $ makeComment VerboseC id code str
 
 warnWithFix :: MonadWriter [TokenComment] m => Id -> Code -> String -> Fix -> m ()
 warnWithFix  = addCommentWithFix WarningC
 styleWithFix :: MonadWriter [TokenComment] m => Id -> Code -> String -> Fix -> m ()
 styleWithFix = addCommentWithFix StyleC
-verboseWithFix :: MonadWriter [TokenComment] m => Id -> Code -> String -> Fix -> m ()
-verboseWithFix = addCommentWithFix VerboseC
 
 addCommentWithFix :: MonadWriter [TokenComment] m => Severity -> Id -> Code -> String -> Fix -> m ()
 addCommentWithFix severity id code str fix =

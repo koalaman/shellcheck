@@ -17,7 +17,7 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -}
-module ShellCheck.Analyzer (analyzeScript) where
+module ShellCheck.Analyzer (analyzeScript, ShellCheck.Analyzer.optionalChecks) where
 
 import ShellCheck.Analytics
 import ShellCheck.AnalyzerLib
@@ -42,4 +42,8 @@ analyzeScript spec = newAnalysisResult {
 checkers params = mconcat $ map ($ params) [
     ShellCheck.Checks.Commands.checker,
     ShellCheck.Checks.ShellSupport.checker
+    ]
+
+optionalChecks = mconcat $ [
+    ShellCheck.Analytics.optionalChecks
     ]

@@ -84,7 +84,8 @@ checkScript sys spec = do
                     asFallbackShell = shellFromFilename $ csFilename spec,
                     asCheckSourced = csCheckSourced spec,
                     asExecutionMode = Executed,
-                    asTokenPositions = tokenPositions
+                    asTokenPositions = tokenPositions,
+                    asOptionalChecks = csOptionalChecks spec
                 } where as = newAnalysisSpec root
         let analysisMessages =
                 fromMaybe [] $
@@ -302,6 +303,14 @@ prop_sourcedFileUsesOriginalShellExtension = result == [2079]
         csCheckSourced = True
     }
 
+prop_canEnableOptionalsWithSpec = result == [2244]
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "file.sh",
+        csScript = "#!/bin/sh\n[ \"$1\" ]",
+        csOptionalChecks = ["avoid-nullary-conditions"]
+    }
+
 prop_optionIncludes1 =
     -- expect 2086, but not included, so nothing reported
     null $ checkOptionIncludes (Just [2080]) "#!/bin/sh\n var='a b'\n echo $var"
@@ -345,6 +354,12 @@ prop_brokenRcGetsWarning = result == [1134, 2086]
     result = checkWithRc "rofl" emptyCheckSpec {
         csScript = "#!/bin/sh\necho $1",
         csIgnoreRC = False
+    }
+
+prop_canEnableOptionalsWithRc = result == [2244]
+  where
+    result = checkWithRc "enable=avoid-nullary-conditions" emptyCheckSpec {
+        csScript = "#!/bin/sh\n[ \"$1\" ]"
     }
 
 prop_sourcePathRedirectsName = result == [2086]

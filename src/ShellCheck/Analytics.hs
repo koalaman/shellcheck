@@ -19,7 +19,7 @@
 -}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleContexts #-}
-module ShellCheck.Analytics (runAnalytics, ShellCheck.Analytics.runTests) where
+module ShellCheck.Analytics (runAnalytics, optionalChecks, ShellCheck.Analytics.runTests) where
 
 import ShellCheck.AST
 import ShellCheck.ASTLib
@@ -49,11 +49,9 @@ import Test.QuickCheck.Test (quickCheckWithResult, stdArgs, maxSuccess)
 -- Checks that are run on the AST root
 treeChecks :: [Parameters -> Token -> [TokenComment]]
 treeChecks = [
-    runNodeAnalysis
-        (\p t -> (mapM_ ((\ f -> f t) . (\ f -> f p))
-            nodeChecks))
+    nodeChecksToTreeCheck nodeChecks
     ,subshellAssignmentCheck
-    ,checkVerboseSpacefulness
+    ,checkSpacefulness
     ,checkQuotesInLiterals
     ,checkShebangParameters
     ,checkFunctionsUsedExternally
@@ -69,7 +67,14 @@ treeChecks = [
 
 runAnalytics :: AnalysisSpec -> [TokenComment]
 runAnalytics options =
-        runList options treeChecks
+    runList options treeChecks ++ runList options optionalChecks
+  where
+    root = asScript options
+    optionals = getEnableDirectives root ++ asOptionalChecks options
+    optionalChecks =
+        if "all" `elem` optionals
+        then map snd optionalTreeChecks
+        else mapMaybe (\c -> Map.lookup c optionalCheckMap) optionals
 
 runList :: AnalysisSpec -> [Parameters -> Token -> [TokenComment]]
     -> [TokenComment]
@@ -79,12 +84,26 @@ runList spec list = notes
         params = makeParameters spec
         notes = concatMap (\f -> f params root) list
 
+getEnableDirectives root =
+    case root of
+        T_Annotation _ list _ -> mapMaybe getEnable list
+        _ -> []
+  where
+    getEnable t =
+        case t of
+            EnableComment s -> return s
+            _ -> Nothing
 
 checkList l t = concatMap (\f -> f t) l
 
-
 -- Checks that are run on each node in the AST
 runNodeAnalysis f p t = execWriter (doAnalysis (f p) t)
+
+-- Perform multiple node checks in a single iteration over the tree
+nodeChecksToTreeCheck checkList =
+    runNodeAnalysis
+        (\p t -> (mapM_ ((\ f -> f t) . (\ f -> f p))
+            checkList))
 
 nodeChecks :: [Parameters -> Token -> Writer [TokenComment] ()]
 nodeChecks = [
@@ -170,11 +189,46 @@ nodeChecks = [
     ,checkSubshelledTests
     ,checkInvertedStringTest
     ,checkRedirectionToCommand
-    ,checkNullaryExpansionTest
     ,checkDollarQuoteParen
-    ,checkDefaultCase
     ]
 
+optionalChecks = map fst optionalTreeChecks
+
+
+prop_verifyOptionalExamples = all check optionalTreeChecks
+  where
+    check (desc, check) =
+        verifyTree check (cdPositive desc)
+        && verifyNotTree check (cdNegative desc)
+
+optionalTreeChecks :: [(CheckDescription, (Parameters -> Token -> [TokenComment]))]
+optionalTreeChecks = [
+    (newCheckDescription {
+        cdName = "quote-safe-variables",
+        cdDescription = "Suggest quoting variables without metacharacters",
+        cdPositive = "var=hello; echo $var",
+        cdNegative = "var=hello; echo \"$var\""
+    }, checkVerboseSpacefulness)
+
+    ,(newCheckDescription {
+        cdName = "avoid-nullary-conditions",
+        cdDescription = "Suggest explicitly using -n in `[ $var ]`",
+        cdPositive = "[ \"$var\" ]",
+        cdNegative = "[ -n \"$var\" ]"
+    }, nodeChecksToTreeCheck [checkNullaryExpansionTest])
+
+    ,(newCheckDescription {
+        cdName = "add-default-case",
+        cdDescription = "Suggest adding a default case in `case` statements",
+        cdPositive = "case $? in 0) echo 'Success';; esac",
+        cdNegative = "case $? in 0) echo 'Success';; *) echo 'Fail' ;; esac"
+    }, nodeChecksToTreeCheck [checkDefaultCase])
+    ]
+
+optionalCheckMap :: Map.Map String (Parameters -> Token -> [TokenComment])
+optionalCheckMap = Map.fromList $ map item optionalTreeChecks
+  where
+    item (desc, check) = (cdName desc, check)
 
 wouldHaveBeenGlob s = '*' `elem` s
 
@@ -1650,12 +1704,10 @@ prop_checkSpacefulness2 = verifyNotTree checkSpacefulness "a='cow moo'; [[ $a ]]
 prop_checkSpacefulness3 = verifyNotTree checkSpacefulness "a='cow*.mp3'; echo \"$a\""
 prop_checkSpacefulness4 = verifyTree checkSpacefulness "for f in *.mp3; do echo $f; done"
 prop_checkSpacefulness4a= verifyNotTree checkSpacefulness "foo=3; foo=$(echo $foo)"
-prop_checkSpacefulness4v= verifyTree checkVerboseSpacefulness "foo=3; foo=$(echo $foo)"
 prop_checkSpacefulness5 = verifyTree checkSpacefulness "a='*'; b=$a; c=lol${b//foo/bar}; echo $c"
 prop_checkSpacefulness6 = verifyTree checkSpacefulness "a=foo$(lol); echo $a"
 prop_checkSpacefulness7 = verifyTree checkSpacefulness "a=foo\\ bar; rm $a"
 prop_checkSpacefulness8 = verifyNotTree checkSpacefulness "a=foo\\ bar; a=foo; rm $a"
-prop_checkSpacefulness8v= verifyTree checkVerboseSpacefulness "a=foo\\ bar; a=foo; rm $a"
 prop_checkSpacefulness10= verifyTree checkSpacefulness "rm $1"
 prop_checkSpacefulness11= verifyTree checkSpacefulness "rm ${10//foo/bar}"
 prop_checkSpacefulness12= verifyNotTree checkSpacefulness "(( $1 + 3 ))"
@@ -1675,7 +1727,6 @@ prop_checkSpacefulness25= verifyTree checkSpacefulness "a='s/[0-9]//g'; sed $a"
 prop_checkSpacefulness26= verifyTree checkSpacefulness "a='foo bar'; echo {1,2,$a}"
 prop_checkSpacefulness27= verifyNotTree checkSpacefulness "echo ${a:+'foo'}"
 prop_checkSpacefulness28= verifyNotTree checkSpacefulness "exec {n}>&1; echo $n"
-prop_checkSpacefulness28v = verifyTree checkVerboseSpacefulness "exec {n}>&1; echo $n"
 prop_checkSpacefulness29= verifyNotTree checkSpacefulness "n=$(stuff); exec {n}>&-;"
 prop_checkSpacefulness30= verifyTree checkSpacefulness "file='foo bar'; echo foo > $file;"
 prop_checkSpacefulness31= verifyNotTree checkSpacefulness "echo \"`echo \\\"$1\\\"`\""
@@ -1684,22 +1735,53 @@ prop_checkSpacefulness33= verifyTree checkSpacefulness "for file; do echo $file;
 prop_checkSpacefulness34= verifyTree checkSpacefulness "declare foo$n=$1"
 prop_checkSpacefulness35= verifyNotTree checkSpacefulness "echo ${1+\"$1\"}"
 prop_checkSpacefulness36= verifyNotTree checkSpacefulness "arg=$#; echo $arg"
-prop_checkSpacefulness36v = verifyTree checkVerboseSpacefulness "arg=$#; echo $arg"
 prop_checkSpacefulness37= verifyNotTree checkSpacefulness "@test 'status' {\n [ $status -eq 0 ]\n}"
 prop_checkSpacefulness37v = verifyTree checkVerboseSpacefulness "@test 'status' {\n [ $status -eq 0 ]\n}"
 
--- This is slightly awkward because we want the tests to
--- discriminate between normal and verbose output.
-checkSpacefulness params t = checkSpacefulness' False params t
-checkVerboseSpacefulness params t = checkSpacefulness' True params t
-checkSpacefulness' alsoVerbose params t =
+-- This is slightly awkward because we want to support structured
+-- optional checks based on nearly the same logic
+checkSpacefulness params = checkSpacefulness' onFind params
+  where
+    emit x = tell [x]
+    onFind spaces token _ =
+        when spaces $
+            if isDefaultAssignment (parentMap params) token
+            then
+                emit $ makeComment InfoC (getId token) 2223
+                         "This default assignment may cause DoS due to globbing. Quote it."
+            else
+                emit $ makeCommentWithFix InfoC (getId token) 2086
+                         "Double quote to prevent globbing and word splitting."
+                         (addDoubleQuotesAround params token)
+
+    isDefaultAssignment parents token =
+        let modifier = getBracedModifier $ bracedString token in
+            any (`isPrefixOf` modifier) ["=", ":="]
+            && isParamTo parents ":" token
+
+
+prop_checkSpacefulness4v= verifyTree checkVerboseSpacefulness "foo=3; foo=$(echo $foo)"
+prop_checkSpacefulness8v= verifyTree checkVerboseSpacefulness "a=foo\\ bar; a=foo; rm $a"
+prop_checkSpacefulness28v = verifyTree checkVerboseSpacefulness "exec {n}>&1; echo $n"
+prop_checkSpacefulness36v = verifyTree checkVerboseSpacefulness "arg=$#; echo $arg"
+checkVerboseSpacefulness params = checkSpacefulness' onFind params
+  where
+    onFind spaces token name =
+        when (not spaces && name `notElem` specialVariablesWithoutSpaces) $
+            tell [makeCommentWithFix StyleC (getId token) 2248
+                    "Prefer double quoting even when variables don't contain special characters."
+                    (addDoubleQuotesAround params token)]
+
+addDoubleQuotesAround params token = (surroundWidth (getId token) params "\"")
+checkSpacefulness'
+    :: (Bool -> Token -> String -> Writer [TokenComment] ()) ->
+            Parameters -> Token -> [TokenComment]
+checkSpacefulness' onFind params t =
     doVariableFlowAnalysis readF writeF (Map.fromList defaults) (variableFlow params)
   where
     defaults = zip variablesWithoutSpaces (repeat False)
 
-    hasSpaces name = do
-        map <- get
-        return $ Map.findWithDefault True name map
+    hasSpaces name = gets (Map.findWithDefault True name)
 
     setSpaces name bool =
         modify $ Map.insert name bool
@@ -1714,24 +1796,9 @@ checkSpacefulness' alsoVerbose params t =
                   && not (isQuotedAlternativeReference token)
                   && not (usedAsCommandName parents token)
 
-        return . execWriter $ when needsQuoting $
-            if spaces
-            then
-                if isDefaultAssignment (parentMap params) token
-                then
-                    emit $ makeComment InfoC (getId token) 2223
-                             "This default assignment may cause DoS due to globbing. Quote it."
-                else
-                    emit $ makeCommentWithFix InfoC (getId token) 2086
-                             "Double quote to prevent globbing and word splitting."
-                             (fixFor token)
-            else
-                when (alsoVerbose && name `notElem` specialVariablesWithoutSpaces) $
-                    emit $ makeCommentWithFix VerboseC (getId token) 2248
-                            "Prefer double quoting even when variables don't contain special characters."
-                            (fixFor token)
+        return . execWriter $ when needsQuoting $ onFind spaces token name
+
       where
-        fixFor token = (surroundWidth (getId token) params "\"")
         emit x = tell [x]
 
     writeF _ _ name (DataString SourceExternal) = setSpaces name True >> return []
@@ -1770,12 +1837,6 @@ checkSpacefulness' alsoVerbose params t =
       where
         globspace = "*?[] \t\n"
         containsAny s = any (`elem` s)
-
-    isDefaultAssignment parents token =
-        let modifier = getBracedModifier $ bracedString token in
-            isExpansion token
-            && any (`isPrefixOf` modifier) ["=", ":="]
-            && isParamTo parents ":" token
 
 prop_checkQuotesInLiterals1 = verifyTree checkQuotesInLiterals "param='--foo=\"bar\"'; app $param"
 prop_checkQuotesInLiterals1a= verifyTree checkQuotesInLiterals "param=\"--foo='lolbar'\"; app $param"
@@ -3224,11 +3285,11 @@ checkNullaryExpansionTest params t =
         TC_Nullary _ _ word ->
             case getWordParts word of
                 [t] | isCommandSubstitution t ->
-                    verboseWithFix id 2243 "Prefer explicit -n to check for output (or run command without [/[[ to check for success)." fix
+                    styleWithFix id 2243 "Prefer explicit -n to check for output (or run command without [/[[ to check for success)." fix
 
                 -- If they're constant, you get SC2157 &co
                 x | all (not . isConstant) x ->
-                    verboseWithFix id 2244 "Prefer explicit -n to check non-empty string (or use =/-ne to check boolean/integer)." fix
+                    styleWithFix id 2244 "Prefer explicit -n to check non-empty string (or use =/-ne to check boolean/integer)." fix
                 _ -> return ()
             where
                 id = getId word
@@ -3256,7 +3317,7 @@ checkDefaultCase _ t =
     case t of
         T_CaseExpression id _ list ->
             unless (any canMatchAny list) $
-                verbose id 2249 "Consider adding a default *) case, even if it just exits with error."
+                info id 2249 "Consider adding a default *) case, even if it just exits with error."
         _ -> return ()
   where
     canMatchAny (_, list, _) = any canMatchAny' list
