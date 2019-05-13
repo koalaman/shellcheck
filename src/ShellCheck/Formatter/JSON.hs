@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-
-    Copyright 2012-2015 Vidar Holen
+    Copyright 2012-2019 Vidar Holen
 
     This file is part of ShellCheck.
     https://www.shellcheck.net
