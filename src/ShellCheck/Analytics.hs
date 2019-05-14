@@ -223,6 +223,13 @@ optionalTreeChecks = [
         cdPositive = "case $? in 0) echo 'Success';; esac",
         cdNegative = "case $? in 0) echo 'Success';; *) echo 'Fail' ;; esac"
     }, nodeChecksToTreeCheck [checkDefaultCase])
+
+    ,(newCheckDescription {
+        cdName = "require-braces",
+        cdDescription = "Suggest putting braces around all variable references",
+        cdPositive = "var=hello; echo $var",
+        cdNegative = "var=hello; echo ${var}"
+    }, nodeChecksToTreeCheck [checkVariableBraces])
     ]
 
 optionalCheckMap :: Map.Map String (Parameters -> Token -> [TokenComment])
@@ -1842,6 +1849,24 @@ checkSpacefulness' onFind params t =
       where
         globspace = "*?[] \t\n"
         containsAny s = any (`elem` s)
+
+prop_CheckVariableBraces1 = verify checkVariableBraces "a='123'; echo $a"
+prop_CheckVariableBraces2 = verifyNot checkVariableBraces "a='123'; echo ${a}"
+prop_CheckVariableBraces3 = verifyNot checkVariableBraces "#shellcheck disable=SC2016\necho '$a'"
+prop_CheckVariableBraces4 = verifyNot checkVariableBraces "echo $* $1"
+checkVariableBraces params t =
+    case t of
+        T_DollarBraced id False _ ->
+            unless (name `elem` unbracedVariables) $
+                styleWithFix id 2250
+                    "Prefer putting braces around variable references even when not strictly required."
+                    (fixFor t)
+
+        _ -> return ()
+  where
+    name = getBracedReference $ bracedString t
+    fixFor token = fixWith [replaceStart (getId token) params 1 "${"
+                           ,replaceEnd (getId token) params 0 "}"]
 
 prop_checkQuotesInLiterals1 = verifyTree checkQuotesInLiterals "param='--foo=\"bar\"'; app $param"
 prop_checkQuotesInLiterals1a= verifyTree checkQuotesInLiterals "param=\"--foo='lolbar'\"; app $param"

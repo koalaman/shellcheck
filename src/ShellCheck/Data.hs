@@ -49,6 +49,10 @@ variablesWithoutSpaces = specialVariablesWithoutSpaces ++ [
 
 specialVariables = specialVariablesWithoutSpaces ++ ["@", "*"]
 
+unbracedVariables = specialVariables ++ [
+    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"
+  ]
+
 arrayVariables = [
     "BASH_ALIASES", "BASH_ARGC", "BASH_ARGV", "BASH_CMDS", "BASH_LINENO",
     "BASH_REMATCH", "BASH_SOURCE", "BASH_VERSINFO", "COMP_WORDS", "COPROC",
