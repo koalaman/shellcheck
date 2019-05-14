@@ -149,11 +149,11 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
           ...
         </checkstyle>
 
-**json**
+**json1**
 
 :   Json is a popular serialization format that is more suitable for web
     applications. ShellCheck's json is compact and contains only the bare
-    minimum.  Tabs are 8 characters.
+    minimum.  Tabs are counted as 1 character.
 
         [
           {
@@ -167,12 +167,12 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
           ...
         ]
 
-**json1**
+**json**
 
-:   This is the same as shellcheck's json format, but tabs are treated as
-    single characters instead of 8-character tabstops.
+:   This is a legacy version of the **json1** format, with a tab stop
+    of 8 instead of 1.
 
-*quiet*
+**quiet**
 
 :   Suppress all normal output. Exit with zero if no issues are found,
     otherwise exit with one. Stops processing after the first issue.
