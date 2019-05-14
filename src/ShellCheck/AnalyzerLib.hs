@@ -947,5 +947,14 @@ getOpts flagTokenizer string cmd = process flags
 
 supportsArrays shell = shell == Bash || shell == Ksh
 
+-- Returns true if the shell is Bash or Ksh (sorry for the name, Ksh)
+isBashLike :: Parameters -> Bool
+isBashLike params =
+    case shellType params of
+        Bash -> True
+        Ksh -> True
+        Dash -> False
+        Sh -> False
+
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

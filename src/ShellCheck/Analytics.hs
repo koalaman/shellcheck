@@ -1302,12 +1302,18 @@ prop_checkComparisonAgainstGlob3 = verify checkComparisonAgainstGlob "[ $cow = *
 prop_checkComparisonAgainstGlob4 = verifyNot checkComparisonAgainstGlob "[ $cow = foo ]"
 prop_checkComparisonAgainstGlob5 = verify checkComparisonAgainstGlob "[[ $cow != $bar ]]"
 prop_checkComparisonAgainstGlob6 = verify checkComparisonAgainstGlob "[ $f != /* ]"
+
 checkComparisonAgainstGlob _ (TC_Binary _ DoubleBracket op _ (T_NormalWord id [T_DollarBraced _ _]))
     | op `elem` ["=", "==", "!="] =
         warn id 2053 $ "Quote the right-hand side of " ++ op ++ " in [[ ]] to prevent glob matching."
-checkComparisonAgainstGlob _ (TC_Binary _ SingleBracket op _ word)
+checkComparisonAgainstGlob params (TC_Binary _ SingleBracket op _ word)
         | op `elem` ["=", "==", "!="] && isGlob word =
-    err (getId word) 2081 "[ .. ] can't match globs. Use [[ .. ]] or case statement."
+    err (getId word) 2081 msg
+  where
+    msg = if isBashLike params
+            then "[ .. ] can't match globs. Use [[ .. ]] or case statement."
+            else "[ .. ] can't match globs. Use a case statement."
+
 checkComparisonAgainstGlob _ _ = return ()
 
 prop_checkCommarrays1 = verify checkCommarrays "a=(1, 2)"
