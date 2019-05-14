@@ -7,6 +7,7 @@
                    Enable with `-o` flags or `enable=name` directives
 - Source paths: Use `-P dir1:dir2` or a `source-path=dir1` directive
                 to specify search paths for sourced files.
+- json1 format like --format=json but treats tabs as single characters
 - SC2249: Warn about `case` with missing default case (verbose)
 - SC2248: Warn about unquoted variables without special chars (verbose)
 - SC2247: Warn about $"(cmd)" and $"{var}"
