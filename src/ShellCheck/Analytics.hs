@@ -225,7 +225,7 @@ optionalTreeChecks = [
     }, nodeChecksToTreeCheck [checkDefaultCase])
 
     ,(newCheckDescription {
-        cdName = "require-braces",
+        cdName = "require-variable-braces",
         cdDescription = "Suggest putting braces around all variable references",
         cdPositive = "var=hello; echo $var",
         cdNegative = "var=hello; echo ${var}"
