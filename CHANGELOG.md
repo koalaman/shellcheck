@@ -8,12 +8,13 @@
 - Source paths: Use `-P dir1:dir2` or a `source-path=dir1` directive
                 to specify search paths for sourced files.
 - json1 format like --format=json but treats tabs as single characters
-- SC2249: Warn about `case` with missing default case (verbose)
-- SC2248: Warn about unquoted variables without special chars (verbose)
+- SC2250: Warn about variable references without braces (optional)
+- SC2249: Warn about `case` with missing default case (optional)
+- SC2248: Warn about unquoted variables without special chars (optional)
 - SC2247: Warn about $"(cmd)" and $"{var}"
 - SC2246: Warn if a shebang's interpreter ends with /
 - SC2245: Warn that Ksh ignores all but the first glob result in `[`
-- SC2243/SC2244: Suggest using explicit -n for `[ $foo ]` (verbose)
+- SC2243/SC2244: Suggest using explicit -n for `[ $foo ]` (optional)
 
 ### Changed
 - If a directive or shebang is not specified, a `.bash/.bats/.dash/.ksh`

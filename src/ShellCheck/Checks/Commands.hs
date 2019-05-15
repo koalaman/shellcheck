@@ -278,7 +278,7 @@ checkTrapQuotes = CommandCheck (Exactly "trap") (f . arguments) where
     warning id = warn id 2064 "Use single quotes, otherwise this expands now rather than when signalled."
     checkExpansions (T_DollarExpansion id _) = warning id
     checkExpansions (T_Backticked id _) = warning id
-    checkExpansions (T_DollarBraced id _) = warning id
+    checkExpansions (T_DollarBraced id _ _) = warning id
     checkExpansions (T_DollarArithmetic id _) = warning id
     checkExpansions _ = return ()
 
@@ -896,7 +896,7 @@ checkCatastrophicRm = CommandCheck (Basename "rm") $ \t ->
     getPotentialPath = getLiteralStringExt f
       where
         f (T_Glob _ str) = return str
-        f (T_DollarBraced _ word) =
+        f (T_DollarBraced _ _ word) =
             let var = onlyLiteralString word in
                 -- This shouldn't handle non-colon cases.
                 if any (`isInfixOf` var) [":?", ":-", ":="]

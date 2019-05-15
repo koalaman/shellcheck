@@ -510,7 +510,7 @@ getModifiedVariables t =
             guard . not . null $ str
             return (t, token, str, DataString SourceChecked)
 
-        T_DollarBraced _ l -> maybeToList $ do
+        T_DollarBraced _ _ l -> maybeToList $ do
             let string = bracedString t
             let modifier = getBracedModifier string
             guard $ ":=" `isPrefixOf` modifier
@@ -702,7 +702,7 @@ getOffsetReferences mods = fromMaybe [] $ do
 
 getReferencedVariables parents t =
     case t of
-        T_DollarBraced id l -> let str = bracedString t in
+        T_DollarBraced id _ l -> let str = bracedString t in
             (t, t, getBracedReference str) :
                 map (\x -> (l, l, x)) (
                     getIndexReferences str
@@ -897,7 +897,7 @@ shouldIgnoreCode params code t =
         getPath (parentMap params) t
 
 -- Is this a ${#anything}, to get string length or array count?
-isCountingReference (T_DollarBraced id token) =
+isCountingReference (T_DollarBraced id _ token) =
     case concat $ oversimplify token of
         '#':_ -> True
         _     -> False
@@ -906,7 +906,7 @@ isCountingReference _ = False
 -- FIXME: doesn't handle ${a:+$var} vs ${a:+"$var"}
 isQuotedAlternativeReference t =
     case t of
-        T_DollarBraced _ _ ->
+        T_DollarBraced _ _ _ ->
             getBracedModifier (bracedString t) `matches` re
         _ -> False
   where

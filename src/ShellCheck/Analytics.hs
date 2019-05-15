@@ -223,6 +223,13 @@ optionalTreeChecks = [
         cdPositive = "case $? in 0) echo 'Success';; esac",
         cdNegative = "case $? in 0) echo 'Success';; *) echo 'Fail' ;; esac"
     }, nodeChecksToTreeCheck [checkDefaultCase])
+
+    ,(newCheckDescription {
+        cdName = "require-variable-braces",
+        cdDescription = "Suggest putting braces around all variable references",
+        cdPositive = "var=hello; echo $var",
+        cdNegative = "var=hello; echo ${var}"
+    }, nodeChecksToTreeCheck [checkVariableBraces])
     ]
 
 optionalCheckMap :: Map.Map String (Parameters -> Token -> [TokenComment])
@@ -754,7 +761,7 @@ checkShorthandIf _ _ = return ()
 prop_checkDollarStar = verify checkDollarStar "for f in $*; do ..; done"
 prop_checkDollarStar2 = verifyNot checkDollarStar "a=$*"
 prop_checkDollarStar3 = verifyNot checkDollarStar "[[ $* = 'a b' ]]"
-checkDollarStar p t@(T_NormalWord _ [b@(T_DollarBraced id _)])
+checkDollarStar p t@(T_NormalWord _ [b@(T_DollarBraced id _ _)])
       | bracedString b == "*"  =
     unless (isStrictlyQuoteFree (parentMap p) t) $
         warn id 2048 "Use \"$@\" (with quotes) to prevent whitespace problems."
@@ -825,7 +832,7 @@ checkArrayWithoutIndex params _ =
     doVariableFlowAnalysis readF writeF defaultMap (variableFlow params)
   where
     defaultMap = Map.fromList $ map (\x -> (x,())) arrayVariables
-    readF _ (T_DollarBraced id token) _ = do
+    readF _ (T_DollarBraced id _ token) _ = do
         map <- get
         return . maybeToList $ do
             name <- getLiteralString token
@@ -1267,7 +1274,7 @@ prop_checkArithmeticDeref12= verify checkArithmeticDeref "for ((i=0; $i < 3; i))
 prop_checkArithmeticDeref13= verifyNot checkArithmeticDeref "(( $$ ))"
 prop_checkArithmeticDeref14= verifyNot checkArithmeticDeref "(( $! ))"
 prop_checkArithmeticDeref15= verifyNot checkArithmeticDeref "(( ${!var} ))"
-checkArithmeticDeref params t@(TA_Expansion _ [b@(T_DollarBraced id _)]) =
+checkArithmeticDeref params t@(TA_Expansion _ [b@(T_DollarBraced id _ _)]) =
     unless (isException $ bracedString b) getWarning
   where
     isException [] = True
@@ -1302,8 +1309,7 @@ prop_checkComparisonAgainstGlob3 = verify checkComparisonAgainstGlob "[ $cow = *
 prop_checkComparisonAgainstGlob4 = verifyNot checkComparisonAgainstGlob "[ $cow = foo ]"
 prop_checkComparisonAgainstGlob5 = verify checkComparisonAgainstGlob "[[ $cow != $bar ]]"
 prop_checkComparisonAgainstGlob6 = verify checkComparisonAgainstGlob "[ $f != /* ]"
-
-checkComparisonAgainstGlob _ (TC_Binary _ DoubleBracket op _ (T_NormalWord id [T_DollarBraced _ _]))
+checkComparisonAgainstGlob _ (TC_Binary _ DoubleBracket op _ (T_NormalWord id [T_DollarBraced _ _ _]))
     | op `elem` ["=", "==", "!="] =
         warn id 2053 $ "Quote the right-hand side of " ++ op ++ " in [[ ]] to prevent glob matching."
 checkComparisonAgainstGlob params (TC_Binary _ SingleBracket op _ word)
@@ -1457,7 +1463,7 @@ prop_checkIndirectExpansion2 = verifyNot checkIndirectExpansion "${foo//$n/lol}"
 prop_checkIndirectExpansion3 = verify checkIndirectExpansion "${$#}"
 prop_checkIndirectExpansion4 = verify checkIndirectExpansion "${var${n}_$((i%2))}"
 prop_checkIndirectExpansion5 = verifyNot checkIndirectExpansion "${bar}"
-checkIndirectExpansion _ (T_DollarBraced i (T_NormalWord _ contents)) =
+checkIndirectExpansion _ (T_DollarBraced i _ (T_NormalWord _ contents)) =
     when (isIndirection contents) $
         err i 2082 "To expand via indirection, use arrays, ${!name} or (for sh only) eval."
   where
@@ -1467,7 +1473,7 @@ checkIndirectExpansion _ (T_DollarBraced i (T_NormalWord _ contents)) =
     isIndirectionPart t =
         case t of T_DollarExpansion _ _ ->  Just True
                   T_Backticked _ _ ->       Just True
-                  T_DollarBraced _ _ ->     Just True
+                  T_DollarBraced _ _ _ ->     Just True
                   T_DollarArithmetic _ _ -> Just True
                   T_Literal _ s -> if all isVariableChar s
                                     then Nothing
@@ -1494,7 +1500,7 @@ checkInexplicablyUnquoted params (T_NormalWord id tokens) = mapM_ check (tails t
     check (T_DoubleQuoted _ a:trapped:T_DoubleQuoted _ b:_) =
         case trapped of
             T_DollarExpansion id _ -> warnAboutExpansion id
-            T_DollarBraced id _ -> warnAboutExpansion id
+            T_DollarBraced id _ _ -> warnAboutExpansion id
             T_Literal id s ->
                 unless (quotesSingleThing a && quotesSingleThing b || isRegex (getPath (parentMap params) trapped)) $
                     warnAboutLiteral id
@@ -1515,7 +1521,7 @@ checkInexplicablyUnquoted params (T_NormalWord id tokens) = mapM_ check (tails t
     -- the quotes were probably intentional and harmless.
     quotesSingleThing x = case x of
         [T_DollarExpansion _ _] -> True
-        [T_DollarBraced _ _] -> True
+        [T_DollarBraced _ _ _] -> True
         [T_Backticked _ _] -> True
         _ -> False
 
@@ -1822,7 +1828,7 @@ checkSpacefulness' onFind params t =
 
     isExpansion t =
         case t of
-            (T_DollarBraced _ _ ) -> True
+            (T_DollarBraced _ _ _ ) -> True
             _ -> False
 
     isSpacefulWord :: (String -> Bool) -> [Token] -> Bool
@@ -1836,13 +1842,31 @@ checkSpacefulness' onFind params t =
           T_Extglob {}       -> True
           T_Literal _ s      -> s `containsAny` globspace
           T_SingleQuoted _ s -> s `containsAny` globspace
-          T_DollarBraced _ _ -> spacefulF $ getBracedReference $ bracedString x
+          T_DollarBraced _ _ _ -> spacefulF $ getBracedReference $ bracedString x
           T_NormalWord _ w   -> isSpacefulWord spacefulF w
           T_DoubleQuoted _ w -> isSpacefulWord spacefulF w
           _ -> False
       where
         globspace = "*?[] \t\n"
         containsAny s = any (`elem` s)
+
+prop_CheckVariableBraces1 = verify checkVariableBraces "a='123'; echo $a"
+prop_CheckVariableBraces2 = verifyNot checkVariableBraces "a='123'; echo ${a}"
+prop_CheckVariableBraces3 = verifyNot checkVariableBraces "#shellcheck disable=SC2016\necho '$a'"
+prop_CheckVariableBraces4 = verifyNot checkVariableBraces "echo $* $1"
+checkVariableBraces params t =
+    case t of
+        T_DollarBraced id False _ ->
+            unless (name `elem` unbracedVariables) $
+                styleWithFix id 2250
+                    "Prefer putting braces around variable references even when not strictly required."
+                    (fixFor t)
+
+        _ -> return ()
+  where
+    name = getBracedReference $ bracedString t
+    fixFor token = fixWith [replaceStart (getId token) params 1 "${"
+                           ,replaceEnd (getId token) params 0 "}"]
 
 prop_checkQuotesInLiterals1 = verifyTree checkQuotesInLiterals "param='--foo=\"bar\"'; app $param"
 prop_checkQuotesInLiterals1a= verifyTree checkQuotesInLiterals "param=\"--foo='lolbar'\"; app $param"
@@ -1874,7 +1898,7 @@ checkQuotesInLiterals params t =
         return []
     writeF _ _ _ _ = return []
 
-    forToken map (T_DollarBraced id t) =
+    forToken map (T_DollarBraced id _ t) =
         -- skip getBracedReference here to avoid false positives on PE
         Map.lookup (concat . oversimplify $ t) map
     forToken quoteMap (T_DoubleQuoted id tokens) =
@@ -1888,7 +1912,7 @@ checkQuotesInLiterals params t =
 
     squashesQuotes t =
         case t of
-            T_DollarBraced id _ -> "#" `isPrefixOf` bracedString t
+            T_DollarBraced id _ _ -> "#" `isPrefixOf` bracedString t
             _ -> False
 
     readF _ expr name = do
@@ -2135,10 +2159,10 @@ checkUnassignedReferences params t = warnings
     isInArray var t = any isArray $ getPath (parentMap params) t
       where
         isArray T_Array {} = True
-        isArray b@(T_DollarBraced _ _) | var /= getBracedReference (bracedString b) = True
+        isArray b@(T_DollarBraced _ _ _) | var /= getBracedReference (bracedString b) = True
         isArray _ = False
 
-    isGuarded (T_DollarBraced _ v) =
+    isGuarded (T_DollarBraced _ _ v) =
         rest `matches` guardRegex
       where
         name = concat $ oversimplify v
@@ -2224,7 +2248,7 @@ checkWhileReadPitfalls _ _ = return ()
 
 prop_checkPrefixAssign1 = verify checkPrefixAssignmentReference "var=foo echo $var"
 prop_checkPrefixAssign2 = verifyNot checkPrefixAssignmentReference "var=$(echo $var) cmd"
-checkPrefixAssignmentReference params t@(T_DollarBraced id value) =
+checkPrefixAssignmentReference params t@(T_DollarBraced id _ value) =
     check path
   where
     name = getBracedReference $ bracedString t
@@ -3026,7 +3050,7 @@ checkSplittingInArrays params t =
         T_DollarExpansion id _ -> forCommand id
         T_DollarBraceCommandExpansion id _ -> forCommand id
         T_Backticked id _ -> forCommand id
-        T_DollarBraced id str |
+        T_DollarBraced id _ str |
             not (isCountingReference part)
             && not (isQuotedAlternativeReference part)
             && not (getBracedReference (bracedString part) `elem` variablesWithoutSpaces)

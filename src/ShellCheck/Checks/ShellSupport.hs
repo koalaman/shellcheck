@@ -232,7 +232,7 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
     bashism t@(TA_Variable id str _) | isBashVariable str =
         warnMsg id $ str ++ " is"
 
-    bashism t@(T_DollarBraced id token) = do
+    bashism t@(T_DollarBraced id _ token) = do
         mapM_ check expansion
         when (isBashVariable var) $
                     warnMsg id $ var ++ " is"
