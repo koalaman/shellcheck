@@ -100,7 +100,7 @@ or in a Travis CI `.travis.yml` file:
 ```yaml
 script:
   # Fail if any of these files have warnings
-  * shellcheck myscripts/*.sh
+  - shellcheck myscripts/*.sh
 ```
 
 Services and platforms that have ShellCheck pre-installed and ready to use:
