@@ -8,46 +8,45 @@ ShellCheck is a GPLv3 tool that gives warnings and suggestions for bash/sh shell
 
 The goals of ShellCheck are
 
-- To point out and clarify typical beginner's syntax issues that cause a shell
+* To point out and clarify typical beginner's syntax issues that cause a shell
   to give cryptic error messages.
 
-- To point out and clarify typical intermediate level semantic problems that
+* To point out and clarify typical intermediate level semantic problems that
   cause a shell to behave strangely and counter-intuitively.
 
-- To point out subtle caveats, corner cases and pitfalls that may cause an
+* To point out subtle caveats, corner cases and pitfalls that may cause an
   advanced user's otherwise working script to fail under future circumstances.
 
 See [the gallery of bad code](README.md#user-content-gallery-of-bad-code) for examples of what ShellCheck can help you identify!
 
 ## Table of Contents
 
-- [Table of Contents](#table-of-contents)
-- [How to use](#how-to-use)
-  - [On the web](#on-the-web)
-  - [From your terminal](#from-your-terminal)
-  - [In your editor](#in-your-editor)
-  - [In your build or test suites](#in-your-build-or-test-suites)
-- [Installing](#installing)
-- [Compiling from source](#compiling-from-source)
-  - [Installing Cabal](#installing-cabal)
-  - [Compiling ShellCheck](#compiling-shellcheck)
-  - [Running tests](#running-tests)
-- [Gallery of bad code](#gallery-of-bad-code)
-  - [Quoting](#quoting)
-  - [Conditionals](#conditionals)
-  - [Frequently misused commands](#frequently-misused-commands)
-  - [Common beginner's mistakes](#common-beginners-mistakes)
-  - [Style](#style)
-  - [Data and typing errors](#data-and-typing-errors)
-  - [Robustness](#robustness)
-  - [Portability](#portability)
-  - [Miscellaneous](#miscellaneous)
-- [Testimonials](#testimonials)
-- [Ignoring issues](#ignoring-issues)
-- [Reporting bugs](#reporting-bugs)
-- [Contributing](#contributing)
-- [Copyright](#copyright)
-- [Other Resources](#other-resources)
+* [How to use](#how-to-use)
+  * [On the web](#on-the-web)
+  * [From your terminal](#from-your-terminal)
+  * [In your editor](#in-your-editor)
+  * [In your build or test suites](#in-your-build-or-test-suites)
+* [Installing](#installing)
+* [Compiling from source](#compiling-from-source)
+  * [Installing Cabal](#installing-cabal)
+  * [Compiling ShellCheck](#compiling-shellcheck)
+  * [Running tests](#running-tests)
+* [Gallery of bad code](#gallery-of-bad-code)
+  * [Quoting](#quoting)
+  * [Conditionals](#conditionals)
+  * [Frequently misused commands](#frequently-misused-commands)
+  * [Common beginner's mistakes](#common-beginners-mistakes)
+  * [Style](#style)
+  * [Data and typing errors](#data-and-typing-errors)
+  * [Robustness](#robustness)
+  * [Portability](#portability)
+  * [Miscellaneous](#miscellaneous)
+* [Testimonials](#testimonials)
+* [Ignoring issues](#ignoring-issues)
+* [Reporting bugs](#reporting-bugs)
+* [Contributing](#contributing)
+* [Copyright](#copyright)
+* [Other Resources](#other-resources)
 
 ## How to use
 
@@ -179,7 +178,7 @@ On openSUSE
 
     zypper in ShellCheck
 
-Or use OneClickInstall - https://software.opensuse.org/package/ShellCheck
+Or use OneClickInstall - <https://software.opensuse.org/package/ShellCheck>
 
 On Solus:
 
@@ -262,7 +261,7 @@ On MacOS (OS X), you can do a fast install of Cabal using brew, which takes a co
     brew cask install haskell-platform
     cabal install cabal-install
 
-On MacPorts, the package is instead called `hs-cabal-install`, while native Windows users should install the latest version of the Haskell platform from https://www.haskell.org/platform/
+On MacPorts, the package is instead called `hs-cabal-install`, while native Windows users should install the latest version of the Haskell platform from <https://www.haskell.org/platform/>
 
 Verify that `cabal` is installed and update its dependency list with
 
@@ -505,7 +504,7 @@ The contributor retains the copyright.
 
 ShellCheck is licensed under the GNU General Public License, v3. A copy of this license is included in the file [LICENSE](LICENSE).
 
-Copyright 2012-2018, Vidar 'koala_man' Holen and contributors.
+Copyright 2012-2019, [Vidar 'koala_man' Holen](https://github.com/koalaman/) and contributors.
 
 Happy ShellChecking!
 

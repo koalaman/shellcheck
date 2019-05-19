@@ -299,7 +299,7 @@ Bugs and issues can be reported on GitHub:
 https://github.com/koalaman/shellcheck/issues
 
 # COPYRIGHT
-Copyright 2012-2015, Vidar Holen.
+Copyright 2012-2019, Vidar Holen.
 Licensed under the GNU General Public License version 3 or later,
 see https://gnu.org/licenses/gpl.html
 
