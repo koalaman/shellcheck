@@ -1274,11 +1274,12 @@ prop_checkArithmeticDeref12= verify checkArithmeticDeref "for ((i=0; $i < 3; i))
 prop_checkArithmeticDeref13= verifyNot checkArithmeticDeref "(( $$ ))"
 prop_checkArithmeticDeref14= verifyNot checkArithmeticDeref "(( $! ))"
 prop_checkArithmeticDeref15= verifyNot checkArithmeticDeref "(( ${!var} ))"
+prop_checkArithmeticDeref16= verifyNot checkArithmeticDeref "(( ${x+1} + ${x=42} ))"
 checkArithmeticDeref params t@(TA_Expansion _ [b@(T_DollarBraced id _ _)]) =
     unless (isException $ bracedString b) getWarning
   where
     isException [] = True
-    isException s = any (`elem` "/.:#%?*@$-!") s || isDigit (head s)
+    isException s = any (`elem` "/.:#%?*@$-!+=^,") s || isDigit (head s)
     getWarning = fromMaybe noWarning . msum . map warningFor $ parents params t
     warningFor t =
         case t of
