@@ -190,6 +190,7 @@ nodeChecks = [
     ,checkInvertedStringTest
     ,checkRedirectionToCommand
     ,checkDollarQuoteParen
+    ,checkUselessBang
     ]
 
 optionalChecks = map fst optionalTreeChecks
@@ -3356,6 +3357,42 @@ checkDefaultCase _ t =
     canMatchAny' pat = fromMaybe False $ do
         pg <- wordToExactPseudoGlob pat
         return $ pseudoGlobIsSuperSetof pg [PGMany]
+
+prop_checkUselessBang1 = verify checkUselessBang "! true; rest"
+prop_checkUselessBang2 = verify checkUselessBang "while true; do ! true; done"
+prop_checkUselessBang3 = verifyNot checkUselessBang "if ! true; then true; fi"
+prop_checkUselessBang4 = verifyNot checkUselessBang "( ! true )"
+prop_checkUselessBang5 = verifyNot checkUselessBang "{ ! true; }"
+prop_checkUselessBang6 = verifyNot checkUselessBang "x() { ! [ x ]; }"
+checkUselessBang params t = mapM_ check (getNonReturningCommands t)
+  where
+    check t =
+        case t of
+            T_Banged id _ ->
+                info id 2251 "This ! is not on a condition and skips errexit. Use { ! ...; } to errexit, or verify usage."
+            _ -> return ()
+
+    -- Get all the subcommands that aren't likely to be the return value
+    getNonReturningCommands :: Token -> [Token]
+    getNonReturningCommands t =
+        case t of
+            T_Script _ _ list -> dropLast list
+            T_BraceGroup _ list -> dropLast list
+            T_Subshell _ list -> dropLast list
+            T_WhileExpression _ conds cmds -> dropLast conds ++ cmds
+            T_UntilExpression _ conds cmds -> dropLast conds ++ cmds
+            T_ForIn _ _ _ list -> list
+            T_ForArithmetic _ _ _ _ list -> list
+            T_Annotation _ _ t -> getNonReturningCommands t
+            T_IfExpression _ conds elses ->
+                concatMap (dropLast . fst) conds ++ concatMap snd conds ++ elses
+            _ -> []
+
+    dropLast t =
+        case t of
+            [_] -> []
+            x:rest -> x : dropLast rest
+            _ -> []
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

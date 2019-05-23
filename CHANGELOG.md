@@ -8,6 +8,7 @@
 - Source paths: Use `-P dir1:dir2` or a `source-path=dir1` directive
                 to specify search paths for sourced files.
 - json1 format like --format=json but treats tabs as single characters
+- SC2251: Inform about ineffectual ! in front of commands
 - SC2250: Warn about variable references without braces (optional)
 - SC2249: Warn about `case` with missing default case (optional)
 - SC2248: Warn about unquoted variables without special chars (optional)
