@@ -29,7 +29,6 @@ will warn that decimals are not supported.
 + For scripts starting with `#!/bin/ksh` (or using `-s ksh`), ShellCheck will
 not warn at all, as `ksh` supports decimals in arithmetic contexts.
 
-
 # OPTIONS
 
 **-a**,\ **--check-sourced**
@@ -112,6 +111,10 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
     By default, `shellcheck` will only follow files specified on the command
     line (plus `/dev/null`). This option allows following any file the script
     may `source`.
+
+**FILES...**
+
+:   One or more script files to check, or "-" for standard input.
 
 
 # FORMATS
