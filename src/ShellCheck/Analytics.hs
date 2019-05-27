@@ -917,6 +917,8 @@ prop_checkSingleQuotedVariables14= verifyNot checkSingleQuotedVariables "[ -v 'b
 prop_checkSingleQuotedVariables15= verifyNot checkSingleQuotedVariables "git filter-branch 'test $GIT_COMMIT'"
 prop_checkSingleQuotedVariables16= verify checkSingleQuotedVariables "git '$a'"
 prop_checkSingleQuotedVariables17= verifyNot checkSingleQuotedVariables "rename 's/(.)a/$1/g' *"
+prop_checkSingleQuotedVariables18= verifyNot checkSingleQuotedVariables "echo '``'"
+prop_checkSingleQuotedVariables19= verifyNot checkSingleQuotedVariables "echo '```'"
 
 checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
     when (s `matches` re) $
@@ -962,7 +964,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
             TC_Unary _ _ "-v" _ -> True
             _ -> False
 
-    re = mkRegex "\\$[{(0-9a-zA-Z_]|`.*`"
+    re = mkRegex "\\$[{(0-9a-zA-Z_]|`[^`]+`"
     sedContra = mkRegex "\\$[{dpsaic]($|[^a-zA-Z])"
 
     getFindCommand (T_SimpleCommand _ _ words) =
