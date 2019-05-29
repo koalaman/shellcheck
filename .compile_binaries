@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# This script compile shellcheck binaries
+set -ex
+
+# Remove all tests to reduce binary size
+./striptests
+
+mkdir -p deploy
+
+_cleanup(){
+  rm -rf dist shellcheck || true
+}
+
+if [ "$TRAVIS_OS_NAME" = 'linux' ]
+then
+  # Linux Docker image
+  name="$DOCKER_BASE"
+  DOCKER_BUILDS="$DOCKER_BUILDS $name"
+  docker build -t "$name:current" .
+  docker run "$name:current" --version
+  printf '%s\n' "#!/bin/sh" "echo 'hello world'" > myscript
+  docker run -v "$PWD:/mnt" "$name:current" myscript
+
+  # Copy static executable from docker image
+  id=$(docker create "$name:current")
+  docker cp "$id:/bin/shellcheck" "shellcheck"
+  docker rm "$id"
+  ls -l shellcheck
+  ./shellcheck myscript
+  for tag in $TAGS
+  do 
+    cp "shellcheck" "deploy/shellcheck-$tag.linux-x86_64"; 
+  done
+
+  # Linux Alpine based Docker image
+  name="$DOCKER_BASE-alpine"
+  DOCKER_BUILDS="$DOCKER_BUILDS $name"
+  sed -e '/DELETE-MARKER/,$d' Dockerfile > Dockerfile.alpine
+  docker build -f Dockerfile.alpine -t "$name:current" .
+  docker run "$name:current" sh -c 'shellcheck --version'
+
+  # Linux armv6hf static executable
+  docker run -v "$PWD:/mnt" koalaman/armv6hf-builder -c 'compile-shellcheck'
+  for tag in $TAGS
+  do 
+    cp "shellcheck" "deploy/shellcheck-$tag.linux-armv6hf"; 
+  done
+  _cleanup
+
+  # Windows .exe
+  docker run --user="$UID" -v "$PWD:/appdata" koalaman/winghc cuib
+  for tag in $TAGS
+  do 
+    cp "dist/build/ShellCheck/shellcheck.exe" "deploy/shellcheck-$tag.exe"; 
+  done
+  _cleanup
+fi
+
+if [ "$TRAVIS_OS_NAME" = 'osx' ];
+then
+  # Darwin x86_64 static executable
+  sudo ln -s /usr/local/bin/gsha512sum /usr/local/bin/sha512sum
+  brew install cabal-install pandoc
+  cabal update
+  cabal new-build shellcheck
+  for tag in $TAGS
+  do 
+    cp "$HOME/.cabal/dist/build/shellcheck/shellcheck" "deploy/shellcheck-$tag.darwin-x86_64";
+  done
+  _cleanup
+fi
