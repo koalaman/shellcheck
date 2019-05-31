@@ -606,6 +606,11 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal 
         "mapfile" -> maybeToList $ getMapfileArray base rest
         "readarray" -> maybeToList $ getMapfileArray base rest
 
+        "DEFINE_boolean" -> maybeToList $ getFlagVariable rest
+        "DEFINE_float" -> maybeToList $ getFlagVariable rest
+        "DEFINE_integer" -> maybeToList $ getFlagVariable rest
+        "DEFINE_string" -> maybeToList $ getFlagVariable rest
+
         _ -> []
   where
     flags = map snd $ getAllFlags base
@@ -678,6 +683,12 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal 
     getReadArrayVariables args = do
         map (getLiteralArray . snd)
             (filter (\(x,_) -> getLiteralString x == Just "-a") (zip (args) (tail args)))
+
+    -- get the FLAGS_ variable created by a shflags DEFINE_ call
+    getFlagVariable (n:v:_) = return (base, n, flagName n, DataString $ SourceFrom [v])
+      where
+        flagName varName@(T_NormalWord _ _) = "FLAGS_" ++ (onlyLiteralString varName)
+    getFlagVariable _ = fail "Invalid flag definition"
 
 getModifiedVariableCommand _ = []
 
