@@ -251,6 +251,9 @@ Here is an example `.shellcheckrc`:
     # Turn on warnings for unquoted variables with safe values
     enable=quote-safe-variables
 
+    # Turn on warnings for unassigned uppercase variables
+    enable=check-unassigned-uppercase
+
     # Allow using `which` since it gives full paths and is common enough
     disable=SC2230
 

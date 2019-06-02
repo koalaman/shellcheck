@@ -8,6 +8,7 @@
 - Source paths: Use `-P dir1:dir2` or a `source-path=dir1` directive
                 to specify search paths for sourced files.
 - json1 format like --format=json but treats tabs as single characters
+- SC2154: Also warn about unassigned uppercase variables (optional)
 - SC2252: Warn about `[ $a != x ] || [ $a != y ]`, similar to SC2055
 - SC2251: Inform about ineffectual ! in front of commands
 - SC2250: Warn about variable references without braces (optional)

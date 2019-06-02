@@ -231,6 +231,13 @@ optionalTreeChecks = [
         cdPositive = "var=hello; echo $var",
         cdNegative = "var=hello; echo ${var}"
     }, nodeChecksToTreeCheck [checkVariableBraces])
+
+    ,(newCheckDescription {
+        cdName = "check-unassigned-uppercase",
+        cdDescription = "Warn when uppercase variables are unassigned",
+        cdPositive = "echo $VAR",
+        cdNegative = "VAR=hello; echo $VAR"
+    }, checkUnassignedReferences' True)
     ]
 
 optionalCheckMap :: Map.Map String (Parameters -> Token -> [TokenComment])
@@ -2131,7 +2138,10 @@ prop_checkUnassignedReferences34= verifyNotTree checkUnassignedReferences "decla
 prop_checkUnassignedReferences35= verifyNotTree checkUnassignedReferences "echo ${arr[foo-bar]:?fail}"
 prop_checkUnassignedReferences36= verifyNotTree checkUnassignedReferences "read -a foo -r <<<\"foo bar\"; echo \"$foo\""
 prop_checkUnassignedReferences37= verifyNotTree checkUnassignedReferences "var=howdy; printf -v 'array[0]' %s \"$var\"; printf %s \"${array[0]}\";"
-checkUnassignedReferences params t = warnings
+prop_checkUnassignedReferences38= verifyTree (checkUnassignedReferences' True) "echo $VAR"
+
+checkUnassignedReferences = checkUnassignedReferences' False
+checkUnassignedReferences' includeGlobals params t = warnings
   where
     (readMap, writeMap) = execState (mapM tally $ variableFlow params) (Map.empty, Map.empty)
     defaultAssigned = Map.fromList $ map (\a -> (a, ())) $ filter (not . null) internalVariables
@@ -2176,8 +2186,11 @@ checkUnassignedReferences params t = warnings
                     return $ " (did you mean '" ++ match ++ "'?)"
 
     warningFor var place = do
+        guard $ isVariableName var
         guard . not $ isInArray var place || isGuarded place
-        (if isLocal var then warningForLocals else warningForGlobals) var place
+        (if includeGlobals || isLocal var
+         then warningForLocals
+         else warningForGlobals) var place
 
     warnings = execWriter . sequence $ mapMaybe (uncurry warningFor) unassigned
 
