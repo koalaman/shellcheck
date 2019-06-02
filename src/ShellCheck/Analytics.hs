@@ -1348,14 +1348,39 @@ prop_checkOrNeq2 = verify checkOrNeq "(( a!=lol || a!=foo ))"
 prop_checkOrNeq3 = verify checkOrNeq "[ \"$a\" != lol || \"$a\" != foo ]"
 prop_checkOrNeq4 = verifyNot checkOrNeq "[ a != $cow || b != $foo ]"
 prop_checkOrNeq5 = verifyNot checkOrNeq "[[ $a != /home || $a != */public_html/* ]]"
+prop_checkOrNeq6 = verify checkOrNeq "[ $a != a ] || [ $a != b ]"
+prop_checkOrNeq7 = verify checkOrNeq "[ $a != a ] || [ $a != b ] || true"
+prop_checkOrNeq8 = verifyNot checkOrNeq "[[ $a != x || $a != x ]]"
 -- This only catches the most idiomatic cases. Fixme?
+
+-- For test-level "or": [ x != y -o x != z ]
 checkOrNeq _ (TC_Or id typ op (TC_Binary _ _ op1 lhs1 rhs1 ) (TC_Binary _ _ op2 lhs2 rhs2))
-    | lhs1 == lhs2 && (op1 == op2 && (op1 == "-ne" || op1 == "!=")) && not (any isGlob [rhs1,rhs2]) =
+    | (op1 == op2 && (op1 == "-ne" || op1 == "!=")) && lhs1 == lhs2 && rhs1 /= rhs2 && not (any isGlob [rhs1,rhs2]) =
         warn id 2055 $ "You probably wanted " ++ (if typ == SingleBracket then "-a" else "&&") ++ " here."
 
+-- For arithmetic context "or"
 checkOrNeq _ (TA_Binary id "||" (TA_Binary _ "!=" word1 _) (TA_Binary _ "!=" word2 _))
     | word1 == word2 =
-        warn id 2056 "You probably wanted && here."
+        warn id 2056 "You probably wanted && here, otherwise it's always true."
+
+-- For command level "or": [ x != y ] || [ x != z ]
+checkOrNeq _ (T_OrIf id lhs rhs) = potentially $ do
+    (lhs1, op1, rhs1) <- getExpr lhs
+    (lhs2, op2, rhs2) <- getExpr rhs
+    guard $ op1 == op2 && op1 `elem` ["-ne", "!="]
+    guard $ lhs1 == lhs2 && rhs1 /= rhs2
+    guard . not $ any isGlob [rhs1, rhs2]
+    return $ warn id 2252 "You probably wanted && here, otherwise it's always true."
+  where
+    getExpr x =
+        case x of
+            T_OrIf _ lhs _ -> getExpr lhs -- Fetches x and y in `T_OrIf x (T_OrIf y z)`
+            T_Pipeline _ _ [x] -> getExpr x
+            T_Redirecting _ _ c -> getExpr c
+            T_Condition _ _ c -> getExpr c
+            TC_Binary _ _ op lhs rhs -> return (lhs, op, rhs)
+            _ -> fail ""
+
 checkOrNeq _ _ = return ()
 
 
