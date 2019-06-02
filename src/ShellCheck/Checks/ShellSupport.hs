@@ -174,6 +174,7 @@ prop_checkBashisms90 = verifyNot checkBashisms "#!/bin/sh\nset -o \"$opt\""
 prop_checkBashisms91 = verify checkBashisms "#!/bin/sh\nwait -n"
 prop_checkBashisms92 = verify checkBashisms "#!/bin/sh\necho $((16#FF))"
 prop_checkBashisms93 = verify checkBashisms "#!/bin/sh\necho $(( 10#$(date +%m) ))"
+prop_checkBashisms94 = verify checkBashisms "#!/bin/sh\n[ -v var ]"
 checkBashisms = ForShell [Sh, Dash] $ \t -> do
     params <- ask
     kludge params t
@@ -208,6 +209,8 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
             warnMsg id "== in place of = is"
     bashism (TC_Binary id SingleBracket "=~" _ _) =
             warnMsg id "=~ regex matching is"
+    bashism (TC_Unary id SingleBracket "-v" _) =
+            warnMsg id "unary -v (in place of [ -n \"${var+x}\" ]) is"
     bashism (TC_Unary id _ "-a" _) =
             warnMsg id "unary -a in place of -e is"
     bashism (TA_Unary id op _)
