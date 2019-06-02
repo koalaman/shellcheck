@@ -30,12 +30,12 @@ import GHC.Exts
 import System.IO
 import qualified Data.ByteString.Lazy.Char8 as BL
 
-format :: Bool -> IO Formatter
-format removeTabs = do
+format :: IO Formatter
+format = do
     ref <- newIORef []
     return Formatter {
         header = return (),
-        onResult = collectResult removeTabs ref,
+        onResult = collectResult ref,
         onFailure = outputError,
         footer = finish ref
     }
@@ -98,19 +98,12 @@ instance ToJSON Fix where
 
 outputError file msg = hPutStrLn stderr $ file ++ ": " ++ msg
 
-collectResult removeTabs ref cr sys = mapM_ f groups
+collectResult ref cr sys = mapM_ f groups
   where
     comments = crComments cr
     groups = groupWith sourceFile comments
     f :: [PositionedComment] -> IO ()
-    f group = do
-        let filename = sourceFile (head group)
-        result <- siReadFile sys filename
-        let contents = either (const "") id result
-        let comments' = if removeTabs
-                        then makeNonVirtual comments contents
-                        else comments
-        modifyIORef ref (\x -> comments' ++ x)
+    f group = modifyIORef ref (\x -> comments ++ x)
 
 finish ref = do
     list <- readIORef ref

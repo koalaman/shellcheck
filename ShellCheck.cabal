@@ -80,6 +80,7 @@ library
       ShellCheck.Formatter.CheckStyle
       ShellCheck.Formatter.GCC
       ShellCheck.Formatter.JSON
+      ShellCheck.Formatter.JSON1
       ShellCheck.Formatter.TTY
       ShellCheck.Formatter.Quiet
       ShellCheck.Interface
