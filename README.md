@@ -500,6 +500,10 @@ ShellCheck Wiki.
 Contributions must be licensed under the GNU GPLv3.
 The contributor retains the copyright.
 
+## Issue triage [![Open Source Helpers](https://www.codetriage.com/koalaman/shellcheck/badges/users.svg)](https://www.codetriage.com/koalaman/shellcheck)
+
+You can contribute by triaging issues which may include reproducing bug reports or asking for vital information, such as version numbers or reproduction instructions. If you would like to start triaging issues, one easy way to get started is to [subscribe to shellcheck on CodeTriage](https://www.codetriage.com/koalaman/shellcheck).
+
 ## Copyright
 
 ShellCheck is licensed under the GNU General Public License, v3. A copy of this license is included in the file [LICENSE](LICENSE).
