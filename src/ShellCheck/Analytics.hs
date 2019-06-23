@@ -534,7 +534,7 @@ indexOfSublists sub = f 0
 prop_checkShebangParameters1 = verifyTree checkShebangParameters "#!/usr/bin/env bash -x\necho cow"
 prop_checkShebangParameters2 = verifyNotTree checkShebangParameters "#! /bin/sh  -l "
 checkShebangParameters p (T_Annotation _ _ t) = checkShebangParameters p t
-checkShebangParameters _ (T_Script id sb _) =
+checkShebangParameters _ (T_Script _ (T_Literal id sb) _) =
     [makeComment ErrorC id 2096 "On most OS, shebangs can only specify a single parameter." | length (words sb) > 2]
 
 prop_checkShebang1 = verifyNotTree checkShebang "#!/usr/bin/env bash -x\necho cow"
@@ -554,7 +554,7 @@ checkShebang params (T_Annotation _ list t) =
   where
     isOverride (ShellOverride _) = True
     isOverride _ = False
-checkShebang params (T_Script id sb _) = execWriter $ do
+checkShebang params (T_Script _ (T_Literal id sb) _) = execWriter $ do
     unless (shellTypeSpecified params) $ do
         when (sb == "") $
             err id 2148 "Tips depend on target shell and yours is unknown. Add a shebang."

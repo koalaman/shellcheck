@@ -206,7 +206,7 @@ containsSetE root = isNothing $ doAnalysis (guard . not . isSetE) root
   where
     isSetE t =
         case t of
-            T_Script _ str _ -> str `matches` re
+            T_Script _ (T_Literal _ str) _ -> str `matches` re
             T_SimpleCommand {}  ->
                 t `isUnqualifiedCommand` "set" &&
                     ("errexit" `elem` oversimplify t ||
@@ -252,7 +252,7 @@ determineShell fallbackShell t = fromMaybe Bash $ do
     getCandidates (T_Annotation _ annotations s) =
         map forAnnotation annotations ++
            [Just $ fromShebang s]
-    fromShebang (T_Script _ s t) = executableFromShebang s
+    fromShebang (T_Script _ (T_Literal _ s) _) = executableFromShebang s
 
 -- Given a string like "/bin/bash" or "/usr/bin/env dash",
 -- return the shell basename like "bash" or "dash"

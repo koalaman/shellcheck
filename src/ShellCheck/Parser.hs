@@ -2790,10 +2790,11 @@ readAssignmentWordExt lenient = try $ do
 
             string "=" >> return Assign
             ]
-    readEmptyLiteral = do
-        start <- startSpan
-        id <- endSpan start
-        return $ T_Literal id ""
+
+readEmptyLiteral = do
+    start <- startSpan
+    id <- endSpan start
+    return $ T_Literal id ""
 
 readArrayIndex = do
     start <- startSpan
@@ -2941,12 +2942,14 @@ prop_readShebang5 = isWarning readShebang "\n#!/bin/sh"
 prop_readShebang6 = isWarning readShebang " # Copyright \n!#/bin/bash"
 prop_readShebang7 = isNotOk readShebang "# Copyright \nfoo\n#!/bin/bash"
 readShebang = do
+    start <- startSpan
     anyShebang <|> try readMissingBang <|> withHeader
     many linewhitespace
     str <- many $ noneOf "\r\n"
+    id <- endSpan start
     optional carriageReturn
     optional linefeed
-    return str
+    return $ T_Literal id str
   where
     anyShebang = choice $ map try [
         readCorrect,
@@ -3077,7 +3080,8 @@ readScriptFile sourced = do
         readUtf8Bom
         parseProblem ErrorC 1082
             "This file has a UTF-8 BOM. Remove it with: LC_CTYPE=C sed '1s/^...//' < yourscript ."
-    sb <- option "" readShebang
+    shebang <- readShebang <|> readEmptyLiteral
+    let (T_Literal _ shebangString) = shebang
     allspacing
     annotationStart <- startSpan
     fileAnnotations <- readAnnotations
@@ -3094,19 +3098,19 @@ readScriptFile sourced = do
     let ignoreShebang = shellAnnotationSpecified || shellFlagSpecified
 
     unless ignoreShebang $
-        verifyShebang pos (getShell sb)
-    if ignoreShebang || isValidShell (getShell sb) /= Just False
+        verifyShebang pos (getShell shebangString)
+    if ignoreShebang || isValidShell (getShell shebangString) /= Just False
       then do
             commands <- withAnnotations annotations readCompoundListOrEmpty
             id <- endSpan start
             verifyEof
             let script = T_Annotation annotationId annotations $
-                            T_Script id sb commands
+                            T_Script id shebang commands
             reparseIndices script
         else do
             many anyChar
             id <- endSpan start
-            return $ T_Script id sb []
+            return $ T_Script id shebang []
 
   where
     basename s = reverse . takeWhile (/= '/') . reverse $ s
