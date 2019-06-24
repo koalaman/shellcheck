@@ -158,22 +158,24 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
     applications. ShellCheck's json is compact and contains only the bare
     minimum.  Tabs are counted as 1 character.
 
-        [
-          {
-            "file": "filename",
-            "line": lineNumber,
-            "column": columnNumber,
-            "level": "severitylevel",
-            "code": errorCode,
-            "message": "warning message"
-          },
-          ...
-        ]
+        {
+          comments: [
+            {
+              "file": "filename",
+              "line": lineNumber,
+              "column": columnNumber,
+              "level": "severitylevel",
+              "code": errorCode,
+              "message": "warning message"
+            },
+            ...
+          ]
+        }
 
 **json**
 
-:   This is a legacy version of the **json1** format, with a tab stop
-    of 8 instead of 1.
+:   This is a legacy version of the **json1** format. It's a raw array of
+    comments, and all offsets have a tab stop of 8.
 
 **quiet**
 
