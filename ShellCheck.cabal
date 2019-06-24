@@ -57,6 +57,7 @@ library
       bytestring,
       containers >= 0.5,
       deepseq >= 1.4.0.0,
+      Diff >= 0.2.0,
       directory >= 1.2.3.0,
       mtl >= 2.2.1,
       filepath,
@@ -78,6 +79,7 @@ library
       ShellCheck.Fixer
       ShellCheck.Formatter.Format
       ShellCheck.Formatter.CheckStyle
+      ShellCheck.Formatter.Diff
       ShellCheck.Formatter.GCC
       ShellCheck.Formatter.JSON
       ShellCheck.Formatter.JSON1
@@ -100,6 +102,7 @@ executable shellcheck
       bytestring,
       containers,
       deepseq >= 1.4.0.0,
+      Diff >= 0.2.0,
       directory >= 1.2.3.0,
       mtl >= 2.2.1,
       filepath,
@@ -118,6 +121,7 @@ test-suite test-shellcheck
       bytestring,
       containers,
       deepseq >= 1.4.0.0,
+      Diff >= 0.2.0,
       directory >= 1.2.3.0,
       mtl >= 2.2.1,
       filepath,

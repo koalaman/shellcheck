@@ -1,6 +1,7 @@
 ## Since previous release
 ### Added
 - Preliminary support for fix suggestions
+- New `-f diff` unified diff format for auto-fixes
 - Files containing Bats tests can now be checked
 - Directory wide directives can now be placed in a `.shellcheckrc`
 - Optional checks: Use `--list-optional` to show a list of tests,

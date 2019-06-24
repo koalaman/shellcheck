@@ -8,6 +8,7 @@ import qualified ShellCheck.Checker
 import qualified ShellCheck.Checks.Commands
 import qualified ShellCheck.Checks.ShellSupport
 import qualified ShellCheck.Fixer
+import qualified ShellCheck.Formatter.Diff
 import qualified ShellCheck.Parser
 
 main = do
@@ -19,6 +20,7 @@ main = do
         ,ShellCheck.Checks.Commands.runTests
         ,ShellCheck.Checks.ShellSupport.runTests
         ,ShellCheck.Fixer.runTests
+        ,ShellCheck.Formatter.Diff.runTests
         ,ShellCheck.Parser.runTests
       ]
     if and results
