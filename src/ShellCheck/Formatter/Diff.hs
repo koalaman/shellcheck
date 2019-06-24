@@ -29,6 +29,7 @@ import Data.Algorithm.Diff
 import Data.Array
 import Data.IORef
 import Data.List
+import qualified Data.Monoid as Monoid
 import Data.Maybe
 import qualified Data.Map as M
 import GHC.Exts (sortWith)
@@ -181,7 +182,7 @@ splitFixByFile fix = map makeFix $ groupBy sameFile (fixReplacements fix)
     makeFix reps = newFix { fixReplacements = reps }
 
 groupByMap :: (Ord k, Monoid v) => (v -> k) -> [v] -> M.Map k v
-groupByMap f = M.fromListWith (<>) . map (\x -> (f x, x))
+groupByMap f = M.fromListWith Monoid.mappend . map (\x -> (f x, x))
 
 -- For building unit tests
 b n = Both n n
