@@ -2343,27 +2343,18 @@ prop_checkCdAndBack4 = verify checkCdAndBack "cd $tmp; foo; cd -"
 prop_checkCdAndBack5 = verifyNot checkCdAndBack "cd ..; foo; cd .."
 prop_checkCdAndBack6 = verify checkCdAndBack "for dir in */; do cd \"$dir\"; some_cmd; cd ..; done"
 prop_checkCdAndBack7 = verifyNot checkCdAndBack "set -e; for dir in */; do cd \"$dir\"; some_cmd; cd ..; done"
-checkCdAndBack params = doLists
+prop_checkCdAndBack8 = verifyNot checkCdAndBack "cd tmp\nfoo\n# shellcheck disable=SC2103\ncd ..\n"
+checkCdAndBack params t =
+    unless (hasSetE params) $ mapM_ doList $ getCommandSequences t
   where
-    shell = shellType params
-    doLists (T_ForIn _ _ _ cmds) = doList cmds
-    doLists (T_ForArithmetic _ _ _ _ cmds) = doList cmds
-    doLists (T_WhileExpression _ _ cmds) = doList cmds
-    doLists (T_UntilExpression _ _ cmds) = doList cmds
-    doLists (T_Script _ _ cmds) = doList cmds
-    doLists (T_IfExpression _ thens elses) = do
-        mapM_ (\(_, l) -> doList l) thens
-        doList elses
-    doLists _ = return ()
-
     isCdRevert t =
         case oversimplify t of
-            ["cd", p] -> p `elem` ["..", "-"]
+            [_, p] -> p `elem` ["..", "-"]
             _ -> False
 
-    getCmd (T_Annotation id _ x) = getCmd x
-    getCmd (T_Pipeline id _ [x]) = getCommandName x
-    getCmd _ = Nothing
+    getCandidate (T_Annotation _ _ x) = getCandidate x
+    getCandidate (T_Pipeline id _ [x]) | x `isCommand` "cd" = return x
+    getCandidate _ = Nothing
 
     findCdPair list =
         case list of
@@ -2373,13 +2364,9 @@ checkCdAndBack params = doLists
                 else findCdPair (b:rest)
             _ -> Nothing
 
-    doList list =
-        if hasSetE params
-        then return ()
-        else let cds = filter ((== Just "cd") . getCmd) list
-             in  potentially $ do
-                     cd <- findCdPair cds
-                     return $ info cd 2103 "Use a ( subshell ) to avoid having to cd back."
+    doList list = potentially $ do
+        cd <- findCdPair $ mapMaybe getCandidate list
+        return $ info cd 2103 "Use a ( subshell ) to avoid having to cd back."
 
 prop_checkLoopKeywordScope1 = verify checkLoopKeywordScope "continue 2"
 prop_checkLoopKeywordScope2 = verify checkLoopKeywordScope "for f; do ( break; ); done"
