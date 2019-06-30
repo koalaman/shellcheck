@@ -273,7 +273,11 @@ producesComments :: (Parameters -> Token -> [TokenComment]) -> String -> Maybe B
 producesComments f s = do
         let pr = pScript s
         prRoot pr
-        return . not . null $ runList (defaultSpec pr) [f]
+        let spec = defaultSpec pr
+        let params = makeParameters spec
+        return . not . null $
+            filterByAnnotation spec params $
+                runList spec [f]
 
 -- Copied from https://wiki.haskell.org/Edit_distance
 dist :: Eq a => [a] -> [a] -> Int
