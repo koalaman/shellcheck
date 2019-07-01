@@ -19,6 +19,7 @@
 - SC2246: Warn if a shebang's interpreter ends with /
 - SC2245: Warn that Ksh ignores all but the first glob result in `[`
 - SC2243/SC2244: Suggest using explicit -n for `[ $foo ]` (optional)
+- SC1135: Suggest not ending double quotes just to make $ literal
 
 ### Changed
 - If a directive or shebang is not specified, a `.bash/.bats/.dash/.ksh`

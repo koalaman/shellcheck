@@ -1524,10 +1524,10 @@ ensureDollar =
 
 readNormalDollar = do
     ensureDollar
-    readDollarExp <|> readDollarDoubleQuote <|> readDollarSingleQuote <|> readDollarLonely
+    readDollarExp <|> readDollarDoubleQuote <|> readDollarSingleQuote <|> readDollarLonely False
 readDoubleQuotedDollar = do
     ensureDollar
-    readDollarExp <|> readDollarLonely
+    readDollarExp <|> readDollarLonely True
 
 
 prop_readDollarExpression1 = isOk readDollarExpression "$(((1) && 3))"
@@ -1689,11 +1689,32 @@ readVariableName = do
     rest <- many variableChars
     return (f:rest)
 
-readDollarLonely = do
+
+prop_readDollarLonely1 = isWarning readNormalWord "\"$\"var"
+prop_readDollarLonely2 = isWarning readNormalWord "\"$\"\"var\""
+prop_readDollarLonely3 = isOk readNormalWord "\"$\"$var"
+prop_readDollarLonely4 = isOk readNormalWord "\"$\"*"
+prop_readDollarLonely5 = isOk readNormalWord "$\"str\""
+readDollarLonely quoted = do
     start <- startSpan
     char '$'
     id <- endSpan start
+    when quoted $ do
+        isHack <- quoteForEscape
+        when isHack $
+            parseProblemAtId id StyleC 1135
+                "Prefer escape over ending quote to make $ literal. Instead of \"It costs $\"5, use \"It costs \\$5\"."
     return $ T_Literal id "$"
+  where
+    quoteForEscape = option False $ try . lookAhead $ do
+        char '"'
+        -- Check for "foo $""bar"
+        optional $ char '"'
+        c <- anyVar
+        -- Don't trigger on [[ x == "$"* ]] or "$"$pattern
+        return $ c `notElem` "*$"
+    anyVar = variableStart <|> digit <|> specialVariable
+
 
 prop_readHereDoc = isOk readScript "cat << foo\nlol\ncow\nfoo"
 prop_readHereDoc2 = isNotOk readScript "cat <<- EOF\n  cow\n  EOF"
