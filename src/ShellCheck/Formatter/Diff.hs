@@ -75,7 +75,8 @@ checkFooter didOutput color = do
             printErr color "Issues were detected, but none were auto-fixable. Use another format to see them."
 
 type ColorFunc = (Int -> String -> String)
-data DiffDoc a = DiffDoc String [DiffRegion a]
+data LFStatus = LinefeedMissing | LinefeedOk
+data DiffDoc a = DiffDoc String LFStatus [DiffRegion a]
 data DiffRegion a = DiffRegion (Int, Int) (Int, Int) [Diff a]
 
 reportResult :: (IORef Bool) -> ColorFunc -> CheckResult -> SystemInterface IO -> IO ()
@@ -93,9 +94,25 @@ reportResult didOutput color result sys = do
                 writeIORef didOutput True
             Left msg -> reportFailure color name msg
 
+hasTrailingLinefeed str =
+    case str of
+        [] -> True
+        _ -> last str == '\n'
+
+coversLastLine regions =
+    case regions of
+        [] -> False
+        _ -> (fst $ last regions)
+
+-- TODO: Factor this out into a unified diff library because we're doing a lot
+-- of the heavy lifting anyways.
 makeDiff :: String -> String -> Fix -> DiffDoc String
-makeDiff name contents fix =
-    DiffDoc name $ findRegions . groupDiff $ computeDiff contents fix
+makeDiff name contents fix = do
+    let hunks = groupDiff $ computeDiff contents fix
+    let lf = if coversLastLine hunks && not (hasTrailingLinefeed contents)
+             then LinefeedMissing
+             else LinefeedOk
+    DiffDoc name lf $ findRegions hunks
 
 computeDiff :: String -> Fix -> [Diff String]
 computeDiff contents fix =
@@ -151,21 +168,36 @@ countDelta = count' 0 0
             First {} -> count' (left+1) right rest
             Second {} -> count' left (right+1) rest
 
-formatRegion :: ColorFunc -> DiffRegion String -> String
-formatRegion color (DiffRegion left right diffs) =
+formatRegion :: ColorFunc -> LFStatus -> DiffRegion String -> String
+formatRegion color lf (DiffRegion left right diffs) =
     let header = color cyan ("@@ -" ++ (tup left) ++ " +" ++ (tup right) ++" @@")
     in
-        unlines $ header : map format diffs
+        unlines $ header : reverse (getStrings lf (reverse diffs))
   where
+    noLF = "\\ No newline at end of file"
+
+    getStrings LinefeedOk list = map format list
+    getStrings LinefeedMissing list@((Both _ _):_) = noLF : map format list
+    getStrings LinefeedMissing list@((First _):_) = noLF : map format list
+    getStrings LinefeedMissing (last:rest) = format last : getStrings LinefeedMissing rest
+
     tup (a,b) = (show a) ++ "," ++ (show b)
     format (Both x _) = ' ':x
     format (First x) = color red $ '-':x
     format (Second x) = color green $ '+':x
 
-formatDoc color (DiffDoc name regions) =
+splitLast [] = ([], [])
+splitLast x =
+    let (last, rest) = splitAt 1 $ reverse x
+    in (reverse rest, last)
+
+formatDoc color (DiffDoc name lf regions) =
+    let (most, last) = splitLast regions
+    in
           (color bold $ "--- " ++ ("a" </> name)) ++ "\n" ++
           (color bold $ "+++ " ++ ("b" </> name)) ++ "\n" ++
-          concatMap (formatRegion color) regions
+          concatMap (formatRegion color LinefeedOk) most ++
+          concatMap (formatRegion color lf) last
 
 -- Create a Map from filename to Fix
 buildFixMap :: [Fix] -> M.Map String Fix
