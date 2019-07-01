@@ -138,7 +138,6 @@ almostSpace =
         return ' '
 
 --------- Message/position annotation on top of user state
-data Note = Note Id Severity Code String deriving (Show, Eq)
 data ParseNote = ParseNote SourcePos SourcePos Severity Code String deriving (Show, Eq)
 data Context =
         ContextName SourcePos String
@@ -166,10 +165,6 @@ initialUserState = UserState {
 }
 
 codeForParseNote (ParseNote _ _ _ code _) = code
-noteToParseNote map (Note id severity code message) =
-        ParseNote pos pos severity code message
-    where
-        pos = fromJust $ Map.lookup id map
 
 getLastId = lastId <$> getState
 
