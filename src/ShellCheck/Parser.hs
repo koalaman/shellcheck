@@ -1698,7 +1698,6 @@ readDollarLonely = do
     start <- startSpan
     char '$'
     id <- endSpan start
-    n <- lookAhead (anyChar <|> (eof >> return '_'))
     return $ T_Literal id "$"
 
 prop_readHereDoc = isOk readScript "cat << foo\nlol\ncow\nfoo"
