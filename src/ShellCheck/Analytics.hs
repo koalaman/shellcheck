@@ -2085,6 +2085,9 @@ prop_checkUnused38= verifyTree checkUnusedAssignments "(( a=42 ))"
 prop_checkUnused39= verifyNotTree checkUnusedAssignments "declare -x -f foo"
 prop_checkUnused40= verifyNotTree checkUnusedAssignments "arr=(1 2); num=2; echo \"${arr[@]:num}\""
 prop_checkUnused41= verifyNotTree checkUnusedAssignments "@test 'foo' {\ntrue\n}\n"
+prop_checkUnused42= verifyNotTree checkUnusedAssignments "DEFINE_string foo '' ''; echo \"${FLAGS_foo}\""
+prop_checkUnused43= verifyTree checkUnusedAssignments "DEFINE_string foo '' ''"
+prop_checkUnused44= verifyNotTree checkUnusedAssignments "DEFINE_string \"foo$ibar\" x y"
 checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
     flow = variableFlow params
