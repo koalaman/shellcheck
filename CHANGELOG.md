@@ -16,6 +16,7 @@
 - json1 format like --format=json but treats tabs as single characters
 - Recognize FLAGS variables created by the shflags library.
 - Site-specific changes can now be made in Custom.hs for ease of patching
+- Add portage as a bash-like shell for ebuild/eclass files.
 - SC2154: Also warn about unassigned uppercase variables (optional)
 - SC2252: Warn about `[ $a != x ] || [ $a != y ]`, similar to SC2055
 - SC2251: Inform about ineffectual ! in front of commands

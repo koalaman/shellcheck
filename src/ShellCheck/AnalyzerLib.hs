@@ -92,7 +92,9 @@ data Parameters = Parameters {
     -- The root node of the AST
     rootNode           :: Token,
     -- map from token id to start and end position
-    tokenPositions     :: Map.Map Id (Position, Position)
+    tokenPositions     :: Map.Map Id (Position, Position),
+    -- True if script is being used as a portage build file
+    isPortageBuild     :: Bool
     } deriving (Show)
 
 -- TODO: Cache results of common AST ops here
@@ -195,7 +197,8 @@ makeParameters spec =
         shellTypeSpecified = isJust (asShellType spec) || isJust (asFallbackShell spec),
         parentMap = getParentTree root,
         variableFlow = getVariableFlow params root,
-        tokenPositions = asTokenPositions spec
+        tokenPositions = asTokenPositions spec,
+        isPortageBuild = asIsPortageBuild spec
     } in params
   where root = asScript spec
 

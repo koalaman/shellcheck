@@ -87,8 +87,9 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 
 :   Specify Bourne shell dialect. Valid values are *sh*, *bash*, *dash* and *ksh*.
     The default is to deduce the shell from the file's `shell` directive,
-    shebang, or `.bash/.bats/.dash/.ksh` extension, in that order. *sh* refers to
-    POSIX `sh` (not the system's), and will warn of portability issues.
+    shebang, or `.bash/.bats/.dash/.ksh/.ebuild/.eclass` extension, in that
+    order. *sh* refers to POSIX `sh` (not the system's), and will warn of
+    portability issues.
 
 **-S**\ *SEVERITY*,\ **--severity=***severity*
 

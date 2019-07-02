@@ -53,11 +53,17 @@ shellFromFilename filename = foldl mplus Nothing candidates
     shellExtensions = [(".ksh", Ksh)
                       ,(".bash", Bash)
                       ,(".bats", Bash)
-                      ,(".dash", Dash)]
+                      ,(".dash", Dash)
+                      ,(".ebuild", Bash)
+                      ,(".eclass", Bash)]
                       -- The `.sh` is too generic to determine the shell:
                       -- We fallback to Bash in this case and emit SC2148 if there is no shebang
     candidates =
         map (\(ext,sh) -> if ext `isSuffixOf` filename then Just sh else Nothing) shellExtensions
+
+isPortageBuildFile filename = any (\x -> isSuffixOf x filename) portageExtensions
+  where
+    portageExtensions = [".ebuild", ".eclass"]
 
 checkScript :: Monad m => SystemInterface m -> CheckSpec -> m CheckResult
 checkScript sys spec = do
@@ -85,7 +91,8 @@ checkScript sys spec = do
                     asCheckSourced = csCheckSourced spec,
                     asExecutionMode = Executed,
                     asTokenPositions = tokenPositions,
-                    asOptionalChecks = csOptionalChecks spec
+                    asOptionalChecks = csOptionalChecks spec,
+                    asIsPortageBuild = isPortageBuildFile $ csFilename spec
                 } where as = newAnalysisSpec root
         let analysisMessages =
                 fromMaybe [] $
