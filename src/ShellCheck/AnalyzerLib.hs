@@ -685,10 +685,10 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal 
             (filter (\(x,_) -> getLiteralString x == Just "-a") (zip (args) (tail args)))
 
     -- get the FLAGS_ variable created by a shflags DEFINE_ call
-    getFlagVariable (n:v:_) = return (base, n, flagName n, DataString $ SourceFrom [v])
-      where
-        flagName varName@(T_NormalWord _ _) = "FLAGS_" ++ (onlyLiteralString varName)
-    getFlagVariable _ = fail "Invalid flag definition"
+    getFlagVariable (n:v:_) = do
+        name <- getLiteralString v
+        return (base, n, "FLAGS_" ++ name, DataString $ SourceExternal)
+    getFlagVariable _ = Nothing
 
 getModifiedVariableCommand _ = []
 
