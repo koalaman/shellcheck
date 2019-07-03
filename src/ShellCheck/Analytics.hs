@@ -2088,6 +2088,8 @@ prop_checkUnused41= verifyNotTree checkUnusedAssignments "@test 'foo' {\ntrue\n}
 prop_checkUnused42= verifyNotTree checkUnusedAssignments "DEFINE_string foo '' ''; echo \"${FLAGS_foo}\""
 prop_checkUnused43= verifyTree checkUnusedAssignments "DEFINE_string foo '' ''"
 prop_checkUnused44= verifyNotTree checkUnusedAssignments "DEFINE_string \"foo$ibar\" x y"
+prop_checkUnused45= verifyTree checkUnusedAssignments "readonly foo=bar"
+prop_checkUnused46= verifyTree checkUnusedAssignments "readonly foo=(bar)"
 checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
     flow = variableFlow params

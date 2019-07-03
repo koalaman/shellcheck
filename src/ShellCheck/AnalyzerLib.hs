@@ -546,10 +546,6 @@ getReferencedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Litera
                     (not $ any (`elem` flags) ["f", "F"])
             then concatMap getReference rest
             else []
-        "readonly" ->
-            if any (`elem` flags) ["f", "p"]
-            then []
-            else concatMap getReference rest
         "trap" ->
             case rest of
                 head:_ -> map (\x -> (head, head, x)) $ getVariablesFromLiteralToken head
