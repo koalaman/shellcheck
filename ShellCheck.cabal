@@ -74,6 +74,7 @@ library
       ShellCheck.AnalyzerLib
       ShellCheck.Checker
       ShellCheck.Checks.Commands
+      ShellCheck.Checks.Custom
       ShellCheck.Checks.ShellSupport
       ShellCheck.Data
       ShellCheck.Fixer

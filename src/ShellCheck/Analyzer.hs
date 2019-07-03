@@ -25,6 +25,7 @@ import ShellCheck.Interface
 import Data.List
 import Data.Monoid
 import qualified ShellCheck.Checks.Commands
+import qualified ShellCheck.Checks.Custom
 import qualified ShellCheck.Checks.ShellSupport
 
 
@@ -41,6 +42,7 @@ analyzeScript spec = newAnalysisResult {
 
 checkers params = mconcat $ map ($ params) [
     ShellCheck.Checks.Commands.checker,
+    ShellCheck.Checks.Custom.checker,
     ShellCheck.Checks.ShellSupport.checker
     ]
 
