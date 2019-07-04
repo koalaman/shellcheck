@@ -2765,7 +2765,7 @@ readAssignmentWordExt lenient = try $ do
     variable <- readVariableName
     when lenient $
         optional (readNormalDollar >> parseNoteAt pos ErrorC
-                                1067 "For indirection, use (associative) arrays or 'read \"var$n\" <<< \"value\"'")
+                                1067 "For indirection, use arrays, declare \"var$n=value\", or (for sh) read/eval.")
     indices <- many readArrayIndex
     hasLeftSpace <- fmap (not . null) spacing
     pos <- getPosition
