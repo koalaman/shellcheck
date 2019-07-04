@@ -676,9 +676,16 @@ getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal 
         return (base, lastArg, name, DataArray SourceExternal)
 
     -- get all the array variables used in read, e.g. read -a arr
-    getReadArrayVariables args = do
+    getReadArrayVariables args =
         map (getLiteralArray . snd)
-            (filter (\(x,_) -> getLiteralString x == Just "-a") (zip (args) (tail args)))
+            (filter (isArrayFlag . fst) (zip args (tail args)))
+
+    isArrayFlag x = fromMaybe False $ do
+        str <- getLiteralString x
+        return $ case str of
+                    '-':'-':_ -> False
+                    '-':str -> 'a' `elem` str
+                    _ -> False
 
     -- get the FLAGS_ variable created by a shflags DEFINE_ call
     getFlagVariable (n:v:_) = do
