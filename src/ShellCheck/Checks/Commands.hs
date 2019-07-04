@@ -94,6 +94,7 @@ commandChecks = [
     ,checkSudoRedirect
     ,checkSudoArgs
     ,checkSourceArgs
+    ,checkChmodDashr
     ]
 
 buildCommandMap :: [CommandCheck] -> Map.Map CommandName (Token -> Analysis)
@@ -1041,6 +1042,17 @@ checkSourceArgs = CommandCheck (Exactly ".") f
             (file:arg1:_) -> warn (getId arg1) 2240 $
                 "The dot command does not support arguments in sh/dash. Set them as variables."
             _ -> return ()
+
+prop_checkChmodDashr1 = verify checkChmodDashr "chmod -r 0755 dir"
+prop_checkChmodDashr2 = verifyNot checkChmodDashr "chmod -R 0755 dir"
+prop_checkChmodDashr3 = verifyNot checkChmodDashr "chmod a-r dir"
+checkChmodDashr = CommandCheck (Basename "chmod") f
+  where
+    f t = mapM_ check $ arguments t
+    check t = potentially $ do
+        flag <- getLiteralString t
+        guard $ flag == "-r"
+        return $ warn (getId t) 2253 "Use -R to recurse, or explicitly a-r to remove read permissions."
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
