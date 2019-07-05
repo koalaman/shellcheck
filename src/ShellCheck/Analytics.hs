@@ -3395,18 +3395,23 @@ checkDefaultCase _ t =
         pg <- wordToExactPseudoGlob pat
         return $ pseudoGlobIsSuperSetof pg [PGMany]
 
-prop_checkUselessBang1 = verify checkUselessBang "! true; rest"
-prop_checkUselessBang2 = verify checkUselessBang "while true; do ! true; done"
-prop_checkUselessBang3 = verifyNot checkUselessBang "if ! true; then true; fi"
-prop_checkUselessBang4 = verifyNot checkUselessBang "( ! true )"
-prop_checkUselessBang5 = verifyNot checkUselessBang "{ ! true; }"
-prop_checkUselessBang6 = verifyNot checkUselessBang "x() { ! [ x ]; }"
-checkUselessBang params t = mapM_ check (getNonReturningCommands t)
+prop_checkUselessBang1 = verify checkUselessBang "set -e; ! true; rest"
+prop_checkUselessBang2 = verifyNot checkUselessBang "! true; rest"
+prop_checkUselessBang3 = verify checkUselessBang "set -e; while true; do ! true; done"
+prop_checkUselessBang4 = verifyNot checkUselessBang "set -e; if ! true; then true; fi"
+prop_checkUselessBang5 = verifyNot checkUselessBang "set -e; ( ! true )"
+prop_checkUselessBang6 = verify checkUselessBang "set -e; { ! true; }"
+prop_checkUselessBang7 = verifyNot checkUselessBang "set -e; x() { ! [ x ]; }"
+prop_checkUselessBang8 = verifyNot checkUselessBang "set -e; if { ! true; }; then true; fi"
+prop_checkUselessBang9 = verifyNot checkUselessBang "set -e; while ! true; do true; done"
+checkUselessBang params t = when (hasSetE params) $ mapM_ check (getNonReturningCommands t)
   where
     check t =
         case t of
-            T_Banged id _ ->
-                info id 2251 "This ! is not on a condition and skips errexit. Use { ! ...; } to errexit, or verify usage."
+            T_Banged id cmd | not $ isCondition (getPath (parentMap params) t) ->
+                addComment $ makeCommentWithFix InfoC id 2251
+                        "This ! is not on a condition and skips errexit. Use `&& exit 1` instead, or make sure $? is checked."
+                        (fixWith [replaceStart id params 1 "", replaceEnd (getId cmd) params 0 " && exit 1"])
             _ -> return ()
 
     -- Get all the subcommands that aren't likely to be the return value
@@ -3414,7 +3419,7 @@ checkUselessBang params t = mapM_ check (getNonReturningCommands t)
     getNonReturningCommands t =
         case t of
             T_Script _ _ list -> dropLast list
-            T_BraceGroup _ list -> dropLast list
+            T_BraceGroup _ list -> if isFunctionBody t then dropLast list else list
             T_Subshell _ list -> dropLast list
             T_WhileExpression _ conds cmds -> dropLast conds ++ cmds
             T_UntilExpression _ conds cmds -> dropLast conds ++ cmds
@@ -3424,6 +3429,11 @@ checkUselessBang params t = mapM_ check (getNonReturningCommands t)
             T_IfExpression _ conds elses ->
                 concatMap (dropLast . fst) conds ++ concatMap snd conds ++ elses
             _ -> []
+
+    isFunctionBody t =
+        case getPath (parentMap params) t of
+            _:T_Function {}:_-> True
+            _ -> False
 
     dropLast t =
         case t of
