@@ -791,7 +791,7 @@ isCommandMatch token matcher = fromMaybe False $
 -- False: .*foo.*
 isConfusedGlobRegex :: String -> Bool
 isConfusedGlobRegex ('*':_) = True
-isConfusedGlobRegex [x,'*'] | x /= '\\' = True
+isConfusedGlobRegex [x,'*'] | x `notElem` "\\." = True
 isConfusedGlobRegex _       = False
 
 isVariableStartChar x = x == '_' || isAsciiLower x || isAsciiUpper x
