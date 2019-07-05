@@ -3095,8 +3095,8 @@ checkSplittingInArrays params t =
             && not (getBracedReference (bracedString part) `elem` variablesWithoutSpaces)
             -> warn id 2206 $
                 if shellType params == Ksh
-                then "Quote to prevent word splitting, or split robustly with read -A or while read."
-                else "Quote to prevent word splitting, or split robustly with mapfile or read -a."
+                then "Quote to prevent word splitting/globbing, or split robustly with read -A or while read."
+                else "Quote to prevent word splitting/globbing, or split robustly with mapfile or read -a."
         _ -> return ()
 
     forCommand id =
