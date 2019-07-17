@@ -2815,14 +2815,15 @@ checkUncheckedCdPushdPopd params root =
             && not (name `elem` ["pushd", "popd"] && ("n" `elem` map snd (getAllFlags t)))
             && not (isCondition $ getPath (parentMap params) t)) $
                 warnWithFix (getId t) 2164
-                    ("Use '" ++ name ++ " ... || exit' or '" ++ name ++ " ... || return' in case " ++ name ++ " fails.")
-                    (fixWith [replaceEnd (getId t) params 0 " || exit"])
+                    ("Use '" ++ name ++ " ... || " ++ exit ++ "' or '" ++ name ++ " ... || return' in case " ++ name ++ " fails.")
+                    (fixWith [replaceEnd (getId t) params 0 (" || " ++ exit)])
     checkElement _ = return ()
     getName t = fromMaybe "" $ getCommandName t
     isSafeDir t = case oversimplify t of
           [_, str] -> str `matches` regex
           _ -> False
     regex = mkRegex "^/*((\\.|\\.\\.)/+)*(\\.|\\.\\.)?$"
+    exit = if isPortageBuild params then "die" else "exit"
 
 prop_checkLoopVariableReassignment1 = verify checkLoopVariableReassignment "for i in *; do for i in *.bar; do true; done; done"
 prop_checkLoopVariableReassignment2 = verify checkLoopVariableReassignment "for i in *; do for((i=0; i<3; i++)); do true; done; done"
