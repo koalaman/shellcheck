@@ -831,6 +831,10 @@ checkArrayAsString _ (T_Assignment id _ _ _ word) =
           "Brace expansions and globs are literal in assignments. Quote it or use an array."
 checkArrayAsString _ _ = return ()
 
+arrayVariables params =
+    shellArrayVariables ++
+    if isPortageBuild params then shellArrayVariables else []
+
 prop_checkArrayWithoutIndex1 = verifyTree checkArrayWithoutIndex "foo=(a b); echo $foo"
 prop_checkArrayWithoutIndex2 = verifyNotTree checkArrayWithoutIndex "foo='bar baz'; foo=($foo); echo ${foo[0]}"
 prop_checkArrayWithoutIndex3 = verifyTree checkArrayWithoutIndex "coproc foo while true; do echo cow; done; echo $foo"
@@ -844,7 +848,7 @@ prop_checkArrayWithoutIndex10= verifyTree checkArrayWithoutIndex "read -ra arr <
 checkArrayWithoutIndex params _ =
     doVariableFlowAnalysis readF writeF defaultMap (variableFlow params)
   where
-    defaultMap = Map.fromList $ map (\x -> (x,())) arrayVariables
+    defaultMap = Map.fromList $ map (\x -> (x,())) (arrayVariables params)
     readF _ (T_DollarBraced id _ token) _ = do
         map <- get
         return . maybeToList $ do
@@ -1813,6 +1817,10 @@ checkSpacefulness params = checkSpacefulness' onFind params
             && isParamTo parents ":" token
 
 
+variablesWithoutSpaces params =
+    shellVariablesWithoutSpaces ++
+    if isPortageBuild params then portageVariablesWithoutSpaces else []
+
 prop_checkSpacefulness4v= verifyTree checkVerboseSpacefulness "foo=3; foo=$(echo $foo)"
 prop_checkSpacefulness8v= verifyTree checkVerboseSpacefulness "a=foo\\ bar; a=foo; rm $a"
 prop_checkSpacefulness28v = verifyTree checkVerboseSpacefulness "exec {n}>&1; echo $n"
@@ -1832,7 +1840,7 @@ checkSpacefulness'
 checkSpacefulness' onFind params t =
     doVariableFlowAnalysis readF writeF (Map.fromList defaults) (variableFlow params)
   where
-    defaults = zip variablesWithoutSpaces (repeat False)
+    defaults = zip (variablesWithoutSpaces params) (repeat False)
 
     hasSpaces name = gets (Map.findWithDefault True name)
 
@@ -2044,6 +2052,11 @@ checkFunctionsUsedExternally params t =
             info definitionId 2032 $
               "Use own script or sh -c '..' to run this from " ++ cmd ++ "."
 
+internalVariables params =
+    genericInternalVariables ++
+    if shellType params == Ksh then kshInternalVariables else [] ++
+    if isPortageBuild params then portageInternalVariables else []
+
 prop_checkUnused0 = verifyNotTree checkUnusedAssignments "var=foo; echo $var"
 prop_checkUnused1 = verifyTree checkUnusedAssignments "var=foo; echo $bar"
 prop_checkUnused2 = verifyNotTree checkUnusedAssignments "var=foo; export var;"
@@ -2111,7 +2124,7 @@ checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
             name ++ " appears unused. Verify use (or export if used externally)."
 
     stripSuffix = takeWhile isVariableChar
-    defaultMap = Map.fromList $ zip internalVariables $ repeat ()
+    defaultMap = Map.fromList $ zip (internalVariables params) $ repeat ()
 
 prop_checkUnassignedReferences1 = verifyTree checkUnassignedReferences "echo $foo"
 prop_checkUnassignedReferences2 = verifyNotTree checkUnassignedReferences "foo=hello; echo $foo"
@@ -2156,7 +2169,7 @@ checkUnassignedReferences = checkUnassignedReferences' False
 checkUnassignedReferences' includeGlobals params t = warnings
   where
     (readMap, writeMap) = execState (mapM tally $ variableFlow params) (Map.empty, Map.empty)
-    defaultAssigned = Map.fromList $ map (\a -> (a, ())) $ filter (not . null) internalVariables
+    defaultAssigned = Map.fromList $ map (\a -> (a, ())) $ filter (not . null) (internalVariables params)
 
     tally (Assignment (_, _, name, _))  =
         modify (\(read, written) -> (read, Map.insert name () written))
@@ -3095,7 +3108,7 @@ checkSplittingInArrays params t =
         T_DollarBraced id _ str |
             not (isCountingReference part)
             && not (isQuotedAlternativeReference part)
-            && not (getBracedReference (bracedString part) `elem` variablesWithoutSpaces)
+            && not (getBracedReference (bracedString part) `elem` (variablesWithoutSpaces params))
             -> warn id 2206 $
                 if shellType params == Ksh
                 then "Quote to prevent word splitting/globbing, or split robustly with read -A or while read."

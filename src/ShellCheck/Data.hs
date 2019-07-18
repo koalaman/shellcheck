@@ -6,7 +6,7 @@ import Paths_ShellCheck (version)
 
 shellcheckVersion = showVersion version
 
-internalVariables = [
+genericInternalVariables = [
     -- Generic
     "", "_", "rest", "REST",
 
@@ -34,19 +34,34 @@ internalVariables = [
     "USER", "TZ", "TERM", "LOGNAME", "LD_LIBRARY_PATH", "LANGUAGE", "DISPLAY",
     "HOSTNAME", "KRB5CCNAME", "XAUTHORITY"
 
-    -- Ksh
-    , ".sh.version"
-
     -- shflags
     , "FLAGS_ARGC", "FLAGS_ARGV", "FLAGS_ERROR", "FLAGS_FALSE", "FLAGS_HELP",
     "FLAGS_PARENT", "FLAGS_RESERVED", "FLAGS_TRUE", "FLAGS_VERSION",
     "flags_error", "flags_return"
   ]
 
+kshInternalVariables = [
+    ".sh.version"
+  ]
+
+portageInternalVariables = [
+    "A", "BDEPEND", "BROOT", "CATEGORY", "D", "DEPEND", "DESCRIPTION",
+    "DISTDIR", "DOCS", "EAPI", "ED", "EPREFIX", "EROOT", "ESYSROOT", "FILESDIR",
+    "HOME", "HOMEPAGE", "HTML_DOCS", "IUSE", "KEYWORDS", "LICENSE", "P",
+    "PATCHES", "PDEPEND", "PF", "PN", "PR", "PROPERTIES", "PV", "PVR",
+    "QA_AM_MAINTAINER_MODE", "QA_CONFIGURE_OPTIONS", "QA_DESKTOP_FILE",
+    "QA_DT_NEEDED", "QA_EXECSTACK", "QA_FLAGS_IGNORED", "QA_MULTILIB_PATHS",
+    "QA_PREBUILT", "QA_PRESTRIPPED", "QA_SONAME", "QA_SONAME_NO_SYMLINK",
+    "QA_TEXTRELS", "QA_WX_LOAD", "RDEPEND", "REQUIRED_USE", "RESTRICT", "ROOT",
+    "S", "SLOT", "SRC_TEST", "SRC_URI", "STRIP_MASK", "SUBSLOT", "SYSROOT",
+    "T", "WORKDIR"
+  ]
+
 specialVariablesWithoutSpaces = [
     "$", "-", "?", "!", "#"
   ]
-variablesWithoutSpaces = specialVariablesWithoutSpaces ++ [
+
+shellVariablesWithoutSpaces = specialVariablesWithoutSpaces ++ [
     "BASHPID", "BASH_ARGC", "BASH_LINENO", "BASH_SUBSHELL", "EUID", "LINENO",
     "OPTIND", "PPID", "RANDOM", "SECONDS", "SHELLOPTS", "SHLVL", "UID",
     "COLUMNS", "HISTFILESIZE", "HISTSIZE", "LINES"
@@ -55,16 +70,24 @@ variablesWithoutSpaces = specialVariablesWithoutSpaces ++ [
     , "FLAGS_ERROR", "FLAGS_FALSE", "FLAGS_TRUE"
   ]
 
+portageVariablesWithoutSpaces = [
+    "EAPI", "P", "PF", "PN", "PR", "PV", "PVR", "SLOT"
+  ]
+
 specialVariables = specialVariablesWithoutSpaces ++ ["@", "*"]
 
 unbracedVariables = specialVariables ++ [
     "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"
   ]
 
-arrayVariables = [
+shellArrayVariables = [
     "BASH_ALIASES", "BASH_ARGC", "BASH_ARGV", "BASH_CMDS", "BASH_LINENO",
     "BASH_REMATCH", "BASH_SOURCE", "BASH_VERSINFO", "COMP_WORDS", "COPROC",
     "DIRSTACK", "FUNCNAME", "GROUPS", "MAPFILE", "PIPESTATUS", "COMPREPLY"
+  ]
+
+portageArrayVariables = [
+    "PATCHES"
   ]
 
 commonCommands = [
