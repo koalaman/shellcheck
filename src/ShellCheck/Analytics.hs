@@ -2758,7 +2758,6 @@ prop_checkMaskedReturns2 = verify checkMaskedReturns "declare a=$(false)"
 prop_checkMaskedReturns3 = verify checkMaskedReturns "declare a=\"`false`\""
 prop_checkMaskedReturns4 = verifyNot checkMaskedReturns "declare a; a=$(false)"
 prop_checkMaskedReturns5 = verifyNot checkMaskedReturns "f() { local -r a=$(false); }"
-prop_checkMaskedReturns6 = verifyNot checkMaskedReturns "#shellcheck shell=portage\ndeclare a=$(false)"
 checkMaskedReturns params t@(T_SimpleCommand id _ (cmd:rest)) = potentially $ do
     name <- getCommandName t
     guard $ (name `elem` ["declare", "export"]
