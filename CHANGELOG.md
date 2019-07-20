@@ -28,6 +28,9 @@
   extension will be used to infer the shell type when present.
 - Disabling SC2120 on a function now disables SC2119 on call sites
 
+### Fixed
+- SC2183 no longer warns about missing printf args for `%()T`
+
 ## v0.6.0 - 2018-12-02
 ### Added
 - Command line option --severity/-S for filtering by minimum severity

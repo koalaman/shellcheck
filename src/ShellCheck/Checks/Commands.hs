@@ -538,52 +538,83 @@ prop_checkPrintfVar15= verifyNot checkPrintfVar "printf '%*s\\n' 1 2"
 prop_checkPrintfVar16= verifyNot checkPrintfVar "printf $'string'"
 prop_checkPrintfVar17= verify checkPrintfVar "printf '%-*s\\n' 1"
 prop_checkPrintfVar18= verifyNot checkPrintfVar "printf '%-*s\\n' 1 2"
+prop_checkPrintfVar19= verifyNot checkPrintfVar "printf '%(%s)T'"
+prop_checkPrintfVar20= verifyNot checkPrintfVar "printf '%d %(%s)T' 42"
+prop_checkPrintfVar21= verify checkPrintfVar "printf '%d %(%s)T'"
 checkPrintfVar = CommandCheck (Exactly "printf") (f . arguments) where
     f (doubledash:rest) | getLiteralString doubledash == Just "--" = f rest
     f (dashv:var:rest) | getLiteralString dashv == Just "-v" = f rest
     f (format:params) = check format params
     f _ = return ()
 
-    countFormats string =
-        case string of
-            '%':'%':rest -> countFormats rest
-            '%':'(':rest -> 1 + countFormats (dropWhile (/= ')') rest)
-            '%':rest -> regexBasedCountFormats rest + countFormats (dropWhile (/= '%') rest)
-            _:rest -> countFormats rest
-            [] -> 0
-
-    regexBasedCountFormats rest =
-        maybe 1 (foldl (\acc group -> acc + (if group == "*" then 1 else 0)) 1) (matchRegex re rest)
-      where
-        -- constructed based on specifications in "man printf"
-        re = mkRegex "#?-?\\+? ?0?(\\*|\\d*).?(\\d*|\\*)[diouxXfFeEgGaAcsb]"
-        --            \____ _____/\___ ____/ \____ ____/\________ ________/
-        --                 V          V           V               V
-        --               flags    field width  precision   format character
-        -- field width and precision can be specified with a '*' instead of a digit,
-        -- in which case printf will accept one more argument for each '*' used
     check format more = do
         fromMaybe (return ()) $ do
             string <- getLiteralString format
-            let vars = countFormats string
+            let formats = getPrintfFormats string
+            let formatCount = length formats
+            let argCount = length more
 
-            return $ do
-                when (vars == 0 && more /= []) $
-                    err (getId format) 2182
-                        "This printf format string has no variables. Other arguments are ignored."
-
-                when (vars > 0
-                        && ((length more) `mod` vars /= 0 || null more)
-                        && all (not . mayBecomeMultipleArgs) more) $
-                    warn (getId format) 2183 $
-                        "This format string has " ++ show vars ++ " variables, but is passed " ++ show (length more) ++ " arguments."
-
+            return $
+                case () of
+                    () | argCount == 0 && formatCount == 0 ->
+                        return () -- This is fine
+                    () | formatCount == 0 && argCount > 0 ->
+                        err (getId format) 2182
+                            "This printf format string has no variables. Other arguments are ignored."
+                    () | any mayBecomeMultipleArgs more ->
+                        return () -- We don't know so trust the user
+                    () | argCount < formatCount && onlyTrailingTs formats argCount ->
+                        return () -- Allow trailing %()Ts since they use the current time
+                    () | argCount > 0 && argCount `mod` formatCount == 0 ->
+                        return () -- Great: a suitable number of arguments
+                    () ->
+                        warn (getId format) 2183 $
+                            "This format string has " ++ show formatCount ++ " variables, but is passed " ++ show argCount ++ " arguments."
 
         unless ('%' `elem` concat (oversimplify format) || isLiteral format) $
           info (getId format) 2059
               "Don't use variables in the printf format string. Use printf \"..%s..\" \"$foo\"."
+      where
+        onlyTrailingTs format argCount =
+            all (== 'T') $ drop argCount format
 
 
+prop_checkGetPrintfFormats1 = getPrintfFormats "%s" == "s"
+prop_checkGetPrintfFormats2 = getPrintfFormats "%0*s" == "*s"
+prop_checkGetPrintfFormats3 = getPrintfFormats "%(%s)T" == "T"
+prop_checkGetPrintfFormats4 = getPrintfFormats "%d%%%(%s)T" == "dT"
+prop_checkGetPrintfFormats5 = getPrintfFormats "%bPassed: %d, %bFailed: %d%b, Skipped: %d, %bErrored: %d%b\\n" == "bdbdbdbdb"
+getPrintfFormats = getFormats
+  where
+    -- Get the arguments in the string as a string of type characters,
+    -- e.g. "Hello %s" -> "s" and "%(%s)T %0*d\n" -> "T*d"
+    getFormats :: String -> String
+    getFormats string =
+        case string of
+            '%':'%':rest -> getFormats rest
+            '%':'(':rest ->
+                case dropWhile (/= ')') rest of
+                    ')':c:trailing -> c : getFormats trailing
+                    _ -> ""
+            '%':rest -> regexBasedGetFormats rest
+            _:rest -> getFormats rest
+            [] -> ""
+
+    regexBasedGetFormats rest =
+        case matchRegex re rest of
+            Just [width, precision, typ, rest] ->
+                (if width == "*" then "*" else "") ++
+                (if precision == "*" then "*" else "") ++
+                typ ++ getFormats rest
+            Nothing -> take 1 rest ++ getFormats rest
+      where
+        -- constructed based on specifications in "man printf"
+        re = mkRegex "#?-?\\+? ?0?(\\*|\\d*)\\.?(\\d*|\\*)([diouxXfFeEgGaAcsbq])(.*)"
+        --            \____ _____/\___ ____/   \____ ____/\_________ _________/ \ /
+        --                 V          V             V               V            V
+        --               flags    field width  precision   format character     rest
+        -- field width and precision can be specified with a '*' instead of a digit,
+        -- in which case printf will accept one more argument for each '*' used
 
 
 prop_checkUuoeCmd1 = verify checkUuoeCmd "echo $(date)"
