@@ -22,8 +22,12 @@ module ShellCheck.Formatter.Format where
 import ShellCheck.Data
 import ShellCheck.Interface
 import ShellCheck.Fixer
+
 import Control.Monad
 import Data.Array
+import Data.List
+import System.IO
+import System.Info
 
 -- A formatter that carries along an arbitrary piece of data
 data Formatter = Formatter {
@@ -59,6 +63,17 @@ makeNonVirtual comments contents =
       fixReplacements = map (\r -> removeTabStops r arr) (fixReplacements f)
     }
     fix c = (removeTabStops c arr) {
-      pcFix = liftM untabbedFix (pcFix c)
+      pcFix = fmap untabbedFix (pcFix c)
     }
 
+
+shouldOutputColor :: ColorOption -> IO Bool
+shouldOutputColor colorOption = do
+    term <- hIsTerminalDevice stdout
+    let windows = "mingw" `isPrefixOf` os
+    let isUsableTty = term && not windows
+    let useColor = case colorOption of
+                       ColorAlways -> True
+                       ColorNever -> False
+                       ColorAuto -> isUsableTty
+    return useColor

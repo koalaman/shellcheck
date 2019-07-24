@@ -152,28 +152,47 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
           ...
         </checkstyle>
 
+**diff**
+
+:   Auto-fixes in unified diff format. Can be piped to `git apply` or `patch -p1`
+    to automatically apply fixes.
+
+    --- a/test.sh
+    +++ b/test.sh
+    @@ -2,6 +2,6 @@
+     ## Example of a broken script.
+     for f in $(ls *.m3u)
+     do
+    -  grep -qi hq.*mp3 $f \
+    +  grep -qi hq.*mp3 "$f" \
+	 && echo -e 'Playlist $f contains a HQ file in mp3 format'
+     done
+
+
 **json1**
 
 :   Json is a popular serialization format that is more suitable for web
     applications. ShellCheck's json is compact and contains only the bare
     minimum.  Tabs are counted as 1 character.
 
-        [
-          {
-            "file": "filename",
-            "line": lineNumber,
-            "column": columnNumber,
-            "level": "severitylevel",
-            "code": errorCode,
-            "message": "warning message"
-          },
-          ...
-        ]
+        {
+          comments: [
+            {
+              "file": "filename",
+              "line": lineNumber,
+              "column": columnNumber,
+              "level": "severitylevel",
+              "code": errorCode,
+              "message": "warning message"
+            },
+            ...
+          ]
+        }
 
 **json**
 
-:   This is a legacy version of the **json1** format, with a tab stop
-    of 8 instead of 1.
+:   This is a legacy version of the **json1** format. It's a raw array of
+    comments, and all offsets have a tab stop of 8.
 
 **quiet**
 
@@ -250,6 +269,9 @@ Here is an example `.shellcheckrc`:
 
     # Turn on warnings for unquoted variables with safe values
     enable=quote-safe-variables
+
+    # Turn on warnings for unassigned uppercase variables
+    enable=check-unassigned-uppercase
 
     # Allow using `which` since it gives full paths and is common enough
     disable=SC2230

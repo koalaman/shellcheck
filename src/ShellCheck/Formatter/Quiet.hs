@@ -27,8 +27,7 @@ import Data.IORef
 import System.Exit
 
 format :: FormatterOptions -> IO Formatter
-format options = do
-    topErrorRef <- newIORef []
+format options =
     return Formatter {
         header = return (),
         footer = return (),

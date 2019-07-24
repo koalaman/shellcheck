@@ -188,13 +188,7 @@ code num = "SC" ++ show num
 
 getColorFunc :: ColorOption -> IO ColorFunc
 getColorFunc colorOption = do
-    term <- hIsTerminalDevice stdout
-    let windows = "mingw" `isPrefixOf` os
-    let isUsableTty = term && not windows
-    let useColor = case colorOption of
-                       ColorAlways -> True
-                       ColorNever -> False
-                       ColorAuto -> isUsableTty
+    useColor <- shouldOutputColor colorOption
     return $ if useColor then colorComment else const id
   where
     colorComment level comment =

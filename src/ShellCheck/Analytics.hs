@@ -231,6 +231,13 @@ optionalTreeChecks = [
         cdPositive = "var=hello; echo $var",
         cdNegative = "var=hello; echo ${var}"
     }, nodeChecksToTreeCheck [checkVariableBraces])
+
+    ,(newCheckDescription {
+        cdName = "check-unassigned-uppercase",
+        cdDescription = "Warn when uppercase variables are unassigned",
+        cdPositive = "echo $VAR",
+        cdNegative = "VAR=hello; echo $VAR"
+    }, checkUnassignedReferences' True)
     ]
 
 optionalCheckMap :: Map.Map String (Parameters -> Token -> [TokenComment])
@@ -266,7 +273,11 @@ producesComments :: (Parameters -> Token -> [TokenComment]) -> String -> Maybe B
 producesComments f s = do
         let pr = pScript s
         prRoot pr
-        return . not . null $ runList (defaultSpec pr) [f]
+        let spec = defaultSpec pr
+        let params = makeParameters spec
+        return . not . null $
+            filterByAnnotation spec params $
+                runList spec [f]
 
 -- Copied from https://wiki.haskell.org/Edit_distance
 dist :: Eq a => [a] -> [a] -> Int
@@ -527,7 +538,7 @@ indexOfSublists sub = f 0
 prop_checkShebangParameters1 = verifyTree checkShebangParameters "#!/usr/bin/env bash -x\necho cow"
 prop_checkShebangParameters2 = verifyNotTree checkShebangParameters "#! /bin/sh  -l "
 checkShebangParameters p (T_Annotation _ _ t) = checkShebangParameters p t
-checkShebangParameters _ (T_Script id sb _) =
+checkShebangParameters _ (T_Script _ (T_Literal id sb) _) =
     [makeComment ErrorC id 2096 "On most OS, shebangs can only specify a single parameter." | length (words sb) > 2]
 
 prop_checkShebang1 = verifyNotTree checkShebang "#!/usr/bin/env bash -x\necho cow"
@@ -547,7 +558,7 @@ checkShebang params (T_Annotation _ list t) =
   where
     isOverride (ShellOverride _) = True
     isOverride _ = False
-checkShebang params (T_Script id sb _) = execWriter $ do
+checkShebang params (T_Script _ (T_Literal id sb) _) = execWriter $ do
     unless (shellTypeSpecified params) $ do
         when (sb == "") $
             err id 2148 "Tips depend on target shell and yours is unknown. Add a shebang."
@@ -829,6 +840,7 @@ prop_checkArrayWithoutIndex6 = verifyTree checkArrayWithoutIndex "echo $PIPESTAT
 prop_checkArrayWithoutIndex7 = verifyTree checkArrayWithoutIndex "a=(a b); a+=c"
 prop_checkArrayWithoutIndex8 = verifyTree checkArrayWithoutIndex "declare -a foo; foo=bar;"
 prop_checkArrayWithoutIndex9 = verifyTree checkArrayWithoutIndex "read -r -a arr <<< 'foo bar'; echo \"$arr\""
+prop_checkArrayWithoutIndex10= verifyTree checkArrayWithoutIndex "read -ra arr <<< 'foo bar'; echo \"$arr\""
 checkArrayWithoutIndex params _ =
     doVariableFlowAnalysis readF writeF defaultMap (variableFlow params)
   where
@@ -917,6 +929,8 @@ prop_checkSingleQuotedVariables14= verifyNot checkSingleQuotedVariables "[ -v 'b
 prop_checkSingleQuotedVariables15= verifyNot checkSingleQuotedVariables "git filter-branch 'test $GIT_COMMIT'"
 prop_checkSingleQuotedVariables16= verify checkSingleQuotedVariables "git '$a'"
 prop_checkSingleQuotedVariables17= verifyNot checkSingleQuotedVariables "rename 's/(.)a/$1/g' *"
+prop_checkSingleQuotedVariables18= verifyNot checkSingleQuotedVariables "echo '``'"
+prop_checkSingleQuotedVariables19= verifyNot checkSingleQuotedVariables "echo '```'"
 
 checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
     when (s `matches` re) $
@@ -962,7 +976,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
             TC_Unary _ _ "-v" _ -> True
             _ -> False
 
-    re = mkRegex "\\$[{(0-9a-zA-Z_]|`.*`"
+    re = mkRegex "\\$[{(0-9a-zA-Z_]|`[^`]+`"
     sedContra = mkRegex "\\$[{dpsaic]($|[^a-zA-Z])"
 
     getFindCommand (T_SimpleCommand _ _ words) =
@@ -1348,14 +1362,39 @@ prop_checkOrNeq2 = verify checkOrNeq "(( a!=lol || a!=foo ))"
 prop_checkOrNeq3 = verify checkOrNeq "[ \"$a\" != lol || \"$a\" != foo ]"
 prop_checkOrNeq4 = verifyNot checkOrNeq "[ a != $cow || b != $foo ]"
 prop_checkOrNeq5 = verifyNot checkOrNeq "[[ $a != /home || $a != */public_html/* ]]"
+prop_checkOrNeq6 = verify checkOrNeq "[ $a != a ] || [ $a != b ]"
+prop_checkOrNeq7 = verify checkOrNeq "[ $a != a ] || [ $a != b ] || true"
+prop_checkOrNeq8 = verifyNot checkOrNeq "[[ $a != x || $a != x ]]"
 -- This only catches the most idiomatic cases. Fixme?
-checkOrNeq _ (TC_Or id typ op (TC_Binary _ _ op1 lhs1 rhs1 ) (TC_Binary _ _ op2 lhs2 rhs2))
-    | lhs1 == lhs2 && (op1 == op2 && (op1 == "-ne" || op1 == "!=")) && not (any isGlob [rhs1,rhs2]) =
-        warn id 2055 $ "You probably wanted " ++ (if typ == SingleBracket then "-a" else "&&") ++ " here."
 
+-- For test-level "or": [ x != y -o x != z ]
+checkOrNeq _ (TC_Or id typ op (TC_Binary _ _ op1 lhs1 rhs1 ) (TC_Binary _ _ op2 lhs2 rhs2))
+    | (op1 == op2 && (op1 == "-ne" || op1 == "!=")) && lhs1 == lhs2 && rhs1 /= rhs2 && not (any isGlob [rhs1,rhs2]) =
+        warn id 2055 $ "You probably wanted " ++ (if typ == SingleBracket then "-a" else "&&") ++ " here, otherwise it's always true."
+
+-- For arithmetic context "or"
 checkOrNeq _ (TA_Binary id "||" (TA_Binary _ "!=" word1 _) (TA_Binary _ "!=" word2 _))
     | word1 == word2 =
-        warn id 2056 "You probably wanted && here."
+        warn id 2056 "You probably wanted && here, otherwise it's always true."
+
+-- For command level "or": [ x != y ] || [ x != z ]
+checkOrNeq _ (T_OrIf id lhs rhs) = potentially $ do
+    (lhs1, op1, rhs1) <- getExpr lhs
+    (lhs2, op2, rhs2) <- getExpr rhs
+    guard $ op1 == op2 && op1 `elem` ["-ne", "!="]
+    guard $ lhs1 == lhs2 && rhs1 /= rhs2
+    guard . not $ any isGlob [rhs1, rhs2]
+    return $ warn id 2252 "You probably wanted && here, otherwise it's always true."
+  where
+    getExpr x =
+        case x of
+            T_OrIf _ lhs _ -> getExpr lhs -- Fetches x and y in `T_OrIf x (T_OrIf y z)`
+            T_Pipeline _ _ [x] -> getExpr x
+            T_Redirecting _ _ c -> getExpr c
+            T_Condition _ _ c -> getExpr c
+            TC_Binary _ _ op lhs rhs -> return (lhs, op, rhs)
+            _ -> fail ""
+
 checkOrNeq _ _ = return ()
 
 
@@ -2047,6 +2086,11 @@ prop_checkUnused38= verifyTree checkUnusedAssignments "(( a=42 ))"
 prop_checkUnused39= verifyNotTree checkUnusedAssignments "declare -x -f foo"
 prop_checkUnused40= verifyNotTree checkUnusedAssignments "arr=(1 2); num=2; echo \"${arr[@]:num}\""
 prop_checkUnused41= verifyNotTree checkUnusedAssignments "@test 'foo' {\ntrue\n}\n"
+prop_checkUnused42= verifyNotTree checkUnusedAssignments "DEFINE_string foo '' ''; echo \"${FLAGS_foo}\""
+prop_checkUnused43= verifyTree checkUnusedAssignments "DEFINE_string foo '' ''"
+prop_checkUnused44= verifyNotTree checkUnusedAssignments "DEFINE_string \"foo$ibar\" x y"
+prop_checkUnused45= verifyTree checkUnusedAssignments "readonly foo=bar"
+prop_checkUnused46= verifyTree checkUnusedAssignments "readonly foo=(bar)"
 checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
     flow = variableFlow params
@@ -2106,7 +2150,10 @@ prop_checkUnassignedReferences34= verifyNotTree checkUnassignedReferences "decla
 prop_checkUnassignedReferences35= verifyNotTree checkUnassignedReferences "echo ${arr[foo-bar]:?fail}"
 prop_checkUnassignedReferences36= verifyNotTree checkUnassignedReferences "read -a foo -r <<<\"foo bar\"; echo \"$foo\""
 prop_checkUnassignedReferences37= verifyNotTree checkUnassignedReferences "var=howdy; printf -v 'array[0]' %s \"$var\"; printf %s \"${array[0]}\";"
-checkUnassignedReferences params t = warnings
+prop_checkUnassignedReferences38= verifyTree (checkUnassignedReferences' True) "echo $VAR"
+
+checkUnassignedReferences = checkUnassignedReferences' False
+checkUnassignedReferences' includeGlobals params t = warnings
   where
     (readMap, writeMap) = execState (mapM tally $ variableFlow params) (Map.empty, Map.empty)
     defaultAssigned = Map.fromList $ map (\a -> (a, ())) $ filter (not . null) internalVariables
@@ -2151,8 +2198,11 @@ checkUnassignedReferences params t = warnings
                     return $ " (did you mean '" ++ match ++ "'?)"
 
     warningFor var place = do
+        guard $ isVariableName var
         guard . not $ isInArray var place || isGuarded place
-        (if isLocal var then warningForLocals else warningForGlobals) var place
+        (if includeGlobals || isLocal var
+         then warningForLocals
+         else warningForGlobals) var place
 
     warnings = execWriter . sequence $ mapMaybe (uncurry warningFor) unassigned
 
@@ -2299,27 +2349,18 @@ prop_checkCdAndBack4 = verify checkCdAndBack "cd $tmp; foo; cd -"
 prop_checkCdAndBack5 = verifyNot checkCdAndBack "cd ..; foo; cd .."
 prop_checkCdAndBack6 = verify checkCdAndBack "for dir in */; do cd \"$dir\"; some_cmd; cd ..; done"
 prop_checkCdAndBack7 = verifyNot checkCdAndBack "set -e; for dir in */; do cd \"$dir\"; some_cmd; cd ..; done"
-checkCdAndBack params = doLists
+prop_checkCdAndBack8 = verifyNot checkCdAndBack "cd tmp\nfoo\n# shellcheck disable=SC2103\ncd ..\n"
+checkCdAndBack params t =
+    unless (hasSetE params) $ mapM_ doList $ getCommandSequences t
   where
-    shell = shellType params
-    doLists (T_ForIn _ _ _ cmds) = doList cmds
-    doLists (T_ForArithmetic _ _ _ _ cmds) = doList cmds
-    doLists (T_WhileExpression _ _ cmds) = doList cmds
-    doLists (T_UntilExpression _ _ cmds) = doList cmds
-    doLists (T_Script _ _ cmds) = doList cmds
-    doLists (T_IfExpression _ thens elses) = do
-        mapM_ (\(_, l) -> doList l) thens
-        doList elses
-    doLists _ = return ()
-
     isCdRevert t =
         case oversimplify t of
-            ["cd", p] -> p `elem` ["..", "-"]
+            [_, p] -> p `elem` ["..", "-"]
             _ -> False
 
-    getCmd (T_Annotation id _ x) = getCmd x
-    getCmd (T_Pipeline id _ [x]) = getCommandName x
-    getCmd _ = Nothing
+    getCandidate (T_Annotation _ _ x) = getCandidate x
+    getCandidate (T_Pipeline id _ [x]) | x `isCommand` "cd" = return x
+    getCandidate _ = Nothing
 
     findCdPair list =
         case list of
@@ -2329,13 +2370,9 @@ checkCdAndBack params = doLists
                 else findCdPair (b:rest)
             _ -> Nothing
 
-    doList list =
-        if hasSetE params
-        then return ()
-        else let cds = filter ((== Just "cd") . getCmd) list
-             in  potentially $ do
-                     cd <- findCdPair cds
-                     return $ info cd 2103 "Use a ( subshell ) to avoid having to cd back."
+    doList list = potentially $ do
+        cd <- findCdPair $ mapMaybe getCandidate list
+        return $ info cd 2103 "Use a ( subshell ) to avoid having to cd back."
 
 prop_checkLoopKeywordScope1 = verify checkLoopKeywordScope "continue 2"
 prop_checkLoopKeywordScope2 = verify checkLoopKeywordScope "for f; do ( break; ); done"
@@ -3058,8 +3095,8 @@ checkSplittingInArrays params t =
             && not (getBracedReference (bracedString part) `elem` variablesWithoutSpaces)
             -> warn id 2206 $
                 if shellType params == Ksh
-                then "Quote to prevent word splitting, or split robustly with read -A or while read."
-                else "Quote to prevent word splitting, or split robustly with mapfile or read -a."
+                then "Quote to prevent word splitting/globbing, or split robustly with read -A or while read."
+                else "Quote to prevent word splitting/globbing, or split robustly with mapfile or read -a."
         _ -> return ()
 
     forCommand id =
@@ -3358,18 +3395,23 @@ checkDefaultCase _ t =
         pg <- wordToExactPseudoGlob pat
         return $ pseudoGlobIsSuperSetof pg [PGMany]
 
-prop_checkUselessBang1 = verify checkUselessBang "! true; rest"
-prop_checkUselessBang2 = verify checkUselessBang "while true; do ! true; done"
-prop_checkUselessBang3 = verifyNot checkUselessBang "if ! true; then true; fi"
-prop_checkUselessBang4 = verifyNot checkUselessBang "( ! true )"
-prop_checkUselessBang5 = verifyNot checkUselessBang "{ ! true; }"
-prop_checkUselessBang6 = verifyNot checkUselessBang "x() { ! [ x ]; }"
-checkUselessBang params t = mapM_ check (getNonReturningCommands t)
+prop_checkUselessBang1 = verify checkUselessBang "set -e; ! true; rest"
+prop_checkUselessBang2 = verifyNot checkUselessBang "! true; rest"
+prop_checkUselessBang3 = verify checkUselessBang "set -e; while true; do ! true; done"
+prop_checkUselessBang4 = verifyNot checkUselessBang "set -e; if ! true; then true; fi"
+prop_checkUselessBang5 = verifyNot checkUselessBang "set -e; ( ! true )"
+prop_checkUselessBang6 = verify checkUselessBang "set -e; { ! true; }"
+prop_checkUselessBang7 = verifyNot checkUselessBang "set -e; x() { ! [ x ]; }"
+prop_checkUselessBang8 = verifyNot checkUselessBang "set -e; if { ! true; }; then true; fi"
+prop_checkUselessBang9 = verifyNot checkUselessBang "set -e; while ! true; do true; done"
+checkUselessBang params t = when (hasSetE params) $ mapM_ check (getNonReturningCommands t)
   where
     check t =
         case t of
-            T_Banged id _ ->
-                info id 2251 "This ! is not on a condition and skips errexit. Use { ! ...; } to errexit, or verify usage."
+            T_Banged id cmd | not $ isCondition (getPath (parentMap params) t) ->
+                addComment $ makeCommentWithFix InfoC id 2251
+                        "This ! is not on a condition and skips errexit. Use `&& exit 1` instead, or make sure $? is checked."
+                        (fixWith [replaceStart id params 1 "", replaceEnd (getId cmd) params 0 " && exit 1"])
             _ -> return ()
 
     -- Get all the subcommands that aren't likely to be the return value
@@ -3377,7 +3419,7 @@ checkUselessBang params t = mapM_ check (getNonReturningCommands t)
     getNonReturningCommands t =
         case t of
             T_Script _ _ list -> dropLast list
-            T_BraceGroup _ list -> dropLast list
+            T_BraceGroup _ list -> if isFunctionBody t then dropLast list else list
             T_Subshell _ list -> dropLast list
             T_WhileExpression _ conds cmds -> dropLast conds ++ cmds
             T_UntilExpression _ conds cmds -> dropLast conds ++ cmds
@@ -3387,6 +3429,11 @@ checkUselessBang params t = mapM_ check (getNonReturningCommands t)
             T_IfExpression _ conds elses ->
                 concatMap (dropLast . fst) conds ++ concatMap snd conds ++ elses
             _ -> []
+
+    isFunctionBody t =
+        case getPath (parentMap params) t of
+            _:T_Function {}:_-> True
+            _ -> False
 
     dropLast t =
         case t of

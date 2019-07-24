@@ -18,7 +18,7 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -}
-module ShellCheck.Formatter.JSON (format) where
+module ShellCheck.Formatter.JSON1 (format) where
 
 import ShellCheck.Interface
 import ShellCheck.Formatter.Format
@@ -39,6 +39,18 @@ format = do
         onFailure = outputError,
         footer = finish ref
     }
+
+data Json1Output = Json1Output {
+    comments :: [PositionedComment]
+    }
+
+instance ToJSON Json1Output where
+    toJSON result = object [
+        "comments" .= comments result
+        ]
+    toEncoding result = pairs (
+        "comments" .= comments result
+        )
 
 instance ToJSON Replacement where
     toJSON replacement =
@@ -103,8 +115,13 @@ collectResult ref cr sys = mapM_ f groups
     comments = crComments cr
     groups = groupWith sourceFile comments
     f :: [PositionedComment] -> IO ()
-    f group = modifyIORef ref (\x -> comments ++ x)
+    f group = do
+        let filename = sourceFile (head group)
+        result <- siReadFile sys filename
+        let contents = either (const "") id result
+        let comments' = makeNonVirtual comments contents
+        modifyIORef ref (\x -> comments' ++ x)
 
 finish ref = do
     list <- readIORef ref
-    BL.putStrLn $ encode list
+    BL.putStrLn $ encode $ Json1Output { comments = list }

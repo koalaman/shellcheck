@@ -121,7 +121,7 @@ data Token =
     | T_Rbrace Id
     | T_Redirecting Id [Token] Token
     | T_Rparen Id
-    | T_Script Id String [Token]
+    | T_Script Id Token [Token] -- Shebang T_Literal, followed by script.
     | T_Select Id
     | T_SelectIn Id String [Token] [Token]
     | T_Semi Id

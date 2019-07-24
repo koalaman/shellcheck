@@ -138,7 +138,6 @@ almostSpace =
         return ' '
 
 --------- Message/position annotation on top of user state
-data Note = Note Id Severity Code String deriving (Show, Eq)
 data ParseNote = ParseNote SourcePos SourcePos Severity Code String deriving (Show, Eq)
 data Context =
         ContextName SourcePos String
@@ -166,10 +165,6 @@ initialUserState = UserState {
 }
 
 codeForParseNote (ParseNote _ _ _ code _) = code
-noteToParseNote map (Note id severity code message) =
-        ParseNote pos pos severity code message
-    where
-        pos = fromJust $ Map.lookup id map
 
 getLastId = lastId <$> getState
 
@@ -1529,10 +1524,10 @@ ensureDollar =
 
 readNormalDollar = do
     ensureDollar
-    readDollarExp <|> readDollarDoubleQuote <|> readDollarSingleQuote <|> readDollarLonely
+    readDollarExp <|> readDollarDoubleQuote <|> readDollarSingleQuote <|> readDollarLonely False
 readDoubleQuotedDollar = do
     ensureDollar
-    readDollarExp <|> readDollarLonely
+    readDollarExp <|> readDollarLonely True
 
 
 prop_readDollarExpression1 = isOk readDollarExpression "$(((1) && 3))"
@@ -1694,12 +1689,32 @@ readVariableName = do
     rest <- many variableChars
     return (f:rest)
 
-readDollarLonely = do
+
+prop_readDollarLonely1 = isWarning readNormalWord "\"$\"var"
+prop_readDollarLonely2 = isWarning readNormalWord "\"$\"\"var\""
+prop_readDollarLonely3 = isOk readNormalWord "\"$\"$var"
+prop_readDollarLonely4 = isOk readNormalWord "\"$\"*"
+prop_readDollarLonely5 = isOk readNormalWord "$\"str\""
+readDollarLonely quoted = do
     start <- startSpan
     char '$'
     id <- endSpan start
-    n <- lookAhead (anyChar <|> (eof >> return '_'))
+    when quoted $ do
+        isHack <- quoteForEscape
+        when isHack $
+            parseProblemAtId id StyleC 1135
+                "Prefer escape over ending quote to make $ literal. Instead of \"It costs $\"5, use \"It costs \\$5\"."
     return $ T_Literal id "$"
+  where
+    quoteForEscape = option False $ try . lookAhead $ do
+        char '"'
+        -- Check for "foo $""bar"
+        optional $ char '"'
+        c <- anyVar
+        -- Don't trigger on [[ x == "$"* ]] or "$"$pattern
+        return $ c `notElem` "*$"
+    anyVar = variableStart <|> digit <|> specialVariable
+
 
 prop_readHereDoc = isOk readScript "cat << foo\nlol\ncow\nfoo"
 prop_readHereDoc2 = isNotOk readScript "cat <<- EOF\n  cow\n  EOF"
@@ -2750,7 +2765,7 @@ readAssignmentWordExt lenient = try $ do
     variable <- readVariableName
     when lenient $
         optional (readNormalDollar >> parseNoteAt pos ErrorC
-                                1067 "For indirection, use (associative) arrays or 'read \"var$n\" <<< \"value\"'")
+                                1067 "For indirection, use arrays, declare \"var$n=value\", or (for sh) read/eval.")
     indices <- many readArrayIndex
     hasLeftSpace <- fmap (not . null) spacing
     pos <- getPosition
@@ -2790,10 +2805,11 @@ readAssignmentWordExt lenient = try $ do
 
             string "=" >> return Assign
             ]
-    readEmptyLiteral = do
-        start <- startSpan
-        id <- endSpan start
-        return $ T_Literal id ""
+
+readEmptyLiteral = do
+    start <- startSpan
+    id <- endSpan start
+    return $ T_Literal id ""
 
 readArrayIndex = do
     start <- startSpan
@@ -2941,12 +2957,14 @@ prop_readShebang5 = isWarning readShebang "\n#!/bin/sh"
 prop_readShebang6 = isWarning readShebang " # Copyright \n!#/bin/bash"
 prop_readShebang7 = isNotOk readShebang "# Copyright \nfoo\n#!/bin/bash"
 readShebang = do
+    start <- startSpan
     anyShebang <|> try readMissingBang <|> withHeader
     many linewhitespace
     str <- many $ noneOf "\r\n"
+    id <- endSpan start
     optional carriageReturn
     optional linefeed
-    return str
+    return $ T_Literal id str
   where
     anyShebang = choice $ map try [
         readCorrect,
@@ -3077,7 +3095,8 @@ readScriptFile sourced = do
         readUtf8Bom
         parseProblem ErrorC 1082
             "This file has a UTF-8 BOM. Remove it with: LC_CTYPE=C sed '1s/^...//' < yourscript ."
-    sb <- option "" readShebang
+    shebang <- readShebang <|> readEmptyLiteral
+    let (T_Literal _ shebangString) = shebang
     allspacing
     annotationStart <- startSpan
     fileAnnotations <- readAnnotations
@@ -3094,19 +3113,19 @@ readScriptFile sourced = do
     let ignoreShebang = shellAnnotationSpecified || shellFlagSpecified
 
     unless ignoreShebang $
-        verifyShebang pos (getShell sb)
-    if ignoreShebang || isValidShell (getShell sb) /= Just False
+        verifyShebang pos (getShell shebangString)
+    if ignoreShebang || isValidShell (getShell shebangString) /= Just False
       then do
             commands <- withAnnotations annotations readCompoundListOrEmpty
             id <- endSpan start
             verifyEof
             let script = T_Annotation annotationId annotations $
-                            T_Script id sb commands
+                            T_Script id shebang commands
             reparseIndices script
         else do
             many anyChar
             id <- endSpan start
-            return $ T_Script id sb []
+            return $ T_Script id shebang []
 
   where
     basename s = reverse . takeWhile (/= '/') . reverse $ s
