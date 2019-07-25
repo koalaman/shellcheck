@@ -1,3 +1,4 @@
+
 sudo: required
 
 language: sh
@@ -5,9 +6,18 @@ language: sh
 services:
   - docker
 
-os:
-  - linux
-  - osx
+matrix:
+  include:
+    - os: linux
+      env: BUILD=linux
+    - os: linux
+      env: BUILD=windows
+    - os: linux
+      env: BUILD=armv6hf
+    - os: linux
+      env: BUILD=aarch64
+    - os: osx
+      env: BUILD=osx
 
 before_install: |
   DOCKER_BASE="$DOCKER_USERNAME/shellcheck"
@@ -18,11 +28,14 @@ before_install: |
   echo "Tags are $TAGS"
 
 script:
-  - ./.compile_binaries
+  - mkdir -p deploy
+  - source ./.compile_binaries
+  - ./striptests
+  - set -x; build_"$BUILD"; set +x;
   - ./.prepare_deploy
 
 after_success: |
-  if [ "$TRAVIS_OS_NAME" = "linux" ]; then
+  if [ "$BUILD" = "linux" ]; then
     docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
     for repo in $DOCKER_BUILDS; do
       for tag in $TAGS; do

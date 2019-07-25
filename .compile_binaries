@@ -1,18 +1,10 @@
-#!/usr/bin/env bash
-# This script compile shellcheck binaries
-set -ex
-
-# Remove all tests to reduce binary size
-./striptests
-
-mkdir -p deploy
+#!/bin/bash
 
 _cleanup(){
   rm -rf dist shellcheck || true
 }
 
-if [ "$TRAVIS_OS_NAME" = 'linux' ]
-then
+build_linux() {
   # Linux Docker image
   name="$DOCKER_BASE"
   DOCKER_BUILDS="$DOCKER_BUILDS $name"
@@ -38,14 +30,20 @@ then
   sed -e '/DELETE-MARKER/,$d' Dockerfile > Dockerfile.alpine
   docker build -f Dockerfile.alpine -t "$name:current" .
   docker run "$name:current" sh -c 'shellcheck --version'
+  _cleanup
+}
 
+build_aarch64() {
   # Linux aarch64 static executable
   docker run -v "$PWD:/mnt" koalaman/aarch64-builder 'buildsc'
   for tag in $TAGS
   do
     cp "shellcheck" "deploy/shellcheck-$tag.linux-aarch64"
   done
+}
 
+
+build_armv6hf() {
   # Linux armv6hf static executable
   docker run -v "$PWD:/mnt" koalaman/armv6hf-builder -c 'compile-shellcheck'
   for tag in $TAGS
@@ -53,7 +51,9 @@ then
     cp "shellcheck" "deploy/shellcheck-$tag.linux-armv6hf"; 
   done
   _cleanup
+}
 
+build_windows() {
   # Windows .exe
   docker run --user="$UID" -v "$PWD:/appdata" koalaman/winghc cuib
   for tag in $TAGS
@@ -61,18 +61,22 @@ then
     cp "dist/build/ShellCheck/shellcheck.exe" "deploy/shellcheck-$tag.exe"; 
   done
   _cleanup
-fi
+}
 
-if [ "$TRAVIS_OS_NAME" = 'osx' ];
-then
+build_osx() {
   # Darwin x86_64 static executable
+  brew install cabal-install pandoc gnu-tar
   sudo ln -s /usr/local/bin/gsha512sum /usr/local/bin/sha512sum
-  brew install cabal-install pandoc
+  sudo ln -s /usr/local/bin/gtar /usr/local/bin/tar
+  export PATH="/usr/local/bin:$PATH"
+
   cabal update
-  cabal new-build shellcheck
+  cabal install --dependencies-only
+  cabal build shellcheck
   for tag in $TAGS
   do 
-    cp "$HOME/.cabal/dist/build/shellcheck/shellcheck" "deploy/shellcheck-$tag.darwin-x86_64";
+    cp "dist/build/shellcheck/shellcheck" "deploy/shellcheck-$tag.darwin-x86_64";
   done
   _cleanup
-fi
+}
+
