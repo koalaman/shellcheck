@@ -13,8 +13,7 @@ before_install: |
   DOCKER_BASE="$DOCKER_USERNAME/shellcheck"
   DOCKER_BUILDS=""
   TAGS=""
-  tes
-t "$TRAVIS_BRANCH" = master && TAGS="$TAGS latest" || true
+  test "$TRAVIS_BRANCH" = master && TAGS="$TAGS latest" || true
   test -n "$TRAVIS_TAG"          && TAGS="$TAGS stable $TRAVIS_TAG" || true
   echo "Tags are $TAGS"
 
