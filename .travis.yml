@@ -5,74 +5,41 @@ language: sh
 services:
   - docker
 
-before_install:
-  - DOCKER_BASE="$DOCKER_USERNAME/shellcheck"
-  - DOCKER_BUILDS=""
-  - TAGS=""
-  - test "$TRAVIS_BRANCH" = master && TAGS="$TAGS latest" || true
-  - test -n "$TRAVIS_TAG"          && TAGS="$TAGS stable $TRAVIS_TAG" || true
-  - echo "Tags are $TAGS"
+os:
+  - linux
+  - osx
+
+before_install: |
+  DOCKER_BASE="$DOCKER_USERNAME/shellcheck"
+  DOCKER_BUILDS=""
+  TAGS=""
+  tes
+t "$TRAVIS_BRANCH" = master && TAGS="$TAGS latest" || true
+  test -n "$TRAVIS_TAG"          && TAGS="$TAGS stable $TRAVIS_TAG" || true
+  echo "Tags are $TAGS"
 
 script:
-  - mkdir deploy
-  # Remove all tests to reduce binary size
-  - ./striptests
-  # Start fetching the aarch64 image since it's a multi-GB beast
-  - docker pull koalaman/aarch64-builder >> aarch64pull.log 2>&1 &
-  # Linux Docker image
-  - name="$DOCKER_BASE"
-  - DOCKER_BUILDS="$DOCKER_BUILDS $name"
-  - docker build -t "$name:current" .
-  - docker run "$name:current" --version
-  - printf '%s\n' "#!/bin/sh" "echo 'hello world'" > myscript
-  - docker run -v "$PWD:/mnt" "$name:current" myscript
-  # Copy static executable from docker image
-  - id=$(docker create "$name:current")
-  - docker cp "$id:/bin/shellcheck" "shellcheck"
-  - docker rm "$id"
-  - ls -l shellcheck
-  - ./shellcheck myscript
-  - for tag in $TAGS; do cp "shellcheck" "deploy/shellcheck-$tag.linux-x86_64"; done
-  # Linux Alpine based Docker image
-  - name="$DOCKER_BASE-alpine"
-  - DOCKER_BUILDS="$DOCKER_BUILDS $name"
-  - sed -e '/DELETE-MARKER/,$d' Dockerfile > Dockerfile.alpine
-  - docker build -f Dockerfile.alpine -t "$name:current" .
-  - docker run "$name:current" sh -c 'shellcheck --version'
-  # Linux aarch64 static executable
-  - wait
-  - docker run -v "$PWD:/mnt" koalaman/aarch64-builder 'buildsc'
-  - for tag in $TAGS; do cp "shellcheck" "deploy/shellcheck-$tag.linux-aarch64"; done
-  - rm -f shellcheck || true
-  # Linux armv6hf static executable
-  - docker run -v "$PWD:/mnt" koalaman/armv6hf-builder -c 'compile-shellcheck'
-  - for tag in $TAGS; do cp "shellcheck" "deploy/shellcheck-$tag.linux-armv6hf"; done
-  - rm -f shellcheck || true
-  # Windows .exe
-  - docker run --user="$UID" -v "$PWD:/appdata" koalaman/winghc cuib
-  - for tag in $TAGS; do cp "dist/build/ShellCheck/shellcheck.exe" "deploy/shellcheck-$tag.exe"; done
-  - rm -rf dist shellcheck || true
-  # Misc packaging
+  - ./.compile_binaries
   - ./.prepare_deploy
 
-after_success:
-  - docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
-  - for repo in $DOCKER_BUILDS;
-    do
-      for tag in $TAGS;
-      do
+after_success: |
+  if [ "$TRAVIS_OS_NAME" = "linux" ]; then
+    docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
+    for repo in $DOCKER_BUILDS; do
+      for tag in $TAGS; do
         echo "Deploying $repo:current as $repo:$tag...";
         docker tag "$repo:current" "$repo:$tag" || exit 1;
         docker push "$repo:$tag" || exit 1;
       done;
     done;
+  fi
 
-after_failure:
-  - id
-  - pwd
-  - df -h
-  - find . -name '*.log' -type f -exec grep "" /dev/null {} +
-  - find . -ls
+after_failure: |
+  id
+  pwd
+  df -h
+  find . -name '*.log' -type f -exec grep "" /dev/null {} +
+  find . -ls
 
 deploy:
   provider: gcs

@@ -51,8 +51,19 @@ do
   rm "shellcheck"
 done
 
+if [ "$TRAVIS_OS_NAME" = 'osx' ];
+then
+  brew install gnu-tar
+  for file in *.darwin-x86_64
+  do
+    base="${file%.*}"
+    cp "$file" "shellcheck"
+    gtar -cJf "$base.darwin.x86_64.tar.xz" --transform="s:^:$base/:" README.txt LICENSE.txt shellcheck
+      rm "shellcheck"
+  done
+fi
+
 for file in ./*
 do
   sha512sum "$file" > "$file.sha512sum"
 done
-
