@@ -157,16 +157,16 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 :   Auto-fixes in unified diff format. Can be piped to `git apply` or `patch -p1`
     to automatically apply fixes.
 
-    --- a/test.sh
-    +++ b/test.sh
-    @@ -2,6 +2,6 @@
-     ## Example of a broken script.
-     for f in $(ls *.m3u)
-     do
-    -  grep -qi hq.*mp3 $f \
-    +  grep -qi hq.*mp3 "$f" \
-	 && echo -e 'Playlist $f contains a HQ file in mp3 format'
-     done
+        --- a/test.sh
+        +++ b/test.sh
+        @@ -2,6 +2,6 @@
+         ## Example of a broken script.
+         for f in $(ls *.m3u)
+         do
+        -  grep -qi hq.*mp3 $f \
+        +  grep -qi hq.*mp3 "$f" \
+             && echo -e 'Playlist $f contains a HQ file in mp3 format'
+         done
 
 
 **json1**
