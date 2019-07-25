@@ -35,6 +35,14 @@ do
   rm "shellcheck"
 done
 
+for file in *.linux-aarch64
+do
+  base="${file%.*}"
+  cp "$file" "shellcheck"
+  tar -cJf "$base.linux.aarch64.tar.xz" --transform="s:^:$base/:" README.txt LICENSE.txt shellcheck
+  rm "shellcheck"
+done
+
 for file in *.linux-armv6hf
 do
   base="${file%.*}"
