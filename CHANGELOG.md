@@ -1,3 +1,7 @@
+## v0.7.1 - soon
+### Fixed
+- `-f diff` no longer claims that it found more issues when it didn't
+
 ## v0.7.0 - 2019-07-28
 ### Added
 - Precompiled binaries for macOS and Linux aarch64

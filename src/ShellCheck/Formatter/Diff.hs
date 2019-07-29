@@ -43,14 +43,15 @@ ltt x = trace (show x) x
 
 format :: FormatterOptions -> IO Formatter
 format options = do
-    didOutput <- newIORef False
+    foundIssues <- newIORef False
+    reportedIssues <- newIORef False
     shouldColor <- shouldOutputColor (foColorOption options)
     let color = if shouldColor then colorize else nocolor
     return Formatter {
         header = return (),
-        footer = checkFooter didOutput color,
+        footer = checkFooter foundIssues reportedIssues color,
         onFailure = reportFailure color,
-        onResult  = reportResult didOutput color
+        onResult  = reportResult foundIssues reportedIssues color
     }
 
 
@@ -69,9 +70,10 @@ printErr :: ColorFunc -> String -> IO ()
 printErr color = hPutStrLn stderr . color bold . color red
 reportFailure color file msg = printErr color $ file ++ ": " ++ msg
 
-checkFooter didOutput color = do
-    output <- readIORef didOutput
-    unless output $
+checkFooter foundIssues reportedIssues color = do
+    found <- readIORef foundIssues
+    output <- readIORef reportedIssues
+    when (found && not output) $
             printErr color "Issues were detected, but none were auto-fixable. Use another format to see them."
 
 type ColorFunc = (Int -> String -> String)
@@ -79,9 +81,10 @@ data LFStatus = LinefeedMissing | LinefeedOk
 data DiffDoc a = DiffDoc String LFStatus [DiffRegion a]
 data DiffRegion a = DiffRegion (Int, Int) (Int, Int) [Diff a]
 
-reportResult :: (IORef Bool) -> ColorFunc -> CheckResult -> SystemInterface IO -> IO ()
-reportResult didOutput color result sys = do
+reportResult :: (IORef Bool) -> (IORef Bool) -> ColorFunc -> CheckResult -> SystemInterface IO -> IO ()
+reportResult foundIssues reportedIssues color result sys = do
     let comments = crComments result
+    unless (null comments) $ writeIORef foundIssues True
     let suggestedFixes = mapMaybe pcFix comments
     let fixmap = buildFixMap suggestedFixes
     mapM_ output $ M.toList fixmap
@@ -91,7 +94,7 @@ reportResult didOutput color result sys = do
         case file of
             Right contents -> do
                 putStrLn $ formatDoc color $ makeDiff name contents fix
-                writeIORef didOutput True
+                writeIORef reportedIssues True
             Left msg -> reportFailure color name msg
 
 hasTrailingLinefeed str =
