@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+
+failed=0
+fail() {
+  echo "$(tput setaf 1)$*$(tput sgr0)"
+  failed=1
+}
+
+if git diff | grep -q ""
+then
+  fail "There are uncommited changes"
+fi
+
+current=$(git tag --points-at)
+if [[ -z "$current" ]]
+then
+  fail "No git tag on the current commit"
+  echo "Create one with:   git tag -a v0.0.0"
+fi
+
+if [[ "$current" != v* ]]
+then
+  fail "Bad tag format: expected v0.0.0"
+fi
+
+if [[ "$(git cat-file -t "$current")" != "tag" ]]
+then
+  fail "Current tag is not annotated (required for Snap)."
+fi
+
+if [[ "$(git tag --points-at master)" != "$current" ]]
+then
+  fail "You are not on master"
+fi
+
+version=${current#v}
+if ! grep "Version:" ShellCheck.cabal | grep -qFw "$version"
+then
+  fail "The cabal file does not match tag version $version"
+fi
+
+if ! grep -qF "## $current" CHANGELOG.md
+then
+  fail "CHANGELOG.md does not contain '## $current'"
+fi
+
+if [[ $(git log -1 --pretty=%B) != "Stable version "* ]]
+then
+  fail "Expected git log message to be 'Stable version ...'"
+fi
+
+i=1 j=1
+cat << EOF
+
+Manual Checklist
+
+$((i++)). Make sure none of the automated checks above failed
+$((i++)). Make sure Travis build currently passes: https://travis-ci.org/koalaman/shellcheck
+$((i++)). Make sure SnapCraft build currently works: https://build.snapcraft.io/user/koalaman
+$((i++)). Run test/distrotest to ensure that most distros can build OOTB.
+$((i++)). Format and read over the manual for bad formatting and outdated info.
+$((i++)). Make sure the Hackage package builds, so that all files are 
+
+Release Steps
+
+$((j++)). \`cabal sdist\` to generate a Hackage package
+$((j++)). \`git push --follow-tags\` to push commit
+$((j++)). Wait for Travis to build
+$((j++)). Verify release:
+  a. Check that the new versions are uploaded: https://shellcheck.storage.googleapis.com/index.html
+  b. Check that the docker images have version tags: https://hub.docker.com/u/koalaman
+$((j++)). If no disaster, upload to Hackage: http://hackage.haskell.org/upload
+$((j++)). Push a new commit that updates CHANGELOG.md
+EOF
+exit "$failed"
