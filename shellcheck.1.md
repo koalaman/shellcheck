@@ -201,6 +201,7 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 
 
 # DIRECTIVES
+
 ShellCheck directives can be specified as comments in the shell script.
 If they appear before the first command, they are considered file-wide.
 Otherwise, they apply to the immediately following command or block:
@@ -256,6 +257,7 @@ Valid keys are:
     as a more targeted alternative to 'disable=2039'.
 
 # RC FILES
+
 Unless `--norc` is used, ShellCheck will look for a file `.shellcheckrc` or
 `shellcheckrc` in the script's directory and each parent directory. If found,
 it will read `key=value` pairs from it and treat them as file-wide directives.
@@ -289,6 +291,7 @@ are mounted in the container, so `~/.shellcheckrc` will not be read.
 
 
 # ENVIRONMENT VARIABLES
+
 The environment variable `SHELLCHECK_OPTS` can be set with default flags:
 
     export SHELLCHECK_OPTS='--shell=bash --exclude=SC2016'
@@ -307,6 +310,7 @@ ShellCheck uses the follow exit codes:
 + 4: ShellCheck was invoked with bad options (e.g. unknown formatter).
 
 # LOCALE
+
 This version of ShellCheck is only available in English. All files are
 leniently decoded as UTF-8, with a fallback of ISO-8859-1 for invalid
 sequences. `LC_CTYPE` is respected for output, and defaults to UTF-8 for
@@ -315,19 +319,22 @@ locales where encoding is unspecified (such as the `C` locale).
 Windows users seeing `commitBuffer: invalid argument (invalid character)`
 should set their terminal to use UTF-8 with `chcp 65001`.
 
-# AUTHOR
-ShellCheck is written and maintained by Vidar Holen.
+# AUTHORS
+
+ShellCheck is developed and maintained by Vidar Holen, with assistance from a
+long list of wonderful contributors.
 
 # REPORTING BUGS
+
 Bugs and issues can be reported on GitHub:
 
 https://github.com/koalaman/shellcheck/issues
 
 # COPYRIGHT
-Copyright 2012-2019, Vidar Holen.
+
+Copyright 2012-2019, Vidar Holen and contributors.
 Licensed under the GNU General Public License version 3 or later,
 see https://gnu.org/licenses/gpl.html
-
 
 # SEE ALSO
 
