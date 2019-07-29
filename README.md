@@ -213,6 +213,8 @@ Alternatively, you can download pre-compiled binaries for the latest release her
 
 * [Linux, x86_64](https://storage.googleapis.com/shellcheck/shellcheck-stable.linux.x86_64.tar.xz) (statically linked)
 * [Linux, armv6hf](https://storage.googleapis.com/shellcheck/shellcheck-stable.linux.armv6hf.tar.xz), i.e. Raspberry Pi (statically linked)
+* [Linux, aarch64](https://storage.googleapis.com/shellcheck/shellcheck-stable.linux.armv6hf.tar.xz) aka ARM64 (statically linked)
+* [MacOS, x86_64](https://shellcheck.storage.googleapis.com/shellcheck-stable.darwin.x86_64.tar.xz)
 * [Windows, x86](https://storage.googleapis.com/shellcheck/shellcheck-stable.zip)
 
 or see the [storage bucket listing](https://shellcheck.storage.googleapis.com/index.html) for checksums, older versions and the latest daily builds.

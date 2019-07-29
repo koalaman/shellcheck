@@ -1,4 +1,4 @@
-## Since previous release
+## v0.7.0 - 2019-07-28
 ### Added
 - Precompiled binaries for macOS and Linux aarch64
 - Preliminary support for fix suggestions
