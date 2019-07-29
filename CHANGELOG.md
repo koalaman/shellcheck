@@ -1,5 +1,6 @@
 ## Since previous release
 ### Added
+- Precompiled binaries for macOS and Linux aarch64
 - Preliminary support for fix suggestions
 - New `-f diff` unified diff format for auto-fixes
 - Files containing Bats tests can now be checked
