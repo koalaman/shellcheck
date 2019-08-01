@@ -1,9 +1,5 @@
 #!/bin/bash
 
-_cleanup(){
-  rm -rf dist shellcheck || true
-}
-
 build_linux() {
   # Linux Docker image
   name="$DOCKER_BASE"
@@ -30,7 +26,6 @@ build_linux() {
   sed -e '/DELETE-MARKER/,$d' Dockerfile > Dockerfile.alpine
   docker build -f Dockerfile.alpine -t "$name:current" .
   docker run "$name:current" sh -c 'shellcheck --version'
-  _cleanup
 }
 
 build_aarch64() {
@@ -50,7 +45,6 @@ build_armv6hf() {
   do 
     cp "shellcheck" "deploy/shellcheck-$tag.linux-armv6hf"; 
   done
-  _cleanup
 }
 
 build_windows() {
@@ -60,7 +54,6 @@ build_windows() {
   do 
     cp "dist/build/ShellCheck/shellcheck.exe" "deploy/shellcheck-$tag.exe"; 
   done
-  _cleanup
 }
 
 build_osx() {
@@ -77,6 +70,5 @@ build_osx() {
   do 
     cp "dist/build/shellcheck/shellcheck" "deploy/shellcheck-$tag.darwin-x86_64";
   done
-  _cleanup
 }
 
