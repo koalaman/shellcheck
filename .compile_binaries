@@ -55,7 +55,7 @@ build_armv6hf() {
 
 build_windows() {
   # Windows .exe
-  docker run --user="$UID" -v "$PWD:/appdata" koalaman/winghc cuib
+  docker run -v "$PWD:/appdata" koalaman/winghc cuib
   for tag in $TAGS
   do 
     cp "dist/build/ShellCheck/shellcheck.exe" "deploy/shellcheck-$tag.exe"; 

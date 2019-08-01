@@ -31,7 +31,7 @@ script:
   - mkdir -p deploy
   - source ./.compile_binaries
   - ./striptests
-  - set -x; build_"$BUILD"; set +x;
+  - set -ex; build_"$BUILD"; set +x;
   - ./.prepare_deploy
 
 after_success: |
