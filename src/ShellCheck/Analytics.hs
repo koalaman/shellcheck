@@ -125,6 +125,7 @@ nodeChecks = [
     ,checkArithmeticDeref
     ,checkArithmeticBadOctal
     ,checkComparisonAgainstGlob
+    ,checkCaseAgainstGlob
     ,checkCommarrays
     ,checkOrNeq
     ,checkEchoWc
@@ -1337,6 +1338,21 @@ checkComparisonAgainstGlob params (TC_Binary _ SingleBracket op _ word)
             else "[ .. ] can't match globs. Use a case statement."
 
 checkComparisonAgainstGlob _ _ = return ()
+
+prop_checkCaseAgainstGlob1 = verify checkCaseAgainstGlob "case foo in lol$n) foo;; esac"
+prop_checkCaseAgainstGlob2 = verify checkCaseAgainstGlob "case foo in $(foo)) foo;; esac"
+prop_checkCaseAgainstGlob3 = verifyNot checkCaseAgainstGlob "case foo in *$bar*) foo;; esac"
+checkCaseAgainstGlob _ t =
+    case t of
+        (T_CaseExpression _ _ cases) -> mapM_ check cases
+        _ -> return ()
+  where
+    check (_, list, _) = mapM_ check' list
+    check' expr@(T_NormalWord _ list)
+        -- If it's already a glob, assume that's what the user wanted
+        | not (isGlob expr) && any isQuoteableExpansion list =
+            warn (getId expr) 2254 "Quote expansions in case patterns to match literally rather than as a glob."
+    check' _ = return ()
 
 prop_checkCommarrays1 = verify checkCommarrays "a=(1, 2)"
 prop_checkCommarrays2 = verify checkCommarrays "a+=(1,2,3)"

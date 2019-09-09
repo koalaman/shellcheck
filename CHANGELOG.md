@@ -2,6 +2,9 @@
 ### Fixed
 - `-f diff` no longer claims that it found more issues when it didn't
 
+### Added
+- SC2254: Suggest quoting expansions in case statements
+
 ## v0.7.0 - 2019-07-28
 ### Added
 - Precompiled binaries for macOS and Linux aarch64
