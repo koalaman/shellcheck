@@ -109,6 +109,7 @@ Services and platforms that have ShellCheck pre-installed and ready to use:
 * [Codacy](https://www.codacy.com/)
 * [Code Climate](https://codeclimate.com/)
 * [Code Factor](https://www.codefactor.io/)
+* [Github](https://github.com/features/actions)(only Linux)
 
 Services and platforms with third party plugins:
 
