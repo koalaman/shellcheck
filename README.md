@@ -113,6 +113,7 @@ Services and platforms that have ShellCheck pre-installed and ready to use:
 Services and platforms with third party plugins:
 
 * [SonarQube](https://www.sonarqube.org/) through [sonar-shellcheck-plugin](https://github.com/emerald-squad/sonar-shellcheck-plugin)
+* [GitHub Actions](https://github.com/features/actions) through [reviewdog/action-shellcheck](https://github.com/reviewdog/action-shellcheck)
 
 Most other services, including [GitLab](https://about.gitlab.com/), let you install
 ShellCheck yourself, either through the system's package manager (see [Installing](#installing)),
