@@ -2341,6 +2341,7 @@ prop_checkCharRangeGlob2 = verifyNot checkCharRangeGlob "ls *[[:digit:]].jpg"
 prop_checkCharRangeGlob3 = verify checkCharRangeGlob "ls [10-15]"
 prop_checkCharRangeGlob4 = verifyNot checkCharRangeGlob "ls [a-zA-Z]"
 prop_checkCharRangeGlob5 = verifyNot checkCharRangeGlob "tr -d [a-zA-Z]" -- tr has 2060
+prop_checkCharRangeGlob6 = verifyNot checkCharRangeGlob "[[ $x == [!!]* ]]"
 checkCharRangeGlob p t@(T_Glob id str) |
   isCharClass str && not (isParamTo (parentMap p) "tr" t) =
     if ":" `isPrefixOf` contents
@@ -2352,8 +2353,13 @@ checkCharRangeGlob p t@(T_Glob id str) |
             info id 2102 "Ranges can only match single chars (mentioned due to duplicates)."
   where
     isCharClass str = "[" `isPrefixOf` str && "]" `isSuffixOf` str
-    contents = drop 1 . take (length str - 1) $ str
+    contents = dropNegation . drop 1 . take (length str - 1) $ str
     hasDupes = any (>1) . map length . group . sort . filter (/= '-') $ contents
+    dropNegation s =
+        case s of
+            '!':rest -> rest
+            '^':rest -> rest
+            x -> x
 checkCharRangeGlob _ _ = return ()
 
 
