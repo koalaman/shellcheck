@@ -2,4 +2,7 @@
 # quickrun runs ShellCheck in an interpreted mode.
 # This allows testing changes without recompiling.
 
-stack runghc shellcheck.hs "$@"
+BASEDIR=$(dirname $0)
+AUTOGEN_PATH=$(find . -path '*/build/autogen')
+
+stack runghc -- -i"${AUTOGEN_PATH}" -isrc shellcheck.hs "$@"
