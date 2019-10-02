@@ -4,7 +4,7 @@
 # 'cabal test' remains the source of truth.
 
 (
-var=$(echo 'main' | ghci test/shellcheck.hs 2>&1 | tee /dev/stderr)
+var=$(echo 'main' | stack ghci test/shellcheck.hs 2>&1 | tee /dev/stderr)
 if [[ $var == *ExitSuccess* ]]
 then
   exit 0
