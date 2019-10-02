@@ -2786,8 +2786,11 @@ checkMaskedReturns _ _ = return ()
 
 prop_checkReadWithoutR1 = verify checkReadWithoutR "read -a foo"
 prop_checkReadWithoutR2 = verifyNot checkReadWithoutR "read -ar foo"
+prop_checkReadWithoutR3 = verifyNot checkReadWithoutR "read -t 0"
+prop_checkReadWithoutR4 = verifyNot checkReadWithoutR "read -t 0 && read --d '' -r bar"
+prop_checkReadWithoutR5 = verify checkReadWithoutR "read -t 0 foo < file.txt"
 checkReadWithoutR _ t@T_SimpleCommand {} | t `isUnqualifiedCommand` "read" =
-    unless ("r" `elem` map snd (getAllFlags t)) $
+    unless (oversimplify t == ["read", "-t", "0"] || "r" `elem` map snd (getAllFlags t)) $
         info (getId $ getCommandTokenOrThis t) 2162 "read without -r will mangle backslashes."
 checkReadWithoutR _ _ = return ()
 
