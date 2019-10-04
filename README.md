@@ -116,7 +116,7 @@ Services and platforms with third party plugins:
 
 Most other services, including [GitLab](https://about.gitlab.com/), let you install
 ShellCheck yourself, either through the system's package manager (see [Installing](#installing)),
-or by downloading and unpacking a [binary release](#installing-the-shellcheck-binary).
+or by downloading and unpacking a [binary release](#installing-a-pre-compiled-binary).
 
 It's a good idea to manually install a specific ShellCheck version regardless. This avoids
 any surprise build breaks when a new version with new warnings is published.
