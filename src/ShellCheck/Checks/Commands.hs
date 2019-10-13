@@ -676,7 +676,7 @@ prop_checkReadExpansions7 = verifyNot checkReadExpansions "read $1"
 prop_checkReadExpansions8 = verifyNot checkReadExpansions "read ${var?}"
 checkReadExpansions = CommandCheck (Exactly "read") check
   where
-    options = getGnuOpts "sreu:n:N:i:p:a:"
+    options = getGnuOpts flagsForRead
     getVars cmd = fromMaybe [] $ do
         opts <- options cmd
         return . map snd $ filter (\(x,_) -> x == "" || x == "a") opts
