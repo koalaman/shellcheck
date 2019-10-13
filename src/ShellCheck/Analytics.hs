@@ -1044,7 +1044,7 @@ checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
                 Dash -> err id 2073 $ "Escape \\" ++ op ++ " to prevent it redirecting."
                 _ -> err id 2073 $ "Escape \\" ++ op ++ " to prevent it redirecting (or switch to [[ .. ]])."
 
-    when (op `elem` ["-lt", "-gt", "-le", "-ge", "-eq"]) $ do
+    when (op `elem` arithmeticBinaryTestOps) $ do
         mapM_ checkDecimals [lhs, rhs]
         when (typ == SingleBracket) $
             checkStrings [lhs, rhs]
@@ -1193,7 +1193,7 @@ checkConstantIfs _ (TC_Binary id typ op lhs rhs) | not isDynamic =
         else checkUnmatchable id op lhs rhs
   where
     isDynamic =
-        op `elem` [ "-lt", "-gt", "-le", "-ge", "-eq", "-ne" ]
+        op `elem` arithmeticBinaryTestOps
             && typ == DoubleBracket
         || op `elem` [ "-nt", "-ot", "-ef"]
 
@@ -2700,6 +2700,10 @@ prop_checkTestArgumentSplitting15 = verifyNot checkTestArgumentSplitting "[[ \"$
 prop_checkTestArgumentSplitting16 = verifyNot checkTestArgumentSplitting "[[ -v foo[123] ]]"
 prop_checkTestArgumentSplitting17 = verifyNot checkTestArgumentSplitting "#!/bin/ksh\n[ -e foo* ]"
 prop_checkTestArgumentSplitting18 = verify checkTestArgumentSplitting "#!/bin/ksh\n[ -d foo* ]"
+prop_checkTestArgumentSplitting19 = verifyNot checkTestArgumentSplitting "[[ var[x] -eq 2*3 ]]"
+prop_checkTestArgumentSplitting20 = verify checkTestArgumentSplitting "[ var[x] -eq 2 ]"
+prop_checkTestArgumentSplitting21 = verify checkTestArgumentSplitting "[ 6 -eq 2*3 ]"
+prop_checkTestArgumentSplitting22 = verify checkTestArgumentSplitting "[ foo -eq 'y' ]"
 checkTestArgumentSplitting :: Parameters -> Token -> Writer [TokenComment] ()
 checkTestArgumentSplitting params t =
     case t of
@@ -2728,6 +2732,18 @@ checkTestArgumentSplitting params t =
                 checkArrays typ token
 
         (TC_Unary _ typ op token) -> checkAll typ token
+
+        (TC_Binary _ typ op lhs rhs) | op `elem` arithmeticBinaryTestOps ->
+            if typ == DoubleBracket
+            then
+                mapM_ (\c -> do
+                        checkArrays typ c
+                        checkBraces typ c) [lhs, rhs]
+            else
+                mapM_ (\c -> do
+                        checkNumericalGlob typ c
+                        checkArrays typ c
+                        checkBraces typ c) [lhs, rhs]
 
         (TC_Binary _ typ op lhs rhs) ->
             if op `elem` ["=", "==", "!=", "=~"]
@@ -2760,6 +2776,11 @@ checkTestArgumentSplitting params t =
             if typ == SingleBracket
             then warn (getId token) 2202 "Globs don't work as operands in [ ]. Use a loop."
             else err (getId token) 2203 "Globs are ignored in [[ ]] except right of =/!=. Use a loop."
+
+    checkNumericalGlob SingleBracket token =
+        -- var[x] and x*2 look like globs
+        when (shellType params /= Ksh && isGlob token) $
+            err (getId token) 2255 "[ ] does not apply arithmetic evaluation. Evaluate with $((..)) for numbers, or use string comparator for strings."
 
 
 prop_checkMaskedReturns1 = verify checkMaskedReturns "f() { local a=$(false); }"

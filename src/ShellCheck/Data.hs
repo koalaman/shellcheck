@@ -114,6 +114,10 @@ binaryTestOps = [
     "-gt", "-ge", "=~", ">", "<", "=", "\\<", "\\>", "\\<=", "\\>="
   ]
 
+arithmeticBinaryTestOps = [
+    "-eq", "-ne", "-lt", "-le", "-gt", "-ge"
+  ]
+
 unaryTestOps = [
     "!", "-a", "-b", "-c", "-d", "-e", "-f", "-g", "-h", "-L", "-k", "-p",
     "-r", "-s", "-S", "-t", "-u", "-w", "-x", "-O", "-G", "-N", "-z", "-n",
