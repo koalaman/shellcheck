@@ -1021,6 +1021,7 @@ prop_checkNumberComparisons12 = verify checkNumberComparisons "[ x$foo -gt x${N}
 prop_checkNumberComparisons13 = verify checkNumberComparisons "[ $foo > $bar ]"
 prop_checkNumberComparisons14 = verifyNot checkNumberComparisons "[[ foo < bar ]]"
 prop_checkNumberComparisons15 = verifyNot checkNumberComparisons "[ $foo '>' $bar ]"
+prop_checkNumberComparisons16 = verify checkNumberComparisons "[ foo -eq 'y' ]"
 checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
     if isNum lhs || isNum rhs
       then do
@@ -2703,7 +2704,6 @@ prop_checkTestArgumentSplitting18 = verify checkTestArgumentSplitting "#!/bin/ks
 prop_checkTestArgumentSplitting19 = verifyNot checkTestArgumentSplitting "[[ var[x] -eq 2*3 ]]"
 prop_checkTestArgumentSplitting20 = verify checkTestArgumentSplitting "[ var[x] -eq 2 ]"
 prop_checkTestArgumentSplitting21 = verify checkTestArgumentSplitting "[ 6 -eq 2*3 ]"
-prop_checkTestArgumentSplitting22 = verify checkTestArgumentSplitting "[ foo -eq 'y' ]"
 checkTestArgumentSplitting :: Parameters -> Token -> Writer [TokenComment] ()
 checkTestArgumentSplitting params t =
     case t of
