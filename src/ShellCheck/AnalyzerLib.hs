@@ -932,12 +932,11 @@ isQuotedAlternativeReference t =
 --     Just [("r", -re), ("e", -re), ("d", :), ("u", 3), ("", bar)]
 -- where flags with arguments map to arguments, while others map to themselves.
 -- Any unrecognized flag will result in Nothing.
-getGnuOpts = getOpts getAllFlags
-getBsdOpts = getOpts getLeadingFlags
-getOpts :: (Token -> [(Token, String)]) -> String -> Token -> Maybe [(String, Token)]
-getOpts flagTokenizer string cmd = process flags
+getGnuOpts str t = getOpts str $ getAllFlags t
+getBsdOpts str t = getOpts str $ getLeadingFlags t
+getOpts :: String -> [(Token, String)] -> Maybe [(String, Token)]
+getOpts string flags = process flags
   where
-    flags = flagTokenizer cmd
     flagList (c:':':rest) = ([c], True) : flagList rest
     flagList (c:rest)     = ([c], False) : flagList rest
     flagList []           = []
@@ -958,6 +957,8 @@ getOpts flagTokenizer string cmd = process flags
             else do
                 more <- process rest2
                 return $ (flag1, token1) : more
+
+getOpt str flags = snd <$> (listToMaybe $ filter (\(f, _) -> f == str) $ flags)
 
 supportsArrays shell = shell == Bash || shell == Ksh
 

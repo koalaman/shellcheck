@@ -2807,9 +2807,21 @@ checkMaskedReturns _ _ = return ()
 
 prop_checkReadWithoutR1 = verify checkReadWithoutR "read -a foo"
 prop_checkReadWithoutR2 = verifyNot checkReadWithoutR "read -ar foo"
+prop_checkReadWithoutR3 = verifyNot checkReadWithoutR "read -t 0"
+prop_checkReadWithoutR4 = verifyNot checkReadWithoutR "read -t 0 && read --d '' -r bar"
+prop_checkReadWithoutR5 = verifyNot checkReadWithoutR "read -t 0 foo < file.txt"
+prop_checkReadWithoutR6 = verifyNot checkReadWithoutR "read -u 3 -t 0"
 checkReadWithoutR _ t@T_SimpleCommand {} | t `isUnqualifiedCommand` "read" =
-    unless ("r" `elem` map snd (getAllFlags t)) $
+    unless ("r" `elem` map snd flags || has_t0) $
         info (getId $ getCommandTokenOrThis t) 2162 "read without -r will mangle backslashes."
+  where
+    flags = getAllFlags t
+    has_t0 = fromMaybe False $ do
+        parsed <- getOpts flagsForRead flags
+        t <- getOpt "t" parsed
+        str <- getLiteralString t
+        return $ str == "0"
+
 checkReadWithoutR _ _ = return ()
 
 prop_checkUncheckedCd1 = verifyTree checkUncheckedCdPushdPopd "cd ~/src; rm -r foo"

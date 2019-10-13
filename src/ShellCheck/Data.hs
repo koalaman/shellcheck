@@ -136,3 +136,5 @@ shellForExecutable name =
         "ksh88" -> return Ksh
         "ksh93" -> return Ksh
         otherwise -> Nothing
+
+flagsForRead = "sreu:n:N:i:p:a:t:"
