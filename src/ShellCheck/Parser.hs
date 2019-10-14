@@ -910,6 +910,7 @@ prop_readCondition20 = isOk readCondition "[[ echo_rc -eq 0 ]]"
 prop_readCondition21 = isOk readCondition "[[ $1 =~ ^(a\\ b)$ ]]"
 prop_readCondition22 = isOk readCondition "[[ $1 =~ \\.a\\.(\\.b\\.)\\.c\\. ]]"
 prop_readCondition23 = isOk readCondition "[[ -v arr[$var] ]]"
+prop_readCondition24 = isWarning readCondition "[[ 1 == 2 ]]]"
 readCondition = called "test expression" $ do
     opos <- getPosition
     start <- startSpan
@@ -938,6 +939,11 @@ readCondition = called "test expression" $ do
     id <- endSpan start
     when (open == "[[" && close /= "]]") $ parseProblemAt cpos ErrorC 1033 "Did you mean ]] ?"
     when (open == "[" && close /= "]" ) $ parseProblemAt opos ErrorC 1034 "Did you mean [[ ?"
+    optional $ lookAhead $ do
+        pos <- getPosition
+        notFollowedBy2 readCmdWord <|>
+            parseProblemAt pos ErrorC 1136
+                ("Unexpected characters after terminating " ++ close ++ ". Missing semicolon/linefeed?")
     spacing
     many readCmdWord -- Read and throw away remainders to get then/do warnings. Fixme?
     return $ T_Condition id typ condition
