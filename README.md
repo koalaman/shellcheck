@@ -209,6 +209,11 @@ docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable myscript
 
 or use `koalaman/shellcheck-alpine` if you want a larger Alpine Linux based image to extend. It works exactly like a regular Alpine image, but has shellcheck preinstalled.
 
+Using the [nix package manager](https://nixos.org/nix):
+```sh
+nix-env -iA nixpkgs.shellcheck
+```
+
 Alternatively, you can download pre-compiled binaries for the latest release here:
 
 * [Linux, x86_64](https://storage.googleapis.com/shellcheck/shellcheck-stable.linux.x86_64.tar.xz) (statically linked)
