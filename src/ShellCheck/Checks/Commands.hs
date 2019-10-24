@@ -573,7 +573,7 @@ checkPrintfVar = CommandCheck (Exactly "printf") (f . arguments) where
 
         unless ('%' `elem` concat (oversimplify format) || isLiteral format) $
           info (getId format) 2059
-              "Don't use variables in the printf format string. Use printf \"..%s..\" \"$foo\"."
+              "Don't use variables in the printf format string. Use printf '..%s..' \"$foo\"."
       where
         onlyTrailingTs format argCount =
             all (== 'T') $ drop argCount format
