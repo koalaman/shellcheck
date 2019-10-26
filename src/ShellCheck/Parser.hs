@@ -2448,6 +2448,7 @@ readDoGroup kwId = do
 
 
 prop_readForClause = isOk readForClause "for f in *; do rm \"$f\"; done"
+prop_readForClause1 = isOk readForClause "for f in *; { rm \"$f\"; }"
 prop_readForClause3 = isOk readForClause "for f; do foo; done"
 prop_readForClause4 = isOk readForClause "for((i=0; i<10; i++)); do echo $i; done"
 prop_readForClause5 = isOk readForClause "for ((i=0;i<10 && n>x;i++,--n))\ndo \necho $i\ndone"
@@ -2487,7 +2488,7 @@ readForClause = called "for loop" $ do
             "Don't use $ on the iterator name in for loops."
         name <- readVariableName `thenSkip` allspacing
         values <- readInClause <|> (optional readSequentialSep >> return [])
-        group <- readDoGroup id
+        group <- readBraced <|> readDoGroup id
         return $ T_ForIn id name values group
 
 prop_readSelectClause1 = isOk readSelectClause "select foo in *; do echo $foo; done"
@@ -3431,4 +3432,3 @@ tryWithErrors parser = do
 
 return []
 runTests = $quickCheckAll
-
