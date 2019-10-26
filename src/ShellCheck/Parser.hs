@@ -1739,6 +1739,7 @@ prop_readHereDoc14= isWarning readScript "cat << foo\nbar\nfoo \n"
 prop_readHereDoc15= isWarning readScript "cat <<foo\nbar\nfoo bar\nfoo"
 prop_readHereDoc16= isOk readScript "cat <<- ' foo'\nbar\n foo\n"
 prop_readHereDoc17= isWarning readScript "cat <<- ' foo'\nbar\n  foo\n foo\n"
+prop_readHereDoc18= isOk readScript "cat <<'\"foo'\nbar\n\"foo\n"
 prop_readHereDoc20= isWarning readScript "cat << foo\n  foo\n()\nfoo\n"
 prop_readHereDoc21= isOk readScript "# shellcheck disable=SC1039\ncat << foo\n  foo\n()\nfoo\n"
 readHereDoc = called "here document" $ do
@@ -1759,14 +1760,17 @@ readHereDoc = called "here document" $ do
     addPendingHereDoc doc
     return doc
   where
-    quotes = "\"'\\"
+    unquote :: String -> (Quoted, String)
+    unquote "" = (Unquoted, "")
+    unquote [c] = (Unquoted, [c])
+    unquote s@(cl:tl) =
+      case reverse tl of
+        (cr:tr) | cr == cl && cl `elem` "\"'" -> (Quoted, reverse tr)
+        _ -> (if '\\' `elem` s then (Quoted, filter ((/=) '\\') s) else (Unquoted, s))
     -- Fun fact: bash considers << foo"" quoted, but not << <("foo").
-    -- Instead of replicating this, just read a token and strip quotes.
     readToken = do
         str <- readStringForParser readNormalWord
-        return (if any (`elem` quotes) str then Quoted else Unquoted,
-                filter (not . (`elem` quotes)) str)
-
+        return $ unquote str
 
 readPendingHereDocs = do
     docs <- popPendingHereDocs
