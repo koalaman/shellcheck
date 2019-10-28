@@ -2788,11 +2788,12 @@ prop_checkMaskedReturns2 = verify checkMaskedReturns "declare a=$(false)"
 prop_checkMaskedReturns3 = verify checkMaskedReturns "declare a=\"`false`\""
 prop_checkMaskedReturns4 = verifyNot checkMaskedReturns "declare a; a=$(false)"
 prop_checkMaskedReturns5 = verifyNot checkMaskedReturns "f() { local -r a=$(false); }"
-checkMaskedReturns _ t@(T_SimpleCommand id _ (cmd:rest)) = potentially $ do
+checkMaskedReturns _ t@(T_SimpleCommand id preopts (cmd:rest)) = potentially $ do
     name <- getCommandName t
     guard $ name `elem` ["declare", "export"]
         || name == "local" && "r" `notElem` map snd (getAllFlags t)
-    return $ mapM_ checkArgs rest
+        || not (null preopts)
+    return $ mapM_ checkArgs (preopts ++ rest)
   where
     checkArgs (T_Assignment id _ _ _ word) | any hasReturn $ getWordParts word =
         warn id 2155 "Declare and assign separately to avoid masking return values."
