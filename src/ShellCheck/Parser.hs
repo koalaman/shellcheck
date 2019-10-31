@@ -246,6 +246,10 @@ addParseNote n = do
             parseNotes = n : parseNotes state
         }
 
+ignoreProblemsOf p = do
+    systemState <- lift . lift $ Ms.get
+    p <* (lift . lift . Ms.put $ systemState)
+
 shouldIgnoreCode code = do
     context <- getCurrentContexts
     checkSourced <- Mr.asks checkSourced
@@ -2041,7 +2045,11 @@ readSimpleCommand = called "simple command" $ do
 
       Just cmd -> do
             validateCommand cmd
-            suffix <- option [] $ getParser readCmdSuffix cmd [
+            -- We have to ignore possible parsing problems from the lookAhead parser
+            firstArgument <- ignoreProblemsOf . optionMaybe . try . lookAhead $ readCmdWord
+            suffix <- option [] $ getParser readCmdSuffix
+                    -- If `export` or other modifier commands are called with `builtin` we have to look at the first argument
+                    (if isCommand ["builtin"] cmd && isJust firstArgument then fromJust firstArgument else cmd) [
                         (["declare", "export", "local", "readonly", "typeset"], readModifierSuffix),
                         (["time"], readTimeSuffix),
                         (["let"], readLetSuffix),
