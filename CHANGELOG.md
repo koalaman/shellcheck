@@ -1,7 +1,8 @@
 ## v0.7.1 - soon
 ### Fixed
 - `-f diff` no longer claims that it found more issues when it didn't
-- SC2154 triggers for builtins called with `builtin`
+- SC2154 and all command-specific checks now trigger for builtins
+  called with `builtin`
 
 ### Added
 - SC2254: Suggest quoting expansions in case statements
