@@ -105,12 +105,16 @@ buildCommandMap = foldl' addCheck Map.empty
 
 
 checkCommand :: Map.Map CommandName (Token -> Analysis) -> Token -> Analysis
-checkCommand map t@(T_SimpleCommand id _ (cmd:rest)) = fromMaybe (return ()) $ do
+checkCommand map t@(T_SimpleCommand id cmdPrefix (cmd:rest)) = fromMaybe (return ()) $ do
     name <- getLiteralString cmd
     return $
         if '/' `elem` name
         then
             Map.findWithDefault nullCheck (Basename $ basename name) map t
+        else if name == "builtin" && not (null rest) then
+            let t' = T_SimpleCommand id cmdPrefix rest
+                selectedBuiltin = fromMaybe "" $ getLiteralString . head $ rest
+            in Map.findWithDefault nullCheck (Exactly selectedBuiltin) map t'
         else do
             Map.findWithDefault nullCheck (Exactly name) map t
             Map.findWithDefault nullCheck (Basename name) map t
