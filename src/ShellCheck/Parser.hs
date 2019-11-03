@@ -437,6 +437,7 @@ readConditionContents single =
     readCondContents `attempting` lookAhead (do
                                 pos <- getPosition
                                 s <- readVariableName
+                                spacing1
                                 when (s `elem` commonCommands) $
                                     parseProblemAt pos WarningC 1014 "Use 'if cmd; then ..' to check exit code, or 'if [[ $(cmd) == .. ]]' to check output.")
 
@@ -911,6 +912,7 @@ prop_readCondition21 = isOk readCondition "[[ $1 =~ ^(a\\ b)$ ]]"
 prop_readCondition22 = isOk readCondition "[[ $1 =~ \\.a\\.(\\.b\\.)\\.c\\. ]]"
 prop_readCondition23 = isOk readCondition "[[ -v arr[$var] ]]"
 prop_readCondition24 = isWarning readCondition "[[ 1 == 2 ]]]"
+prop_readCondition25 = isOk readCondition "[[ lex.yy.c -ot program.l ]]"
 readCondition = called "test expression" $ do
     opos <- getPosition
     start <- startSpan
