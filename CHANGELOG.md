@@ -1,6 +1,7 @@
 ## v0.7.1 - soon
 ### Fixed
 - `-f diff` no longer claims that it found more issues when it didn't
+- Known empty variables now correctly trigger SC2086
 
 ### Added
 - SC2254: Suggest quoting expansions in case statements

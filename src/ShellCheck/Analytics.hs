@@ -1807,6 +1807,21 @@ prop_checkSpacefulness35= verifyNotTree checkSpacefulness "echo ${1+\"$1\"}"
 prop_checkSpacefulness36= verifyNotTree checkSpacefulness "arg=$#; echo $arg"
 prop_checkSpacefulness37= verifyNotTree checkSpacefulness "@test 'status' {\n [ $status -eq 0 ]\n}"
 prop_checkSpacefulness37v = verifyTree checkVerboseSpacefulness "@test 'status' {\n [ $status -eq 0 ]\n}"
+prop_checkSpacefulness38= verifyTree checkSpacefulness "a=; echo $a"
+prop_checkSpacefulness39= verifyNotTree checkSpacefulness "a=''\"\"''; b=x$a; echo $b"
+prop_checkSpacefulness40= verifyNotTree checkSpacefulness "a=$((x+1)); echo $a"
+
+data SpaceStatus = SpaceSome | SpaceNone | SpaceEmpty deriving (Eq)
+instance Semigroup SpaceStatus where
+  (<>) x y =
+    case (x,y) of
+        (SpaceNone, SpaceNone) -> SpaceNone
+        (SpaceSome, _) -> SpaceSome
+        (_, SpaceSome) -> SpaceSome
+        (SpaceEmpty, x) -> x
+        (x, SpaceEmpty) -> x
+instance Monoid SpaceStatus where
+    mempty = SpaceEmpty
 
 -- This is slightly awkward because we want to support structured
 -- optional checks based on nearly the same logic
@@ -1814,7 +1829,7 @@ checkSpacefulness params = checkSpacefulness' onFind params
   where
     emit x = tell [x]
     onFind spaces token _ =
-        when spaces $
+        when (spaces /= SpaceNone) $
             if isDefaultAssignment (parentMap params) token
             then
                 emit $ makeComment InfoC (getId token) 2223
@@ -1829,7 +1844,6 @@ checkSpacefulness params = checkSpacefulness' onFind params
             any (`isPrefixOf` modifier) ["=", ":="]
             && isParamTo parents ":" token
 
-
 prop_checkSpacefulness4v= verifyTree checkVerboseSpacefulness "foo=3; foo=$(echo $foo)"
 prop_checkSpacefulness8v= verifyTree checkVerboseSpacefulness "a=foo\\ bar; a=foo; rm $a"
 prop_checkSpacefulness28v = verifyTree checkVerboseSpacefulness "exec {n}>&1; echo $n"
@@ -1837,24 +1851,24 @@ prop_checkSpacefulness36v = verifyTree checkVerboseSpacefulness "arg=$#; echo $a
 checkVerboseSpacefulness params = checkSpacefulness' onFind params
   where
     onFind spaces token name =
-        when (not spaces && name `notElem` specialVariablesWithoutSpaces) $
+        when (spaces == SpaceNone && name `notElem` specialVariablesWithoutSpaces) $
             tell [makeCommentWithFix StyleC (getId token) 2248
                     "Prefer double quoting even when variables don't contain special characters."
                     (addDoubleQuotesAround params token)]
 
 addDoubleQuotesAround params token = (surroundWidth (getId token) params "\"")
 checkSpacefulness'
-    :: (Bool -> Token -> String -> Writer [TokenComment] ()) ->
+    :: (SpaceStatus -> Token -> String -> Writer [TokenComment] ()) ->
             Parameters -> Token -> [TokenComment]
 checkSpacefulness' onFind params t =
     doVariableFlowAnalysis readF writeF (Map.fromList defaults) (variableFlow params)
   where
-    defaults = zip variablesWithoutSpaces (repeat False)
+    defaults = zip variablesWithoutSpaces (repeat SpaceNone)
 
-    hasSpaces name = gets (Map.findWithDefault True name)
+    hasSpaces name = gets (Map.findWithDefault SpaceSome name)
 
-    setSpaces name bool =
-        modify $ Map.insert name bool
+    setSpaces name status =
+        modify $ Map.insert name status
 
     readF _ token name = do
         spaces <- hasSpaces name
@@ -1871,13 +1885,13 @@ checkSpacefulness' onFind params t =
       where
         emit x = tell [x]
 
-    writeF _ _ name (DataString SourceExternal) = setSpaces name True >> return []
-    writeF _ _ name (DataString SourceInteger) = setSpaces name False >> return []
+    writeF _ _ name (DataString SourceExternal) = setSpaces name SpaceSome >> return []
+    writeF _ _ name (DataString SourceInteger) = setSpaces name SpaceNone >> return []
 
     writeF _ _ name (DataString (SourceFrom vals)) = do
         map <- get
         setSpaces name
-            (isSpacefulWord (\x -> Map.findWithDefault True x map) vals)
+            (isSpacefulWord (\x -> Map.findWithDefault SpaceSome x map) vals)
         return []
 
     writeF _ _ _ _ = return []
@@ -1889,24 +1903,28 @@ checkSpacefulness' onFind params t =
             (T_DollarBraced _ _ _ ) -> True
             _ -> False
 
-    isSpacefulWord :: (String -> Bool) -> [Token] -> Bool
-    isSpacefulWord f = any (isSpaceful f)
-    isSpaceful :: (String -> Bool) -> Token -> Bool
+    isSpacefulWord :: (String -> SpaceStatus) -> [Token] -> SpaceStatus
+    isSpacefulWord f = mconcat . map (isSpaceful f)
+    isSpaceful :: (String -> SpaceStatus) -> Token -> SpaceStatus
     isSpaceful spacefulF x =
         case x of
-          T_DollarExpansion _ _ -> True
-          T_Backticked _ _ -> True
-          T_Glob _ _         -> True
-          T_Extglob {}       -> True
-          T_Literal _ s      -> s `containsAny` globspace
-          T_SingleQuoted _ s -> s `containsAny` globspace
+          T_DollarExpansion _ _ -> SpaceSome
+          T_Backticked _ _ -> SpaceSome
+          T_Glob _ _         -> SpaceSome
+          T_Extglob {}       -> SpaceSome
+          T_DollarArithmetic _ _ -> SpaceNone
+          T_Literal _ s      -> fromLiteral s
+          T_SingleQuoted _ s -> fromLiteral s
           T_DollarBraced _ _ _ -> spacefulF $ getBracedReference $ bracedString x
           T_NormalWord _ w   -> isSpacefulWord spacefulF w
           T_DoubleQuoted _ w -> isSpacefulWord spacefulF w
-          _ -> False
+          _ -> SpaceEmpty
       where
         globspace = "*?[] \t\n"
         containsAny s = any (`elem` s)
+        fromLiteral "" = SpaceEmpty
+        fromLiteral s | s `containsAny` globspace = SpaceSome
+        fromLiteral _ = SpaceNone
 
 prop_CheckVariableBraces1 = verify checkVariableBraces "a='123'; echo $a"
 prop_CheckVariableBraces2 = verifyNot checkVariableBraces "a='123'; echo ${a}"
