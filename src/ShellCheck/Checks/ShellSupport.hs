@@ -205,7 +205,7 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
         | op `elem` [ "<", ">", "\\<", "\\>", "<=", ">=", "\\<=", "\\>="] =
             unless isDash $ warnMsg id $ "lexicographical " ++ op ++ " is"
     bashism (TC_Binary id SingleBracket op _ _)
-        | op `elem` [ "-nt", "-ef" ] =
+        | op `elem` [ "-ot", "-nt", "-ef" ] =
             unless isDash $ warnMsg id $ op ++ " is"
     bashism (TC_Binary id SingleBracket "==" _ _) =
             warnMsg id "== in place of = is"
