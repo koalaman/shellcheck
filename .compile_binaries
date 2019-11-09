@@ -23,8 +23,7 @@ build_linux() {
   # Linux Alpine based Docker image
   name="$DOCKER_BASE-alpine"
   DOCKER_BUILDS="$DOCKER_BUILDS $name"
-  sed -e '/DELETE-MARKER/,$d' Dockerfile > Dockerfile.alpine
-  docker build -f Dockerfile.alpine -t "$name:current" .
+  docker build -f Dockerfile -t "$name:current" --target alpine .
   docker run "$name:current" sh -c 'shellcheck --version'
 }
 
