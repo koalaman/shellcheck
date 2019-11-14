@@ -41,6 +41,7 @@ import Data.Function (on)
 import Data.List
 import Data.Maybe
 import Data.Ord
+import Data.Semigroup
 import Debug.Trace
 import qualified Data.Map.Strict as Map
 import Test.QuickCheck.All (forAllProperties)
