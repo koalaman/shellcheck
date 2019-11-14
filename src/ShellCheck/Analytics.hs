@@ -192,7 +192,7 @@ nodeChecks = [
     ,checkRedirectionToCommand
     ,checkDollarQuoteParen
     ,checkUselessBang
-    ,checkTranslatedString
+    ,checkTranslatedStringVariable
     ]
 
 optionalChecks = map fst optionalTreeChecks
@@ -3452,13 +3452,14 @@ checkDollarQuoteParen params t =
   where
     fix id = fixWith [replaceStart id params 2 "\"$"]
 
-prop_checkTranslatedString1 = verify checkTranslatedString "foo_bar2=val; $\"foo_bar2\""
-prop_checkTranslatedString2 = verifyNot checkTranslatedString "$\"foo_bar2\""
-prop_checkTranslatedString3 = verifyNot checkTranslatedString "$\"..\""
-prop_checkTranslatedString4 = verifyNot checkTranslatedString "var=val; $\"$var\""
-prop_checkTranslatedString5 = verifyNot checkTranslatedString "foo=var; bar=val2; $\"foo bar\""
-checkTranslatedString params (T_DollarDoubleQuoted id ((T_Literal _ s):_)) =
+prop_checkTranslatedStringVariable1 = verify checkTranslatedStringVariable "foo_bar2=val; $\"foo_bar2\""
+prop_checkTranslatedStringVariable2 = verifyNot checkTranslatedStringVariable "$\"foo_bar2\""
+prop_checkTranslatedStringVariable3 = verifyNot checkTranslatedStringVariable "$\"..\""
+prop_checkTranslatedStringVariable4 = verifyNot checkTranslatedStringVariable "var=val; $\"$var\""
+prop_checkTranslatedStringVariable5 = verifyNot checkTranslatedStringVariable "foo=var; bar=val2; $\"foo bar\""
+checkTranslatedStringVariable params (T_DollarDoubleQuoted id [T_Literal _ s]) =
   fromMaybe (return ()) $ do
+    guard $ all isVariableChar s
     Map.lookup s assignments
     return $
         warnWithFix id 2256 "This translated string is the name of a variable. Flip leading $ and \" if this should be a quoted substitution." (fix id)
@@ -3468,7 +3469,7 @@ checkTranslatedString params (T_DollarDoubleQuoted id ((T_Literal _ s):_)) =
         Map.insert name token
     insertAssignment _ = Prelude.id
     fix id = fixWith [replaceStart id params 2 "\"$"]
-checkTranslatedString _ _ = return ()
+checkTranslatedStringVariable _ _ = return ()
 
 prop_checkDefaultCase1 = verify checkDefaultCase "case $1 in a) true ;; esac"
 prop_checkDefaultCase2 = verify checkDefaultCase "case $1 in ?*?) true ;; *? ) true ;; esac"
