@@ -192,6 +192,7 @@ nodeChecks = [
     ,checkRedirectionToCommand
     ,checkDollarQuoteParen
     ,checkUselessBang
+    ,checkTranslatedStringVariable
     ]
 
 optionalChecks = map fst optionalTreeChecks
@@ -3450,6 +3451,25 @@ checkDollarQuoteParen params t =
         _ -> return ()
   where
     fix id = fixWith [replaceStart id params 2 "\"$"]
+
+prop_checkTranslatedStringVariable1 = verify checkTranslatedStringVariable "foo_bar2=val; $\"foo_bar2\""
+prop_checkTranslatedStringVariable2 = verifyNot checkTranslatedStringVariable "$\"foo_bar2\""
+prop_checkTranslatedStringVariable3 = verifyNot checkTranslatedStringVariable "$\"..\""
+prop_checkTranslatedStringVariable4 = verifyNot checkTranslatedStringVariable "var=val; $\"$var\""
+prop_checkTranslatedStringVariable5 = verifyNot checkTranslatedStringVariable "foo=var; bar=val2; $\"foo bar\""
+checkTranslatedStringVariable params (T_DollarDoubleQuoted id [T_Literal _ s]) =
+  fromMaybe (return ()) $ do
+    guard $ all isVariableChar s
+    Map.lookup s assignments
+    return $
+        warnWithFix id 2256 "This translated string is the name of a variable. Flip leading $ and \" if this should be a quoted substitution." (fix id)
+  where
+    assignments = foldl (flip ($)) Map.empty (map insertAssignment $ variableFlow params)
+    insertAssignment (Assignment (_, token, name, _)) | isVariableName name =
+        Map.insert name token
+    insertAssignment _ = Prelude.id
+    fix id = fixWith [replaceStart id params 2 "\"$"]
+checkTranslatedStringVariable _ _ = return ()
 
 prop_checkDefaultCase1 = verify checkDefaultCase "case $1 in a) true ;; esac"
 prop_checkDefaultCase2 = verify checkDefaultCase "case $1 in ?*?) true ;; *? ) true ;; esac"

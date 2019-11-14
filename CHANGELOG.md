@@ -6,6 +6,7 @@
 ### Added
 - SC2254: Suggest quoting expansions in case statements
 - SC2255: Suggest using `$((..))` in `[ 2*3 -eq 6 ]`
+- SC2256: Warn about translated strings that are known variables
 
 ## v0.7.0 - 2019-07-28
 ### Added
