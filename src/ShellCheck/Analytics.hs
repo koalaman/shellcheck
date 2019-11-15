@@ -33,7 +33,7 @@ import Control.Arrow (first)
 import Control.Monad
 import Control.Monad.Identity
 import Control.Monad.State
-import Control.Monad.Writer
+import Control.Monad.Writer hiding ((<>))
 import Control.Monad.Reader
 import Data.Char
 import Data.Functor
