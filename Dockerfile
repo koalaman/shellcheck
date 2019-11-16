@@ -1,5 +1,5 @@
 # Build-only image
-FROM ubuntu:19.10 AS build
+FROM ubuntu:18.04 AS build
 USER root
 WORKDIR /opt/shellCheck
 
