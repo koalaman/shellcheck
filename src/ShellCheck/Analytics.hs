@@ -1824,6 +1824,7 @@ instance Semigroup SpaceStatus where
         (x, SpaceEmpty) -> x
 instance Monoid SpaceStatus where
     mempty = SpaceEmpty
+    mappend = (<>)
 
 -- This is slightly awkward because we want to support structured
 -- optional checks based on nearly the same logic
