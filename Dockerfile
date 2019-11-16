@@ -1,5 +1,5 @@
 # Build-only image
-FROM ubuntu:18.04 AS build
+FROM ubuntu:19.10 AS build
 USER root
 WORKDIR /opt/shellCheck
 
@@ -12,7 +12,7 @@ COPY ShellCheck.cabal ./
 RUN cabal update && cabal install --dependencies-only --ghc-options="-optlo-Os -split-sections"
 
 # Copy source and build it
-COPY LICENSE Setup.hs shellcheck.hs ./
+COPY LICENSE shellcheck.hs ./
 COPY src src
 RUN cabal build Paths_ShellCheck && \
   ghc -optl-static -optl-pthread -isrc -idist/build/autogen --make shellcheck -split-sections -optc-Wl,--gc-sections -optlo-Os && \

@@ -7,7 +7,7 @@ Category:         Static Analysis
 Author:           Vidar Holen
 Maintainer:       vidar@vidarholen.net
 Homepage:         https://www.shellcheck.net/
-Build-Type:       Custom
+Build-Type:       Simple
 Cabal-Version:    >= 1.8
 Bug-reports:      https://github.com/koalaman/shellcheck/issues
 Description:
@@ -26,18 +26,12 @@ Extra-Source-Files:
     -- documentation
     README.md
     shellcheck.1.md
-    -- built with a cabal sdist hook
-    shellcheck.1
+    -- A script to build the man page using pandoc
+    manpage
     -- convenience script for stripping tests
     striptests
     -- tests
     test/shellcheck.hs
-
-custom-setup
-  setup-depends:
-    base    >= 4    && <5,
-    process >= 1.0  && <1.7,
-    Cabal   >= 1.10 && <2.5
 
 source-repository head
     type: git
