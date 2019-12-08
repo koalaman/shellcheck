@@ -21,7 +21,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 -- This module contains checks that examine specific commands by name.
-module ShellCheck.Checks.Commands (checker , ShellCheck.Checks.Commands.runTests) where
+module ShellCheck.Checks.Commands (checker, optionalChecks, ShellCheck.Checks.Commands.runTests) where
 
 import ShellCheck.AST
 import ShellCheck.ASTLib
@@ -90,12 +90,29 @@ commandChecks = [
     ,checkMvArguments, checkCpArguments, checkLnArguments
     ,checkFindRedirections
     ,checkReadExpansions
-    ,checkWhich
     ,checkSudoRedirect
     ,checkSudoArgs
     ,checkSourceArgs
     ,checkChmodDashr
     ]
+
+optionalChecks = map fst optionalCommandChecks
+optionalCommandChecks :: [(CheckDescription, CommandCheck)]
+optionalCommandChecks = [
+    (newCheckDescription {
+        cdName = "deprecate-which",
+        cdDescription = "Suggest 'command -v' instead of 'which'",
+        cdPositive = "which javac",
+        cdNegative = "command -v javac"
+    }, checkWhich)
+    ]
+optionalCheckMap = Map.fromList $ map (\(desc, check) -> (cdName desc, check)) optionalCommandChecks
+
+prop_verifyOptionalExamples = all check optionalCommandChecks
+  where
+    check (desc, check) =
+      verify check (cdPositive desc)
+      && verifyNot check (cdNegative desc)
 
 buildCommandMap :: [CommandCheck] -> Map.Map CommandName (Token -> Analysis)
 buildCommandMap = foldl' addCheck Map.empty
@@ -128,8 +145,14 @@ getChecker list = Checker {
     map = buildCommandMap list
 
 
-checker :: Parameters -> Checker
-checker params = getChecker commandChecks
+checker :: AnalysisSpec -> Parameters -> Checker
+checker spec params = getChecker $ commandChecks ++ optionals
+  where
+    keys = asOptionalChecks spec
+    optionals =
+        if "all" `elem` keys
+        then map snd optionalCommandChecks
+        else mapMaybe (\x -> Map.lookup x optionalCheckMap) keys
 
 prop_checkTr1 = verify checkTr "tr [a-f] [A-F]"
 prop_checkTr2 = verify checkTr "tr 'a-z' 'A-Z'"

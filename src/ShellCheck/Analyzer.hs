@@ -35,17 +35,18 @@ analyzeScript spec = newAnalysisResult {
     arComments =
         filterByAnnotation spec params . nub $
             runAnalytics spec
-            ++ runChecker params (checkers params)
+            ++ runChecker params (checkers spec params)
 }
   where
     params = makeParameters spec
 
-checkers params = mconcat $ map ($ params) [
-    ShellCheck.Checks.Commands.checker,
+checkers spec params = mconcat $ map ($ params) [
+    ShellCheck.Checks.Commands.checker spec,
     ShellCheck.Checks.Custom.checker,
     ShellCheck.Checks.ShellSupport.checker
     ]
 
 optionalChecks = mconcat $ [
-    ShellCheck.Analytics.optionalChecks
+    ShellCheck.Analytics.optionalChecks,
+    ShellCheck.Checks.Commands.optionalChecks
     ]

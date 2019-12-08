@@ -9,6 +9,9 @@
 - SC2255: Suggest using `$((..))` in `[ 2*3 -eq 6 ]`
 - SC2256: Warn about translated strings that are known variables
 
+### Changed
+- SC2230: This check is now off by default
+
 ## v0.7.0 - 2019-07-28
 ### Added
 - Precompiled binaries for macOS and Linux aarch64

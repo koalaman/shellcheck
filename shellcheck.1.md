@@ -275,8 +275,8 @@ Here is an example `.shellcheckrc`:
     # Turn on warnings for unassigned uppercase variables
     enable=check-unassigned-uppercase
 
-    # Allow using `which` since it gives full paths and is common enough
-    disable=SC2230
+    # Allow [ ! -z foo ] instead of suggesting -n
+    disable=SC2236
 
 If no `.shellcheckrc` is found in any of the parent directories, ShellCheck
 will look in `~/.shellcheckrc` followed by the XDG config directory
