@@ -567,9 +567,12 @@ getReferencedVariableCommand _ = []
 --   VariableName :: String,   -- The variable name, i.e. foo
 --   VariableValue :: DataType -- A description of the value being assigned, i.e. "Literal string with value foo"
 -- )
-getModifiedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal _ x:_):rest)) =
+getModifiedVariableCommand base@(T_SimpleCommand i t (T_NormalWord _ (T_Literal _ x:_):rest)) =
    filter (\(_,_,s,_) -> not ("-" `isPrefixOf` s)) $
     case x of
+        "builtin" ->
+            getModifiedVariableCommand $ T_SimpleCommand i t rest
+
         "read" ->
             let params = map getLiteral rest
                 readArrayVars = getReadArrayVariables rest

@@ -2129,6 +2129,7 @@ prop_checkUnused43= verifyTree checkUnusedAssignments "DEFINE_string foo '' ''"
 prop_checkUnused44= verifyNotTree checkUnusedAssignments "DEFINE_string \"foo$ibar\" x y"
 prop_checkUnused45= verifyTree checkUnusedAssignments "readonly foo=bar"
 prop_checkUnused46= verifyTree checkUnusedAssignments "readonly foo=(bar)"
+prop_checkUnused47= verifyNotTree checkUnusedAssignments "foo=1; builtin echo \"$foo\""
 checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
     flow = variableFlow params
@@ -2189,6 +2190,7 @@ prop_checkUnassignedReferences35= verifyNotTree checkUnassignedReferences "echo 
 prop_checkUnassignedReferences36= verifyNotTree checkUnassignedReferences "read -a foo -r <<<\"foo bar\"; echo \"$foo\""
 prop_checkUnassignedReferences37= verifyNotTree checkUnassignedReferences "var=howdy; printf -v 'array[0]' %s \"$var\"; printf %s \"${array[0]}\";"
 prop_checkUnassignedReferences38= verifyTree (checkUnassignedReferences' True) "echo $VAR"
+prop_checkUnassignedReferences39= verifyNotTree checkUnassignedReferences "builtin read -r foo; echo \"$foo\""
 
 checkUnassignedReferences = checkUnassignedReferences' False
 checkUnassignedReferences' includeGlobals params t = warnings
