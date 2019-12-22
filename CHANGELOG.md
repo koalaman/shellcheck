@@ -3,6 +3,8 @@
 - `-f diff` no longer claims that it found more issues when it didn't
 - Known empty variables now correctly trigger SC2086
 - ShellCheck should now be compatible with Cabal 3
+- SC2154 and all command-specific checks now trigger for builtins
+  called with `builtin`
 
 ### Added
 - SC2254: Suggest quoting expansions in case statements
