@@ -2534,6 +2534,7 @@ prop_readCaseClause2 = isOk readCaseClause "case foo\n in * ) echo bar;; esac"
 prop_readCaseClause3 = isOk readCaseClause "case foo\n in * ) echo bar & ;; esac"
 prop_readCaseClause4 = isOk readCaseClause "case foo\n in *) echo bar ;& bar) foo; esac"
 prop_readCaseClause5 = isOk readCaseClause "case foo\n in *) echo bar;;& foo) baz;; esac"
+prop_readCaseClause6 = isOk readCaseClause "case foo\n in if) :;; done) :;; esac"
 readCaseClause = called "case expression" $ do
     start <- startSpan
     g_Case
