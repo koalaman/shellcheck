@@ -1040,14 +1040,16 @@ prop_readNormalWord9 = isOk readSubshell "(foo\\ ;\nbar)"
 prop_readNormalWord10 = isWarning readNormalWord "\x201Chello\x201D"
 prop_readNormalWord11 = isWarning readNormalWord "\x2018hello\x2019"
 prop_readNormalWord12 = isWarning readNormalWord "hello\x2018"
-readNormalWord = readNormalishWord ""
+readNormalWord = readNormalishWord "" ["do", "done", "then", "fi", "esac"]
 
-readNormalishWord end = do
+readPatternWord = readNormalishWord "" ["esac"]
+
+readNormalishWord end terms = do
     start <- startSpan
     pos <- getPosition
     x <- many1 (readNormalWordPart end)
     id <- endSpan start
-    checkPossibleTermination pos x
+    checkPossibleTermination pos x terms
     return $ T_NormalWord id x
 
 readIndexSpan = do
@@ -1067,10 +1069,10 @@ readIndexSpan = do
         id <- endSpan start
         return $ T_Literal id str
 
-checkPossibleTermination pos [T_Literal _ x] =
-    when (x `elem` ["do", "done", "then", "fi", "esac"]) $
+checkPossibleTermination pos [T_Literal _ x] terminators =
+    when (x `elem` terminators) $
         parseProblemAt pos WarningC 1010 $ "Use semicolon or linefeed before '" ++ x ++ "' (or quote to make it literal)."
-checkPossibleTermination _ _ = return ()
+checkPossibleTermination _ _ _ = return ()
 
 readNormalWordPart end = do
     notFollowedBy2 $ oneOf end
@@ -2655,7 +2657,7 @@ readCoProc = called "coproc" $ do
         return $ T_CoProcBody id body
 
 
-readPattern = (readNormalWord `thenSkip` spacing) `sepBy1` (char '|' `thenSkip` spacing)
+readPattern = (readPatternWord `thenSkip` spacing) `sepBy1` (char '|' `thenSkip` spacing)
 
 prop_readCompoundCommand = isOk readCompoundCommand "{ echo foo; }>/dev/null"
 readCompoundCommand = do
