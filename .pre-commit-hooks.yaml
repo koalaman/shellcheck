@@ -1,0 +1,7 @@
+# See https://pre-commit.com for more information
+-   id: shellcheck
+    name: shellcheck shell scripts
+    description: Validate shell scripts with shellcheck running in Docker
+    language: docker_image
+    entry: koalaman/shellcheck:v0.7.1
+    types: [shell]

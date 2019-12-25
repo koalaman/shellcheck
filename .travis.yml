@@ -65,6 +65,17 @@ before_install: |
   test "$TRAVIS_BRANCH" = master && TAGS="$TAGS latest" || true
   test -n "$TRAVIS_TAG"          && TAGS="$TAGS stable $TRAVIS_TAG" || true
   echo "Tags are $TAGS"
+  set -e
+  # The version encoded in pre-commit and built version must be in sync. If not,
+  # the pre-commit version was forgotten to be updated.
+  if [ -n "$TRAVIS_TAG" ]; then
+    precommit_tag="$(awk -F: '/^ *entry:/ {print $NF}' .pre-commit-hooks.yaml)"
+    if [ "$TRAVIS_TAG" != "$precommit_tag" ]; then
+      echo "Wrong version number $precommit_tag in .pre-commit-hooks.yaml"
+      sleep 1  # give Travis time to grab the error message
+      exit 1
+    fi
+  fi
 
 # This is in global context and runs for every stage that doesn't override it.
 script:
