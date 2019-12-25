@@ -57,6 +57,27 @@ jobs:
         - source ./.multi_arch_docker
         - set -ex; multi_arch_docker::main; set +x
 
+    # Run pre-commit checks with the shellcheck docker package that was just
+    # deployed.
+    - stage: Pre-commit checks
+      language: python
+      python: 3.7
+      cache:
+        - pip
+        - directories: $HOME/.cache/pre-commit
+      install: pip install pre-commit
+      script: |
+        # Run pre-commit. It also uses shellcheck on itself from the just built
+        # and deployed docker image.
+        # Use the first build tag, or if there isn't any use 'latest'.
+        set -e
+        tag="$(echo "${TAGS/ */}")"
+        tag="${tag:-latest}"
+        echo "tag: $tag"
+        sed -i.bak -e "s/\(shellcheck\):.*/\1:$tag/" .pre-commit-config.yaml
+        pre-commit run --all-files --show-diff-on-failure --color=always
+        mv .pre-commit-config.yaml.bak .pre-commit-config.yaml
+
 # This is in global context and runs for every stage that doesn't override it.
 before_install: |
   DOCKER_BASE="$DOCKER_USERNAME/shellcheck"
