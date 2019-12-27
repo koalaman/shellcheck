@@ -6,12 +6,18 @@ services:
 
 jobs:
   include:
-    - env: BUILD=linux
+    - stage: Test
+      env: BUILD=linux
     - env: BUILD=windows
     - env: BUILD=armv6hf
     - env: BUILD=aarch64
     - env: BUILD=osx
       os: osx
+
+    - stage: Deploy docker image
+      script:
+        - source ./.multi_arch_docker
+        - set -ex; multi_arch_docker::main; set +x
 
 before_install: |
   DOCKER_BASE="$DOCKER_USERNAME/shellcheck"
@@ -27,18 +33,6 @@ script:
   - ./striptests
   - set -ex; build_"$BUILD"; set +x;
   - ./.prepare_deploy
-
-after_success: |
-  if [ "$BUILD" = "linux" ]; then
-    docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
-    for repo in $DOCKER_BUILDS; do
-      for tag in $TAGS; do
-        echo "Deploying $repo:current as $repo:$tag...";
-        docker tag "$repo:current" "$repo:$tag" || exit 1;
-        docker push "$repo:$tag" || exit 1;
-      done;
-    done;
-  fi
 
 after_failure: |
   id
@@ -57,4 +51,5 @@ deploy:
   local_dir: deploy
   on:
     repo: koalaman/shellcheck
+    condition: $TRAVIS_BUILD_STAGE_NAME = Test
     all_branches: true

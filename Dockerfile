@@ -21,13 +21,6 @@ RUN cabal build Paths_ShellCheck && \
 RUN mkdir -p /out/bin && \
   cp shellcheck  /out/bin/
 
-# Resulting Alpine image
-FROM alpine:latest AS alpine
-LABEL maintainer="Vidar Holen <vidar@vidarholen.net>"
-COPY --from=build /out /
-
-# DELETE-MARKER (Remove everything below to keep the alpine image)
-
 # Resulting ShellCheck image
 FROM scratch
 LABEL maintainer="Vidar Holen <vidar@vidarholen.net>"
