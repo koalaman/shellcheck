@@ -59,8 +59,8 @@ build_osx() {
   # Darwin x86_64 executable
   brew update
   brew install cabal-install pandoc gnu-tar
-  sudo ln -s /usr/local/bin/gsha512sum /usr/local/bin/sha512sum
-  sudo ln -s /usr/local/bin/gtar /usr/local/bin/tar
+  sudo ln -sf /usr/local/bin/gsha512sum /usr/local/bin/sha512sum
+  sudo ln -sf /usr/local/bin/gtar /usr/local/bin/tar
   export PATH="/usr/local/bin:$PATH"
 
   cabal update
