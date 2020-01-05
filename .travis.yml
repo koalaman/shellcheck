@@ -1,23 +1,17 @@
-
-sudo: required
-
-language: sh
+language: shell
+os: linux
 
 services:
   - docker
 
-matrix:
+jobs:
   include:
-    - os: linux
-      env: BUILD=linux
-    - os: linux
-      env: BUILD=windows
-    - os: linux
-      env: BUILD=armv6hf
-    - os: linux
-      env: BUILD=aarch64
-    - os: osx
-      env: BUILD=osx
+    - env: BUILD=linux
+    - env: BUILD=windows
+    - env: BUILD=armv6hf
+    - env: BUILD=aarch64
+    - env: BUILD=osx
+      os: osx
 
 before_install: |
   DOCKER_BASE="$DOCKER_USERNAME/shellcheck"
@@ -60,7 +54,7 @@ deploy:
   secret_access_key:
     secure: Bcx2cT0/E2ikj7sdamVq52xlLZF9dz9ojGPtoKfPyQhkkZa+McVI4xgUSuyyoSxyKj77sofx2y8m6PJYYumT4g5hREV1tfeUkl0J2DQFMbGDYEt7kxVkXCxojNvhHwTzLFv0ezstrxWWxQm81BfQQ4U9lggRXtndAP4czZnOeHPINPSiue1QNwRAEw05r5UoIUJXy/5xyUrjIxn381pAs+gJqP2COeN9kTKYH53nS/AAws29RprfZFnPlo7xxWmcjRcdS5KPdGXI/c6tQp5zl2iTh510VC1PN2w1Wvnn/oNWhiNdqPyVDsojIX5+sS3nejzJA+KFMxXSBlyXIY3wPpS/MdscU79X6Q5f9ivsFfsm7gNBmxHUPNn0HAvU4ROT/CCE9j6jSbs5PC7QBo3CK4++jxAwE/pd9HUc2rs3k0ofx3rgveJ7txpy5yPKfwIIBi98kVKlC4w7dLvNTOfjW1Imt2yH87XTfsE0UIG9st1WII6s4l/WgBx2GuwKdt6+3QUYiAlCFckkxWi+fAvpHZUEL43Qxub5fN+ZV7Zib1n7opchH4QKGBb6/y0WaDCmtCfu0lppoe/TH6saOTjDFj67NJSElK6ZDxGZ3uw4R+ret2gm6WRKT2Oeub8J33VzSa7VkmFpMPrAAfPa9N1Z4ewBLoTmvxSg2A0dDrCdJio=
   bucket: shellcheck
-  local-dir: deploy
+  local_dir: deploy
   on:
     repo: koalaman/shellcheck
     all_branches: true
