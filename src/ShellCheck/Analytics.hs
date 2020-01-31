@@ -2191,6 +2191,16 @@ prop_checkUnassignedReferences37= verifyNotTree checkUnassignedReferences "var=h
 prop_checkUnassignedReferences38= verifyTree (checkUnassignedReferences' True) "echo $VAR"
 prop_checkUnassignedReferences39= verifyNotTree checkUnassignedReferences "builtin export var=4; echo $var"
 
+prop_checkUnassignedReferences_minusNPlain   = verifyNotTree checkUnassignedReferences "if [ -n \"$x\" ]; then echo $x; fi"
+prop_checkUnassignedReferences_minusZPlain   = verifyNotTree checkUnassignedReferences "if [ -z \"$x\" ]; then echo \"\"; fi"
+prop_checkUnassignedReferences_minusNBraced  = verifyNotTree checkUnassignedReferences "if [ -n \"${x}\" ]; then echo $x; fi"
+prop_checkUnassignedReferences_minusZBraced  = verifyNotTree checkUnassignedReferences "if [ -z \"${x}\" ]; then echo \"\"; fi"
+prop_checkUnassignedReferences_minusNDefault = verifyNotTree checkUnassignedReferences "if [ -n \"${x:-}\" ]; then echo $x; fi"
+prop_checkUnassignedReferences_minusZDefault = verifyNotTree checkUnassignedReferences "if [ -z \"${x:-}\" ]; then echo \"\"; fi"
+
+prop_checkUnassignedReferences_minusZInsteadOfN       = verifyTree checkUnassignedReferences "if [ -z \"$x\" ]; then echo $x; fi"
+prop_checkUnassignedReferences_minusZInsteadOfNBraced = verifyTree checkUnassignedReferences "if [ -z \"${x}\" ]; then echo $x; fi"
+
 checkUnassignedReferences = checkUnassignedReferences' False
 checkUnassignedReferences' includeGlobals params t = warnings
   where
