@@ -487,7 +487,7 @@ checkBraceExpansionVars = ForShell [Bash] f
             T_DollarBraced {} -> return "$"
             T_DollarExpansion {} -> return "$"
             T_DollarArithmetic {} -> return "$"
-            otherwise -> return "-"
+            _ -> return "-"
     toString t = fromJust $ getLiteralStringExt literalExt t
     isEvaled t = do
         cmd <- getClosestCommandM t
