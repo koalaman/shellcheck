@@ -329,12 +329,11 @@ getCurrentContexts = Ms.gets contextStack
 
 popContext = do
     v <- getCurrentContexts
-    if not $ null v
-        then do
-            let (a:r) = v
+    case v of
+        (a:r) -> do
             setCurrentContexts r
             return $ Just a
-        else
+        [] ->
             return Nothing
 
 pushContext c = do
