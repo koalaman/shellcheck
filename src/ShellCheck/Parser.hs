@@ -34,7 +34,7 @@ import Control.Monad.Identity
 import Control.Monad.Trans
 import Data.Char
 import Data.Functor
-import Data.List (isPrefixOf, isInfixOf, isSuffixOf, partition, sortBy, intercalate, nub)
+import Data.List (isPrefixOf, isInfixOf, isSuffixOf, partition, sortBy, intercalate, nub, find)
 import Data.Maybe
 import Data.Monoid
 import Debug.Trace
@@ -589,7 +589,7 @@ readConditionContents single =
 
     checkTrailingOp x = fromMaybe (return ()) $ do
         (T_Literal id str) <- getTrailingUnquotedLiteral x
-        trailingOp <- listToMaybe (filter (`isSuffixOf` str) binaryTestOps)
+        trailingOp <- find (`isSuffixOf` str) binaryTestOps
         return $ parseProblemAtId id ErrorC 1108 $
             "You need a space before and after the " ++ trailingOp ++ " ."
 

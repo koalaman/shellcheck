@@ -340,8 +340,8 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
             potentially $ do
                 allowed' <- Map.lookup name allowedFlags
                 allowed <- allowed'
-                (word, flag) <- listToMaybe $
-                    filter (\x -> (not . null . snd $ x) && snd x `notElem` allowed) flags
+                (word, flag) <- find
+                    (\x -> (not . null . snd $ x) && snd x `notElem` allowed) flags
                 return . warnMsg (getId word) $ name ++ " -" ++ flag ++ " is"
 
             when (name == "source") $ warnMsg id "'source' in place of '.' is"

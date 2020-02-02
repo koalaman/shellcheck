@@ -1234,10 +1234,10 @@ checkLiteralBreakingTest _ t = potentially $
         return ()
 
     comparisonWarning list = do
-        token <- listToMaybe $ filter hasEquals list
+        token <- find hasEquals list
         return $ err (getId token) 2077 "You need spaces around the comparison operator."
     tautologyWarning t s = do
-        token <- listToMaybe $ filter isNonEmpty $ getWordParts t
+        token <- find isNonEmpty $ getWordParts t
         return $ err (getId token) 2157 s
 
 prop_checkConstantNullary = verify checkConstantNullary "[[ '$(foo)' ]]"
@@ -2910,7 +2910,7 @@ checkLoopVariableReassignment params token =
   where
     check = do
         str <- loopVariable token
-        next <- listToMaybe $ filter (\x -> loopVariable x == Just str) path
+        next <- find (\x -> loopVariable x == Just str) path
         return $ do
             warn (getId token) 2165 "This nested loop overrides the index variable of its parent."
             warn (getId next)  2167 "This parent loop has its index variable overridden."
