@@ -325,7 +325,7 @@ parseProblem level code msg = do
     parseProblemAt pos level code msg
 
 setCurrentContexts c = Ms.modify (\state -> state { contextStack = c })
-getCurrentContexts = contextStack <$> Ms.get
+getCurrentContexts = Ms.gets contextStack
 
 popContext = do
     v <- getCurrentContexts

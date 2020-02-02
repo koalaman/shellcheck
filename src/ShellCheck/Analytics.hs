@@ -1961,7 +1961,7 @@ prop_checkQuotesInLiterals9 = verifyNotTree checkQuotesInLiterals "param=\"/foo/
 checkQuotesInLiterals params t =
     doVariableFlowAnalysis readF writeF Map.empty (variableFlow params)
   where
-    getQuotes name = fmap (Map.lookup name) get
+    getQuotes name = gets (Map.lookup name)
     setQuotes name ref = modify $ Map.insert name ref
     deleteQuotes = modify . Map.delete
     parents = parentMap params
