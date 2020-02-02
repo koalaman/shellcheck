@@ -960,8 +960,6 @@ getOpts string flags = process flags
                 more <- process rest2
                 return $ (flag1, token1) : more
 
-getOpt str flags = snd <$> (listToMaybe $ filter (\(f, _) -> f == str) $ flags)
-
 supportsArrays shell = shell == Bash || shell == Ksh
 
 -- Returns true if the shell is Bash or Ksh (sorry for the name, Ksh)

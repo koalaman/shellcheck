@@ -2840,7 +2840,7 @@ checkReadWithoutR _ t@T_SimpleCommand {} | t `isUnqualifiedCommand` "read" =
     flags = getAllFlags t
     has_t0 = fromMaybe False $ do
         parsed <- getOpts flagsForRead flags
-        t <- getOpt "t" parsed
+        t <- lookup "t" parsed
         str <- getLiteralString t
         return $ str == "0"
 
