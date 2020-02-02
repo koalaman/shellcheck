@@ -643,7 +643,7 @@ getModifiedVariableCommand base@(T_SimpleCommand id cmdPrefix (T_NormalWord _ (T
     getModifierParam _ _ = []
 
     letParamToLiteral token =
-          if var == ""
+          if null var
             then []
             else [(base, token, var, DataString $ SourceFrom [stripEqualsFrom token])]
         where var = takeWhile isVariableChar $ dropWhile (`elem` "+-") $ concat $ oversimplify token
@@ -952,7 +952,7 @@ getOpts string flags = process flags
         takesArg <- Map.lookup flag1 flagMap
         if takesArg
             then do
-                guard $ flag2 == ""
+                guard $ null flag2
                 more <- process rest
                 return $ (flag1, token2) : more
             else do

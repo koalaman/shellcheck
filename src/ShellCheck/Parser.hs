@@ -3169,7 +3169,7 @@ readScriptFile sourced = do
             Nothing -> parseProblemAt pos ErrorC 1008 "This shebang was unrecognized. ShellCheck only supports sh/bash/dash/ksh. Add a 'shell' directive to specify."
 
     isValidShell s =
-        let good = s == "" || any (`isPrefixOf` s) goodShells
+        let good = null s || any (`isPrefixOf` s) goodShells
             bad = any (`isPrefixOf` s) badShells
         in
             if good

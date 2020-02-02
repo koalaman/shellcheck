@@ -345,7 +345,7 @@ returnOrExit multi invalid = (f . arguments)
             invalid (getId value)
     f _ = return ()
 
-    isInvalid s = s == "" || any (not . isDigit) s || length s > 5
+    isInvalid s = null s || any (not . isDigit) s || length s > 5
         || let value = (read s :: Integer) in value > 255
 
     literal token = fromJust $ getLiteralStringExt lit token
@@ -706,7 +706,7 @@ checkReadExpansions = CommandCheck (Exactly "read") check
     options = getGnuOpts flagsForRead
     getVars cmd = fromMaybe [] $ do
         opts <- options cmd
-        return [y | (x,y) <- opts, x == "" || x == "a"]
+        return [y | (x,y) <- opts, null x || x == "a"]
 
     check cmd = mapM_ warning $ getVars cmd
     warning t = potentially $ do
@@ -1057,7 +1057,7 @@ checkSudoRedirect = CommandCheck (Basename "sudo") f
             Just (T_Redirecting _ redirs _) ->
                 mapM_ warnAbout redirs
     warnAbout (T_FdRedirect _ s (T_IoFile id op file))
-        | (s == "" || s == "&") && not (special file) =
+        | (null s || s == "&") && not (special file) =
         case op of
             T_Less _ ->
               info (getId op) 2024

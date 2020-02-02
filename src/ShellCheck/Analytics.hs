@@ -563,7 +563,7 @@ checkShebang params (T_Annotation _ list t) =
     isOverride _ = False
 checkShebang params (T_Script _ (T_Literal id sb) _) = execWriter $ do
     unless (shellTypeSpecified params) $ do
-        when (sb == "") $
+        when (null sb) $
             err id 2148 "Tips depend on target shell and yours is unknown. Add a shebang."
         when (executableFromShebang sb == "ash") $
             warn id 2187 "Ash scripts will be checked as Dash. Add '# shellcheck shell=dash' to silence."
@@ -2332,7 +2332,7 @@ checkWhileReadPitfalls _ (T_WhileExpression id [command] contents)
     checkMuncher _ = return ()
 
     stdinRedirect (T_FdRedirect _ fd _)
-        | fd == "" || fd == "0" = True
+        | null fd || fd == "0" = True
     stdinRedirect _ = False
 checkWhileReadPitfalls _ _ = return ()
 
