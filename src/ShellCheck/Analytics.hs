@@ -2651,21 +2651,25 @@ checkMultipleAppends params t =
 
 prop_checkSuspiciousIFS1 = verify checkSuspiciousIFS "IFS=\"\\n\""
 prop_checkSuspiciousIFS2 = verifyNot checkSuspiciousIFS "IFS=$'\\t'"
-checkSuspiciousIFS params (T_Assignment id Assign "IFS" [] value) =
+prop_checkSuspiciousIFS3 = verify checkSuspiciousIFS "IFS=' \\t\\n'"
+checkSuspiciousIFS params (T_Assignment _ _ "IFS" [] value) =
     potentially $ do
         str <- getLiteralString value
         return $ check str
   where
-    n = if shellType params == Sh then "'<literal linefeed here>'" else "$'\\n'"
-    t = if shellType params == Sh then "\"$(printf '\\t')\"" else "$'\\t'"
+    hasDollarSingle = shellType params == Bash || shellType params == Ksh
+    n = if hasDollarSingle then  "$'\\n'" else "'<literal linefeed here>'"
+    t = if hasDollarSingle then  "$'\\t'" else "\"$(printf '\\t')\""
     check value =
         case value of
             "\\n" -> suggest n
-            "/n" -> suggest n
             "\\t" -> suggest t
-            "/t" -> suggest t
+            x | '\\' `elem` x -> suggest2 "a literal backslash"
+            x | 'n' `elem` x -> suggest2 "the literal letter 'n'"
+            x | 't' `elem` x -> suggest2 "the literal letter 't'"
             _ -> return ()
-    suggest r = warn id 2141 $ "Did you mean IFS=" ++ r ++ " ?"
+    suggest r = warn (getId value) 2141 $ "This backslash is literal. Did you mean IFS=" ++ r ++ " ?"
+    suggest2 desc = warn (getId value) 2141 $ "This IFS value contains " ++ desc ++ ". For tabs/linefeeds/escapes, use $'..', literal, or printf."
 checkSuspiciousIFS _ _ = return ()
 
 
