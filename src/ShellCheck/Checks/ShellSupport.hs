@@ -491,7 +491,7 @@ checkBraceExpansionVars = ForShell [Bash] f
     toString t = fromJust $ getLiteralStringExt literalExt t
     isEvaled t = do
         cmd <- getClosestCommandM t
-        return $ isJust cmd && fromJust cmd `isUnqualifiedCommand` "eval"
+        return $ maybe False (`isUnqualifiedCommand` "eval") cmd
 
 
 prop_checkMultiDimensionalArrays1 = verify checkMultiDimensionalArrays "foo[a][b]=3"
