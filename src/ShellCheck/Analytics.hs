@@ -1644,9 +1644,9 @@ checkSpuriousExec _ = doLists
     doList = doList' . stripCleanup
     -- The second parameter is True if we are in a loop
     -- In that case we should emit the warning also if `exec' is the last statement
-    doList' t@(current:following:_) False = do
+    doList' (current:t@(following:_)) False = do
         commentIfExec current
-        doList (tail t) False
+        doList t False
     doList' (current:tail) True = do
         commentIfExec current
         doList tail True
