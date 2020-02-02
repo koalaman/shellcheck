@@ -706,7 +706,7 @@ checkReadExpansions = CommandCheck (Exactly "read") check
     options = getGnuOpts flagsForRead
     getVars cmd = fromMaybe [] $ do
         opts <- options cmd
-        return . map snd $ filter (\(x,_) -> x == "" || x == "a") opts
+        return [y | (x,y) <- opts, x == "" || x == "a"]
 
     check cmd = mapM_ warning $ getVars cmd
     warning t = potentially $ do
@@ -995,7 +995,7 @@ missingDestination handler token = do
         _ -> return ()
   where
     args = getAllFlags token
-    params = map fst $ filter (\(_,x) -> x == "") args
+    params = [x | (x,"") <- args]
     hasTarget =
         any (\(_,x) -> x /= "" && x `isPrefixOf` "target-directory") args
 
@@ -1083,7 +1083,7 @@ checkSudoArgs = CommandCheck (Basename "sudo") f
   where
     f t = potentially $ do
         opts <- parseOpts t
-        let nonFlags = map snd $ filter (\(flag, _) -> flag == "") opts
+        let nonFlags = [x | ("",x) <- opts]
         commandArg <- nonFlags !!! 0
         command <- getLiteralString commandArg
         guard $ command `elem` builtins
