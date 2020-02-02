@@ -200,7 +200,7 @@ doReplace start end o r =
     let si = fromIntegral (start-1)
         ei = fromIntegral (end-1)
         (x, xs) = splitAt si o
-        (y, z) = splitAt (ei - si) xs
+        z = drop (ei - si) xs
     in
     x ++ r ++ z
 
