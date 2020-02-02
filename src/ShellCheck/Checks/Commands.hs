@@ -997,8 +997,7 @@ missingDestination handler token = do
     args = getAllFlags token
     params = map fst $ filter (\(_,x) -> x == "") args
     hasTarget =
-        any (\x -> x /= "" && x `isPrefixOf` "target-directory") $
-            map snd args
+        any (\(_,x) -> x /= "" && x `isPrefixOf` "target-directory") args
 
 prop_checkMvArguments1 = verify    checkMvArguments "mv 'foo bar'"
 prop_checkMvArguments2 = verifyNot checkMvArguments "mv foo bar"
