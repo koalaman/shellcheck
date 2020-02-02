@@ -3169,7 +3169,7 @@ checkSplittingInArrays params t =
         T_DollarBraced id _ str |
             not (isCountingReference part)
             && not (isQuotedAlternativeReference part)
-            && not (getBracedReference (bracedString part) `elem` variablesWithoutSpaces)
+            && getBracedReference (bracedString part) `notElem` variablesWithoutSpaces
             -> warn id 2206 $
                 if shellType params == Ksh
                 then "Quote to prevent word splitting/globbing, or split robustly with read -A or while read."
