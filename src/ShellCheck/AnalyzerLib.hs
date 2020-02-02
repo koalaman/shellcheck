@@ -612,8 +612,7 @@ getModifiedVariableCommand base@(T_SimpleCommand id cmdPrefix (T_NormalWord _ (T
         _ -> []
   where
     flags = map snd $ getAllFlags base
-    stripEquals s = let rest = dropWhile (/= '=') s in
-        if rest == "" then "" else tail rest
+    stripEquals s = drop 1 $ dropWhile (/= '=') s
     stripEqualsFrom (T_NormalWord id1 (T_Literal id2 s:rs)) =
         T_NormalWord id1 (T_Literal id2 (stripEquals s):rs)
     stripEqualsFrom (T_NormalWord id1 [T_DoubleQuoted id2 [T_Literal id3 s]]) =
