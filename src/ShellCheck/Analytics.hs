@@ -2635,8 +2635,8 @@ checkMultipleAppends params t =
   where
     checkList list =
         mapM_ checkGroup (groupWith (fmap fst) $ map getTarget list)
-    checkGroup (f:_:_:_) | isJust f =
-        style (snd $ fromJust f) 2129
+    checkGroup (Just (_,id):_:_:_) =
+        style id 2129
             "Consider using { cmd1; cmd2; } >> file instead of individual redirects."
     checkGroup _ = return ()
     getTarget (T_Annotation _ _ t) = getTarget t
