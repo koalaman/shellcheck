@@ -88,9 +88,9 @@ checkScript sys spec = do
                     asOptionalChecks = csOptionalChecks spec
                 } where as = newAnalysisSpec root
         let analysisMessages =
-                fromMaybe [] $
+                maybe []
                     (arComments . analyzeScript . analysisSpec)
-                        <$> prRoot result
+                        $ prRoot result
         let translator = tokenToPosition tokenPositions
         return . nub . sortMessages . filter shouldInclude $
             (parseMessages ++ map translator analysisMessages)

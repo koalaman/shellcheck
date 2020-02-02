@@ -784,8 +784,8 @@ isCommand token str = isCommandMatch token (\cmd -> cmd  == str || ('/' : str) `
 -- Compare a command to a literal. Like above, but checks full path.
 isUnqualifiedCommand token str = isCommandMatch token (== str)
 
-isCommandMatch token matcher = fromMaybe False $
-    fmap matcher (getCommandName token)
+isCommandMatch token matcher = maybe False
+    matcher (getCommandName token)
 
 -- Does this regex look like it was intended as a glob?
 -- True:  *foo*

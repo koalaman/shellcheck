@@ -409,7 +409,7 @@ prop_checkArithmeticOpCommand1 = verify checkArithmeticOpCommand "i=i + 1"
 prop_checkArithmeticOpCommand2 = verify checkArithmeticOpCommand "foo=bar * 2"
 prop_checkArithmeticOpCommand3 = verifyNot checkArithmeticOpCommand "foo + opts"
 checkArithmeticOpCommand _ (T_SimpleCommand id [T_Assignment {}] (firstWord:_)) =
-    fromMaybe (return ()) $ check <$> getGlobOrLiteralString firstWord
+    maybe (return ()) check $ getGlobOrLiteralString firstWord
   where
     check op =
         when (op `elem` ["+", "-", "*", "/"]) $
@@ -493,8 +493,8 @@ checkPipePitfalls _ (T_Pipeline id _ commands) = do
 
     for ["grep", "wc"] $
         \(grep:wc:_) ->
-            let flagsGrep = fromMaybe [] $ map snd . getAllFlags <$> getCommand grep
-                flagsWc = fromMaybe [] $ map snd . getAllFlags <$> getCommand wc
+            let flagsGrep = maybe [] (map snd . getAllFlags) $ getCommand grep
+                flagsWc = maybe [] (map snd . getAllFlags) $ getCommand wc
             in
                 unless (any (`elem` ["o", "only-matching", "r", "R", "recursive"]) flagsGrep || any (`elem` ["m", "chars", "w", "words", "c", "bytes", "L", "max-line-length"]) flagsWc || null flagsWc) $
                     style (getId grep) 2126 "Consider using grep -c instead of grep|wc -l."
@@ -3140,9 +3140,9 @@ checkSubshellAsTest _ t =
 
 
     checkParams id first second = do
-        when (fromMaybe False $ (`elem` unaryTestOps) <$> getLiteralString first) $
+        when (maybe False (`elem` unaryTestOps) $ getLiteralString first) $
             err id 2204 "(..) is a subshell. Did you mean [ .. ], a test expression?"
-        when (fromMaybe False $ (`elem` binaryTestOps) <$> getLiteralString second) $
+        when (maybe False (`elem` binaryTestOps) $ getLiteralString second) $
             warn id 2205 "(..) is a subshell. Did you mean [ .. ], a test expression?"
 
 
