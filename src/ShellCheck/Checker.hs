@@ -104,7 +104,7 @@ checkScript sys spec = do
             code     = cCode (pcComment pc)
             severity = cSeverity (pcComment pc)
 
-    sortMessages = sortBy (comparing order)
+    sortMessages = sortOn order
     order pc =
         let pos = pcStartPos pc
             comment = pcComment pc in
