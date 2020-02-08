@@ -3025,9 +3025,13 @@ prop_checkArrayAssignmentIndices3 = verifyNotTree checkArrayAssignmentIndices "d
 prop_checkArrayAssignmentIndices4 = verifyTree checkArrayAssignmentIndices "typeset -A foo; foo+=(bar)"
 prop_checkArrayAssignmentIndices5 = verifyTree checkArrayAssignmentIndices "arr=( [foo]= bar )"
 prop_checkArrayAssignmentIndices6 = verifyTree checkArrayAssignmentIndices "arr=( [foo] = bar )"
-prop_checkArrayAssignmentIndices7 = verifyTree checkArrayAssignmentIndices "arr=( var=value )"
+prop_checkArrayAssignmentIndices7 = verifyNotTree checkArrayAssignmentIndices "arr=( var=value )"
 prop_checkArrayAssignmentIndices8 = verifyNotTree checkArrayAssignmentIndices "arr=( [foo]=bar )"
 prop_checkArrayAssignmentIndices9 = verifyNotTree checkArrayAssignmentIndices "arr=( [foo]=\"\" )"
+prop_checkArrayAssignmentIndices10 = verifyTree checkArrayAssignmentIndices "declare -A arr; arr=( var=value )"
+prop_checkArrayAssignmentIndices11 = verifyTree checkArrayAssignmentIndices "arr=( 1=value )"
+prop_checkArrayAssignmentIndices12 = verifyTree checkArrayAssignmentIndices "arr=( $a=value )"
+prop_checkArrayAssignmentIndices13 = verifyTree checkArrayAssignmentIndices "arr=( $((1+1))=value )"
 checkArrayAssignmentIndices params root =
     runNodeAnalysis check params root
   where
@@ -3052,7 +3056,7 @@ checkArrayAssignmentIndices params root =
                     (id, str) <- case part of
                         T_Literal id str -> [(id,str)]
                         _ -> []
-                    guard $ '=' `elem` str
+                    guard $ '=' `elem` str && hasNumericIndex str
                     return $ warnWithFix id 2191 "The = here is literal. To assign by index, use ( [index]=value ) with no spaces. To keep as literal, quote it." (surroundWidth id params "\"")
                 in
                     if null literalEquals && isAssociative
@@ -3060,6 +3064,9 @@ checkArrayAssignmentIndices params root =
                     else sequence_ literalEquals
 
             _ -> return ()
+      where
+        hasNumericIndex str = all isDigit $ takeWhile (/= '=') str
+
 
 prop_checkUnmatchableCases1 = verify checkUnmatchableCases "case foo in bar) true; esac"
 prop_checkUnmatchableCases2 = verify checkUnmatchableCases "case foo-$bar in ??|*) true; esac"
