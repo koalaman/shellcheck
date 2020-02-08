@@ -3052,11 +3052,9 @@ checkArrayAssignmentIndices params root =
 
             T_NormalWord _ parts ->
                 let literalEquals = do
-                    part <- parts
-                    (id, str) <- case part of
-                        T_Literal id str -> [(id,str)]
-                        _ -> []
-                    guard $ '=' `elem` str && hasNumericIndex str
+                    T_Literal id str <- parts
+                    let (before, after) = break ('=' ==) str
+                    guard $ all isDigit before && not (null after)
                     return $ warnWithFix id 2191 "The = here is literal. To assign by index, use ( [index]=value ) with no spaces. To keep as literal, quote it." (surroundWidth id params "\"")
                 in
                     if null literalEquals && isAssociative
@@ -3064,8 +3062,6 @@ checkArrayAssignmentIndices params root =
                     else sequence_ literalEquals
 
             _ -> return ()
-      where
-        hasNumericIndex str = all isDigit $ takeWhile (/= '=') str
 
 
 prop_checkUnmatchableCases1 = verify checkUnmatchableCases "case foo in bar) true; esac"
