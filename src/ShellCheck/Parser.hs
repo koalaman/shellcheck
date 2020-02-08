@@ -34,7 +34,7 @@ import Control.Monad.Identity
 import Control.Monad.Trans
 import Data.Char
 import Data.Functor
-import Data.List (isPrefixOf, isInfixOf, isSuffixOf, partition, sortBy, intercalate, nub)
+import Data.List (isPrefixOf, isInfixOf, isSuffixOf, partition, sortBy, intercalate, nub, find)
 import Data.Maybe
 import Data.Monoid
 import Debug.Trace
@@ -325,16 +325,15 @@ parseProblem level code msg = do
     parseProblemAt pos level code msg
 
 setCurrentContexts c = Ms.modify (\state -> state { contextStack = c })
-getCurrentContexts = contextStack <$> Ms.get
+getCurrentContexts = Ms.gets contextStack
 
 popContext = do
     v <- getCurrentContexts
-    if not $ null v
-        then do
-            let (a:r) = v
+    case v of
+        (a:r) -> do
             setCurrentContexts r
             return $ Just a
-        else
+        [] ->
             return Nothing
 
 pushContext c = do
@@ -589,7 +588,7 @@ readConditionContents single =
 
     checkTrailingOp x = fromMaybe (return ()) $ do
         (T_Literal id str) <- getTrailingUnquotedLiteral x
-        trailingOp <- listToMaybe (filter (`isSuffixOf` str) binaryTestOps)
+        trailingOp <- find (`isSuffixOf` str) binaryTestOps
         return $ parseProblemAtId id ErrorC 1108 $
             "You need a space before and after the " ++ trailingOp ++ " ."
 
@@ -3169,7 +3168,7 @@ readScriptFile sourced = do
             Nothing -> parseProblemAt pos ErrorC 1008 "This shebang was unrecognized. ShellCheck only supports sh/bash/dash/ksh. Add a 'shell' directive to specify."
 
     isValidShell s =
-        let good = s == "" || any (`isPrefixOf` s) goodShells
+        let good = null s || any (`isPrefixOf` s) goodShells
             bad = any (`isPrefixOf` s) badShells
         in
             if good

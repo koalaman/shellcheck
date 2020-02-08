@@ -345,7 +345,7 @@ returnOrExit multi invalid = (f . arguments)
             invalid (getId value)
     f _ = return ()
 
-    isInvalid s = s == "" || any (not . isDigit) s || length s > 5
+    isInvalid s = null s || any (not . isDigit) s || length s > 5
         || let value = (read s :: Integer) in value > 255
 
     literal token = fromJust $ getLiteralStringExt lit token
@@ -706,7 +706,7 @@ checkReadExpansions = CommandCheck (Exactly "read") check
     options = getGnuOpts flagsForRead
     getVars cmd = fromMaybe [] $ do
         opts <- options cmd
-        return . map snd $ filter (\(x,_) -> x == "" || x == "a") opts
+        return [y | (x,y) <- opts, null x || x == "a"]
 
     check cmd = mapM_ warning $ getVars cmd
     warning t = potentially $ do
@@ -995,10 +995,9 @@ missingDestination handler token = do
         _ -> return ()
   where
     args = getAllFlags token
-    params = map fst $ filter (\(_,x) -> x == "") args
+    params = [x | (x,"") <- args]
     hasTarget =
-        any (\x -> x /= "" && x `isPrefixOf` "target-directory") $
-            map snd args
+        any (\(_,x) -> x /= "" && x `isPrefixOf` "target-directory") args
 
 prop_checkMvArguments1 = verify    checkMvArguments "mv 'foo bar'"
 prop_checkMvArguments2 = verifyNot checkMvArguments "mv foo bar"
@@ -1058,7 +1057,7 @@ checkSudoRedirect = CommandCheck (Basename "sudo") f
             Just (T_Redirecting _ redirs _) ->
                 mapM_ warnAbout redirs
     warnAbout (T_FdRedirect _ s (T_IoFile id op file))
-        | (s == "" || s == "&") && not (special file) =
+        | (null s || s == "&") && not (special file) =
         case op of
             T_Less _ ->
               info (getId op) 2024
@@ -1084,7 +1083,7 @@ checkSudoArgs = CommandCheck (Basename "sudo") f
   where
     f t = potentially $ do
         opts <- parseOpts t
-        let nonFlags = map snd $ filter (\(flag, _) -> flag == "") opts
+        let nonFlags = [x | ("",x) <- opts]
         commandArg <- nonFlags !!! 0
         command <- getLiteralString commandArg
         guard $ command `elem` builtins

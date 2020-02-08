@@ -200,7 +200,7 @@ doReplace start end o r =
     let si = fromIntegral (start-1)
         ei = fromIntegral (end-1)
         (x, xs) = splitAt si o
-        (y, z) = splitAt (ei - si) xs
+        z = drop (ei - si) xs
     in
     x ++ r ++ z
 
@@ -295,7 +295,7 @@ prop_pstreeSumsCorrectly kvs targets =
     -- Trivial O(n * m) implementation
     dumbPrefixSums :: [(Int, Int)] -> [Int] -> [Int]
     dumbPrefixSums kvs targets =
-        let prefixSum target = sum . map snd . filter (\(k,v) -> k <= target) $ kvs
+        let prefixSum target = sum [v | (k,v) <- kvs, k <= target]
         in map prefixSum targets
     -- PSTree O(n * log m) implementation
     smartPrefixSums :: [(Int, Int)] -> [Int] -> [Int]

@@ -409,7 +409,7 @@ prop_checkArithmeticOpCommand1 = verify checkArithmeticOpCommand "i=i + 1"
 prop_checkArithmeticOpCommand2 = verify checkArithmeticOpCommand "foo=bar * 2"
 prop_checkArithmeticOpCommand3 = verifyNot checkArithmeticOpCommand "foo + opts"
 checkArithmeticOpCommand _ (T_SimpleCommand id [T_Assignment {}] (firstWord:_)) =
-    fromMaybe (return ()) $ check <$> getGlobOrLiteralString firstWord
+    maybe (return ()) check $ getGlobOrLiteralString firstWord
   where
     check op =
         when (op `elem` ["+", "-", "*", "/"]) $
@@ -493,8 +493,8 @@ checkPipePitfalls _ (T_Pipeline id _ commands) = do
 
     for ["grep", "wc"] $
         \(grep:wc:_) ->
-            let flagsGrep = fromMaybe [] $ map snd . getAllFlags <$> getCommand grep
-                flagsWc = fromMaybe [] $ map snd . getAllFlags <$> getCommand wc
+            let flagsGrep = maybe [] (map snd . getAllFlags) $ getCommand grep
+                flagsWc = maybe [] (map snd . getAllFlags) $ getCommand wc
             in
                 unless (any (`elem` ["o", "only-matching", "r", "R", "recursive"]) flagsGrep || any (`elem` ["m", "chars", "w", "words", "c", "bytes", "L", "max-line-length"]) flagsWc || null flagsWc) $
                     style (getId grep) 2126 "Consider using grep -c instead of grep|wc -l."
@@ -563,7 +563,7 @@ checkShebang params (T_Annotation _ list t) =
     isOverride _ = False
 checkShebang params (T_Script _ (T_Literal id sb) _) = execWriter $ do
     unless (shellTypeSpecified params) $ do
-        when (sb == "") $
+        when (null sb) $
             err id 2148 "Tips depend on target shell and yours is unknown. Add a shebang."
         when (executableFromShebang sb == "ash") $
             warn id 2187 "Ash scripts will be checked as Dash. Add '# shellcheck shell=dash' to silence."
@@ -1234,10 +1234,10 @@ checkLiteralBreakingTest _ t = potentially $
         return ()
 
     comparisonWarning list = do
-        token <- listToMaybe $ filter hasEquals list
+        token <- find hasEquals list
         return $ err (getId token) 2077 "You need spaces around the comparison operator."
     tautologyWarning t s = do
-        token <- listToMaybe $ filter isNonEmpty $ getWordParts t
+        token <- find isNonEmpty $ getWordParts t
         return $ err (getId token) 2157 s
 
 prop_checkConstantNullary = verify checkConstantNullary "[[ '$(foo)' ]]"
@@ -1298,7 +1298,7 @@ checkArithmeticDeref params t@(TA_Expansion _ [b@(T_DollarBraced id _ _)]) =
     unless (isException $ bracedString b) getWarning
   where
     isException [] = True
-    isException s = any (`elem` "/.:#%?*@$-!+=^,") s || isDigit (head s)
+    isException s@(h:_) = any (`elem` "/.:#%?*@$-!+=^,") s || isDigit h
     getWarning = fromMaybe noWarning . msum . map warningFor $ parents params t
     warningFor t =
         case t of
@@ -1644,9 +1644,9 @@ checkSpuriousExec _ = doLists
     doList = doList' . stripCleanup
     -- The second parameter is True if we are in a loop
     -- In that case we should emit the warning also if `exec' is the last statement
-    doList' t@(current:following:_) False = do
+    doList' (current:t@(following:_)) False = do
         commentIfExec current
-        doList (tail t) False
+        doList t False
     doList' (current:tail) True = do
         commentIfExec current
         doList tail True
@@ -1961,7 +1961,7 @@ prop_checkQuotesInLiterals9 = verifyNotTree checkQuotesInLiterals "param=\"/foo/
 checkQuotesInLiterals params t =
     doVariableFlowAnalysis readF writeF Map.empty (variableFlow params)
   where
-    getQuotes name = fmap (Map.lookup name) get
+    getQuotes name = gets (Map.lookup name)
     setQuotes name ref = modify $ Map.insert name ref
     deleteQuotes = modify . Map.delete
     parents = parentMap params
@@ -2332,7 +2332,7 @@ checkWhileReadPitfalls _ (T_WhileExpression id [command] contents)
     checkMuncher _ = return ()
 
     stdinRedirect (T_FdRedirect _ fd _)
-        | fd == "" || fd == "0" = True
+        | null fd || fd == "0" = True
     stdinRedirect _ = False
 checkWhileReadPitfalls _ _ = return ()
 
@@ -2635,8 +2635,8 @@ checkMultipleAppends params t =
   where
     checkList list =
         mapM_ checkGroup (groupWith (fmap fst) $ map getTarget list)
-    checkGroup (f:_:_:_) | isJust f =
-        style (snd $ fromJust f) 2129
+    checkGroup (Just (_,id):_:_:_) =
+        style id 2129
             "Consider using { cmd1; cmd2; } >> file instead of individual redirects."
     checkGroup _ = return ()
     getTarget (T_Annotation _ _ t) = getTarget t
@@ -2844,7 +2844,7 @@ checkReadWithoutR _ t@T_SimpleCommand {} | t `isUnqualifiedCommand` "read" =
     flags = getAllFlags t
     has_t0 = fromMaybe False $ do
         parsed <- getOpts flagsForRead flags
-        t <- getOpt "t" parsed
+        t <- lookup "t" parsed
         str <- getLiteralString t
         return $ str == "0"
 
@@ -2914,7 +2914,7 @@ checkLoopVariableReassignment params token =
   where
     check = do
         str <- loopVariable token
-        next <- listToMaybe $ filter (\x -> loopVariable x == Just str) path
+        next <- find (\x -> loopVariable x == Just str) path
         return $ do
             warn (getId token) 2165 "This nested loop overrides the index variable of its parent."
             warn (getId next)  2167 "This parent loop has its index variable overridden."
@@ -3144,9 +3144,9 @@ checkSubshellAsTest _ t =
 
 
     checkParams id first second = do
-        when (fromMaybe False $ (`elem` unaryTestOps) <$> getLiteralString first) $
+        when (maybe False (`elem` unaryTestOps) $ getLiteralString first) $
             err id 2204 "(..) is a subshell. Did you mean [ .. ], a test expression?"
-        when (fromMaybe False $ (`elem` binaryTestOps) <$> getLiteralString second) $
+        when (maybe False (`elem` binaryTestOps) $ getLiteralString second) $
             warn id 2205 "(..) is a subshell. Did you mean [ .. ], a test expression?"
 
 
@@ -3173,7 +3173,7 @@ checkSplittingInArrays params t =
         T_DollarBraced id _ str |
             not (isCountingReference part)
             && not (isQuotedAlternativeReference part)
-            && not (getBracedReference (bracedString part) `elem` variablesWithoutSpaces)
+            && getBracedReference (bracedString part) `notElem` variablesWithoutSpaces
             -> warn id 2206 $
                 if shellType params == Ksh
                 then "Quote to prevent word splitting/globbing, or split robustly with read -A or while read."

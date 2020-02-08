@@ -340,8 +340,8 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
             potentially $ do
                 allowed' <- Map.lookup name allowedFlags
                 allowed <- allowed'
-                (word, flag) <- listToMaybe $
-                    filter (\x -> (not . null . snd $ x) && snd x `notElem` allowed) flags
+                (word, flag) <- find
+                    (\x -> (not . null . snd $ x) && snd x `notElem` allowed) flags
                 return . warnMsg (getId word) $ name ++ " -" ++ flag ++ " is"
 
             when (name == "source") $ warnMsg id "'source' in place of '.' is"
@@ -487,11 +487,11 @@ checkBraceExpansionVars = ForShell [Bash] f
             T_DollarBraced {} -> return "$"
             T_DollarExpansion {} -> return "$"
             T_DollarArithmetic {} -> return "$"
-            otherwise -> return "-"
+            _ -> return "-"
     toString t = fromJust $ getLiteralStringExt literalExt t
     isEvaled t = do
         cmd <- getClosestCommandM t
-        return $ isJust cmd && fromJust cmd `isUnqualifiedCommand` "eval"
+        return $ maybe False (`isUnqualifiedCommand` "eval") cmd
 
 
 prop_checkMultiDimensionalArrays1 = verify checkMultiDimensionalArrays "foo[a][b]=3"
