@@ -491,6 +491,12 @@ ioInterface options files = do
         first <- a arg
         if not first then return False else b arg
 
+    findM p = foldr go (pure Nothing)
+      where
+        go x acc = do
+            b <- p x
+            if b then pure (Just x) else acc
+
     findSourceFile inputs sourcePathFlag currentScript sourcePathAnnotation original =
         if isAbsolute original
         then
@@ -500,11 +506,11 @@ ioInterface options files = do
             find original original
       where
         find filename deflt = do
-            sources <- filterM ((allowable inputs) `andM` doesFileExist) $
+            sources <- findM ((allowable inputs) `andM` doesFileExist) $
                         (adjustPath filename):(map (</> filename) $ map adjustPath $ sourcePathFlag ++ sourcePathAnnotation)
             case sources of
-                [] -> return deflt
-                (first:_) -> return first
+                Nothing -> return deflt
+                Just first -> return first
         scriptdir = dropFileName currentScript
         adjustPath str =
             case (splitDirectories str) of
