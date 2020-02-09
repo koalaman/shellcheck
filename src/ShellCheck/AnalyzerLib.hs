@@ -806,7 +806,7 @@ isVariableName (x:r) = isVariableStartChar x && all isVariableChar r
 isVariableName _     = False
 
 getVariablesFromLiteralToken token =
-    getVariablesFromLiteral (fromJust $ getLiteralStringExt (const $ return " ") token)
+    getVariablesFromLiteral (runIdentity $ getLiteralStringExt (const $ return " ") token)
 
 -- Try to get referenced variables from a literal string like "$foo"
 -- Ignores tons of cases like arithmetic evaluation and array indices.
