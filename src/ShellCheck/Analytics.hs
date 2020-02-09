@@ -1996,18 +1996,18 @@ checkQuotesInLiterals params t =
 
     readF _ expr name = do
         assignment <- getQuotes name
-        return
-          (if isJust assignment
-              && not (isParamTo parents "eval" expr)
+        return $ case assignment of
+          Just j
+              | not (isParamTo parents "eval" expr)
               && not (isQuoteFree parents expr)
               && not (squashesQuotes expr)
-              then [
-                  makeComment WarningC (fromJust assignment) 2089 $
+              -> [
+                  makeComment WarningC j 2089 $
                       "Quotes/backslashes will be treated literally. " ++ suggestion,
                   makeComment WarningC (getId expr) 2090
                       "Quotes/backslashes in this variable will not be respected."
                 ]
-              else [])
+          _ -> []
     suggestion =
         if supportsArrays (shellType params)
         then "Use an array."
