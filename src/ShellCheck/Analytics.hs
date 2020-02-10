@@ -3090,11 +3090,10 @@ checkUnmatchableCases params t =
 
     tupMap f l = map (\x -> (x, f x)) l
     checkDoms ((glob, Just x), rest) =
-        case filter (\(_, p) -> x `pseudoGlobIsSuperSetof` p) valids of
-            ((first,_):_) -> do
+        forM_ (find (\(_, p) -> x `pseudoGlobIsSuperSetof` p) valids) $
+            \(first,_) -> do
                 warn (getId glob) 2221 $ "This pattern always overrides a later one" <> patternContext (getId first)
                 warn (getId first) 2222 $ "This pattern never matches because of a previous pattern" <> patternContext (getId glob)
-            _ -> return ()
       where
         patternContext :: Id -> String
         patternContext id =
