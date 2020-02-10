@@ -431,7 +431,7 @@ checkWrongArithmeticAssignment params (T_SimpleCommand id (T_Assignment _ _ _ _ 
     insertRef _ = Prelude.id
 
     getNormalString (T_NormalWord _ words) = do
-        parts <- foldl (liftM2 (\x y -> x ++ [y])) (Just []) $ map getLiterals words
+        parts <- mapM getLiterals words
         return $ concat parts
     getNormalString _ = Nothing
 
