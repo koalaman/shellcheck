@@ -2588,7 +2588,7 @@ prop_checkUnsupported3 = verify checkUnsupported "#!/bin/sh\ncase foo in bar) ba
 prop_checkUnsupported4 = verify checkUnsupported "#!/bin/ksh\ncase foo in bar) baz ;;& esac"
 prop_checkUnsupported5 = verify checkUnsupported "#!/bin/bash\necho \"${ ls; }\""
 checkUnsupported params t =
-    when (not (null support) && (shellType params `notElem` support)) $
+    unless (null support || (shellType params `elem` support)) $
         report name
  where
     (name, support) = shellSupport t
