@@ -2488,12 +2488,10 @@ checkUnpassedInFunctions params root =
         map (\t@(T_Function _ _ _ name _) -> (name,t)) functions
     functions = execWriter $ doAnalysis (tell . maybeToList . findFunction) root
 
-    findFunction t@(T_Function id _ _ name body) =
-        let flow = getVariableFlow params body
-        in
-          if any (isPositionalReference t) flow && not (any isPositionalAssignment flow)
-            then return t
-            else Nothing
+    findFunction t@(T_Function id _ _ name body)
+        | any (isPositionalReference t) flow && not (any isPositionalAssignment flow)
+        = return t
+        where flow = getVariableFlow params body
     findFunction _ = Nothing
 
     isPositionalAssignment x =
