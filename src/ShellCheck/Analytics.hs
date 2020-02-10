@@ -1209,7 +1209,7 @@ prop_checkLiteralBreakingTest6 = verify checkLiteralBreakingTest "[ -z $(true)z 
 prop_checkLiteralBreakingTest7 = verifyNot checkLiteralBreakingTest "[ -z $(true) ]"
 prop_checkLiteralBreakingTest8 = verifyNot checkLiteralBreakingTest "[ $(true)$(true) ]"
 prop_checkLiteralBreakingTest10 = verify checkLiteralBreakingTest "[ -z foo ]"
-checkLiteralBreakingTest _ t = potentially $
+checkLiteralBreakingTest _ t = sequence_ $
         case t of
             (TC_Nullary _ _ w@(T_NormalWord _ l)) -> do
                 guard . not $ isConstant w -- Covered by SC2078
@@ -1257,7 +1257,7 @@ checkConstantNullary _ _ = return ()
 prop_checkForDecimals1 = verify checkForDecimals "((3.14*c))"
 prop_checkForDecimals2 = verify checkForDecimals "foo[1.2]=bar"
 prop_checkForDecimals3 = verifyNot checkForDecimals "declare -A foo; foo[1.2]=bar"
-checkForDecimals params t@(TA_Expansion id _) = potentially $ do
+checkForDecimals params t@(TA_Expansion id _) = sequence_ $ do
     guard $ not (hasFloatingPoint params)
     str <- getLiteralString t
     first <- str !!! 0
@@ -1310,7 +1310,7 @@ checkArithmeticDeref _ _ = return ()
 prop_checkArithmeticBadOctal1 = verify checkArithmeticBadOctal "(( 0192 ))"
 prop_checkArithmeticBadOctal2 = verifyNot checkArithmeticBadOctal "(( 0x192 ))"
 prop_checkArithmeticBadOctal3 = verifyNot checkArithmeticBadOctal "(( 1 ^ 0777 ))"
-checkArithmeticBadOctal _ t@(TA_Expansion id _) = potentially $ do
+checkArithmeticBadOctal _ t@(TA_Expansion id _) = sequence_ $ do
     str <- getLiteralString t
     guard $ str `matches` octalRE
     return $ err id 2080 "Numbers with leading 0 are considered octal."
@@ -1392,7 +1392,7 @@ checkOrNeq _ (TA_Binary id "||" (TA_Binary _ "!=" word1 _) (TA_Binary _ "!=" wor
         warn id 2056 "You probably wanted && here, otherwise it's always true."
 
 -- For command level "or": [ x != y ] || [ x != z ]
-checkOrNeq _ (T_OrIf id lhs rhs) = potentially $ do
+checkOrNeq _ (T_OrIf id lhs rhs) = sequence_ $ do
     (lhs1, op1, rhs1) <- getExpr lhs
     (lhs2, op2, rhs2) <- getExpr rhs
     guard $ op1 == op2 && op1 `elem` ["-ne", "!="]
@@ -1407,7 +1407,7 @@ checkOrNeq _ (T_OrIf id lhs rhs) = potentially $ do
             T_Redirecting _ _ c -> getExpr c
             T_Condition _ _ c -> getExpr c
             TC_Binary _ _ op lhs rhs -> return (lhs, op, rhs)
-            _ -> fail ""
+            _ -> Nothing
 
 checkOrNeq _ _ = return ()
 
@@ -2068,7 +2068,7 @@ checkFunctionsUsedExternally params t =
         in when ('=' `elem` string) $
             modify ((takeWhile (/= '=') string, getId arg):)
 
-    checkArg cmd (_, arg) = potentially $ do
+    checkArg cmd (_, arg) = sequence_ $ do
         literalArg <- getUnquotedLiteral arg  -- only consider unquoted literals
         definitionId <- Map.lookup literalArg functions
         return $ do
@@ -2312,7 +2312,7 @@ checkWhileReadPitfalls _ (T_WhileExpression id [command] contents)
             (T_IfExpression _ thens elses) ->
               mapM_ checkMuncher . concat $ map fst thens ++ map snd thens ++ [elses]
 
-            _ -> potentially $ do
+            _ -> sequence_ $ do
                 name <- getCommandBasename cmd
                 guard $ name `elem` munchers
 
@@ -2410,7 +2410,7 @@ checkCdAndBack params t =
                 else findCdPair (b:rest)
             _ -> Nothing
 
-    doList list = potentially $ do
+    doList list = sequence_ $ do
         cd <- findCdPair $ mapMaybe getCandidate list
         return $ info cd 2103 "Use a ( subshell ) to avoid having to cd back."
 
@@ -2673,7 +2673,7 @@ prop_checkGrepQ4= verifyNot checkShouldUseGrepQ "[ -z $(grep bar | cmd) ]"
 prop_checkGrepQ5= verifyNot checkShouldUseGrepQ "rm $(ls | grep file)"
 prop_checkGrepQ6= verifyNot checkShouldUseGrepQ "[[ -n $(pgrep foo) ]]"
 checkShouldUseGrepQ params t =
-    potentially $ case t of
+    sequence_ $ case t of
         TC_Nullary id _ token -> check id True token
         TC_Unary id _ "-n" token -> check id True token
         TC_Unary id _ "-z" token -> check id False token
@@ -2807,7 +2807,7 @@ prop_checkMaskedReturns2 = verify checkMaskedReturns "declare a=$(false)"
 prop_checkMaskedReturns3 = verify checkMaskedReturns "declare a=\"`false`\""
 prop_checkMaskedReturns4 = verifyNot checkMaskedReturns "declare a; a=$(false)"
 prop_checkMaskedReturns5 = verifyNot checkMaskedReturns "f() { local -r a=$(false); }"
-checkMaskedReturns _ t@(T_SimpleCommand id _ (cmd:rest)) = potentially $ do
+checkMaskedReturns _ t@(T_SimpleCommand id _ (cmd:rest)) = sequence_ $ do
     name <- getCommandName t
     guard $ name `elem` ["declare", "export"]
         || name == "local" && "r" `notElem` map snd (getAllFlags t)
@@ -2900,7 +2900,7 @@ prop_checkLoopVariableReassignment1 = verify checkLoopVariableReassignment "for 
 prop_checkLoopVariableReassignment2 = verify checkLoopVariableReassignment "for i in *; do for((i=0; i<3; i++)); do true; done; done"
 prop_checkLoopVariableReassignment3 = verifyNot checkLoopVariableReassignment "for i in *; do for j in *.bar; do true; done; done"
 checkLoopVariableReassignment params token =
-    potentially $ case token of
+    sequence_ $ case token of
         T_ForIn {} -> check
         T_ForArithmetic {} -> check
         _ -> Nothing
@@ -2988,12 +2988,12 @@ prop_checkRedirectedNowhere7 = verifyNot checkRedirectedNowhere "var=$(< file)"
 prop_checkRedirectedNowhere8 = verifyNot checkRedirectedNowhere "var=`< file`"
 checkRedirectedNowhere params token =
     case token of
-        T_Pipeline _ _ [single] -> potentially $ do
+        T_Pipeline _ _ [single] -> sequence_ $ do
             redir <- getDanglingRedirect single
             guard . not $ isInExpansion token
             return $ warn (getId redir) 2188 "This redirection doesn't have a command. Move to its command (or use 'true' as no-op)."
 
-        T_Pipeline _ _ list -> forM_ list $ \x -> potentially $ do
+        T_Pipeline _ _ list -> forM_ list $ \x -> sequence_ $ do
             redir <- getDanglingRedirect x
             return $ err (getId redir) 2189 "You can't have | between this redirection and the command it should apply to."
 
@@ -3080,7 +3080,7 @@ checkUnmatchableCases params t =
             if isConstant word
                 then warn (getId word) 2194
                         "This word is constant. Did you forget the $ on a variable?"
-                else  potentially $ do
+                else  sequence_ $ do
                     pg <- wordToPseudoGlob word
                     return $ mapM_ (check pg) allpatterns
 
@@ -3095,7 +3095,7 @@ checkUnmatchableCases params t =
     fst3 (x,_,_) = x
     snd3 (_,x,_) = x
     tp = tokenPositions params
-    check target candidate = potentially $ do
+    check target candidate = sequence_ $ do
         candidateGlob <- wordToPseudoGlob candidate
         guard . not $ pseudoGlobsCanOverlap target candidateGlob
         return $ warn (getId candidate) 2195
@@ -3189,7 +3189,7 @@ prop_checkRedirectionToNumber2 = verify checkRedirectionToNumber "foo 1>2"
 prop_checkRedirectionToNumber3 = verifyNot checkRedirectionToNumber "echo foo > '2'"
 prop_checkRedirectionToNumber4 = verifyNot checkRedirectionToNumber "foo 1>&2"
 checkRedirectionToNumber _ t = case t of
-    T_IoFile id _ word -> potentially $ do
+    T_IoFile id _ word -> sequence_ $ do
         file <- getUnquotedLiteral word
         guard $ all isDigit file
         return $ warn id 2210 "This is a file redirection. Was it supposed to be a comparison or fd operation?"
@@ -3238,7 +3238,7 @@ checkPipeToNowhere _ t =
         T_Redirecting _ redirects cmd -> when (any redirectsStdin redirects) $ checkRedir cmd
         _ -> return ()
   where
-    checkPipe redir = potentially $ do
+    checkPipe redir = sequence_ $ do
         cmd <- getCommand redir
         name <- getCommandBasename cmd
         guard $ name `elem` nonReadingCommands
@@ -3251,7 +3251,7 @@ checkPipeToNowhere _ t =
         return $ warn (getId cmd) 2216 $
             "Piping to '" ++ name ++ "', a command that doesn't read stdin. " ++ suggestion
 
-    checkRedir cmd = potentially $ do
+    checkRedir cmd = sequence_ $ do
         name <- getCommandBasename cmd
         guard $ name `elem` nonReadingCommands
         guard . not $ hasAdditionalConsumers cmd
@@ -3299,7 +3299,7 @@ checkUseBeforeDefinition _ t =
                 mapM_ (checkUsage m) $ concatMap recursiveSequences cmds
         _ -> return ()
 
-    checkUsage map cmd = potentially $ do
+    checkUsage map cmd = sequence_ $ do
         name <- getCommandName cmd
         def <- Map.lookup name map
         return $

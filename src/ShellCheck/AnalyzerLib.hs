@@ -870,15 +870,6 @@ getBracedModifier s = fromMaybe "" . listToMaybe $ do
 
 -- Useful generic functions.
 
--- Run an action in a Maybe (or do nothing).
--- Example:
--- potentially $ do
---   s <- getLiteralString cmd
---   guard $ s `elem` ["--recursive", "-r"]
---   return $ warn .. "Something something recursive"
-potentially :: Monad m => Maybe (m ()) -> m ()
-potentially = fromMaybe (return ())
-
 -- Get element 0 or a default. Like `head` but safe.
 headOrDefault _ (a:_) = a
 headOrDefault def _   = def

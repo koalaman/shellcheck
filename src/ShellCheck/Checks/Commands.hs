@@ -270,7 +270,7 @@ checkGrepRe = CommandCheck (Basename "grep") check where
             let string = concat $ oversimplify re
             if isConfusedGlobRegex string then
                 warn (getId re) 2063 "Grep uses regex, but this looks like a glob."
-              else potentially $ do
+              else sequence_ $ do
                 char <- getSuspiciousRegexWildcard string
                 return $ info (getId re) 2022 $
                     "Note that unlike globs, " ++ [char] ++ "* here matches '" ++ [char, char, char] ++ "' but not '" ++ wordStartingWith char ++ "'."
@@ -461,7 +461,7 @@ prop_checkMkdirDashPM20 = verifyNot checkMkdirDashPM "mkdir -p -m 0755 .././bin"
 prop_checkMkdirDashPM21 = verifyNot checkMkdirDashPM "mkdir -p -m 0755 ../../bin"
 checkMkdirDashPM = CommandCheck (Basename "mkdir") check
   where
-    check t = potentially $ do
+    check t = sequence_ $ do
         let flags = getAllFlags t
         dashP <- find ((\f -> f == "p" || f == "parents") . snd) flags
         dashM <- find ((\f -> f == "m" || f == "mode") . snd) flags
@@ -487,7 +487,7 @@ checkNonportableSignals = CommandCheck (Exactly "trap") (f . arguments)
         first:rest -> unless (isFlag first) $ mapM_ check rest
         _ -> return ()
 
-    check param = potentially $ do
+    check param = sequence_ $ do
         str <- getLiteralString param
         let id = getId param
         return $ sequence_ $ mapMaybe (\f -> f id str) [
@@ -687,7 +687,7 @@ prop_checkExportedExpansions3 = verifyNot checkExportedExpansions "export foo"
 prop_checkExportedExpansions4 = verifyNot checkExportedExpansions "export ${foo?}"
 checkExportedExpansions = CommandCheck (Exactly "export") (mapM_ check . arguments)
   where
-    check t = potentially $ do
+    check t = sequence_ $ do
         var <- getSingleUnmodifiedVariable t
         let name = bracedString var
         return . warn (getId t) 2163 $
@@ -709,7 +709,7 @@ checkReadExpansions = CommandCheck (Exactly "read") check
         return [y | (x,y) <- opts, null x || x == "a"]
 
     check cmd = mapM_ warning $ getVars cmd
-    warning t = potentially $ do
+    warning t = sequence_ $ do
         var <- getSingleUnmodifiedVariable t
         let name = bracedString var
         guard $ isVariableName name   -- e.g. not $1
@@ -859,7 +859,7 @@ checkWhileGetoptsCase = CommandCheck (Exactly "getopts") f
     f :: Token -> Analysis
     f t@(T_SimpleCommand _ _ (cmd:arg1:_))  = do
         path <- getPathM t
-        potentially $ do
+        sequence_ $ do
             options <- getLiteralString arg1
             (T_WhileExpression _ _ body) <- findFirst whileLoop path
             caseCmd <- mapMaybe findCase body !!! 0
@@ -886,7 +886,7 @@ checkWhileGetoptsCase = CommandCheck (Exactly "getopts") f
     warnUnhandled optId caseId str =
         warn caseId 2213 $ "getopts specified -" ++ str ++ ", but it's not handled by this 'case'."
 
-    warnRedundant (key, expr) = potentially $ do
+    warnRedundant (key, expr) = sequence_ $ do
         str <- key
         guard $ str `notElem` ["*", ":", "?"]
         return $ warn (getId expr) 2214 "This case is not specified by getopts."
@@ -1081,7 +1081,7 @@ prop_checkSudoArgs6 = verifyNot checkSudoArgs "sudo -n -u export ls"
 prop_checkSudoArgs7 = verifyNot checkSudoArgs "sudo docker export foo"
 checkSudoArgs = CommandCheck (Basename "sudo") f
   where
-    f t = potentially $ do
+    f t = sequence_ $ do
         opts <- parseOpts t
         let nonFlags = [x | ("",x) <- opts]
         commandArg <- nonFlags !!! 0
@@ -1109,7 +1109,7 @@ prop_checkChmodDashr3 = verifyNot checkChmodDashr "chmod a-r dir"
 checkChmodDashr = CommandCheck (Basename "chmod") f
   where
     f t = mapM_ check $ arguments t
-    check t = potentially $ do
+    check t = sequence_ $ do
         flag <- getLiteralString t
         guard $ flag == "-r"
         return $ warn (getId t) 2253 "Use -R to recurse, or explicitly a-r to remove read permissions."
