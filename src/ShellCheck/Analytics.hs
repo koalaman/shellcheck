@@ -2823,11 +2823,10 @@ checkReadWithoutR _ t@T_SimpleCommand {} | t `isUnqualifiedCommand` "read"
         info (getId $ getCommandTokenOrThis t) 2162 "read without -r will mangle backslashes."
   where
     flags = getAllFlags t
-    has_t0 = fromMaybe False $ do
+    has_t0 = Just "0" == do
         parsed <- getOpts flagsForRead flags
         t <- lookup "t" parsed
-        str <- getLiteralString t
-        return $ str == "0"
+        getLiteralString t
 
 checkReadWithoutR _ _ = return ()
 

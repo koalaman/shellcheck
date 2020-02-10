@@ -454,7 +454,7 @@ leadType params t =
         T_BatsTest {} -> SubshellScope "@bats test"
         T_CoProcBody _ _  -> SubshellScope "coproc"
         T_Redirecting {}  ->
-            if fromMaybe False causesSubshell
+            if causesSubshell == Just True
             then SubshellScope "pipeline"
             else NoneScope
         _ -> NoneScope
