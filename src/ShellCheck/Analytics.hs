@@ -2544,7 +2544,7 @@ checkUnpassedInFunctions params root =
             name ++ " references arguments, but none are ever passed."
 
     getFunction ((name, _, _):_) =
-        (name, fromJust $ Map.lookup name functionMap)
+        (name, functionMap Map.! name)
 
 
 prop_checkOverridingPath1 = verify checkOverridingPath "PATH=\"$var/$foo\""
