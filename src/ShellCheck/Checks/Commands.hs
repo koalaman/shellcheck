@@ -249,13 +249,12 @@ prop_checkGrepRe23= verifyNot checkGrepRe "grep '.*' file"
 checkGrepRe = CommandCheck (Basename "grep") check where
     check cmd = f cmd (arguments cmd)
     -- --regex=*(extglob) doesn't work. Fixme?
-    skippable (Just s) = not ("--regex=" `isPrefixOf` s) && "-" `isPrefixOf` s
-    skippable _ = False
+    skippable s = not ("--regex=" `isPrefixOf` s) && "-" `isPrefixOf` s
     f _ [] = return ()
     f cmd (x:r) =
-        let str = getLiteralStringExt (const $ return "_") x
+        let str = runIdentity $ getLiteralStringExt (const $ return "_") x
         in
-            if str `elem` [Just "--", Just "-e", Just "--regex"]
+            if str `elem` ["--", "-e", "--regex"]
             then checkRE cmd r -- Regex is *after* this
             else
                 if skippable str
@@ -366,7 +365,7 @@ checkFindExecWithSingleArgument = CommandCheck (Basename "find") (f . arguments)
     check (exec:arg:term:_) = do
         execS <- getLiteralString exec
         termS <- getLiteralString term
-        cmdS <- getLiteralStringExt (const $ return " ") arg
+        let cmdS = runIdentity $ getLiteralStringExt (const $ return " ") arg
 
         guard $ execS `elem` ["-exec", "-execdir"] && termS `elem` [";", "+"]
         guard $ cmdS `matches` commandRegex
