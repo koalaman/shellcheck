@@ -186,12 +186,12 @@ getNextIdSpanningTokens startTok endTok = do
 
 -- Get an ID starting from the first token of the list, and ending after the last
 getNextIdSpanningTokenList list =
-    if null list
-    then do
+    case list of
+    [] -> do
         pos <- getPosition
         getNextIdBetween pos pos
-    else
-        getNextIdSpanningTokens (head list) (last list)
+    (h:_) ->
+        getNextIdSpanningTokens h (last list)
 
 -- Get the span covered by an id
 getSpanForId :: Monad m => Id -> SCParser m (SourcePos, SourcePos)
@@ -1826,7 +1826,7 @@ readPendingHereDocs = do
             let thereIsNoTrailer = null trailingSpace && null trailer
             let leaderIsOk = null leadingSpace
                     || dashed == Dashed && leadingSpacesAreTabs
-            let trailerStart = if null trailer then '\0' else head trailer
+            let trailerStart = case trailer of [] -> '\0'; (h:_) -> h
             let hasTrailingSpace = not $ null trailingSpace
             let hasTrailer = not $ null trailer
             let ppt = parseProblemAt trailerPos ErrorC

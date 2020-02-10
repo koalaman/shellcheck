@@ -255,7 +255,7 @@ determineShell fallbackShell t = fromMaybe Bash $
 executableFromShebang :: String -> String
 executableFromShebang = shellFor
   where
-    shellFor s | "/env " `isInfixOf` s = head (drop 1 (words s)++[""])
+    shellFor s | "/env " `isInfixOf` s = headOrDefault "" (drop 1 $ words s)
     shellFor s | ' ' `elem` s = shellFor $ takeWhile (/= ' ') s
     shellFor s = reverse . takeWhile (/= '/') . reverse $ s
 
@@ -295,7 +295,7 @@ isQuoteFree = isQuoteFreeNode False
 
 isQuoteFreeNode strict tree t =
     (isQuoteFreeElement t == Just True) ||
-        head (mapMaybe isQuoteFreeContext (drop 1 $ getPath tree t) ++ [False])
+        headOrDefault False (mapMaybe isQuoteFreeContext (drop 1 $ getPath tree t))
   where
     -- Is this node self-quoting in itself?
     isQuoteFreeElement t =
@@ -758,9 +758,8 @@ getReferencedVariables parents t =
         _          -> Nothing
 
     getIfReference context token = maybeToList $ do
-            str <- getLiteralStringExt literalizer token
-            guard . not $ null str
-            when (isDigit $ head str) $ fail "is a number"
+            str@(h:_) <- getLiteralStringExt literalizer token
+            when (isDigit h) $ fail "is a number"
             return (context, token, getBracedReference str)
 
     isDereferencing = (`elem` ["-eq", "-ne", "-lt", "-le", "-gt", "-ge"])

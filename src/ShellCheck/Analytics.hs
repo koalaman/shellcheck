@@ -2293,7 +2293,7 @@ checkWhileReadPitfalls _ (T_WhileExpression id [command] contents)
 
     isStdinReadCommand (T_Pipeline _ _ [T_Redirecting id redirs cmd]) =
         let plaintext = oversimplify cmd
-        in head (plaintext ++ [""]) == "read"
+        in headOrDefault "" plaintext == "read"
             && ("-u" `notElem` plaintext)
             && all (not . stdinRedirect) redirs
     isStdinReadCommand _ = False

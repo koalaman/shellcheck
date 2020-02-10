@@ -457,8 +457,8 @@ checkEchoSed = ForShell [Bash, Ksh] f
     -- This should have used backreferences, but TDFA doesn't support them
     sedRe = mkRegex "^s(.)([^\n]*)g?$"
     isSimpleSed s = fromMaybe False $ do
-        [first,rest] <- matchRegex sedRe s
-        let delimiters = filter (== head first) rest
+        [h:_,rest] <- matchRegex sedRe s
+        let delimiters = filter (== h) rest
         guard $ length delimiters == 2
         return True
     checkIn id s =

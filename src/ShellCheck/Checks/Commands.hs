@@ -279,10 +279,10 @@ checkGrepRe = CommandCheck (Basename "grep") check where
         grepGlobFlags = ["fixed-strings", "F", "include", "exclude", "exclude-dir", "o", "only-matching"]
 
     wordStartingWith c =
-        head . filter ([c] `isPrefixOf`) $ candidates
+        headOrDefault (c:"test") . filter ([c] `isPrefixOf`) $ candidates
       where
         candidates =
-            sampleWords ++ map (\(x:r) -> toUpper x : r) sampleWords ++ [c:"test"]
+            sampleWords ++ map (\(x:r) -> toUpper x : r) sampleWords
 
     getSuspiciousRegexWildcard str =
         if not $ str `matches` contra
