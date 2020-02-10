@@ -176,9 +176,13 @@ willConcatInAssignment token =
 getLiteralString :: Token -> Maybe String
 getLiteralString = getLiteralStringExt (const Nothing)
 
+-- Definitely get a literal string, with a given default for all non-literals
+getLiteralStringDef :: String -> Token -> String
+getLiteralStringDef x = runIdentity . getLiteralStringExt (const $ return x)
+
 -- Definitely get a literal string, skipping over all non-literals
 onlyLiteralString :: Token -> String
-onlyLiteralString = runIdentity . getLiteralStringExt (const $ return "")
+onlyLiteralString = getLiteralStringDef ""
 
 -- Maybe get a literal string, but only if it's an unquoted argument.
 getUnquotedLiteral (T_NormalWord _ list) =

@@ -252,7 +252,7 @@ checkGrepRe = CommandCheck (Basename "grep") check where
     skippable s = not ("--regex=" `isPrefixOf` s) && "-" `isPrefixOf` s
     f _ [] = return ()
     f cmd (x:r) =
-        let str = runIdentity $ getLiteralStringExt (const $ return "_") x
+        let str = getLiteralStringDef "_" x
         in
             if str `elem` ["--", "-e", "--regex"]
             then checkRE cmd r -- Regex is *after* this
@@ -365,7 +365,7 @@ checkFindExecWithSingleArgument = CommandCheck (Basename "find") (f . arguments)
     check (exec:arg:term:_) = do
         execS <- getLiteralString exec
         termS <- getLiteralString term
-        let cmdS = runIdentity $ getLiteralStringExt (const $ return " ") arg
+        let cmdS = getLiteralStringDef " " arg
 
         guard $ execS `elem` ["-exec", "-execdir"] && termS `elem` [";", "+"]
         guard $ cmdS `matches` commandRegex
@@ -735,7 +735,7 @@ checkAliasesUsesArgs = CommandCheck (Exactly "alias") (f . arguments)
     re = mkRegex "\\$\\{?[0-9*@]"
     f = mapM_ checkArg
     checkArg arg =
-        let string = runIdentity $ getLiteralStringExt (const $ return "_") arg in
+        let string = getLiteralStringDef "_" arg in
             when ('=' `elem` string && string `matches` re) $
                 err (getId arg) 2142
                     "Aliases can't use positional parameters. Use a function."
@@ -781,7 +781,7 @@ checkFindWithoutPath = CommandCheck (Basename "find") f
     -- path. We assume that all the pre-path flags are single characters from a
     -- list of GNU and macOS flags.
     hasPath (first:rest) =
-        let flag = runIdentity $ getLiteralStringExt (const $ return "___") first in
+        let flag = getLiteralStringDef "___" first in
             not ("-" `isPrefixOf` flag) || isLeadingFlag flag && hasPath rest
     hasPath [] = False
     isLeadingFlag flag = length flag <= 2 || all (`elem` leadingFlagChars) flag

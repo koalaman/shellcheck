@@ -1066,7 +1066,7 @@ checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
       checkStrings =
         mapM_ stringError . take 1 . filter isNonNum
 
-      isNonNum t = not . all numChar . runIdentity $ getLiteralStringExt (const $ return "") t
+      isNonNum t = not . all numChar $ onlyLiteralString t
       numChar x = isDigit x || x `elem` "+-. "
 
       stringError t = err (getId t) 2170 $
@@ -2593,7 +2593,7 @@ checkTildeInPath _ (T_SimpleCommand _ vars _) =
             warn id 2147 "Literal tilde in PATH works poorly across programs."
     checkVar _ = return ()
 
-    hasTilde t = '~' `elem` runIdentity (getLiteralStringExt (const $ return "") t)
+    hasTilde t = '~' `elem` onlyLiteralString t
     isQuoted T_DoubleQuoted {} = True
     isQuoted T_SingleQuoted {} = True
     isQuoted _ = False
