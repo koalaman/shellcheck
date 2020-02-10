@@ -565,10 +565,8 @@ checkShebang params (T_Script _ (T_Literal id sb) _) = execWriter $ do
     unless (null sb) $ do
         unless ("/" `isPrefixOf` sb) $
             err id 2239 "Ensure the shebang uses an absolute path to the interpreter."
-        case words sb of
-            first:_ ->
-                when ("/" `isSuffixOf` first) $
-                    err id 2246 "This shebang specifies a directory. Ensure the interpreter is a file."
+        when ("/" `isSuffixOf` head (words sb)) $
+            err id 2246 "This shebang specifies a directory. Ensure the interpreter is a file."
 
 
 prop_checkForInQuoted = verify checkForInQuoted "for f in \"$(ls)\"; do echo foo; done"
