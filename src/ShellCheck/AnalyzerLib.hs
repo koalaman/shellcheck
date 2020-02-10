@@ -239,19 +239,15 @@ prop_determineShell8 = determineShellTest' (Just Ksh) "#!/bin/sh" == Sh
 
 determineShellTest = determineShellTest' Nothing
 determineShellTest' fallbackShell = determineShell fallbackShell . fromJust . prRoot . pScript
-determineShell fallbackShell t = fromMaybe Bash $ do
-    shellString <- foldl mplus Nothing $ getCandidates t
+determineShell fallbackShell t = fromMaybe Bash $
     shellForExecutable shellString `mplus` fallbackShell
   where
-    forAnnotation t =
-        case t of
-            (ShellOverride s) -> return s
-            _                 -> fail ""
-    getCandidates :: Token -> [Maybe String]
-    getCandidates t@T_Script {} = [Just $ fromShebang t]
-    getCandidates (T_Annotation _ annotations s) =
-        map forAnnotation annotations ++
-           [Just $ fromShebang s]
+    shellString = getCandidate t
+    getCandidate :: Token -> String
+    getCandidate t@T_Script {} = fromShebang t
+    getCandidate (T_Annotation _ annotations s) =
+        fromMaybe (fromShebang s) $
+        listToMaybe [s | ShellOverride s <- annotations]
     fromShebang (T_Script _ (T_Literal _ s) _) = executableFromShebang s
 
 -- Given a string like "/bin/bash" or "/usr/bin/env dash",
