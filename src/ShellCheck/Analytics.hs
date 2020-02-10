@@ -2223,14 +2223,14 @@ checkUnassignedReferences' includeGlobals params t = warnings
                     match <- getBestMatch var
                     return $ " (did you mean '" ++ match ++ "'?)"
 
-    warningFor var place = do
+    warningFor (var, place) = do
         guard $ isVariableName var
         guard . not $ isInArray var place || isGuarded place
         (if includeGlobals || isLocal var
          then warningForLocals
          else warningForGlobals) var place
 
-    warnings = execWriter . sequence $ mapMaybe (uncurry warningFor) unassigned
+    warnings = execWriter . sequence $ mapMaybe warningFor unassigned
 
     -- Due to parsing, foo=( [bar]=baz ) parses 'bar' as a reference even for assoc arrays.
     -- Similarly, ${foo[bar baz]} may not be referencing bar/baz. Just skip these.
