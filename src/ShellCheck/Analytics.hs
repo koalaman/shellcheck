@@ -2933,16 +2933,15 @@ checkTrailingBracket _ token =
         T_SimpleCommand _ _ tokens@(_:_) -> check (last tokens) token
         _ -> return ()
   where
-    check t command =
-        case t of
-            T_NormalWord id [T_Literal _ str] -> potentially $ do
-                guard $ str `elem` [ "]]", "]" ]
-                let opposite = invert str
-                    parameters = oversimplify command
-                guard $ opposite `notElem` parameters
-                return $ warn id 2171 $
-                    "Found trailing " ++ str ++ " outside test. Add missing " ++ opposite ++ " or quote if intentional."
-            _ -> return ()
+    check (T_NormalWord id [T_Literal _ str]) command
+        | str `elem` [ "]]", "]" ]
+        && opposite `notElem` parameters
+        = warn id 2171 $
+            "Found trailing " ++ str ++ " outside test. Add missing " ++ opposite ++ " or quote if intentional."
+        where
+            opposite = invert str
+            parameters = oversimplify command
+    check _ _ = return ()
     invert s =
         case s of
             "]]" -> "[["
@@ -3462,12 +3461,10 @@ prop_checkTranslatedStringVariable2 = verifyNot checkTranslatedStringVariable "$
 prop_checkTranslatedStringVariable3 = verifyNot checkTranslatedStringVariable "$\"..\""
 prop_checkTranslatedStringVariable4 = verifyNot checkTranslatedStringVariable "var=val; $\"$var\""
 prop_checkTranslatedStringVariable5 = verifyNot checkTranslatedStringVariable "foo=var; bar=val2; $\"foo bar\""
-checkTranslatedStringVariable params (T_DollarDoubleQuoted id [T_Literal _ s]) =
-  sequence_ $ do
-    guard $ all isVariableChar s
-    Map.lookup s assignments
-    return $
-        warnWithFix id 2256 "This translated string is the name of a variable. Flip leading $ and \" if this should be a quoted substitution." (fix id)
+checkTranslatedStringVariable params (T_DollarDoubleQuoted id [T_Literal _ s])
+  | all isVariableChar s
+  && Map.member s assignments
+  = warnWithFix id 2256 "This translated string is the name of a variable. Flip leading $ and \" if this should be a quoted substitution." (fix id)
   where
     assignments = foldl (flip ($)) Map.empty (map insertAssignment $ variableFlow params)
     insertAssignment (Assignment (_, token, name, _)) | isVariableName name =
