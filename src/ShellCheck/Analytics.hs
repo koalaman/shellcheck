@@ -849,7 +849,7 @@ checkArrayWithoutIndex params _ =
     readF _ _ _ = return []
 
     writeF _ (T_Assignment id mode name [] _) _ (DataString _) = do
-        isArray <- gets (isJust . Map.lookup name)
+        isArray <- gets (Map.member name)
         return $ if not isArray then [] else
             case mode of
                 Assign -> [makeComment WarningC id 2178 "Variable was used as an array but is now assigned a string."]
