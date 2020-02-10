@@ -87,13 +87,8 @@ runList spec list = notes
 
 getEnableDirectives root =
     case root of
-        T_Annotation _ list _ -> mapMaybe getEnable list
+        T_Annotation _ list _ -> [s | EnableComment s <- list]
         _ -> []
-  where
-    getEnable t =
-        case t of
-            EnableComment s -> return s
-            _ -> Nothing
 
 checkList l t = concatMap (\f -> f t) l
 
@@ -3123,9 +3118,7 @@ checkUnmatchableCases params t =
               Just l -> " on line " <> show l <> "."
               _      -> "."
 
-        valids = concatMap f rest
-        f (x, Just y) = [(x,y)]
-        f _ = []
+        valids = [(x,y) | (x, Just y) <- rest]
     checkDoms _ = return ()
 
 
