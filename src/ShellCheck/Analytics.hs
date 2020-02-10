@@ -3250,9 +3250,8 @@ checkPipeToNowhere _ t =
             "Redirecting to '" ++ name ++ "', a command that doesn't read stdin. " ++ suggestion
 
     -- Could any words in a SimpleCommand consume stdin (e.g. echo "$(cat)")?
-    hasAdditionalConsumers t = fromMaybe True $ do
+    hasAdditionalConsumers t = isNothing $
         doAnalysis (guard . not . mayConsume) t
-        return False
 
     mayConsume t =
         case t of
