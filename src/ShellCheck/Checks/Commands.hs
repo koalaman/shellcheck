@@ -122,7 +122,7 @@ buildCommandMap = foldl' addCheck Map.empty
 
 
 checkCommand :: Map.Map CommandName (Token -> Analysis) -> Token -> Analysis
-checkCommand map t@(T_SimpleCommand id cmdPrefix (cmd:rest)) = fromMaybe (return ()) $ do
+checkCommand map t@(T_SimpleCommand id cmdPrefix (cmd:rest)) = sequence_ $ do
     name <- getLiteralString cmd
     return $
         if '/' `elem` name
@@ -575,7 +575,7 @@ checkPrintfVar = CommandCheck (Exactly "printf") (f . arguments) where
     f _ = return ()
 
     check format more = do
-        fromMaybe (return ()) $ do
+        sequence_ $ do
             string <- getLiteralString format
             let formats = getPrintfFormats string
             let formatCount = length formats
@@ -945,7 +945,7 @@ checkCatastrophicRm = CommandCheck (Basename "rm") $ \t ->
             Nothing ->
                 checkWord' token
 
-    checkWord' token = fromMaybe (return ()) $ do
+    checkWord' token = sequence_ $ do
         filename <- getPotentialPath token
         let path = fixPath filename
         return . when (path `elem` importantPaths) $

@@ -382,7 +382,7 @@ getAssociativeArrays t =
     nub . execWriter $ doAnalysis f t
   where
     f :: Token -> Writer [String] ()
-    f t@T_SimpleCommand {} = fromMaybe (return ()) $ do
+    f t@T_SimpleCommand {} = sequence_ $ do
         name <- getCommandName t
         let assocNames = ["declare","local","typeset"]
         guard $ elem name assocNames

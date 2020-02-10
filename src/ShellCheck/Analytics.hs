@@ -404,7 +404,7 @@ prop_checkArithmeticOpCommand1 = verify checkArithmeticOpCommand "i=i + 1"
 prop_checkArithmeticOpCommand2 = verify checkArithmeticOpCommand "foo=bar * 2"
 prop_checkArithmeticOpCommand3 = verifyNot checkArithmeticOpCommand "foo + opts"
 checkArithmeticOpCommand _ (T_SimpleCommand id [T_Assignment {}] (firstWord:_)) =
-    maybe (return ()) check $ getGlobOrLiteralString firstWord
+    mapM_ check $ getGlobOrLiteralString firstWord
   where
     check op =
         when (op `elem` ["+", "-", "*", "/"]) $
@@ -415,7 +415,7 @@ checkArithmeticOpCommand _ _ = return ()
 prop_checkWrongArit = verify checkWrongArithmeticAssignment "i=i+1"
 prop_checkWrongArit2 = verify checkWrongArithmeticAssignment "n=2; i=n*2"
 checkWrongArithmeticAssignment params (T_SimpleCommand id (T_Assignment _ _ _ _ val:[]) []) =
-  fromMaybe (return ()) $ do
+  sequence_ $ do
     str <- getNormalString val
     match <- matchRegex regex str
     var <- match !!! 0
@@ -2524,7 +2524,7 @@ checkUnpassedInFunctions params root =
 
     referenceList :: [(String, Bool, Token)]
     referenceList = execWriter $
-        doAnalysis (fromMaybe (return ()) . checkCommand) root
+        doAnalysis (sequence_ . checkCommand) root
     checkCommand :: Token -> Maybe (Writer [(String, Bool, Token)] ())
     checkCommand t@(T_SimpleCommand _ _ (cmd:args)) = do
         str <- getLiteralString cmd
@@ -2648,9 +2648,7 @@ prop_checkSuspiciousIFS1 = verify checkSuspiciousIFS "IFS=\"\\n\""
 prop_checkSuspiciousIFS2 = verifyNot checkSuspiciousIFS "IFS=$'\\t'"
 prop_checkSuspiciousIFS3 = verify checkSuspiciousIFS "IFS=' \\t\\n'"
 checkSuspiciousIFS params (T_Assignment _ _ "IFS" [] value) =
-    potentially $ do
-        str <- getLiteralString value
-        return $ check str
+    mapM_ check $ getLiteralString value
   where
     hasDollarSingle = shellType params == Bash || shellType params == Ksh
     n = if hasDollarSingle then  "$'\\n'" else "'<literal linefeed here>'"
@@ -3465,7 +3463,7 @@ prop_checkTranslatedStringVariable3 = verifyNot checkTranslatedStringVariable "$
 prop_checkTranslatedStringVariable4 = verifyNot checkTranslatedStringVariable "var=val; $\"$var\""
 prop_checkTranslatedStringVariable5 = verifyNot checkTranslatedStringVariable "foo=var; bar=val2; $\"foo bar\""
 checkTranslatedStringVariable params (T_DollarDoubleQuoted id [T_Literal _ s]) =
-  fromMaybe (return ()) $ do
+  sequence_ $ do
     guard $ all isVariableChar s
     Map.lookup s assignments
     return $

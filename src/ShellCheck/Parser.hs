@@ -586,7 +586,7 @@ readConditionContents single =
             return $ TC_Nullary id typ x
           )
 
-    checkTrailingOp x = fromMaybe (return ()) $ do
+    checkTrailingOp x = sequence_ $ do
         (T_Literal id str) <- getTrailingUnquotedLiteral x
         trailingOp <- find (`isSuffixOf` str) binaryTestOps
         return $ parseProblemAtId id ErrorC 1108 $
