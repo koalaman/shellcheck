@@ -2594,7 +2594,7 @@ checkUnsupported params t =
     (name, support) = shellSupport t
     report s = err (getId t) 2127 $
         "To use " ++ s ++ ", specify #!/usr/bin/env " ++
-            (map toLower . intercalate " or " . map show $ support)
+            (intercalate " or " . map (map toLower . show) $ support)
 
 -- TODO: Move more of these checks here
 shellSupport t =
