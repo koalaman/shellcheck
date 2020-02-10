@@ -3088,7 +3088,7 @@ checkUnmatchableCases params t =
         return $ warn (getId candidate) 2195
                     "This pattern will never match the case statement's word. Double check them."
 
-    tupMap f l = zip l (map f l)
+    tupMap f l = map (\x -> (x, f x)) l
     checkDoms ((glob, Just x), rest) =
         case filter (\(_, p) -> x `pseudoGlobIsSuperSetof` p) valids of
             ((first,_):_) -> do
