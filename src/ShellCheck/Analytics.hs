@@ -1804,13 +1804,11 @@ prop_checkSpacefulness40= verifyNotTree checkSpacefulness "a=$((x+1)); echo $a"
 
 data SpaceStatus = SpaceSome | SpaceNone | SpaceEmpty deriving (Eq)
 instance Semigroup SpaceStatus where
-  (<>) x y =
-    case (x,y) of
-        (SpaceNone, SpaceNone) -> SpaceNone
-        (SpaceSome, _) -> SpaceSome
-        (_, SpaceSome) -> SpaceSome
-        (SpaceEmpty, x) -> x
-        (x, SpaceEmpty) -> x
+    SpaceNone <> SpaceNone = SpaceNone
+    SpaceSome <> _ = SpaceSome
+    _ <> SpaceSome = SpaceSome
+    SpaceEmpty <> x = x
+    x <> SpaceEmpty = x
 instance Monoid SpaceStatus where
     mempty = SpaceEmpty
     mappend = (<>)
