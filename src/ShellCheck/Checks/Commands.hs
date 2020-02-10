@@ -748,7 +748,7 @@ checkAliasesExpandEarly = CommandCheck (Exactly "alias") (f . arguments)
   where
     f = mapM_ checkArg
     checkArg arg | '=' `elem` concat (oversimplify arg) =
-        forM_ (take 1 $ filter (not . isLiteral) $ getWordParts arg) $
+        forM_ (find (not . isLiteral) $ getWordParts arg) $
             \x -> warn (getId x) 2139 "This expands when defined, not when used. Consider escaping."
     checkArg _ = return ()
 

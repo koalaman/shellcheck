@@ -790,7 +790,7 @@ prop_checkUnquotedDollarAt8 = verifyNot checkUnquotedDollarAt "echo \"${args[@]:
 prop_checkUnquotedDollarAt9 = verifyNot checkUnquotedDollarAt "echo ${args[@]:+\"${args[@]}\"}"
 prop_checkUnquotedDollarAt10 = verifyNot checkUnquotedDollarAt "echo ${@+\"$@\"}"
 checkUnquotedDollarAt p word@(T_NormalWord _ parts) | not $ isStrictlyQuoteFree (parentMap p) word =
-    forM_ (take 1 $ filter isArrayExpansion parts) $ \x ->
+    forM_ (find isArrayExpansion parts) $ \x ->
         unless (isQuotedAlternativeReference x) $
             err (getId x) 2068
                 "Double quote array expansions to avoid re-splitting elements."
@@ -807,7 +807,7 @@ checkConcatenatedDollarAt p word@T_NormalWord {}
             mapM_ for array
   where
     parts = getWordParts word
-    array = take 1 $ filter isArrayExpansion parts
+    array = find isArrayExpansion parts
     for t = err (getId t) 2145 "Argument mixes string and array. Use * or separate argument."
 checkConcatenatedDollarAt _ _ = return ()
 
@@ -1059,7 +1059,7 @@ checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
         "Either use integers only, or use bc or awk to compare."
 
       checkStrings =
-        mapM_ stringError . take 1 . filter isNonNum
+        mapM_ stringError . find isNonNum
 
       isNonNum t = fromMaybe False $ do
         s <- getLiteralStringExt (const $ return "") t
