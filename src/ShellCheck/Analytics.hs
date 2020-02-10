@@ -1220,10 +1220,7 @@ checkLiteralBreakingTest _ t = sequence_ $
   where
     hasEquals = matchToken ('=' `elem`)
     isNonEmpty = matchToken (not . null)
-    matchToken m t = isJust $ do
-        str <- getLiteralString t
-        guard $ m str
-        return ()
+    matchToken m t = maybe False m (getLiteralString t)
 
     comparisonWarning list = do
         token <- find hasEquals list
