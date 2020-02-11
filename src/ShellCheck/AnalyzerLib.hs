@@ -239,19 +239,15 @@ prop_determineShell8 = determineShellTest' (Just Ksh) "#!/bin/sh" == Sh
 
 determineShellTest = determineShellTest' Nothing
 determineShellTest' fallbackShell = determineShell fallbackShell . fromJust . prRoot . pScript
-determineShell fallbackShell t = fromMaybe Bash $ do
-    shellString <- foldl mplus Nothing $ getCandidates t
+determineShell fallbackShell t = fromMaybe Bash $
     shellForExecutable shellString `mplus` fallbackShell
   where
-    forAnnotation t =
-        case t of
-            (ShellOverride s) -> return s
-            _                 -> fail ""
-    getCandidates :: Token -> [Maybe String]
-    getCandidates t@T_Script {} = [Just $ fromShebang t]
-    getCandidates (T_Annotation _ annotations s) =
-        map forAnnotation annotations ++
-           [Just $ fromShebang s]
+    shellString = getCandidate t
+    getCandidate :: Token -> String
+    getCandidate t@T_Script {} = fromShebang t
+    getCandidate (T_Annotation _ annotations s) =
+        fromMaybe (fromShebang s) $
+        listToMaybe [s | ShellOverride s <- annotations]
     fromShebang (T_Script _ (T_Literal _ s) _) = executableFromShebang s
 
 -- Given a string like "/bin/bash" or "/usr/bin/env dash",
@@ -259,7 +255,7 @@ determineShell fallbackShell t = fromMaybe Bash $ do
 executableFromShebang :: String -> String
 executableFromShebang = shellFor
   where
-    shellFor s | "/env " `isInfixOf` s = head (drop 1 (words s)++[""])
+    shellFor s | "/env " `isInfixOf` s = headOrDefault "" (drop 1 $ words s)
     shellFor s | ' ' `elem` s = shellFor $ takeWhile (/= ' ') s
     shellFor s = reverse . takeWhile (/= '/') . reverse $ s
 
@@ -299,7 +295,7 @@ isQuoteFree = isQuoteFreeNode False
 
 isQuoteFreeNode strict tree t =
     (isQuoteFreeElement t == Just True) ||
-        head (mapMaybe isQuoteFreeContext (drop 1 $ getPath tree t) ++ [False])
+        headOrDefault False (mapMaybe isQuoteFreeContext (drop 1 $ getPath tree t))
   where
     -- Is this node self-quoting in itself?
     isQuoteFreeElement t =
@@ -454,7 +450,7 @@ leadType params t =
         T_BatsTest {} -> SubshellScope "@bats test"
         T_CoProcBody _ _  -> SubshellScope "coproc"
         T_Redirecting {}  ->
-            if fromMaybe False causesSubshell
+            if causesSubshell == Just True
             then SubshellScope "pipeline"
             else NoneScope
         _ -> NoneScope
@@ -762,9 +758,8 @@ getReferencedVariables parents t =
         _          -> Nothing
 
     getIfReference context token = maybeToList $ do
-            str <- getLiteralStringExt literalizer token
-            guard . not $ null str
-            when (isDigit $ head str) $ fail "is a number"
+            str@(h:_) <- getLiteralStringExt literalizer token
+            when (isDigit h) $ fail "is a number"
             return (context, token, getBracedReference str)
 
     isDereferencing = (`elem` ["-eq", "-ne", "-lt", "-le", "-gt", "-ge"])
@@ -869,15 +864,6 @@ getBracedModifier s = fromMaybe "" . listToMaybe $ do
     dropModifier x        = [x]
 
 -- Useful generic functions.
-
--- Run an action in a Maybe (or do nothing).
--- Example:
--- potentially $ do
---   s <- getLiteralString cmd
---   guard $ s `elem` ["--recursive", "-r"]
---   return $ warn .. "Something something recursive"
-potentially :: Monad m => Maybe (m ()) -> m ()
-potentially = fromMaybe (return ())
 
 -- Get element 0 or a default. Like `head` but safe.
 headOrDefault _ (a:_) = a

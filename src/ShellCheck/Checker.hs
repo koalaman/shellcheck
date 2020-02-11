@@ -48,7 +48,7 @@ tokenToPosition startMap t = fromMaybe fail $ do
   where
     fail = error "Internal shellcheck error: id doesn't exist. Please report!"
 
-shellFromFilename filename = foldl mplus Nothing candidates
+shellFromFilename filename = listToMaybe candidates
   where
     shellExtensions = [(".ksh", Ksh)
                       ,(".bash", Bash)
@@ -57,7 +57,7 @@ shellFromFilename filename = foldl mplus Nothing candidates
                       -- The `.sh` is too generic to determine the shell:
                       -- We fallback to Bash in this case and emit SC2148 if there is no shebang
     candidates =
-        map (\(ext,sh) -> if ext `isSuffixOf` filename then Just sh else Nothing) shellExtensions
+        [sh | (ext,sh) <- shellExtensions, ext `isSuffixOf` filename]
 
 checkScript :: Monad m => SystemInterface m -> CheckSpec -> m CheckResult
 checkScript sys spec = do

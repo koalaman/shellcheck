@@ -73,7 +73,7 @@ prop_checkForDecimals2 = verify checkForDecimals "foo[1.2]=bar"
 prop_checkForDecimals3 = verifyNot checkForDecimals "declare -A foo; foo[1.2]=bar"
 checkForDecimals = ForShell [Sh, Dash, Bash] f
   where
-    f t@(TA_Expansion id _) = potentially $ do
+    f t@(TA_Expansion id _) = sequence_ $ do
         str <- getLiteralString t
         first <- str !!! 0
         guard $ isDigit first && '.' `elem` str
@@ -337,7 +337,7 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
         in do
             when (name `elem` unsupportedCommands) $
                 warnMsg id $ "'" ++ name ++ "' is"
-            potentially $ do
+            sequence_ $ do
                 allowed' <- Map.lookup name allowedFlags
                 allowed <- allowed'
                 (word, flag) <- find
@@ -347,7 +347,7 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
             when (name == "source") $ warnMsg id "'source' in place of '.' is"
             when (name == "trap") $
                 let
-                    check token = potentially $ do
+                    check token = sequence_ $ do
                         str <- getLiteralString token
                         let upper = map toUpper str
                         return $ do
@@ -362,7 +362,7 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
                 in
                     mapM_ check (drop 1 rest)
 
-            when (name == "printf") $ potentially $ do
+            when (name == "printf") $ sequence_ $ do
                 format <- rest !!! 0  -- flags are covered by allowedFlags
                 let literal = onlyLiteralString format
                 guard $ "%q" `isInfixOf` literal
@@ -456,11 +456,10 @@ checkEchoSed = ForShell [Bash, Ksh] f
 
     -- This should have used backreferences, but TDFA doesn't support them
     sedRe = mkRegex "^s(.)([^\n]*)g?$"
-    isSimpleSed s = fromMaybe False $ do
-        [first,rest] <- matchRegex sedRe s
-        let delimiters = filter (== head first) rest
+    isSimpleSed s = isJust $ do
+        [h:_,rest] <- matchRegex sedRe s
+        let delimiters = filter (== h) rest
         guard $ length delimiters == 2
-        return True
     checkIn id s =
         when (isSimpleSed s) $
             style id 2001 "See if you can use ${variable//search/replace} instead."

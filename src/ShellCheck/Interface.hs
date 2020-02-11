@@ -316,10 +316,10 @@ mockedSystemInterface files = SystemInterface {
     siGetConfig = const $ return Nothing
 }
   where
-    rf file =
-        case filter ((== file) . fst) files of
-            [] -> return $ Left "File not included in mock."
-            [(_, contents)] -> return $ Right contents
+    rf file = return $
+        case find ((== file) . fst) files of
+            Nothing -> Left "File not included in mock."
+            Just (_, contents) -> Right contents
     fs _ _ file = return file
 
 mockRcFile rcfile mock = mock {
