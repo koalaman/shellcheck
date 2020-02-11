@@ -19,12 +19,6 @@ build_linux() {
   do 
     cp "shellcheck" "deploy/shellcheck-$tag.linux-x86_64"; 
   done
-
-  # Linux Alpine based Docker image
-  name="$DOCKER_BASE-alpine"
-  DOCKER_BUILDS="$DOCKER_BUILDS $name"
-  docker build -f Dockerfile -t "$name:current" --target alpine .
-  docker run "$name:current" sh -c 'shellcheck --version'
 }
 
 build_aarch64() {
