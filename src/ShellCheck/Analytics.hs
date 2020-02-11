@@ -925,6 +925,11 @@ prop_checkSingleQuotedVariables16= verify checkSingleQuotedVariables "git '$a'"
 prop_checkSingleQuotedVariables17= verifyNot checkSingleQuotedVariables "rename 's/(.)a/$1/g' *"
 prop_checkSingleQuotedVariables18= verifyNot checkSingleQuotedVariables "echo '``'"
 prop_checkSingleQuotedVariables19= verifyNot checkSingleQuotedVariables "echo '```'"
+prop_checkSingleQuotedVariables20= verifyNot checkSingleQuotedVariables "mumps -run %XCMD 'W $O(^GLOBAL(5))'"
+prop_checkSingleQuotedVariables21= verifyNot checkSingleQuotedVariables "mumps -run LOOP%XCMD --xec 'W $O(^GLOBAL(6))'"
+
+
+
 
 checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
     when (s `matches` re) $
@@ -938,7 +943,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
     commandName = fromMaybe "" $ do
         cmd <- getClosestCommand parents t
         name <- getCommandBasename cmd
-        return $ if name == "find" then getFindCommand cmd else if name == "git" then getGitCommand cmd else name
+        return $ if name == "find" then getFindCommand cmd else if name == "git" then getGitCommand cmd else if name == "mumps" then getMumpsCommand cmd else name
 
     isProbablyOk =
             any isOkAssignment (take 3 $ getPath parents t)
@@ -959,6 +964,8 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
                 ,"rename"
                 ,"unset"
                 ,"git filter-branch"
+                ,"mumps -run %XCMD"
+                ,"mumps -run LOOP%XCMD"
                 ]
             || "awk" `isSuffixOf` commandName
             || "perl" `isPrefixOf` commandName
@@ -988,6 +995,13 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
             _ -> "git"
     getGitCommand (T_Redirecting _ _ cmd) = getGitCommand cmd
     getGitCommand _ = "git"
+    getMumpsCommand (T_SimpleCommand _ _ words) =
+        case map getLiteralString words of
+            Just "mumps":Just "-run":Just "%XCMD":_ -> "mumps -run %XCMD"
+            Just "mumps":Just "-run":Just "LOOP%XCMD":_ -> "mumps -run LOOP%XCMD"
+            _ -> "mumps"
+    getMumpsCommand (T_Redirecting _ _ cmd) = getMumpsCommand cmd
+    getMumpsCommand _ = "mumps"
 checkSingleQuotedVariables _ _ = return ()
 
 
