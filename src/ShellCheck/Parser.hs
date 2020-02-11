@@ -2056,7 +2056,7 @@ readSimpleCommand = called "simple command" $ do
             firstArgument <- ignoreProblemsOf . optionMaybe . try . lookAhead $ readCmdWord
             suffix <- option [] $ getParser readCmdSuffix
                     -- If `export` or other modifier commands are called with `builtin` we have to look at the first argument
-                    (if isCommand ["builtin"] cmd && isJust firstArgument then fromJust firstArgument else cmd) [
+                    (if isCommand ["builtin"] cmd then fromMaybe cmd firstArgument else cmd) [
                         (["declare", "export", "local", "readonly", "typeset"], readModifierSuffix),
                         (["time"], readTimeSuffix),
                         (["let"], readLetSuffix),
