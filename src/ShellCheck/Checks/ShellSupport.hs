@@ -30,6 +30,7 @@ import ShellCheck.Regex
 import Control.Monad
 import Control.Monad.RWS
 import Data.Char
+import Data.Functor.Identity
 import Data.List
 import Data.Maybe
 import qualified Data.Map as Map
@@ -487,7 +488,7 @@ checkBraceExpansionVars = ForShell [Bash] f
             T_DollarExpansion {} -> return "$"
             T_DollarArithmetic {} -> return "$"
             _ -> return "-"
-    toString t = fromJust $ getLiteralStringExt literalExt t
+    toString t = runIdentity $ getLiteralStringExt literalExt t
     isEvaled t = do
         cmd <- getClosestCommandM t
         return $ maybe False (`isUnqualifiedCommand` "eval") cmd

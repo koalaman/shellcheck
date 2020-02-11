@@ -34,6 +34,7 @@ import ShellCheck.Regex
 import Control.Monad
 import Control.Monad.RWS
 import Data.Char
+import Data.Functor.Identity
 import Data.List
 import Data.Maybe
 import qualified Data.Map.Strict as Map
@@ -248,13 +249,12 @@ prop_checkGrepRe23= verifyNot checkGrepRe "grep '.*' file"
 checkGrepRe = CommandCheck (Basename "grep") check where
     check cmd = f cmd (arguments cmd)
     -- --regex=*(extglob) doesn't work. Fixme?
-    skippable (Just s) = not ("--regex=" `isPrefixOf` s) && "-" `isPrefixOf` s
-    skippable _ = False
+    skippable s = not ("--regex=" `isPrefixOf` s) && "-" `isPrefixOf` s
     f _ [] = return ()
     f cmd (x:r) =
-        let str = getLiteralStringExt (const $ return "_") x
+        let str = getLiteralStringDef "_" x
         in
-            if str `elem` [Just "--", Just "-e", Just "--regex"]
+            if str `elem` ["--", "-e", "--regex"]
             then checkRE cmd r -- Regex is *after* this
             else
                 if skippable str
@@ -348,7 +348,7 @@ returnOrExit multi invalid = (f . arguments)
     isInvalid s = null s || any (not . isDigit) s || length s > 5
         || let value = (read s :: Integer) in value > 255
 
-    literal token = fromJust $ getLiteralStringExt lit token
+    literal token = runIdentity $ getLiteralStringExt lit token
     lit (T_DollarBraced {}) = return "0"
     lit (T_DollarArithmetic {}) = return "0"
     lit (T_DollarExpansion {}) = return "0"
@@ -365,7 +365,7 @@ checkFindExecWithSingleArgument = CommandCheck (Basename "find") (f . arguments)
     check (exec:arg:term:_) = do
         execS <- getLiteralString exec
         termS <- getLiteralString term
-        cmdS <- getLiteralStringExt (const $ return " ") arg
+        let cmdS = getLiteralStringDef " " arg
 
         guard $ execS `elem` ["-exec", "-execdir"] && termS `elem` [";", "+"]
         guard $ cmdS `matches` commandRegex
@@ -735,7 +735,7 @@ checkAliasesUsesArgs = CommandCheck (Exactly "alias") (f . arguments)
     re = mkRegex "\\$\\{?[0-9*@]"
     f = mapM_ checkArg
     checkArg arg =
-        let string = fromJust $ getLiteralStringExt (const $ return "_") arg in
+        let string = getLiteralStringDef "_" arg in
             when ('=' `elem` string && string `matches` re) $
                 err (getId arg) 2142
                     "Aliases can't use positional parameters. Use a function."
@@ -781,7 +781,7 @@ checkFindWithoutPath = CommandCheck (Basename "find") f
     -- path. We assume that all the pre-path flags are single characters from a
     -- list of GNU and macOS flags.
     hasPath (first:rest) =
-        let flag = fromJust $ getLiteralStringExt (const $ return "___") first in
+        let flag = getLiteralStringDef "___" first in
             not ("-" `isPrefixOf` flag) || isLeadingFlag flag && hasPath rest
     hasPath [] = False
     isLeadingFlag flag = length flag <= 2 || all (`elem` leadingFlagChars) flag
