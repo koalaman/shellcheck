@@ -197,15 +197,14 @@ prop_checkFindNameGlob1 = verify checkFindNameGlob "find / -name *.php"
 prop_checkFindNameGlob2 = verify checkFindNameGlob "find / -type f -ipath *(foo)"
 prop_checkFindNameGlob3 = verifyNot checkFindNameGlob "find * -name '*.php'"
 checkFindNameGlob = CommandCheck (Basename "find") (f . arguments)  where
-    acceptsGlob (Just s) = s `elem` [ "-ilname", "-iname", "-ipath", "-iregex", "-iwholename", "-lname", "-name", "-path", "-regex", "-wholename" ]
-    acceptsGlob _ = False
+    acceptsGlob s = s `elem` [ "-ilname", "-iname", "-ipath", "-iregex", "-iwholename", "-lname", "-name", "-path", "-regex", "-wholename" ]
     f [] = return ()
-    f [x] = return ()
-    f (a:b:r) = do
-        when (acceptsGlob (getLiteralString a) && isGlob b) $ do
-            let (Just s) = getLiteralString a
+    f (x:xs) = g x xs
+    g _ [] = return ()
+    g a (b:r) = do
+        forM_ (getLiteralString a) $ \s -> when (acceptsGlob s && isGlob b) $
             warn (getId b) 2061 $ "Quote the parameter to " ++ s ++ " so the shell won't interpret it."
-        f (b:r)
+        g b r
 
 
 prop_checkNeedlessExpr = verify checkNeedlessExpr "foo=$(expr 3 + 2)"
