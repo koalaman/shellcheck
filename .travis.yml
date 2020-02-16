@@ -6,7 +6,9 @@ services:
 
 jobs:
   include:
-    - stage: Test
+    - stage: Build binaries
+
+      # This must weirdly not have a dash, otherwise an empty job is created
       env: BUILD=linux
     - env: BUILD=windows
     - env: BUILD=armv6hf
