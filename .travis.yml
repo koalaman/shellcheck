@@ -15,6 +15,7 @@ jobs:
       os: osx
 
     - stage: Deploy docker image
+      if: branch = master
       script:
         - source ./.multi_arch_docker
         - set -ex; multi_arch_docker::main; set +x
