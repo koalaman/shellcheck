@@ -1554,7 +1554,7 @@ readDollarExpression = do
 readDollarExp = arithmetic <|> readDollarExpansion <|> readDollarBracket <|> readDollarBraceCommandExpansion <|> readDollarBraced <|> readDollarVariable
   where
     arithmetic = readAmbiguous "$((" readDollarArithmetic readDollarExpansion (\pos ->
-        parseNoteAt pos WarningC 1102 "Shells disambiguate $(( differently or not at all. For $(command substition), add space after $( . For $((arithmetics)), fix parsing errors.")
+        parseNoteAt pos ErrorC 1102 "Shells disambiguate $(( differently or not at all. For $(command substition), add space after $( . For $((arithmetics)), fix parsing errors.")
 
 prop_readDollarSingleQuote = isOk readDollarSingleQuote "$'foo\\\'lol'"
 readDollarSingleQuote = called "$'..' expression" $ do
@@ -2673,7 +2673,7 @@ readCompoundCommand = do
     cmd <- choice [
         readBraceGroup,
         readAmbiguous "((" readArithmeticExpression readSubshell (\pos ->
-            parseNoteAt pos WarningC 1105 "Shells disambiguate (( differently or not at all. For subshell, add spaces around ( . For ((, fix parsing errors."),
+            parseNoteAt pos ErrorC 1105 "Shells disambiguate (( differently or not at all. For subshell, add spaces around ( . For ((, fix parsing errors."),
         readSubshell,
         readCondition,
         readWhileClause,
