@@ -2304,6 +2304,7 @@ prop_readIfClause2 = isWarning readIfClause "if false; then; echo oo; fi"
 prop_readIfClause3 = isWarning readIfClause "if false; then true; else; echo lol; fi"
 prop_readIfClause4 = isWarning readIfClause "if false; then true; else if true; then echo lol; fi; fi"
 prop_readIfClause5 = isOk readIfClause "if false; then true; else\nif true; then echo lol; fi; fi"
+prop_readIfClause6 = isWarning readIfClause "if true\nthen\nDo the thing\nfi"
 readIfClause = called "if expression" $ do
     start <- startSpan
     pos <- getPosition
@@ -2890,6 +2891,7 @@ redirToken c t = try $ do
 
 tryWordToken s t = tryParseWordToken s t `thenSkip` spacing
 tryParseWordToken keyword t = try $ do
+    pos <- getPosition
     start <- startSpan
     str <- anycaseString keyword
     id <- endSpan start
@@ -2905,9 +2907,10 @@ tryParseWordToken keyword t = try $ do
             _ -> return ()
 
     lookAhead keywordSeparator
-    when (str /= keyword) $
-        parseProblem ErrorC 1081 $
-            "Scripts are case sensitive. Use '" ++ keyword ++ "', not '" ++ str ++ "'."
+    when (str /= keyword) $ do
+        parseProblemAt pos ErrorC 1081 $
+            "Scripts are case sensitive. Use '" ++ keyword ++ "', not '" ++ str ++ "' (or quote if literal)."
+        fail ""
     return $ t id
 
 anycaseString =

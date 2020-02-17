@@ -12,7 +12,8 @@
 - SC2256: Warn about translated strings that are known variables
 
 ### Changed
-- SC2230: This check is now off by default
+- SC2230: 'command -v' suggestion is now off by default (-i deprecate-which)
+- SC1081: Keywords are now correctly parsed case sensitively, with a warning
 
 ## v0.7.0 - 2019-07-28
 ### Added
