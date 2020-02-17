@@ -2127,6 +2127,7 @@ prop_checkUnused43= verifyTree checkUnusedAssignments "DEFINE_string foo '' ''"
 prop_checkUnused44= verifyNotTree checkUnusedAssignments "DEFINE_string \"foo$ibar\" x y"
 prop_checkUnused45= verifyTree checkUnusedAssignments "readonly foo=bar"
 prop_checkUnused46= verifyTree checkUnusedAssignments "readonly foo=(bar)"
+prop_checkUnused47= verifyNotTree checkUnusedAssignments "a=1; alias hello='echo $a'"
 checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
     flow = variableFlow params

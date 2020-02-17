@@ -544,8 +544,9 @@ getReferencedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Litera
             else []
         "trap" ->
             case rest of
-                head:_ -> map (\x -> (head, head, x)) $ getVariablesFromLiteralToken head
+                head:_ -> map (\x -> (base, head, x)) $ getVariablesFromLiteralToken head
                 _ -> []
+        "alias" -> [(base, token, name) | token <- rest, name <- getVariablesFromLiteralToken token]
         _ -> []
   where
     getReference t@(T_Assignment _ _ name _ value) = [(t, t, name)]
