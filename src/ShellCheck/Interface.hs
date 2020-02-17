@@ -256,9 +256,6 @@ data Replacement = Replacement {
 data InsertionPoint = InsertBefore | InsertAfter
     deriving (Show, Eq, Generic, NFData)
 
-instance Ord Replacement where
-    compare r1 r2 = (repStartPos r1) `compare` (repStartPos r2)
-
 newReplacement = Replacement {
     repStartPos = newPosition,
     repEndPos = newPosition,
