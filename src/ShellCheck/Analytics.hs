@@ -189,6 +189,7 @@ nodeChecks = [
     ,checkDollarQuoteParen
     ,checkUselessBang
     ,checkTranslatedStringVariable
+    ,checkModifiedArithmeticInRedirection
     ]
 
 optionalChecks = map fst optionalTreeChecks
@@ -3529,6 +3530,41 @@ checkUselessBang params t = when (hasSetE params) $ mapM_ check (getNonReturning
             [_] -> []
             x:rest -> x : dropLast rest
             _ -> []
+
+prop_checkModifiedArithmeticInRedirection1 = verify checkModifiedArithmeticInRedirection "ls > $((i++))"
+prop_checkModifiedArithmeticInRedirection2 = verify checkModifiedArithmeticInRedirection "cat < \"foo$((i++)).txt\""
+prop_checkModifiedArithmeticInRedirection3 = verifyNot checkModifiedArithmeticInRedirection "while true; do true; done > $((i++))"
+prop_checkModifiedArithmeticInRedirection4 = verify checkModifiedArithmeticInRedirection "cat <<< $((i++))"
+prop_checkModifiedArithmeticInRedirection5 = verify checkModifiedArithmeticInRedirection "cat << foo\n$((i++))\nfoo\n"
+checkModifiedArithmeticInRedirection _ t =
+    case t of
+        T_Redirecting _ redirs (T_SimpleCommand _ _ (_:_)) -> mapM_ checkRedirs redirs
+        _ -> return ()
+  where
+    checkRedirs t =
+        case t of
+            T_FdRedirect _ _ (T_IoFile _ _ word) ->
+                mapM_ checkArithmetic $ getWordParts word
+            T_FdRedirect _ _ (T_HereString _ word) ->
+                mapM_ checkArithmetic $ getWordParts word
+            T_FdRedirect _ _ (T_HereDoc _ _ _ _ list) ->
+                mapM_ checkArithmetic list
+            _ -> return ()
+    checkArithmetic t =
+        case t of
+            T_DollarArithmetic _ x -> checkModifying x
+            _ -> return ()
+    checkModifying t =
+        case t of
+            TA_Sequence _ list -> mapM_ checkModifying list
+            TA_Unary id s _ | s `elem` ["|++", "++|", "|--", "--|"] -> warnFor id
+            TA_Assignment id _ _ _ -> warnFor id
+            TA_Binary _ _ x y -> mapM_ checkModifying [x ,y]
+            TA_Trinary _ x y z -> mapM_ checkModifying [x, y, z]
+            _ -> return ()
+    warnFor id =
+        warn id 2257 "Arithmetic modifications in command redirections may be discarded. Do them separately."
+
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
