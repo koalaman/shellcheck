@@ -197,6 +197,10 @@ Or Windows (via [scoop](http://scoop.sh)):
 C:\> scoop install shellcheck
 ```
 
+From [conda-forge](https://anaconda.org/conda-forge/shellcheck):
+
+    conda install -c conda-forge shellcheck
+
 From Snap Store:
 
     snap install --channel=edge shellcheck
