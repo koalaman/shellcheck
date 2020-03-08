@@ -6,7 +6,7 @@ services:
 
 jobs:
   include:
-    - stage: Build binaries
+    - stage: Build
 
       # This must weirdly not have a dash, otherwise an empty job is created
       env: BUILD=linux
@@ -55,5 +55,4 @@ deploy:
   local_dir: deploy
   on:
     repo: koalaman/shellcheck
-    condition: $TRAVIS_BUILD_STAGE_NAME = "Build binaries"
     all_branches: true
