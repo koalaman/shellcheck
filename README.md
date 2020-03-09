@@ -217,13 +217,14 @@ nix-env -iA nixpkgs.shellcheck
 
 Alternatively, you can download pre-compiled binaries for the latest release here:
 
-* [Linux, x86_64](https://storage.googleapis.com/shellcheck/shellcheck-stable.linux.x86_64.tar.xz) (statically linked)
-* [Linux, armv6hf](https://storage.googleapis.com/shellcheck/shellcheck-stable.linux.armv6hf.tar.xz), i.e. Raspberry Pi (statically linked)
-* [Linux, aarch64](https://storage.googleapis.com/shellcheck/shellcheck-stable.linux.aarch64.tar.xz) aka ARM64 (statically linked)
-* [MacOS, x86_64](https://shellcheck.storage.googleapis.com/shellcheck-stable.darwin.x86_64.tar.xz)
-* [Windows, x86](https://storage.googleapis.com/shellcheck/shellcheck-stable.zip)
+* [Linux, x86_64](https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.linux.x86_64.tar.xz) (statically linked)
+* [Linux, armv6hf](https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.linux.armv6hf.tar.xz), i.e. Raspberry Pi (statically linked)
+* [Linux, aarch64](https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.linux.aarch64.tar.xz) aka ARM64 (statically linked)
+* [MacOS, x86_64](https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.darwin.x86_64.tar.xz)
+* [Windows, x86](https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.zip)
 
-or see the [storage bucket listing](https://shellcheck.storage.googleapis.com/index.html) for checksums, older versions and the latest daily builds.
+or see the [GitHub Releases](https://github.com/koalaman/shellcheck/releases) for other releases
+(including the [latest](https://github.com/koalaman/shellcheck/releases/tag/latest) meta-release for daily git builds).
 
 Distro packages already come with a `man` page. If you are building from source, it can be installed with:
 
@@ -250,7 +251,7 @@ A simple installer may do something like:
 
 ```bash
 scversion="stable" # or "v0.4.7", or "latest"
-wget -qO- "https://storage.googleapis.com/shellcheck/shellcheck-${scversion?}.linux.x86_64.tar.xz" | tar -xJv
+wget -qO- "https://github.com/koalaman/shellcheck/releases/download/${scversion?}/shellcheck-${scversion?}.linux.x86_64.tar.xz" | tar -xJv
 cp "shellcheck-${scversion}/shellcheck" /usr/bin/
 shellcheck --version
 ```
