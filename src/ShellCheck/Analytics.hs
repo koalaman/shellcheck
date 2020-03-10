@@ -585,8 +585,9 @@ checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [word@(T_DoubleQuoted id list)]]
 checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [T_SingleQuoted id _]] _) =
     warn id 2041 "This is a literal string. To run as a command, use $(..) instead of '..' . "
 checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [T_Literal id s]] _) =
-    if ',' `elem` s && '{' `notElem` s
-      then warn id 2042 "Use spaces, not commas, to separate loop elements."
+    if ',' `elem` s
+      then unless ('{' `elem` s) $
+         warn id 2042 "Use spaces, not commas, to separate loop elements."
       else warn id 2043 "This loop will only ever run once for a constant value. Did you perhaps mean to loop over dir/*, $var or $(cmd)?"
 checkForInQuoted _ _ = return ()
 
