@@ -2297,13 +2297,30 @@ prop_checkWhileReadPitfalls5 = verifyNot checkWhileReadPitfalls "while read foo;
 prop_checkWhileReadPitfalls6 = verifyNot checkWhileReadPitfalls "while read foo <&3; do ssh $foo; done 3< foo"
 prop_checkWhileReadPitfalls7 = verify checkWhileReadPitfalls "while read foo; do if true; then ssh $foo uptime; fi; done < file"
 prop_checkWhileReadPitfalls8 = verifyNot checkWhileReadPitfalls "while read foo; do ssh -n $foo uptime; done < file"
+prop_checkWhileReadPitfalls9 = verify checkWhileReadPitfalls "while read foo; do ffmpeg -i foo.mkv bar.mkv -an; done"
+prop_checkWhileReadPitfalls10 = verify checkWhileReadPitfalls "while read foo; do mplayer foo.ogv > file; done"
+prop_checkWhileReadPitfalls11 = verifyNot checkWhileReadPitfalls "while read foo; do mplayer foo.ogv <<< q; done"
+prop_checkWhileReadPitfalls12 = verifyNot checkWhileReadPitfalls "while read foo\ndo\nmplayer foo.ogv << EOF\nq\nEOF\ndone"
+prop_checkWhileReadPitfalls13 = verify checkWhileReadPitfalls "while read foo; do x=$(ssh host cmd); done"
+prop_checkWhileReadPitfalls14 = verify checkWhileReadPitfalls "while read foo; do echo $(ssh host cmd) < /dev/null; done"
 
-checkWhileReadPitfalls _ (T_WhileExpression id [command] contents)
+checkWhileReadPitfalls params (T_WhileExpression id [command] contents)
         | isStdinReadCommand command =
     mapM_ checkMuncher contents
   where
-    munchers = [ "ssh", "ffmpeg", "mplayer", "HandBrakeCLI" ]
-    preventionFlags = ["n", "noconsolecontrols" ]
+    -- Map of munching commands to a function that checks if the flags should exclude it
+    munchers = Map.fromList [
+        ("ssh", (hasFlag, addFlag, "-n")),
+        ("ffmpeg", (hasArgument, addFlag, "-nostdin")),
+        ("mplayer", (hasArgument, addFlag, "-noconsolecontrols")),
+        ("HandBrakeCLI", (\_ _ -> False, addRedirect, "< /dev/null"))
+        ]
+    -- Use flag parsing, e.g. "-an" -> "a", "n"
+    hasFlag ('-':flag) = elem flag . map snd . getAllFlags
+    -- Simple string match, e.g. "-an" -> "-an"
+    hasArgument arg = elem arg . mapMaybe getLiteralString . fromJust . getCommandArgv
+    addFlag string cmd = fixWith [replaceEnd (getId $ getCommandTokenOrThis cmd) params 0 (' ':string)]
+    addRedirect string cmd = fixWith [replaceEnd (getId cmd) params 0 (' ':string)]
 
     isStdinReadCommand (T_Pipeline _ _ [T_Redirecting id redirs cmd]) =
         let plaintext = oversimplify cmd
@@ -2312,28 +2329,47 @@ checkWhileReadPitfalls _ (T_WhileExpression id [command] contents)
             && all (not . stdinRedirect) redirs
     isStdinReadCommand _ = False
 
-    checkMuncher (T_Pipeline _ _ (T_Redirecting _ redirs cmd:_)) | not $ any stdinRedirect redirs =
-        case cmd of
-            (T_IfExpression _ thens elses) ->
-              mapM_ checkMuncher . concat $ map fst thens ++ map snd thens ++ [elses]
+    checkMuncher :: Token -> Writer [TokenComment] ()
+    checkMuncher (T_Pipeline _ _ (T_Redirecting _ redirs cmd:_)) = do
+        -- Check command substitutions regardless of the command
+        sequence_ $ do
+            (T_SimpleCommand _ vars args) <- Just cmd
+            let words = concat $ concatMap getCommandSequences $ concatMap getWords $ vars ++ args
+            return $ mapM_ checkMuncher words
 
-            _ -> sequence_ $ do
+        when (not $ any stdinRedirect redirs) $ do
+            -- Recurse into ifs/loops/groups/etc if this doesn't redirect
+            mapM_ checkMuncher $ concat $ getCommandSequences cmd
+
+            -- Check the actual command
+            sequence_ $ do
                 name <- getCommandBasename cmd
-                guard $ name `elem` munchers
+                (check, fix, flag) <- Map.lookup name munchers
+                guard $ not (check flag cmd)
 
-                -- Sloppily check if the command has a flag to prevent eating stdin.
-                let flags = getAllFlags cmd
-                guard . not $ any (`elem` preventionFlags) $ map snd flags
                 return $ do
                     info id 2095 $
                         name ++ " may swallow stdin, preventing this loop from working properly."
-                    warn (getId cmd) 2095 $
-                        "Add < /dev/null to prevent " ++ name ++ " from swallowing stdin."
+                    warnWithFix (getId cmd) 2095
+                        ("Use " ++ name ++ " " ++ flag ++ " to prevent " ++ name ++ " from swallowing stdin.")
+                        (fix flag cmd)
     checkMuncher _ = return ()
 
-    stdinRedirect (T_FdRedirect _ fd _)
-        | null fd || fd == "0" = True
+    stdinRedirect (T_FdRedirect _ fd op)
+        | fd == "0" = True
+        | fd == "" =
+            case op of
+                T_IoFile _ (T_Less _) _ -> True
+                T_IoDuplicate _ (T_LESSAND _) _ -> True
+                T_HereString _ _ -> True
+                T_HereDoc {} -> True
+                _ -> False
     stdinRedirect _ = False
+
+    getWords t =
+        case t of
+            T_Assignment _ _ _ _ x -> getWordParts x
+            _ -> getWordParts t
 checkWhileReadPitfalls _ _ = return ()
 
 

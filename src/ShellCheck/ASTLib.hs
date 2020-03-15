@@ -302,6 +302,11 @@ getCommand t =
 getCommandName :: Token -> Maybe String
 getCommandName = fst . getCommandNameAndToken
 
+-- Maybe get the name+arguments of a command.
+getCommandArgv t = do
+    (T_SimpleCommand _ _ args@(_:_)) <- getCommand t
+    return args
+
 -- Get the command name token from a command, i.e.
 -- the token representing 'ls' in 'ls -la 2> foo'.
 -- If it can't be determined, return the original token.
@@ -367,19 +372,23 @@ isFunctionLike t =
 isBraceExpansion t = case t of T_BraceExpansion {} -> True; _ -> False
 
 -- Get the lists of commands from tokens that contain them, such as
--- the body of while loops or branches of if statements.
+-- the conditions and bodies of while loops or branches of if statements.
 getCommandSequences :: Token -> [[Token]]
 getCommandSequences t =
     case t of
         T_Script _ _ cmds -> [cmds]
         T_BraceGroup _ cmds -> [cmds]
         T_Subshell _ cmds -> [cmds]
-        T_WhileExpression _ _ cmds -> [cmds]
-        T_UntilExpression _ _ cmds -> [cmds]
+        T_WhileExpression _ cond cmds -> [cond, cmds]
+        T_UntilExpression _ cond cmds -> [cond, cmds]
         T_ForIn _ _ _ cmds -> [cmds]
         T_ForArithmetic _ _ _ _ cmds -> [cmds]
-        T_IfExpression _ thens elses -> map snd thens ++ [elses]
+        T_IfExpression _ thens elses -> (concatMap (\(a,b) -> [a,b]) thens) ++ [elses]
         T_Annotation _ _ t -> getCommandSequences t
+
+        T_DollarExpansion _ cmds -> [cmds]
+        T_DollarBraceCommandExpansion _ cmds -> [cmds]
+        T_Backticked _ cmds -> [cmds]
         _ -> []
 
 -- Get a list of names of associative arrays
