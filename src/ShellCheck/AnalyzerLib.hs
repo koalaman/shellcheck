@@ -246,8 +246,7 @@ determineShell fallbackShell t = fromMaybe Bash $
     getCandidate :: Token -> String
     getCandidate t@T_Script {} = fromShebang t
     getCandidate (T_Annotation _ annotations s) =
-        fromMaybe (fromShebang s) $
-        listToMaybe [s | ShellOverride s <- annotations]
+        headOrDefault (fromShebang s) [s | ShellOverride s <- annotations]
     fromShebang (T_Script _ (T_Literal _ s) _) = executableFromShebang s
 
 -- Given a string like "/bin/bash" or "/usr/bin/env dash",
@@ -852,7 +851,7 @@ getBracedReference s = fromMaybe s $
 prop_getBracedModifier1 = getBracedModifier "foo:bar:baz" == ":bar:baz"
 prop_getBracedModifier2 = getBracedModifier "!var:-foo" == ":-foo"
 prop_getBracedModifier3 = getBracedModifier "foo[bar]" == "[bar]"
-getBracedModifier s = fromMaybe "" . listToMaybe $ do
+getBracedModifier s = headOrDefault "" $ do
     let var = getBracedReference s
     a <- dropModifier s
     dropPrefix var a
