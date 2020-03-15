@@ -21,6 +21,7 @@ jobs:
       script:
         - source ./.multi_arch_docker
         - set -ex; multi_arch_docker::main; set +x
+        - mkdir deploy
 
 before_install: |
   DOCKER_BASE="$DOCKER_USERNAME/shellcheck"
