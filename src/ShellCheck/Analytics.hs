@@ -578,16 +578,30 @@ prop_checkForInQuoted4 = verify checkForInQuoted "for f in 1,2,3; do true; done"
 prop_checkForInQuoted4a = verifyNot checkForInQuoted "for f in foo{1,2,3}; do true; done"
 prop_checkForInQuoted5 = verify checkForInQuoted "for f in ls; do true; done"
 prop_checkForInQuoted6 = verifyNot checkForInQuoted "for f in \"${!arr}\"; do true; done"
+prop_checkForInQuoted7 = verify checkForInQuoted "for f in ls, grep, mv; do true; done"
+prop_checkForInQuoted8 = verify checkForInQuoted "for f in 'ls', 'grep', 'mv'; do true; done"
+prop_checkForInQuoted9 = verifyNot checkForInQuoted "for f in 'ls,' 'grep,' 'mv'; do true; done"
 checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [word@(T_DoubleQuoted id list)]] _)
     | any (\x -> willSplit x && not (mayBecomeMultipleArgs x)) list
             || (fmap wouldHaveBeenGlob (getLiteralString word) == Just True) =
         err id 2066 "Since you double quoted this, it will not word split, and the loop will only run once."
 checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [T_SingleQuoted id _]] _) =
     warn id 2041 "This is a literal string. To run as a command, use $(..) instead of '..' . "
-checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [T_Literal id s]] _) =
-    if ',' `elem` s && '{' `notElem` s
-      then warn id 2042 "Use spaces, not commas, to separate loop elements."
-      else warn id 2043 "This loop will only ever run once for a constant value. Did you perhaps mean to loop over dir/*, $var or $(cmd)?"
+checkForInQuoted _ (T_ForIn _ _ [single] _) | fromMaybe False $ fmap (',' `elem`) $ getUnquotedLiteral single =
+    warn (getId single) 2042 "Use spaces, not commas, to separate loop elements."
+checkForInQuoted _ (T_ForIn _ _ [single] _) | not (willSplit single) && not (mayBecomeMultipleArgs single) =
+    warn (getId single) 2043 "This loop will only ever run once. Bad quoting or missing glob/expansion?"
+checkForInQuoted params (T_ForIn _ _ multiple _) =
+    mapM_ f multiple
+  where
+    f arg = sequence_ $ do
+        suffix <- getTrailingUnquotedLiteral arg
+        string <- getLiteralString suffix
+        guard $ "," `isSuffixOf` string
+        return $
+            warnWithFix (getId arg) 2258
+                "The trailing comma is part of the value, not a separator. Delete or quote it."
+                (fixWith [replaceEnd (getId suffix) params 1 ""])
 checkForInQuoted _ _ = return ()
 
 prop_checkForInCat1 = verify checkForInCat "for f in $(cat foo); do stuff; done"
@@ -1011,8 +1025,9 @@ prop_checkUnquotedN2 = verify checkUnquotedN "[ -n $cow ]"
 prop_checkUnquotedN3 = verifyNot checkUnquotedN "[[ -n $foo ]] && echo cow"
 prop_checkUnquotedN4 = verify checkUnquotedN "[ -n $cow -o -t 1 ]"
 prop_checkUnquotedN5 = verifyNot checkUnquotedN "[ -n \"$@\" ]"
-checkUnquotedN _ (TC_Unary _ SingleBracket "-n" (T_NormalWord id [t])) | willSplit t =
-       err id 2070 "-n doesn't work with unquoted arguments. Quote or use [[ ]]."
+checkUnquotedN _ (TC_Unary _ SingleBracket "-n" t) | willSplit t =
+    unless (any isArrayExpansion $ getWordParts t) $ -- There's SC2198 for these
+       err (getId t) 2070 "-n doesn't work with unquoted arguments. Quote or use [[ ]]."
 checkUnquotedN _ _ = return ()
 
 prop_checkNumberComparisons1 = verify checkNumberComparisons "[[ $foo < 3 ]]"

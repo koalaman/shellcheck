@@ -11,6 +11,7 @@
 - SC2255: Suggest using `$((..))` in `[ 2*3 -eq 6 ]`
 - SC2256: Warn about translated strings that are known variables
 - SC2257: Warn about arithmetic mutation in redirections
+- SC2258: Warn about trailing commas in for loop elements
 
 ### Changed
 - SC2230: 'command -v' suggestion is now off by default (-i deprecate-which)

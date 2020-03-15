@@ -47,6 +47,7 @@ willSplit x =
     T_BraceExpansion {} -> True
     T_Glob {} -> True
     T_Extglob {} -> True
+    T_DoubleQuoted _ l -> any willBecomeMultipleArgs l
     T_NormalWord _ l -> any willSplit l
     _ -> False
 
