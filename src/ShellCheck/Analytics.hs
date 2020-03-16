@@ -2205,6 +2205,7 @@ prop_checkUnassignedReferences36= verifyNotTree checkUnassignedReferences "read 
 prop_checkUnassignedReferences37= verifyNotTree checkUnassignedReferences "var=howdy; printf -v 'array[0]' %s \"$var\"; printf %s \"${array[0]}\";"
 prop_checkUnassignedReferences38= verifyTree (checkUnassignedReferences' True) "echo $VAR"
 prop_checkUnassignedReferences39= verifyNotTree checkUnassignedReferences "builtin export var=4; echo $var"
+prop_checkUnassignedReferences40= verifyNotTree checkUnassignedReferences ": ${foo=bar}"
 
 checkUnassignedReferences = checkUnassignedReferences' False
 checkUnassignedReferences' includeGlobals params t = warnings
