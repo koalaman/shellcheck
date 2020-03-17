@@ -249,7 +249,11 @@ analyze f g i =
         list <- mapM round group
         return $ T_ForArithmetic id x y z list
 
-    delve (T_Script id s l) = dl l $ T_Script id s
+    delve (T_Script id shebang list) = do
+        newShebang <- round shebang
+        newList <- roundAll list
+        return $ T_Script id newShebang newList
+
     delve (T_Function id a b name body) = d1 body $ T_Function id a b name
     delve (T_Condition id typ token) = d1 token $ T_Condition id typ
     delve (T_Extglob id str l) = dl l $ T_Extglob id str
