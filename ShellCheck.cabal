@@ -45,9 +45,7 @@ library
     build-depends:
       aeson,
       array,
-      -- GHC 7.6.3 (base 4.6.0.1) is buggy (#1131, #1119) in optimized mode.
-      -- Just disable that version entirely to fail fast.
-      base > 4.6.0.1 && < 5,
+      base >= 4.8.0.0 && < 5,
       bytestring,
       containers >= 0.5,
       deepseq >= 1.4.0.0,
