@@ -22,8 +22,8 @@ jobs:
       script:
         - source ./.multi_arch_docker
         - set -ex; multi_arch_docker::main; set +x
-        - mkdir deploy
 
+# This is in global context and runs for every stage that doesn't override it.
 before_install: |
   DOCKER_BASE="$DOCKER_USERNAME/shellcheck"
   DOCKER_BUILDS=""
@@ -32,6 +32,7 @@ before_install: |
   test -n "$TRAVIS_TAG"          && TAGS="$TAGS stable $TRAVIS_TAG" || true
   echo "Tags are $TAGS"
 
+# This is in global context and runs for every stage that doesn't override it.
 script:
   - mkdir -p deploy
   - source ./.compile_binaries
@@ -40,6 +41,7 @@ script:
   - ./.prepare_deploy
   - ./.github_deploy
 
+# This is in global context and runs for every stage that doesn't override it.
 after_failure: |
   id
   pwd
@@ -47,6 +49,7 @@ after_failure: |
   find . -name '*.log' -type f -exec grep "" /dev/null {} +
   find . -ls
 
+# This is in global context and runs for every stage that doesn't override it.
 deploy:
   provider: gcs
   skip_cleanup: true
@@ -57,4 +60,5 @@ deploy:
   local_dir: deploy
   on:
     repo: koalaman/shellcheck
+    condition: $TRAVIS_BUILD_STAGE_NAME = Build
     all_branches: true
