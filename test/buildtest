@@ -11,21 +11,34 @@ command -v cabal ||
 
 cabal update ||
   die "can't update"
-cabal install --dependencies-only --enable-tests ||
-  die "can't install dependencies"
-cabal configure --enable-tests ||
+
+if [ -e /etc/arch-release ]
+then
+  # Arch has an unconventional packaging setup
+  flags=(--disable-library-vanilla --enable-shared --enable-executable-dynamic --ghc-options=-dynamic)
+else
+  flags=()
+fi
+
+cabal install --dependencies-only --enable-tests "${flags[@]}" ||
+  cabal install --dependencies-only "${flags[@]}" ||
+    die "can't install dependencies"
+cabal configure --enable-tests "${flags[@]}" ||
   die "configure failed"
 cabal build ||
   die "build failed"
 cabal test ||
   die "test failed"
 
-dist/build/shellcheck/shellcheck - << 'EOF' || die "execution failed"
+sc="$(find . -name shellcheck -type f -perm -111)"
+[ -x "$sc" ] || die "Can't find executable"
+
+"$sc" - << 'EOF' || die "execution failed"
 #!/bin/sh
 echo "Hello World"
 EOF
 
-dist/build/shellcheck/shellcheck - << 'EOF' && die "negative execution failed"
+"$sc" - << 'EOF' && die "negative execution failed"
 #!/bin/sh
 echo $1
 EOF

@@ -17,13 +17,13 @@ and is still highly experimental.
 Make sure you're plugged in and have screen/tmux in place,
 then re-run with $0 --run to continue.
 
-Also note that 'dist' will be deleted.
+Also note that dist* will be deleted.
 EOF
 exit 0
 }
 
-echo "Deleting 'dist'..."
-rm -rf dist
+echo "Deleting 'dist' and 'dist-newstyle'..."
+rm -rf dist dist-newstyle
 
 log=$(mktemp) || die "Can't create temp file"
 date >> "$log" || die "Can't write to log"
@@ -61,20 +61,16 @@ done << EOF
 debian:stable         apt-get update && apt-get install -y cabal-install
 debian:testing        apt-get update && apt-get install -y cabal-install
 ubuntu:latest         apt-get update && apt-get install -y cabal-install
+haskell:latest        true
 opensuse/leap:latest  zypper install -y cabal-install ghc
+fedora:latest         dnf install -y cabal-install ghc-template-haskell-devel findutils
+archlinux/base:latest pacman -S -y --noconfirm cabal-install ghc-static base-devel
 
-# Other Ubuntu versions we want to support
-ubuntu:19.04          apt-get update && apt-get install -y cabal-install
-ubuntu:18.10          apt-get update && apt-get install -y cabal-install
+# Other versions we want to support
+ubuntu:18.04          apt-get update && apt-get install -y cabal-install
 
 # Misc Haskell including current and latest Stack build
-ubuntu:18.10          set -e; apt-get update && apt-get install -y curl && curl -sSL https://get.haskellstack.org/ | sh -s - -f && cd /mnt && exec test/stacktest
-haskell:latest        true
-
-# Known to currently fail
-centos:latest         yum install -y epel-release && yum install -y cabal-install
-fedora:latest         dnf install -y cabal-install
-archlinux/base:latest pacman -S -y --noconfirm cabal-install ghc-static base-devel
+ubuntu:18.04          set -e; apt-get update && apt-get install -y curl && curl -sSL https://get.haskellstack.org/ | sh -s - -f && cd /mnt && exec test/stacktest
 EOF
 
 exit "$final"
