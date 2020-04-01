@@ -17,7 +17,7 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -}
-{-# LANGUAGE DeriveGeneric, DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric, DeriveAnyClass, DeriveTraversable, PatternSynonyms #-}
 module ShellCheck.AST where
 
 import GHC.Generics (Generic)
@@ -37,110 +37,112 @@ newtype FunctionParentheses = FunctionParentheses Bool deriving (Show, Eq)
 data CaseType = CaseBreak | CaseFallThrough | CaseContinue deriving (Show, Eq)
 
 newtype Root = Root Token
-data Token =
-    TA_Binary Id String Token Token
-    | TA_Assignment Id String Token Token
-    | TA_Variable Id String [Token]
-    | TA_Expansion Id [Token]
-    | TA_Sequence Id [Token]
-    | TA_Trinary Id Token Token Token
-    | TA_Unary Id String Token
-    | TC_And Id ConditionType String Token Token
-    | TC_Binary Id ConditionType String Token Token
-    | TC_Group Id ConditionType Token
-    | TC_Nullary Id ConditionType Token
-    | TC_Or Id ConditionType String Token Token
-    | TC_Unary Id ConditionType String Token
-    | TC_Empty Id ConditionType
-    | T_AND_IF Id
-    | T_AndIf Id Token Token
-    | T_Arithmetic Id Token
-    | T_Array Id [Token]
-    | T_IndexedElement Id [Token] Token
+data Token = OuterToken Id (InnerToken Token) deriving (Show)
+
+data InnerToken t =
+    Inner_TA_Binary String t t
+    | Inner_TA_Assignment String t t
+    | Inner_TA_Variable String [t]
+    | Inner_TA_Expansion [t]
+    | Inner_TA_Sequence [t]
+    | Inner_TA_Trinary t t t
+    | Inner_TA_Unary String t
+    | Inner_TC_And ConditionType String t t
+    | Inner_TC_Binary ConditionType String t t
+    | Inner_TC_Group ConditionType t
+    | Inner_TC_Nullary ConditionType t
+    | Inner_TC_Or ConditionType String t t
+    | Inner_TC_Unary ConditionType String t
+    | Inner_TC_Empty ConditionType
+    | Inner_T_AND_IF
+    | Inner_T_AndIf t t
+    | Inner_T_Arithmetic t
+    | Inner_T_Array [t]
+    | Inner_T_IndexedElement [t] t
     -- Store the index as string, and parse as arithmetic or string later
-    | T_UnparsedIndex Id SourcePos String
-    | T_Assignment Id AssignmentMode String [Token] Token
-    | T_Backgrounded Id Token
-    | T_Backticked Id [Token]
-    | T_Bang Id
-    | T_Banged Id Token
-    | T_BraceExpansion Id [Token]
-    | T_BraceGroup Id [Token]
-    | T_CLOBBER Id
-    | T_Case Id
-    | T_CaseExpression Id Token [(CaseType, [Token], [Token])]
-    | T_Condition Id ConditionType Token
-    | T_DGREAT Id
-    | T_DLESS Id
-    | T_DLESSDASH Id
-    | T_DSEMI Id
-    | T_Do Id
-    | T_DollarArithmetic Id Token
-    | T_DollarBraced Id Bool Token
-    | T_DollarBracket Id Token
-    | T_DollarDoubleQuoted Id [Token]
-    | T_DollarExpansion Id [Token]
-    | T_DollarSingleQuoted Id String
-    | T_DollarBraceCommandExpansion Id [Token]
-    | T_Done Id
-    | T_DoubleQuoted Id [Token]
-    | T_EOF Id
-    | T_Elif Id
-    | T_Else Id
-    | T_Esac Id
-    | T_Extglob Id String [Token]
-    | T_FdRedirect Id String Token
-    | T_Fi Id
-    | T_For Id
-    | T_ForArithmetic Id Token Token Token [Token]
-    | T_ForIn Id String [Token] [Token]
-    | T_Function Id FunctionKeyword FunctionParentheses String Token
-    | T_GREATAND Id
-    | T_Glob Id String
-    | T_Greater Id
-    | T_HereDoc Id Dashed Quoted String [Token]
-    | T_HereString Id Token
-    | T_If Id
-    | T_IfExpression Id [([Token],[Token])] [Token]
-    | T_In  Id
-    | T_IoFile Id Token Token
-    | T_IoDuplicate Id Token String
-    | T_LESSAND Id
-    | T_LESSGREAT Id
-    | T_Lbrace Id
-    | T_Less Id
-    | T_Literal Id String
-    | T_Lparen Id
-    | T_NEWLINE Id
-    | T_NormalWord Id [Token]
-    | T_OR_IF Id
-    | T_OrIf Id Token Token
-    | T_ParamSubSpecialChar Id String -- e.g. '%' in ${foo%bar}  or '/' in ${foo/bar/baz}
-    | T_Pipeline Id [Token] [Token] -- [Pipe separators] [Commands]
-    | T_ProcSub Id String [Token]
-    | T_Rbrace Id
-    | T_Redirecting Id [Token] Token
-    | T_Rparen Id
-    | T_Script Id Token [Token] -- Shebang T_Literal, followed by script.
-    | T_Select Id
-    | T_SelectIn Id String [Token] [Token]
-    | T_Semi Id
-    | T_SimpleCommand Id [Token] [Token]
-    | T_SingleQuoted Id String
-    | T_Subshell Id [Token]
-    | T_Then Id
-    | T_Until Id
-    | T_UntilExpression Id [Token] [Token]
-    | T_While Id
-    | T_WhileExpression Id [Token] [Token]
-    | T_Annotation Id [Annotation] Token
-    | T_Pipe Id String
-    | T_CoProc Id (Maybe String) Token
-    | T_CoProcBody Id Token
-    | T_Include Id Token
-    | T_SourceCommand Id Token Token
-    | T_BatsTest Id Token Token
-    deriving (Show)
+    | Inner_T_UnparsedIndex SourcePos String
+    | Inner_T_Assignment AssignmentMode String [t] t
+    | Inner_T_Backgrounded t
+    | Inner_T_Backticked [t]
+    | Inner_T_Bang
+    | Inner_T_Banged t
+    | Inner_T_BraceExpansion [t]
+    | Inner_T_BraceGroup [t]
+    | Inner_T_CLOBBER
+    | Inner_T_Case
+    | Inner_T_CaseExpression t [(CaseType, [t], [t])]
+    | Inner_T_Condition ConditionType t
+    | Inner_T_DGREAT
+    | Inner_T_DLESS
+    | Inner_T_DLESSDASH
+    | Inner_T_DSEMI
+    | Inner_T_Do
+    | Inner_T_DollarArithmetic t
+    | Inner_T_DollarBraced Bool t
+    | Inner_T_DollarBracket t
+    | Inner_T_DollarDoubleQuoted [t]
+    | Inner_T_DollarExpansion [t]
+    | Inner_T_DollarSingleQuoted String
+    | Inner_T_DollarBraceCommandExpansion [t]
+    | Inner_T_Done
+    | Inner_T_DoubleQuoted [t]
+    | Inner_T_EOF
+    | Inner_T_Elif
+    | Inner_T_Else
+    | Inner_T_Esac
+    | Inner_T_Extglob String [t]
+    | Inner_T_FdRedirect String t
+    | Inner_T_Fi
+    | Inner_T_For
+    | Inner_T_ForArithmetic t t t [t]
+    | Inner_T_ForIn String [t] [t]
+    | Inner_T_Function FunctionKeyword FunctionParentheses String t
+    | Inner_T_GREATAND
+    | Inner_T_Glob String
+    | Inner_T_Greater
+    | Inner_T_HereDoc Dashed Quoted String [t]
+    | Inner_T_HereString t
+    | Inner_T_If
+    | Inner_T_IfExpression [([t],[t])] [t]
+    | Inner_T_In
+    | Inner_T_IoFile t t
+    | Inner_T_IoDuplicate t String
+    | Inner_T_LESSAND
+    | Inner_T_LESSGREAT
+    | Inner_T_Lbrace
+    | Inner_T_Less
+    | Inner_T_Literal String
+    | Inner_T_Lparen
+    | Inner_T_NEWLINE
+    | Inner_T_NormalWord [t]
+    | Inner_T_OR_IF
+    | Inner_T_OrIf t t
+    | Inner_T_ParamSubSpecialChar String -- e.g. '%' in ${foo%bar}  or '/' in ${foo/bar/baz}
+    | Inner_T_Pipeline [t] [t] -- [Pipe separators] [Commands]
+    | Inner_T_ProcSub String [t]
+    | Inner_T_Rbrace
+    | Inner_T_Redirecting [t] t
+    | Inner_T_Rparen
+    | Inner_T_Script t [t] -- Shebang T_Literal, followed by script.
+    | Inner_T_Select
+    | Inner_T_SelectIn String [t] [t]
+    | Inner_T_Semi
+    | Inner_T_SimpleCommand [t] [t]
+    | Inner_T_SingleQuoted String
+    | Inner_T_Subshell [t]
+    | Inner_T_Then
+    | Inner_T_Until
+    | Inner_T_UntilExpression [t] [t]
+    | Inner_T_While
+    | Inner_T_WhileExpression [t] [t]
+    | Inner_T_Annotation [Annotation] t
+    | Inner_T_Pipe String
+    | Inner_T_CoProc (Maybe String) t
+    | Inner_T_CoProcBody t
+    | Inner_T_Include t
+    | Inner_T_SourceCommand t t
+    | Inner_T_BatsTest t t
+    deriving (Show, Eq, Functor, Foldable, Traversable)
 
 data Annotation =
     DisableComment Integer
@@ -151,244 +153,125 @@ data Annotation =
     deriving (Show, Eq)
 data ConditionType = DoubleBracket | SingleBracket deriving (Show, Eq)
 
--- This is an abomination.
-tokenEquals :: Token -> Token -> Bool
-tokenEquals a b = kludge a == kludge b
-    where kludge s = Re.subRegex (Re.mkRegex "\\(Id [0-9]+\\)") (show s) "(Id 0)"
+pattern T_AND_IF id = OuterToken id Inner_T_AND_IF
+pattern T_Bang id = OuterToken id Inner_T_Bang
+pattern T_Case id = OuterToken id Inner_T_Case
+pattern TC_Empty id typ = OuterToken id (Inner_TC_Empty typ)
+pattern T_CLOBBER id = OuterToken id Inner_T_CLOBBER
+pattern T_DGREAT id = OuterToken id Inner_T_DGREAT
+pattern T_DLESS id = OuterToken id Inner_T_DLESS
+pattern T_DLESSDASH id = OuterToken id Inner_T_DLESSDASH
+pattern T_Do id = OuterToken id Inner_T_Do
+pattern T_DollarSingleQuoted id str = OuterToken id (Inner_T_DollarSingleQuoted str)
+pattern T_Done id = OuterToken id Inner_T_Done
+pattern T_DSEMI id = OuterToken id Inner_T_DSEMI
+pattern T_Elif id = OuterToken id Inner_T_Elif
+pattern T_Else id = OuterToken id Inner_T_Else
+pattern T_EOF id = OuterToken id Inner_T_EOF
+pattern T_Esac id = OuterToken id Inner_T_Esac
+pattern T_Fi id = OuterToken id Inner_T_Fi
+pattern T_For id = OuterToken id Inner_T_For
+pattern T_Glob id str = OuterToken id (Inner_T_Glob str)
+pattern T_GREATAND id = OuterToken id Inner_T_GREATAND
+pattern T_Greater id = OuterToken id Inner_T_Greater
+pattern T_If id = OuterToken id Inner_T_If
+pattern T_In id = OuterToken id Inner_T_In
+pattern T_Lbrace id = OuterToken id Inner_T_Lbrace
+pattern T_Less id = OuterToken id Inner_T_Less
+pattern T_LESSAND id = OuterToken id Inner_T_LESSAND
+pattern T_LESSGREAT id = OuterToken id Inner_T_LESSGREAT
+pattern T_Literal id str = OuterToken id (Inner_T_Literal str)
+pattern T_Lparen id = OuterToken id Inner_T_Lparen
+pattern T_NEWLINE id = OuterToken id Inner_T_NEWLINE
+pattern T_OR_IF id = OuterToken id Inner_T_OR_IF
+pattern T_ParamSubSpecialChar id str = OuterToken id (Inner_T_ParamSubSpecialChar str)
+pattern T_Pipe id str = OuterToken id (Inner_T_Pipe str)
+pattern T_Rbrace id = OuterToken id Inner_T_Rbrace
+pattern T_Rparen id = OuterToken id Inner_T_Rparen
+pattern T_Select id = OuterToken id Inner_T_Select
+pattern T_Semi id = OuterToken id Inner_T_Semi
+pattern T_SingleQuoted id str = OuterToken id (Inner_T_SingleQuoted str)
+pattern T_Then id = OuterToken id Inner_T_Then
+pattern T_UnparsedIndex id pos str = OuterToken id (Inner_T_UnparsedIndex pos str)
+pattern T_Until id = OuterToken id Inner_T_Until
+pattern T_While id = OuterToken id Inner_T_While
+pattern TA_Assignment id op t1 t2 = OuterToken id (Inner_TA_Assignment op t1 t2)
+pattern TA_Binary id op t1 t2 = OuterToken id (Inner_TA_Binary op t1 t2)
+pattern TA_Expansion id t = OuterToken id (Inner_TA_Expansion t)
+pattern T_AndIf id t u = OuterToken id (Inner_T_AndIf t u)
+pattern T_Annotation id anns t = OuterToken id (Inner_T_Annotation anns t)
+pattern T_Arithmetic id c = OuterToken id (Inner_T_Arithmetic c)
+pattern T_Array id t = OuterToken id (Inner_T_Array t)
+pattern TA_Sequence id l = OuterToken id (Inner_TA_Sequence l)
+pattern T_Assignment id mode var indices value = OuterToken id (Inner_T_Assignment mode var indices value)
+pattern TA_Trinary id t1 t2 t3 = OuterToken id (Inner_TA_Trinary t1 t2 t3)
+pattern TA_Unary id op t1 = OuterToken id (Inner_TA_Unary op t1)
+pattern TA_Variable id str t = OuterToken id (Inner_TA_Variable str t)
+pattern T_Backgrounded id l = OuterToken id (Inner_T_Backgrounded l)
+pattern T_Backticked id list = OuterToken id (Inner_T_Backticked list)
+pattern T_Banged id l = OuterToken id (Inner_T_Banged l)
+pattern T_BatsTest id name t = OuterToken id (Inner_T_BatsTest name t)
+pattern T_BraceExpansion id list = OuterToken id (Inner_T_BraceExpansion list)
+pattern T_BraceGroup id l = OuterToken id (Inner_T_BraceGroup l)
+pattern TC_And id typ str t1 t2 = OuterToken id (Inner_TC_And typ str t1 t2)
+pattern T_CaseExpression id word cases = OuterToken id (Inner_T_CaseExpression word cases)
+pattern TC_Binary id typ op lhs rhs = OuterToken id (Inner_TC_Binary typ op lhs rhs)
+pattern TC_Group id typ token = OuterToken id (Inner_TC_Group typ token)
+pattern TC_Nullary id typ token = OuterToken id (Inner_TC_Nullary typ token)
+pattern T_Condition id typ token = OuterToken id (Inner_T_Condition typ token)
+pattern T_CoProcBody id t = OuterToken id (Inner_T_CoProcBody t)
+pattern T_CoProc id var body = OuterToken id (Inner_T_CoProc var body)
+pattern TC_Or id typ str t1 t2 = OuterToken id (Inner_TC_Or typ str t1 t2)
+pattern TC_Unary id typ op token = OuterToken id (Inner_TC_Unary typ op token)
+pattern T_DollarArithmetic id c = OuterToken id (Inner_T_DollarArithmetic c)
+pattern T_DollarBraceCommandExpansion id list = OuterToken id (Inner_T_DollarBraceCommandExpansion list)
+pattern T_DollarBraced id braced op = OuterToken id (Inner_T_DollarBraced braced op)
+pattern T_DollarBracket id c = OuterToken id (Inner_T_DollarBracket c)
+pattern T_DollarDoubleQuoted id list = OuterToken id (Inner_T_DollarDoubleQuoted list)
+pattern T_DollarExpansion id list = OuterToken id (Inner_T_DollarExpansion list)
+pattern T_DoubleQuoted id list = OuterToken id (Inner_T_DoubleQuoted list)
+pattern T_Extglob id str l = OuterToken id (Inner_T_Extglob str l)
+pattern T_FdRedirect id v t = OuterToken id (Inner_T_FdRedirect v t)
+pattern T_ForArithmetic id a b c group = OuterToken id (Inner_T_ForArithmetic a b c group)
+pattern T_ForIn id v w l = OuterToken id (Inner_T_ForIn v w l)
+pattern T_Function id a b name body = OuterToken id (Inner_T_Function a b name body)
+pattern T_HereDoc id d q str l = OuterToken id (Inner_T_HereDoc d q str l)
+pattern T_HereString id word = OuterToken id (Inner_T_HereString word)
+pattern T_IfExpression id conditions elses = OuterToken id (Inner_T_IfExpression conditions elses)
+pattern T_Include id script = OuterToken id (Inner_T_Include script)
+pattern T_IndexedElement id indices t = OuterToken id (Inner_T_IndexedElement indices t)
+pattern T_IoDuplicate id op num = OuterToken id (Inner_T_IoDuplicate op num)
+pattern T_IoFile id op file = OuterToken id (Inner_T_IoFile op file)
+pattern T_NormalWord id list = OuterToken id (Inner_T_NormalWord list)
+pattern T_OrIf id t u = OuterToken id (Inner_T_OrIf t u)
+pattern T_Pipeline id l1 l2 = OuterToken id (Inner_T_Pipeline l1 l2)
+pattern T_ProcSub id typ l = OuterToken id (Inner_T_ProcSub typ l)
+pattern T_Redirecting id redirs cmd = OuterToken id (Inner_T_Redirecting redirs cmd)
+pattern T_Script id shebang list = OuterToken id (Inner_T_Script shebang list)
+pattern T_SelectIn id v w l = OuterToken id (Inner_T_SelectIn v w l)
+pattern T_SimpleCommand id vars cmds = OuterToken id (Inner_T_SimpleCommand vars cmds)
+pattern T_SourceCommand id includer t_include = OuterToken id (Inner_T_SourceCommand includer t_include)
+pattern T_Subshell id l = OuterToken id (Inner_T_Subshell l)
+pattern T_UntilExpression id c l = OuterToken id (Inner_T_UntilExpression c l)
+pattern T_WhileExpression id c l = OuterToken id (Inner_T_WhileExpression c l)
+
+{-# COMPLETE T_AND_IF, T_Bang, T_Case, TC_Empty, T_CLOBBER, T_DGREAT, T_DLESS, T_DLESSDASH, T_Do, T_DollarSingleQuoted, T_Done, T_DSEMI, T_Elif, T_Else, T_EOF, T_Esac, T_Fi, T_For, T_Glob, T_GREATAND, T_Greater, T_If, T_In, T_Lbrace, T_Less, T_LESSAND, T_LESSGREAT, T_Literal, T_Lparen, T_NEWLINE, T_OR_IF, T_ParamSubSpecialChar, T_Pipe, T_Rbrace, T_Rparen, T_Select, T_Semi, T_SingleQuoted, T_Then, T_UnparsedIndex, T_Until, T_While, TA_Assignment, TA_Binary, TA_Expansion, T_AndIf, T_Annotation, T_Arithmetic, T_Array, TA_Sequence, T_Assignment, TA_Trinary, TA_Unary, TA_Variable, T_Backgrounded, T_Backticked, T_Banged, T_BatsTest, T_BraceExpansion, T_BraceGroup, TC_And, T_CaseExpression, TC_Binary, TC_Group, TC_Nullary, T_Condition, T_CoProcBody, T_CoProc, TC_Or, TC_Unary, T_DollarArithmetic, T_DollarBraceCommandExpansion, T_DollarBraced, T_DollarBracket, T_DollarDoubleQuoted, T_DollarExpansion, T_DoubleQuoted, T_Extglob, T_FdRedirect, T_ForArithmetic, T_ForIn, T_Function, T_HereDoc, T_HereString, T_IfExpression, T_Include, T_IndexedElement, T_IoDuplicate, T_IoFile, T_NormalWord, T_OrIf, T_Pipeline, T_ProcSub, T_Redirecting, T_Script, T_SelectIn, T_SimpleCommand, T_SourceCommand, T_Subshell, T_UntilExpression, T_WhileExpression #-}
 
 instance Eq Token where
-    (==) = tokenEquals
+    OuterToken _ a == OuterToken _ b = a == b
 
 analyze :: Monad m => (Token -> m ()) -> (Token -> m ()) -> (Token -> m Token) -> Token -> m Token
 analyze f g i =
     round
   where
-    round t = do
+    round t@(OuterToken id it) = do
         f t
-        newT <- delve t
+        newIt <- traverse round it
         g t
-        i newT
-    roundAll = mapM round
-
-    dl l v = do
-        x <- roundAll l
-        return $ v x
-    dll l m v = do
-        x <- roundAll l
-        y <- roundAll m
-        return $ v x y
-    d1 t v = do
-        x <- round t
-        return $ v x
-    d2 t1 t2 v = do
-        x <- round t1
-        y <- round t2
-        return $ v x y
-
-    delve (T_NormalWord id list) = dl list $ T_NormalWord id
-    delve (T_DoubleQuoted id list) = dl list $ T_DoubleQuoted id
-    delve (T_DollarDoubleQuoted id list) = dl list $ T_DollarDoubleQuoted id
-    delve (T_DollarExpansion id list) = dl list $ T_DollarExpansion id
-    delve (T_DollarBraceCommandExpansion id list) = dl list $ T_DollarBraceCommandExpansion id
-    delve (T_BraceExpansion id list) = dl list $ T_BraceExpansion id
-    delve (T_Backticked id list) = dl list $ T_Backticked id
-    delve (T_DollarArithmetic id c) = d1 c $ T_DollarArithmetic id
-    delve (T_DollarBracket id c) = d1 c $ T_DollarBracket id
-    delve (T_IoFile id op file) = d2 op file $ T_IoFile id
-    delve (T_IoDuplicate id op num) = d1 op $ \x -> T_IoDuplicate id x num
-    delve (T_HereString id word) = d1 word $ T_HereString id
-    delve (T_FdRedirect id v t) = d1 t $ T_FdRedirect id v
-    delve (T_Assignment id mode var indices value) = do
-        a <- roundAll indices
-        b <- round value
-        return $ T_Assignment id mode var a b
-    delve (T_Array id t) = dl t $ T_Array id
-    delve (T_IndexedElement id indices t) = do
-        a <- roundAll indices
-        b <- round t
-        return $ T_IndexedElement id a b
-    delve (T_Redirecting id redirs cmd) = do
-        a <- roundAll redirs
-        b <- round cmd
-        return $ T_Redirecting id a b
-    delve (T_SimpleCommand id vars cmds) = dll vars cmds $ T_SimpleCommand id
-    delve (T_Pipeline id l1 l2) = dll l1 l2 $ T_Pipeline id
-    delve (T_Banged id l) = d1 l $ T_Banged id
-    delve (T_AndIf id t u) = d2 t u $ T_AndIf id
-    delve (T_OrIf id t u) = d2 t u $ T_OrIf id
-    delve (T_Backgrounded id l) = d1 l $ T_Backgrounded id
-    delve (T_Subshell id l) = dl l $ T_Subshell id
-    delve (T_ProcSub id typ l) = dl l $ T_ProcSub id typ
-    delve (T_Arithmetic id c) = d1 c $ T_Arithmetic id
-    delve (T_IfExpression id conditions elses) = do
-        newConds <- mapM (\(c, t) -> do
-                            x <- mapM round c
-                            y <- mapM round t
-                            return (x,y)
-                    ) conditions
-        newElses <- roundAll elses
-        return $ T_IfExpression id newConds newElses
-    delve (T_BraceGroup id l) = dl l $ T_BraceGroup id
-    delve (T_WhileExpression id c l) = dll c l $ T_WhileExpression id
-    delve (T_UntilExpression id c l) = dll c l $ T_UntilExpression id
-    delve (T_ForIn id v w l) = dll w l $ T_ForIn id v
-    delve (T_SelectIn id v w l) = dll w l $ T_SelectIn id v
-    delve (T_CaseExpression id word cases) = do
-        newWord <- round word
-        newCases <- mapM (\(o, c, t) -> do
-                            x <- mapM round c
-                            y <- mapM round t
-                            return (o, x,y)
-                        ) cases
-        return $ T_CaseExpression id newWord newCases
-
-    delve (T_ForArithmetic id a b c group) = do
-        x <- round a
-        y <- round b
-        z <- round c
-        list <- mapM round group
-        return $ T_ForArithmetic id x y z list
-
-    delve (T_Script id shebang list) = do
-        newShebang <- round shebang
-        newList <- roundAll list
-        return $ T_Script id newShebang newList
-
-    delve (T_Function id a b name body) = d1 body $ T_Function id a b name
-    delve (T_Condition id typ token) = d1 token $ T_Condition id typ
-    delve (T_Extglob id str l) = dl l $ T_Extglob id str
-    delve (T_DollarBraced id braced op) = d1 op $ T_DollarBraced id braced
-    delve (T_HereDoc id d q str l) = dl l $ T_HereDoc id d q str
-
-    delve (TC_And id typ str t1 t2) = d2 t1 t2 $ TC_And id typ str
-    delve (TC_Or id typ str t1 t2) = d2 t1 t2 $ TC_Or id typ str
-    delve (TC_Group id typ token) = d1 token $ TC_Group id typ
-    delve (TC_Binary id typ op lhs rhs) = d2 lhs rhs $ TC_Binary id typ op
-    delve (TC_Unary id typ op token) = d1 token $ TC_Unary id typ op
-    delve (TC_Nullary id typ token) = d1 token $ TC_Nullary id typ
-
-    delve (TA_Binary id op t1 t2) = d2 t1 t2 $ TA_Binary id op
-    delve (TA_Assignment id op t1 t2) = d2 t1 t2 $ TA_Assignment id op
-    delve (TA_Unary id op t1) = d1 t1 $ TA_Unary id op
-    delve (TA_Sequence id l) = dl l $ TA_Sequence id
-    delve (TA_Trinary id t1 t2 t3) = do
-        a <- round t1
-        b <- round t2
-        c <- round t3
-        return $ TA_Trinary id a b c
-    delve (TA_Expansion id t) = dl t $ TA_Expansion id
-    delve (TA_Variable id str t) = dl t $ TA_Variable id str
-    delve (T_Annotation id anns t) = d1 t $ T_Annotation id anns
-    delve (T_CoProc id var body) = d1 body $ T_CoProc id var
-    delve (T_CoProcBody id t) = d1 t $ T_CoProcBody id
-    delve (T_Include id script) = d1 script $ T_Include id
-    delve (T_SourceCommand id includer t_include) = d2 includer t_include $ T_SourceCommand id
-    delve (T_BatsTest id name t) = d2 name t $ T_BatsTest id
-    delve t = return t
+        i (OuterToken id newIt)
 
 getId :: Token -> Id
-getId t = case t of
-        T_AND_IF id  -> id
-        T_OR_IF id  -> id
-        T_DSEMI id  -> id
-        T_Semi id  -> id
-        T_DLESS id  -> id
-        T_DGREAT id  -> id
-        T_LESSAND id  -> id
-        T_GREATAND id  -> id
-        T_LESSGREAT id  -> id
-        T_DLESSDASH id  -> id
-        T_CLOBBER id  -> id
-        T_If id  -> id
-        T_Then id  -> id
-        T_Else id  -> id
-        T_Elif id  -> id
-        T_Fi id  -> id
-        T_Do id  -> id
-        T_Done id  -> id
-        T_Case id  -> id
-        T_Esac id  -> id
-        T_While id  -> id
-        T_Until id  -> id
-        T_For id  -> id
-        T_Select id  -> id
-        T_Lbrace id  -> id
-        T_Rbrace id  -> id
-        T_Lparen id  -> id
-        T_Rparen id  -> id
-        T_Bang id  -> id
-        T_In  id  -> id
-        T_NEWLINE id  -> id
-        T_EOF id  -> id
-        T_Less id  -> id
-        T_Greater id  -> id
-        T_SingleQuoted id _  -> id
-        T_Literal id _  -> id
-        T_NormalWord id _  -> id
-        T_DoubleQuoted id _  -> id
-        T_DollarExpansion id _  -> id
-        T_DollarBraced id _ _ -> id
-        T_DollarArithmetic id _  -> id
-        T_BraceExpansion id _  -> id
-        T_ParamSubSpecialChar id _ -> id
-        T_DollarBraceCommandExpansion id _  -> id
-        T_IoFile id _ _  -> id
-        T_IoDuplicate id _ _  -> id
-        T_HereDoc id _ _ _ _ -> id
-        T_HereString id _  -> id
-        T_FdRedirect id _ _  -> id
-        T_Assignment id _ _ _ _  -> id
-        T_Array id _  -> id
-        T_IndexedElement id _ _  -> id
-        T_Redirecting id _ _  -> id
-        T_SimpleCommand id _ _  -> id
-        T_Pipeline id _ _  -> id
-        T_Banged id _  -> id
-        T_AndIf id _ _ -> id
-        T_OrIf id _ _ -> id
-        T_Backgrounded id _  -> id
-        T_IfExpression id _ _  -> id
-        T_Subshell id _  -> id
-        T_BraceGroup id _  -> id
-        T_WhileExpression id _ _  -> id
-        T_UntilExpression id _ _  -> id
-        T_ForIn id _ _ _  -> id
-        T_SelectIn id _ _ _  -> id
-        T_CaseExpression id _ _ -> id
-        T_Function id _ _ _ _  -> id
-        T_Arithmetic id _  -> id
-        T_Script id _ _  -> id
-        T_Condition id _ _  -> id
-        T_Extglob id _ _ -> id
-        T_Backticked id _ -> id
-        TC_And id _ _ _ _  -> id
-        TC_Or id _ _ _ _  -> id
-        TC_Group id _ _  -> id
-        TC_Binary id _ _ _ _  -> id
-        TC_Unary id _ _ _  -> id
-        TC_Nullary id _ _  -> id
-        TA_Binary id _ _ _  -> id
-        TA_Assignment id _ _ _  -> id
-        TA_Unary id _ _  -> id
-        TA_Sequence id _  -> id
-        TA_Trinary id _ _ _  -> id
-        TA_Expansion id _  -> id
-        T_ProcSub id _ _ -> id
-        T_Glob id _ -> id
-        T_ForArithmetic id _ _ _ _ -> id
-        T_DollarSingleQuoted id _ -> id
-        T_DollarDoubleQuoted id _ -> id
-        T_DollarBracket id _ -> id
-        T_Annotation id _ _ -> id
-        T_Pipe id _ -> id
-        T_CoProc id _ _ -> id
-        T_CoProcBody id _ -> id
-        T_Include id _ -> id
-        T_SourceCommand id _ _ -> id
-        T_UnparsedIndex id _ _ -> id
-        TC_Empty id _ -> id
-        TA_Variable id _ _ -> id
-        T_BatsTest id _ _ -> id
+getId (OuterToken id _) = id
 
 blank :: Monad m => Token -> m ()
 blank = const $ return ()
