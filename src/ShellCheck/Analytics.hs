@@ -2340,18 +2340,18 @@ checkWhileReadPitfalls params (T_WhileExpression id [command] contents)
         let plaintext = oversimplify cmd
         in headOrDefault "" plaintext == "read"
             && ("-u" `notElem` plaintext)
-            && all (not . stdinRedirect) redirs
+            && not (any stdinRedirect redirs)
     isStdinReadCommand _ = False
 
     checkMuncher :: Token -> Writer [TokenComment] ()
     checkMuncher (T_Pipeline _ _ (T_Redirecting _ redirs cmd:_)) = do
         -- Check command substitutions regardless of the command
-        sequence_ $ do
-            (T_SimpleCommand _ vars args) <- Just cmd
-            let words = concat $ concatMap getCommandSequences $ concatMap getWords $ vars ++ args
-            return $ mapM_ checkMuncher words
+        case cmd of
+            T_SimpleCommand _ vars args ->
+                mapM_ checkMuncher $ concat $ concatMap getCommandSequences $ concatMap getWords $ vars ++ args
+            _ -> return ()
 
-        when (not $ any stdinRedirect redirs) $ do
+        unless (any stdinRedirect redirs) $ do
             -- Recurse into ifs/loops/groups/etc if this doesn't redirect
             mapM_ checkMuncher $ concat $ getCommandSequences cmd
 
