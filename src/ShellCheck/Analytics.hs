@@ -583,18 +583,17 @@ prop_checkForInQuoted8 = verify checkForInQuoted "for f in 'ls', 'grep', 'mv'; d
 prop_checkForInQuoted9 = verifyNot checkForInQuoted "for f in 'ls,' 'grep,' 'mv'; do true; done"
 checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [word@(T_DoubleQuoted id list)]] _)
     | any (\x -> willSplit x && not (mayBecomeMultipleArgs x)) list
-            || (fmap wouldHaveBeenGlob (getLiteralString word) == Just True) =
+            || maybe False wouldHaveBeenGlob (getLiteralString word) =
         err id 2066 "Since you double quoted this, it will not word split, and the loop will only run once."
 checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [T_SingleQuoted id _]] _) =
     warn id 2041 "This is a literal string. To run as a command, use $(..) instead of '..' . "
-checkForInQuoted _ (T_ForIn _ _ [single] _) | fromMaybe False $ fmap (',' `elem`) $ getUnquotedLiteral single =
-    warn (getId single) 2042 "Use spaces, not commas, to separate loop elements."
-checkForInQuoted _ (T_ForIn _ _ [single] _) | not (willSplit single) && not (mayBecomeMultipleArgs single) =
-    warn (getId single) 2043 "This loop will only ever run once. Bad quoting or missing glob/expansion?"
+checkForInQuoted _ (T_ForIn _ _ [single] _)
+    | maybe False (',' `elem`) $ getUnquotedLiteral single =
+        warn (getId single) 2042 "Use spaces, not commas, to separate loop elements."
+    | not (willSplit single || mayBecomeMultipleArgs single) =
+        warn (getId single) 2043 "This loop will only ever run once. Bad quoting or missing glob/expansion?"
 checkForInQuoted params (T_ForIn _ _ multiple _) =
-    mapM_ f multiple
-  where
-    f arg = sequence_ $ do
+    forM_ multiple $ \arg -> sequence_ $ do
         suffix <- getTrailingUnquotedLiteral arg
         string <- getLiteralString suffix
         guard $ "," `isSuffixOf` string
