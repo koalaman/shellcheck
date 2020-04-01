@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2257
 
 failed=0
 fail() {
