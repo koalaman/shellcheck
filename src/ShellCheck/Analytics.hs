@@ -1399,6 +1399,7 @@ prop_checkOrNeq5 = verifyNot checkOrNeq "[[ $a != /home || $a != */public_html/*
 prop_checkOrNeq6 = verify checkOrNeq "[ $a != a ] || [ $a != b ]"
 prop_checkOrNeq7 = verify checkOrNeq "[ $a != a ] || [ $a != b ] || true"
 prop_checkOrNeq8 = verifyNot checkOrNeq "[[ $a != x || $a != x ]]"
+prop_checkOrNeq9 = verifyNot checkOrNeq "[ 0 -ne $FOO ] || [ 0 -ne $BAR ]"
 -- This only catches the most idiomatic cases. Fixme?
 
 -- For test-level "or": [ x != y -o x != z ]
@@ -1426,8 +1427,16 @@ checkOrNeq _ (T_OrIf id lhs rhs) = sequence_ $ do
             T_Pipeline _ _ [x] -> getExpr x
             T_Redirecting _ _ c -> getExpr c
             T_Condition _ _ c -> getExpr c
-            TC_Binary _ _ op lhs rhs -> return (lhs, op, rhs)
+            TC_Binary _ _ op lhs rhs -> orient (lhs, op, rhs)
             _ -> Nothing
+
+    -- Swap items so that the constant side is rhs (or Nothing if both/neither is constant)
+    orient (lhs, op, rhs) =
+        case (isConstant lhs, isConstant rhs) of
+            (True, False) -> return (rhs, op, lhs)
+            (False, True) -> return (lhs, op, rhs)
+            _ -> Nothing
+
 
 checkOrNeq _ _ = return ()
 
