@@ -508,7 +508,7 @@ getModifiedVariables t =
         T_DollarBraced _ _ l -> maybeToList $ do
             let string = bracedString t
             let modifier = getBracedModifier string
-            guard $ ":=" `isPrefixOf` modifier
+            guard $ any (`isPrefixOf` modifier) ["=", ":="]
             return (t, t, getBracedReference string, DataString $ SourceFrom [l])
 
         t@(T_FdRedirect _ ('{':var) op) -> -- {foo}>&2 modifies foo
