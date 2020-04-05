@@ -178,7 +178,7 @@ makeCommentWithFix severity id code str fix =
         withFix = comment {
             tcFix = Just fix
         }
-    in withFix `deepseq` withFix
+    in force withFix
 
 makeParameters spec =
     let params = Parameters {
