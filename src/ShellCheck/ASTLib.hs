@@ -398,10 +398,10 @@ getAssociativeArrays t =
     f t@T_SimpleCommand {} = sequence_ $ do
         name <- getCommandName t
         let assocNames = ["declare","local","typeset"]
-        guard $ elem name assocNames
+        guard $ name `elem` assocNames
         let flags = getAllFlags t
-        guard $ elem "A" $ map snd flags
-        let args = map fst . filter ((==) "" . snd) $ flags
+        guard $ "A" `elem` map snd flags
+        let args = [arg | (arg, "") <- flags]
         let names = mapMaybe (getLiteralStringExt nameAssignments) args
         return $ tell names
     f _ = return ()
