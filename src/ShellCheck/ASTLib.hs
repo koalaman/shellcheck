@@ -317,13 +317,11 @@ getCommandNameAndToken :: Token -> (Maybe String, Token)
 getCommandNameAndToken t = fromMaybe (Nothing, t) $ do
     (T_SimpleCommand _ _ (w:rest)) <- getCommand t
     s <- getLiteralString w
-    if "busybox" `isSuffixOf` s || "builtin" == s
-        then
-            case rest of
-                (applet:_) -> return (getLiteralString applet, applet)
-                _ -> return (Just s, w)
-        else
-            return (Just s, w)
+    return $ case rest of
+        (applet:_) | "busybox" `isSuffixOf` s || "builtin" == s ->
+            (getLiteralString applet, applet)
+        _ ->
+            (Just s, w)
 
 
 -- If a command substitution is a single command, get its name.
