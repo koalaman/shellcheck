@@ -467,11 +467,7 @@ leadType params t =
 getModifiedVariables t =
     case t of
         T_SimpleCommand _ vars [] ->
-            concatMap (\x -> case x of
-                                T_Assignment id _ name _ w  ->
-                                    [(x, x, name, dataTypeFrom DataString w)]
-                                _ -> []
-                      ) vars
+            [(x, x, name, dataTypeFrom DataString w) | x@(T_Assignment id _ name _ w) <- vars]
         c@T_SimpleCommand {} ->
             getModifiedVariableCommand c
 
