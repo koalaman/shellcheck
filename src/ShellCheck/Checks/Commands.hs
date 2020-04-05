@@ -687,8 +687,7 @@ prop_checkExportedExpansions4 = verifyNot checkExportedExpansions "export ${foo?
 checkExportedExpansions = CommandCheck (Exactly "export") (mapM_ check . arguments)
   where
     check t = sequence_ $ do
-        var <- getSingleUnmodifiedVariable t
-        let name = bracedString var
+        name <- getSingleUnmodifiedBracedString t
         return . warn (getId t) 2163 $
             "This does not export '" ++ name ++ "'. Remove $/${} for that, or use ${var?} to quiet."
 
@@ -709,21 +708,20 @@ checkReadExpansions = CommandCheck (Exactly "read") check
 
     check cmd = mapM_ warning $ getVars cmd
     warning t = sequence_ $ do
-        var <- getSingleUnmodifiedVariable t
-        let name = bracedString var
+        name <- getSingleUnmodifiedBracedString t
         guard $ isVariableName name   -- e.g. not $1
         return . warn (getId t) 2229 $
             "This does not read '" ++ name ++ "'. Remove $/${} for that, or use ${var?} to quiet."
 
 -- Return the single variable expansion that makes up this word, if any.
 -- e.g. $foo -> $foo, "$foo"'' -> $foo , "hello $name" -> Nothing
-getSingleUnmodifiedVariable :: Token -> Maybe Token
-getSingleUnmodifiedVariable word =
+getSingleUnmodifiedBracedString :: Token -> Maybe String
+getSingleUnmodifiedBracedString word =
     case getWordParts word of
         [t@(T_DollarBraced {})] ->
             let contents = bracedString t
                 name = getBracedReference contents
-            in guard (contents == name) >> return t
+            in guard (contents == name) >> return (bracedString t)
         _ -> Nothing
 
 prop_checkAliasesUsesArgs1 = verify checkAliasesUsesArgs "alias a='cp $1 /a'"
