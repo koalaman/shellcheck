@@ -934,7 +934,9 @@ getOpts string flags = process flags
                 more <- process rest2
                 return $ (flag1, token1) : more
 
-supportsArrays shell = shell == Bash || shell == Ksh
+supportsArrays Bash = True
+supportsArrays Ksh = True
+supportsArrays _ = False
 
 -- Returns true if the shell is Bash or Ksh (sorry for the name, Ksh)
 isBashLike :: Parameters -> Bool
