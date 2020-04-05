@@ -293,15 +293,15 @@ isQuoteFree = isQuoteFreeNode False
 
 
 isQuoteFreeNode strict tree t =
-    (isQuoteFreeElement t == Just True) ||
+    isQuoteFreeElement t ||
         headOrDefault False (mapMaybe isQuoteFreeContext (drop 1 $ getPath tree t))
   where
     -- Is this node self-quoting in itself?
     isQuoteFreeElement t =
         case t of
-            T_Assignment {} -> return True
-            T_FdRedirect {} -> return True
-            _               -> Nothing
+            T_Assignment {} -> True
+            T_FdRedirect {} -> True
+            _               -> False
 
     -- Are any subnodes inherently self-quoting?
     isQuoteFreeContext t =
