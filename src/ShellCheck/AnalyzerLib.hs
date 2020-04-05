@@ -468,8 +468,8 @@ getModifiedVariables t =
     case t of
         T_SimpleCommand _ vars [] ->
             [(x, x, name, dataTypeFrom DataString w) | x@(T_Assignment id _ name _ w) <- vars]
-        c@T_SimpleCommand {} ->
-            getModifiedVariableCommand c
+        T_SimpleCommand {} ->
+            getModifiedVariableCommand t
 
         TA_Unary _ "++|" v@(TA_Variable _ name _)  ->
             [(t, v, name, DataString $ SourceFrom [v])]
@@ -503,10 +503,10 @@ getModifiedVariables t =
             guard $ any (`isPrefixOf` modifier) ["=", ":="]
             return (t, t, getBracedReference string, DataString $ SourceFrom [l])
 
-        t@(T_FdRedirect _ ('{':var) op) -> -- {foo}>&2 modifies foo
+        T_FdRedirect _ ('{':var) op -> -- {foo}>&2 modifies foo
             [(t, t, takeWhile (/= '}') var, DataString SourceInteger) | not $ isClosingFileOp op]
 
-        t@(T_CoProc _ name _) ->
+        T_CoProc _ name _ ->
             [(t, t, fromMaybe "COPROC" name, DataArray SourceInteger)]
 
         --Points to 'for' rather than variable
@@ -730,7 +730,7 @@ getReferencedVariables parents t =
             (t, t, "output")
             ]
 
-        t@(T_FdRedirect _ ('{':var) op) -> -- {foo}>&- references and closes foo
+        T_FdRedirect _ ('{':var) op -> -- {foo}>&- references and closes foo
             [(t, t, takeWhile (/= '}') var) | isClosingFileOp op]
         x -> getReferencedVariableCommand x
   where
