@@ -388,14 +388,13 @@ parents params = getPath (parentMap params)
 -- Find the first match in a list where the predicate is Just True.
 -- Stops if it's Just False and ignores Nothing.
 findFirst :: (a -> Maybe Bool) -> [a] -> Maybe a
-findFirst p l =
-    case l of
-        [] -> Nothing
-        (x:xs) ->
-            case p x of
-                Just True  -> return x
-                Just False -> Nothing
-                Nothing    -> findFirst p xs
+findFirst p = foldr go Nothing
+  where
+    go x acc =
+      case p x of
+        Just True  -> return x
+        Just False -> Nothing
+        Nothing    -> acc
 
 -- Check whether a word is entirely output from a single command
 tokenIsJustCommandOutput t = case t of
