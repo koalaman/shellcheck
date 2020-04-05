@@ -798,7 +798,7 @@ getVariablesFromLiteralToken token =
 prop_getVariablesFromLiteral1 =
     getVariablesFromLiteral "$foo${bar//a/b}$BAZ" == ["foo", "bar", "BAZ"]
 getVariablesFromLiteral string =
-    map (!! 0) $ matchAllSubgroups variableRegex string
+    map head $ matchAllSubgroups variableRegex string
   where
     variableRegex = mkRegex "\\$\\{?([A-Za-z0-9_]+)"
 
