@@ -475,7 +475,7 @@ getModifiedVariables t =
             [(t, v, name, DataString $ SourceFrom [v])]
         TA_Unary _ "|++" v@(TA_Variable _ name _)  ->
             [(t, v, name, DataString $ SourceFrom [v])]
-        TA_Assignment _ op (TA_Variable _ name _) rhs -> maybeToList $ do
+        TA_Assignment _ op (TA_Variable _ name _) rhs -> do
             guard $ op `elem` ["=", "*=", "/=", "%=", "+=", "-=", "<<=", ">>=", "&=", "^=", "|="]
             return (t, t, name, DataString $ SourceFrom [rhs])
 
@@ -487,17 +487,17 @@ getModifiedVariables t =
 
         -- Count [[ -v foo ]] as an "assignment".
         -- This is to prevent [ -v foo ] being unassigned or unused.
-        TC_Unary id _ "-v" token -> maybeToList $ do
+        TC_Unary id _ "-v" token -> do
             str <- fmap (takeWhile (/= '[')) $ -- Quoted index
                     flip getLiteralStringExt token $ \x ->
                 case x of
                     T_Glob _ s -> return s -- Unquoted index
-                    _          -> Nothing
+                    _          -> []
 
             guard . not . null $ str
             return (t, token, str, DataString SourceChecked)
 
-        T_DollarBraced _ _ l -> maybeToList $ do
+        T_DollarBraced _ _ l -> do
             let string = bracedString t
             let modifier = getBracedModifier string
             guard $ any (`isPrefixOf` modifier) ["=", ":="]
@@ -747,9 +747,9 @@ getReferencedVariables parents t =
 
     literalizer t = case t of
         T_Glob _ s -> return s    -- Also when parsed as globs
-        _          -> Nothing
+        _          -> []
 
-    getIfReference context token = maybeToList $ do
+    getIfReference context token = do
             str@(h:_) <- getLiteralStringExt literalizer token
             when (isDigit h) $ fail "is a number"
             return (context, token, getBracedReference str)
