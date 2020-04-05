@@ -564,7 +564,7 @@ getModifiedVariableCommand base@(T_SimpleCommand id cmdPrefix (T_NormalWord _ (T
             let params = map getLiteral rest
                 readArrayVars = getReadArrayVariables rest
             in
-                catMaybes . (++ readArrayVars) . takeWhile isJust . reverse $ params
+                catMaybes $ takeWhile isJust (reverse params) ++ readArrayVars
         "getopts" ->
             case rest of
                 opts:var:_ -> maybeToList $ getLiteral var
