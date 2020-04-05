@@ -3596,7 +3596,8 @@ prop_checkModifiedArithmeticInRedirection2 = verify checkModifiedArithmeticInRed
 prop_checkModifiedArithmeticInRedirection3 = verifyNot checkModifiedArithmeticInRedirection "while true; do true; done > $((i++))"
 prop_checkModifiedArithmeticInRedirection4 = verify checkModifiedArithmeticInRedirection "cat <<< $((i++))"
 prop_checkModifiedArithmeticInRedirection5 = verify checkModifiedArithmeticInRedirection "cat << foo\n$((i++))\nfoo\n"
-checkModifiedArithmeticInRedirection _ t =
+prop_checkModifiedArithmeticInRedirection6 = verifyNot checkModifiedArithmeticInRedirection "#!/bin/dash\nls > $((i=i+1))"
+checkModifiedArithmeticInRedirection params t = unless (shellType params == Dash) $
     case t of
         T_Redirecting _ redirs (T_SimpleCommand _ _ (_:_)) -> mapM_ checkRedirs redirs
         _ -> return ()
