@@ -919,20 +919,15 @@ getOpts string flags = process flags
     flagMap = Map.fromList $ ("", False) : flagList string
 
     process [] = return []
-    process [(token, flag)] = do
+    process ((token1, flag):rest1) = do
         takesArg <- Map.lookup flag flagMap
-        guard $ not takesArg
-        return [(flag, token)]
-    process ((token1, flag1):rest2@((token2, flag2):rest)) = do
-        takesArg <- Map.lookup flag1 flagMap
-        if takesArg
-            then do
-                guard $ null flag2
-                more <- process rest
-                return $ (flag1, token2) : more
-            else do
-                more <- process rest2
-                return $ (flag1, token1) : more
+        (token, rest) <- if takesArg
+            then case rest1 of
+                (token2, ""):rest2 -> return (token2, rest2)
+                _ -> fail "takesArg without valid arg"
+            else return (token1, rest1)
+        more <- process rest
+        return $ (flag, token) : more
 
 supportsArrays Bash = True
 supportsArrays Ksh = True
