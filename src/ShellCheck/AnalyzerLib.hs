@@ -460,11 +460,9 @@ leadType params t =
 
     causesSubshell = do
         (T_Pipeline _ _ list) <- parentPipeline
-        if length list <= 1
-            then return False
-            else if not $ hasLastpipe params
-                then return True
-                else return . not $ (getId . head $ reverse list) == getId t
+        return $ case list of
+            _:_:_ -> not (hasLastpipe params) || getId (last list) /= getId t
+            _ -> False
 
 getModifiedVariables t =
     case t of
