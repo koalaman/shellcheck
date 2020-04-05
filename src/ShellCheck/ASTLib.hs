@@ -134,10 +134,6 @@ isUnquotedFlag token = fromMaybe False $ do
     str <- getLeadingUnquotedString token
     return $ "-" `isPrefixOf` str
 
--- Given a T_DollarBraced, return a simplified version of the string contents.
-bracedString (T_DollarBraced _ _ l) = concat $ oversimplify l
-bracedString _ = error "Internal shellcheck error, please report! (bracedString on non-variable)"
-
 -- Is this an expansion of multiple items of an array?
 isArrayExpansion (T_DollarBraced _ _ l) =
     let string = concat $ oversimplify l in

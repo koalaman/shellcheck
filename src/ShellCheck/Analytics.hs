@@ -1869,6 +1869,10 @@ checkSpacefulness params = checkSpacefulness' onFind params
             any (`isPrefixOf` modifier) ["=", ":="]
             && isParamTo parents ":" token
 
+    -- Given a T_DollarBraced, return a simplified version of the string contents.
+    bracedString (T_DollarBraced _ _ l) = concat $ oversimplify l
+    bracedString _ = error "Internal shellcheck error, please report! (bracedString on non-variable)"
+
 prop_checkSpacefulness4v= verifyTree checkVerboseSpacefulness "foo=3; foo=$(echo $foo)"
 prop_checkSpacefulness8v= verifyTree checkVerboseSpacefulness "a=foo\\ bar; a=foo; rm $a"
 prop_checkSpacefulness28v = verifyTree checkVerboseSpacefulness "exec {n}>&1; echo $n"
