@@ -199,12 +199,11 @@ prop_checkFindNameGlob3 = verifyNot checkFindNameGlob "find * -name '*.php'"
 checkFindNameGlob = CommandCheck (Basename "find") (f . arguments)  where
     acceptsGlob s = s `elem` [ "-ilname", "-iname", "-ipath", "-iregex", "-iwholename", "-lname", "-name", "-path", "-regex", "-wholename" ]
     f [] = return ()
-    f (x:xs) = g x xs
-    g _ [] = return ()
-    g a (b:r) = do
+    f (x:xs) = foldr g (const $ return ()) xs x
+    g b acc a = do
         forM_ (getLiteralString a) $ \s -> when (acceptsGlob s && isGlob b) $
             warn (getId b) 2061 $ "Quote the parameter to " ++ s ++ " so the shell won't interpret it."
-        g b r
+        acc b
 
 
 prop_checkNeedlessExpr = verify checkNeedlessExpr "foo=$(expr 3 + 2)"
