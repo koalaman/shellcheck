@@ -50,6 +50,7 @@ do
   for file in deploy/*
   do
     [[ $file == *.@(xz|gz|zip) ]] || continue
+    [[ $file == *"$tag"* ]] || continue
     files+=(-a "$file")
   done
   hub release edit "${files[@]}" "$tag" || exit 1
