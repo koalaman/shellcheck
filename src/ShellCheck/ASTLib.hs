@@ -427,15 +427,8 @@ wordToPseudoGlob word =
         T_Literal _ s -> map PGChar s
         T_SingleQuoted _ s -> map PGChar s
 
-        T_DollarBraced {} -> [PGMany]
-        T_DollarExpansion {} -> [PGMany]
-        T_Backticked {} -> [PGMany]
-
         T_Glob _ "?" -> [PGAny]
         T_Glob _ ('[':_)  -> [PGAny]
-        T_Glob {} -> [PGMany]
-
-        T_Extglob {} -> [PGMany]
 
         _ -> [PGMany]
 
