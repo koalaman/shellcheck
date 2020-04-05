@@ -1,3 +1,5 @@
+## Git
+
 ## v0.7.1 - 2020-04-04
 ### Fixed
 - `-f diff` no longer claims that it found more issues when it didn't
