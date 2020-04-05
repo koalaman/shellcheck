@@ -669,12 +669,10 @@ getModifiedVariableCommand base@(T_SimpleCommand id cmdPrefix (T_NormalWord _ (T
         map (getLiteralArray . snd)
             (filter (isArrayFlag . fst) (zip args (tail args)))
 
-    isArrayFlag x = fromMaybe False $ do
-        str <- getLiteralString x
-        return $ case str of
-                    '-':'-':_ -> False
-                    '-':str -> 'a' `elem` str
-                    _ -> False
+    isArrayFlag x = case getLiteralString x of
+                       Just ('-':'-':_) -> False
+                       Just ('-':str) -> 'a' `elem` str
+                       _ -> False
 
     -- get the FLAGS_ variable created by a shflags DEFINE_ call
     getFlagVariable (n:v:_) = do
