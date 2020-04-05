@@ -498,7 +498,7 @@ getModifiedVariables t =
             return (t, token, str, DataString SourceChecked)
 
         T_DollarBraced _ _ l -> do
-            let string = bracedString t
+            let string = concat $ oversimplify l
             let modifier = getBracedModifier string
             guard $ any (`isPrefixOf` modifier) ["=", ":="]
             return (t, t, getBracedReference string, DataString $ SourceFrom [l])
@@ -703,7 +703,7 @@ getOffsetReferences mods = fromMaybe [] $ do
 
 getReferencedVariables parents t =
     case t of
-        T_DollarBraced id _ l -> let str = bracedString t in
+        T_DollarBraced id _ l -> let str = concat $ oversimplify l in
             (t, t, getBracedReference str) :
                 map (\x -> (l, l, x)) (
                     getIndexReferences str
@@ -895,8 +895,8 @@ isCountingReference _ = False
 -- FIXME: doesn't handle ${a:+$var} vs ${a:+"$var"}
 isQuotedAlternativeReference t =
     case t of
-        T_DollarBraced _ _ _ ->
-            getBracedModifier (bracedString t) `matches` re
+        T_DollarBraced _ _ l ->
+            getBracedModifier (concat $ oversimplify l) `matches` re
         _ -> False
   where
     re = mkRegex "(^|\\]):?\\+"

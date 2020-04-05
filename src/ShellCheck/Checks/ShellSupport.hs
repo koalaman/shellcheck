@@ -243,7 +243,7 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
         when (isBashVariable var) $
                     warnMsg id $ var ++ " is"
       where
-        str = bracedString t
+        str = concat $ oversimplify token
         var = getBracedReference str
         check (regex, feature) =
             when (isJust $ matchRegex regex str) $ warnMsg id feature
@@ -506,13 +506,13 @@ checkMultiDimensionalArrays = ForShell [Bash] f
         case token of
             T_Assignment _ _ name (first:second:_) _ -> about second
             T_IndexedElement _ (first:second:_) _ -> about second
-            T_DollarBraced {} ->
-                when (isMultiDim token) $ about token
+            T_DollarBraced _ _ l ->
+                when (isMultiDim l) $ about token
             _ -> return ()
     about t = warn (getId t) 2180 "Bash does not support multidimensional arrays. Use 1D or associative arrays."
 
     re = mkRegex "^\\[.*\\]\\[.*\\]"  -- Fixme, this matches ${foo:- [][]} and such as well
-    isMultiDim t = getBracedModifier (bracedString t) `matches` re
+    isMultiDim l = getBracedModifier (concat $ oversimplify l) `matches` re
 
 prop_checkPS11 = verify checkPS1Assignments "PS1='\\033[1;35m\\$ '"
 prop_checkPS11a= verify checkPS1Assignments "export PS1='\\033[1;35m\\$ '"

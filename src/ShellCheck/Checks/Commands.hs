@@ -718,10 +718,10 @@ checkReadExpansions = CommandCheck (Exactly "read") check
 getSingleUnmodifiedBracedString :: Token -> Maybe String
 getSingleUnmodifiedBracedString word =
     case getWordParts word of
-        [t@(T_DollarBraced {})] ->
-            let contents = bracedString t
+        [T_DollarBraced _ _ l] ->
+            let contents = concat $ oversimplify l
                 name = getBracedReference contents
-            in guard (contents == name) >> return (bracedString t)
+            in guard (contents == name) >> return contents
         _ -> Nothing
 
 prop_checkAliasesUsesArgs1 = verify checkAliasesUsesArgs "alias a='cp $1 /a'"
