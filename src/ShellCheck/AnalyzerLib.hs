@@ -820,8 +820,8 @@ getBracedReference s = fromMaybe s $
     nameExpansion s `mplus` takeName noPrefix `mplus` getSpecial noPrefix `mplus` getSpecial s
   where
     noPrefix = dropPrefix s
-    dropPrefix (c:rest) = if c `elem` "!#" then rest else c:rest
-    dropPrefix ""       = ""
+    dropPrefix (c:rest) | c `elem` "!#" = rest
+    dropPrefix cs = cs
     takeName s = do
         let name = takeWhile isVariableChar s
         guard . not $ null name
