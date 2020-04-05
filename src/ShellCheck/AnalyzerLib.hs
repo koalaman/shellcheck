@@ -354,8 +354,8 @@ getClosestCommand tree t =
 
 -- Like above, if koala_man knew Haskell when starting this project.
 getClosestCommandM t = do
-    tree <- asks parentMap
-    return $ getClosestCommand tree t
+    params <- ask
+    return $ getClosestCommand (parentMap params) t
 
 -- Is the token used as a command name (the first word in a T_SimpleCommand)?
 usedAsCommandName tree token = go (getId token) (tail $ getPath tree token)
@@ -377,8 +377,8 @@ getPath tree t = t :
 -- Version of the above taking the map from the current context
 -- Todo: give this the name "getPath"
 getPathM t = do
-    map <- asks parentMap
-    return $ getPath map t
+    params <- ask
+    return $ getPath (parentMap params) t
 
 isParentOf tree parent child =
     elem (getId parent) . map getId $ getPath tree child
@@ -866,8 +866,8 @@ headOrDefault def _   = def
 
 -- Run a command if the shell is in the given list
 whenShell l c = do
-    shell <- asks shellType
-    when (shell `elem` l ) c
+    params <- ask
+    when (shellType params `elem` l ) c
 
 
 filterByAnnotation asSpec params =
