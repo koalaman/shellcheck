@@ -1955,19 +1955,16 @@ prop_CheckVariableBraces1 = verify checkVariableBraces "a='123'; echo $a"
 prop_CheckVariableBraces2 = verifyNot checkVariableBraces "a='123'; echo ${a}"
 prop_CheckVariableBraces3 = verifyNot checkVariableBraces "#shellcheck disable=SC2016\necho '$a'"
 prop_CheckVariableBraces4 = verifyNot checkVariableBraces "echo $* $1"
-checkVariableBraces params t =
-    case t of
-        T_DollarBraced id False _
-            | name `notElem` unbracedVariables ->
-                styleWithFix id 2250
-                    "Prefer putting braces around variable references even when not strictly required."
-                    (fixFor t)
-
-        _ -> return ()
+checkVariableBraces params t@(T_DollarBraced id False _)
+    | name `notElem` unbracedVariables =
+        styleWithFix id 2250
+            "Prefer putting braces around variable references even when not strictly required."
+            (fixFor t)
   where
     name = getBracedReference $ bracedString t
     fixFor token = fixWith [replaceStart (getId token) params 1 "${"
                            ,replaceEnd (getId token) params 0 "}"]
+checkVariableBraces _ _ = return ()
 
 prop_checkQuotesInLiterals1 = verifyTree checkQuotesInLiterals "param='--foo=\"bar\"'; app $param"
 prop_checkQuotesInLiterals1a= verifyTree checkQuotesInLiterals "param=\"--foo='lolbar'\"; app $param"
