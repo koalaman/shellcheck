@@ -840,10 +840,9 @@ getBracedReference s = fromMaybe s $
         if c `elem` "*@#?-$!" then return [c] else fail "not special"
     getSpecial _ = fail "empty"
 
-    nameExpansion ('!':rest) = do -- e.g. ${!foo*bar*}
-        let suffix = dropWhile isVariableChar rest
-        guard $ suffix /= rest -- e.g. ${!@}
-        first <- suffix !!! 0
+    nameExpansion ('!':next:rest) = do -- e.g. ${!foo*bar*}
+        guard $ isVariableChar next -- e.g. ${!@}
+        first <- find (not . isVariableChar) rest
         guard $ first `elem` "*?"
         return ""
     nameExpansion _ = Nothing
