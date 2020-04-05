@@ -826,9 +826,8 @@ getBracedReference s = fromMaybe s $
         let name = takeWhile isVariableChar s
         guard . not $ null name
         return name
-    getSpecial (c:_) =
-        if c `elem` "*@#?-$!" then return [c] else fail "not special"
-    getSpecial _ = fail "empty"
+    getSpecial (c:_) | c `elem` "*@#?-$!" = return [c]
+    getSpecial _ = fail "empty or not special"
 
     nameExpansion ('!':rest) = do -- e.g. ${!foo*bar*}
         let suffix = dropWhile isVariableChar rest
