@@ -2,6 +2,12 @@
 # This script builds and deploys multi-architecture docker images from the
 # binaries previously built and deployed to GCS by the Travis pipeline.
 
+if [[ "$TRAVIS_SECURE_ENV_VARS" != "true" ]]
+then
+  echo >&2 "Missing TRAVIS_SECURE_ENV_VARS. Skipping Docker builds."
+  exit 0
+fi
+
 function multi_arch_docker::install_docker_buildx() {
   # Install up-to-date version of docker, with buildx support.
   local -r docker_apt_repo='https://download.docker.com/linux/ubuntu'

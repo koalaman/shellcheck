@@ -18,7 +18,7 @@ jobs:
 
     - stage: Deploy docker image
       # Deploy only for pushes to master branch, not other branches, not PRs.
-      if: branch = master AND type = push
+      if: type = push
       script:
         - source ./.multi_arch_docker
         - set -ex; multi_arch_docker::main; set +x
