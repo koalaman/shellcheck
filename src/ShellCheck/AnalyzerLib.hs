@@ -409,8 +409,7 @@ tokenIsJustCommandOutput t = case t of
 
 -- TODO: Replace this with a proper Control Flow Graph
 getVariableFlow params t =
-    let (_, stack) = runState (doStackAnalysis startScope endScope t) []
-    in reverse stack
+    reverse $ execState (doStackAnalysis startScope endScope t) []
   where
     startScope t =
         let scopeType = leadType params t
