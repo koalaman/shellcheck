@@ -419,25 +419,25 @@ data PseudoGlob = PGAny | PGMany | PGChar Char
 
 -- Turn a word into a PG pattern, replacing all unknown/runtime values with
 -- PGMany.
-wordToPseudoGlob :: Token -> Maybe [PseudoGlob]
+wordToPseudoGlob :: Token -> [PseudoGlob]
 wordToPseudoGlob word =
-    simplifyPseudoGlob . concat <$> mapM f (getWordParts word)
+    simplifyPseudoGlob . concatMap f $ getWordParts word
   where
     f x = case x of
-        T_Literal _ s -> return $ map PGChar s
-        T_SingleQuoted _ s -> return $ map PGChar s
+        T_Literal _ s -> map PGChar s
+        T_SingleQuoted _ s -> map PGChar s
 
-        T_DollarBraced {} -> return [PGMany]
-        T_DollarExpansion {} -> return [PGMany]
-        T_Backticked {} -> return [PGMany]
+        T_DollarBraced {} -> [PGMany]
+        T_DollarExpansion {} -> [PGMany]
+        T_Backticked {} -> [PGMany]
 
-        T_Glob _ "?" -> return [PGAny]
-        T_Glob _ ('[':_)  -> return [PGAny]
-        T_Glob {} -> return [PGMany]
+        T_Glob _ "?" -> [PGAny]
+        T_Glob _ ('[':_)  -> [PGAny]
+        T_Glob {} -> [PGMany]
 
-        T_Extglob {} -> return [PGMany]
+        T_Extglob {} -> [PGMany]
 
-        _ -> return [PGMany]
+        _ -> [PGMany]
 
 -- Turn a word into a PG pattern, but only if we can preserve
 -- exact semantics.
@@ -500,8 +500,7 @@ pseudoGlobIsSuperSetof = matchable
     matchable (PGMany : rest) [] = matchable rest []
     matchable _ _ = False
 
-wordsCanBeEqual x y = fromMaybe True $
-    liftM2 pseudoGlobsCanOverlap (wordToPseudoGlob x) (wordToPseudoGlob y)
+wordsCanBeEqual x y = pseudoGlobsCanOverlap (wordToPseudoGlob x) (wordToPseudoGlob y)
 
 -- Is this an expansion that can be quoted,
 -- e.g. $(foo) `foo` $foo (but not {foo,})?

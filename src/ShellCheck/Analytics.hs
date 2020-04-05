@@ -3137,9 +3137,7 @@ checkUnmatchableCases params t =
             if isConstant word
                 then warn (getId word) 2194
                         "This word is constant. Did you forget the $ on a variable?"
-                else  sequence_ $ do
-                    pg <- wordToPseudoGlob word
-                    return $ mapM_ (check pg) allpatterns
+                else mapM_ (check $ wordToPseudoGlob word) allpatterns
 
             let exactGlobs = tupMap wordToExactPseudoGlob breakpatterns
             let fuzzyGlobs = tupMap wordToPseudoGlob breakpatterns
@@ -3152,15 +3150,13 @@ checkUnmatchableCases params t =
     fst3 (x,_,_) = x
     snd3 (_,x,_) = x
     tp = tokenPositions params
-    check target candidate = sequence_ $ do
-        candidateGlob <- wordToPseudoGlob candidate
-        guard . not $ pseudoGlobsCanOverlap target candidateGlob
-        return $ warn (getId candidate) 2195
-                    "This pattern will never match the case statement's word. Double check them."
+    check target candidate = unless (pseudoGlobsCanOverlap target $ wordToPseudoGlob candidate) $
+        warn (getId candidate) 2195
+            "This pattern will never match the case statement's word. Double check them."
 
     tupMap f l = map (\x -> (x, f x)) l
     checkDoms ((glob, Just x), rest) =
-        forM_ (find (\(_, p) -> x `pseudoGlobIsSuperSetof` p) valids) $
+        forM_ (find (\(_, p) -> x `pseudoGlobIsSuperSetof` p) rest) $
             \(first,_) -> do
                 warn (getId glob) 2221 $ "This pattern always overrides a later one" <> patternContext (getId first)
                 warn (getId first) 2222 $ "This pattern never matches because of a previous pattern" <> patternContext (getId glob)
@@ -3170,8 +3166,6 @@ checkUnmatchableCases params t =
             case posLine . fst <$> Map.lookup id tp of
               Just l -> " on line " <> show l <> "."
               _      -> "."
-
-        valids = [(x,y) | (x, Just y) <- rest]
     checkDoms _ = return ()
 
 
