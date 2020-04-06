@@ -482,7 +482,7 @@ prop_checkNonportableSignals7 = verifyNot checkNonportableSignals "trap 'stop' i
 checkNonportableSignals = CommandCheck (Exactly "trap") (f . arguments)
   where
     f args = case args of
-        first:rest -> unless (isFlag first) $ mapM_ check rest
+        first:rest | not $ isFlag first -> mapM_ check rest
         _ -> return ()
 
     check param = sequence_ $ do
