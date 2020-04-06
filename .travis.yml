@@ -51,9 +51,10 @@ jobs:
         - ./.github_deploy
 
     - stage: Deploy docker image
-      # Deploy only for pushes to master branch, not other branches, not PRs.
+      # Deploy only for pushes, not PRs, since PRs can't access Travis secrets.
       if: type = push
       script:
+        - if [ -z "$TAGS" ]; then exit 0; fi  # Skip rest if nothing to deploy.
         - source ./.multi_arch_docker
         - set -ex; multi_arch_docker::main; set +x
 
