@@ -661,16 +661,11 @@ prop_checkSetAssignment5 = verifyNot checkSetAssignment "set 'a=5'"
 prop_checkSetAssignment6 = verifyNot checkSetAssignment "set"
 checkSetAssignment = CommandCheck (Exactly "set") (f . arguments)
   where
-    f (var:value:rest) =
-        let str = literal var in
-            when (isVariableName str || isAssignment str) $
-                msg (getId var)
-    f (var:_) =
-        when (isAssignment $ literal var) $
-            msg (getId var)
+    f (var:rest)
+        | (not (null rest) && isVariableName str) || isAssignment str =
+            warn (getId var) 2121 "To assign a variable, use just 'var=value', no 'set ..'."
+      where str = literal var
     f _ = return ()
-
-    msg id = warn id 2121 "To assign a variable, use just 'var=value', no 'set ..'."
 
     isAssignment str = '=' `elem` str
     literal (T_NormalWord _ l) = concatMap literal l
