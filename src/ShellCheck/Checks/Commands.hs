@@ -538,9 +538,8 @@ checkSshCommandString = CommandCheck (Basename "ssh") (f . arguments)
             ([], hostport:r@(_:_)) -> checkArg $ last r
             _ -> return ()
     checkArg (T_NormalWord _ [T_DoubleQuoted id parts]) =
-        case filter (not . isConstant) parts of
-            [] -> return ()
-            (x:_) -> info (getId x) 2029
+        forM_ (find (not . isConstant) parts) $
+            \x -> info (getId x) 2029
                 "Note that, unescaped, this expands on the client side."
     checkArg _ = return ()
 
