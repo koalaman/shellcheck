@@ -519,9 +519,9 @@ checkInteractiveSu = CommandCheck (Basename "su") f
             info (getId cmd) 2117
                 "To run commands as another user, use su -c or sudo."
 
-    undirected (T_Pipeline _ _ l) = length l <= 1
+    undirected (T_Pipeline _ _ (_:_:_)) = False
     -- This should really just be modifications to stdin, but meh
-    undirected (T_Redirecting _ list _) = null list
+    undirected (T_Redirecting _ (_:_) _) = False
     undirected _ = True
 
 
