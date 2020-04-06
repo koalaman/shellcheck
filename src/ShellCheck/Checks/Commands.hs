@@ -19,6 +19,7 @@
 -}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MultiWayIf #-}
 
 -- This module contains checks that examine specific commands by name.
 module ShellCheck.Checks.Commands (checker, optionalChecks, ShellCheck.Checks.Commands.runTests) where
@@ -578,22 +579,21 @@ checkPrintfVar = CommandCheck (Exactly "printf") (f . arguments) where
             let formatCount = length formats
             let argCount = length more
 
-            return $
-                case () of
-                    () | argCount == 0 && formatCount == 0 ->
-                        return () -- This is fine
-                    () | formatCount == 0 && argCount > 0 ->
-                        err (getId format) 2182
-                            "This printf format string has no variables. Other arguments are ignored."
-                    () | any mayBecomeMultipleArgs more ->
-                        return () -- We don't know so trust the user
-                    () | argCount < formatCount && onlyTrailingTs formats argCount ->
-                        return () -- Allow trailing %()Ts since they use the current time
-                    () | argCount > 0 && argCount `mod` formatCount == 0 ->
-                        return () -- Great: a suitable number of arguments
-                    () ->
-                        warn (getId format) 2183 $
-                            "This format string has " ++ show formatCount ++ " variables, but is passed " ++ show argCount ++ " arguments."
+            return $ if
+                | argCount == 0 && formatCount == 0 ->
+                    return () -- This is fine
+                | formatCount == 0 && argCount > 0 ->
+                    err (getId format) 2182
+                        "This printf format string has no variables. Other arguments are ignored."
+                | any mayBecomeMultipleArgs more ->
+                    return () -- We don't know so trust the user
+                | argCount < formatCount && onlyTrailingTs formats argCount ->
+                    return () -- Allow trailing %()Ts since they use the current time
+                | argCount > 0 && argCount `mod` formatCount == 0 ->
+                    return () -- Great: a suitable number of arguments
+                | otherwise ->
+                    warn (getId format) 2183 $
+                        "This format string has " ++ show formatCount ++ " variables, but is passed " ++ show argCount ++ " arguments."
 
         unless ('%' `elem` concat (oversimplify format) || isLiteral format) $
           info (getId format) 2059
