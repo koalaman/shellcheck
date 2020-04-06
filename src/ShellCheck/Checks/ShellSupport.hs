@@ -289,10 +289,11 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
         -- Get the literal options from a list of arguments,
         -- up until the first non-literal one
         getLiteralArgs :: [Token] -> [(Id, String)]
-        getLiteralArgs (first:rest) = fromMaybe [] $ do
-            str <- getLiteralString first
-            return $ (getId first, str) : getLiteralArgs rest
-        getLiteralArgs [] = []
+        getLiteralArgs = foldr go []
+          where
+            go first rest = case getLiteralString first of
+                Just str -> (getId first, str) : rest
+                Nothing -> []
 
         -- Check a flag-option pair (such as -o errexit)
         checkOptions (flag@(fid,flag') : opt@(oid,opt') : rest)
