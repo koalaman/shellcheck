@@ -461,8 +461,8 @@ checkMkdirDashPM = CommandCheck (Basename "mkdir") check
   where
     check t = sequence_ $ do
         let flags = getAllFlags t
-        dashP <- find ((\f -> f == "p" || f == "parents") . snd) flags
-        dashM <- find ((\f -> f == "m" || f == "mode") . snd) flags
+        dashP <- find (\(_,f) -> f == "p" || f == "parents") flags
+        dashM <- find (\(_,f) -> f == "m" || f == "mode") flags
         -- mkdir -pm 0700 dir  is fine, so is ../dir, but dir/subdir is not.
         guard $ any couldHaveSubdirs (drop 1 $ arguments t)
         return $ warn (getId $ fst dashM) 2174 "When used with -p, -m only applies to the deepest directory."
