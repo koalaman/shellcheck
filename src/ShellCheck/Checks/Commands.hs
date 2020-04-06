@@ -878,10 +878,10 @@ checkWhileGetoptsCase = CommandCheck (Exactly "getopts") f
     warnUnhandled optId caseId str =
         warn caseId 2213 $ "getopts specified -" ++ str ++ ", but it's not handled by this 'case'."
 
-    warnRedundant (key, expr) = sequence_ $ do
-        str <- key
-        guard $ str `notElem` ["*", ":", "?"]
-        return $ warn (getId expr) 2214 "This case is not specified by getopts."
+    warnRedundant (Just str, expr)
+        | str `notElem` ["*", ":", "?"] =
+            warn (getId expr) 2214 "This case is not specified by getopts."
+    warnRedundant _ = return ()
 
     getHandledStrings (_, globs, _) =
         map (\x -> (literal x, x)) globs
