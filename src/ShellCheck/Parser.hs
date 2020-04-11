@@ -373,10 +373,7 @@ parseNoteAtId id c l a = do
 parseNoteAtWithEnd start end c l a = addParseNote $ ParseNote start end c l a
 
 --------- Convenient combinators
-thenSkip main follow = do
-    r <- main
-    optional follow
-    return r
+thenSkip main follow = main <* optional follow
 
 unexpecting s p = try $
     (try p >> fail ("Unexpected " ++ s)) <|> return ()
@@ -420,7 +417,7 @@ acceptButWarn parser level code note =
 
 parsecBracket before after op = do
     val <- before
-    (op val <* optional (after val)) <|> (after val *> fail "")
+    op val `thenSkip` after val <|> (after val *> fail "")
 
 swapContext contexts p =
     parsecBracket (getCurrentContexts <* setCurrentContexts contexts)
