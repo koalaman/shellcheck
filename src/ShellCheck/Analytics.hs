@@ -781,8 +781,8 @@ checkShorthandIf _ _ = return ()
 prop_checkDollarStar = verify checkDollarStar "for f in $*; do ..; done"
 prop_checkDollarStar2 = verifyNot checkDollarStar "a=$*"
 prop_checkDollarStar3 = verifyNot checkDollarStar "[[ $* = 'a b' ]]"
-checkDollarStar p t@(T_NormalWord _ [b@(T_DollarBraced id _ _)])
-      | bracedString b == "*" &&
+checkDollarStar p t@(T_NormalWord _ [T_DollarBraced id _ l])
+      | concat (oversimplify l) == "*" &&
         not (isStrictlyQuoteFree (parentMap p) t) =
             warn id 2048 "Use \"$@\" (with quotes) to prevent whitespace problems."
 checkDollarStar _ _ = return ()
@@ -1309,8 +1309,8 @@ prop_checkArithmeticDeref13= verifyNot checkArithmeticDeref "(( $$ ))"
 prop_checkArithmeticDeref14= verifyNot checkArithmeticDeref "(( $! ))"
 prop_checkArithmeticDeref15= verifyNot checkArithmeticDeref "(( ${!var} ))"
 prop_checkArithmeticDeref16= verifyNot checkArithmeticDeref "(( ${x+1} + ${x=42} ))"
-checkArithmeticDeref params t@(TA_Expansion _ [b@(T_DollarBraced id _ _)]) =
-    unless (isException $ bracedString b) getWarning
+checkArithmeticDeref params t@(TA_Expansion _ [T_DollarBraced id _ l]) =
+    unless (isException $ concat $ oversimplify l) getWarning
   where
     isException [] = True
     isException s@(h:_) = any (`elem` "/.:#%?*@$-!+=^,") s || isDigit h
@@ -1869,6 +1869,10 @@ checkSpacefulness params = checkSpacefulness' onFind params
             any (`isPrefixOf` modifier) ["=", ":="]
             && isParamTo parents ":" token
 
+    -- Given a T_DollarBraced, return a simplified version of the string contents.
+    bracedString (T_DollarBraced _ _ l) = concat $ oversimplify l
+    bracedString _ = error "Internal shellcheck error, please report! (bracedString on non-variable)"
+
 prop_checkSpacefulness4v= verifyTree checkVerboseSpacefulness "foo=3; foo=$(echo $foo)"
 prop_checkSpacefulness8v= verifyTree checkVerboseSpacefulness "a=foo\\ bar; a=foo; rm $a"
 prop_checkSpacefulness28v = verifyTree checkVerboseSpacefulness "exec {n}>&1; echo $n"
@@ -1940,7 +1944,7 @@ checkSpacefulness' onFind params t =
           T_DollarArithmetic _ _ -> SpaceNone
           T_Literal _ s      -> fromLiteral s
           T_SingleQuoted _ s -> fromLiteral s
-          T_DollarBraced _ _ _ -> spacefulF $ getBracedReference $ bracedString x
+          T_DollarBraced _ _ l -> spacefulF $ getBracedReference $ concat $ oversimplify l
           T_NormalWord _ w   -> isSpacefulWord spacefulF w
           T_DoubleQuoted _ w -> isSpacefulWord spacefulF w
           _ -> SpaceEmpty
@@ -1955,19 +1959,16 @@ prop_CheckVariableBraces1 = verify checkVariableBraces "a='123'; echo $a"
 prop_CheckVariableBraces2 = verifyNot checkVariableBraces "a='123'; echo ${a}"
 prop_CheckVariableBraces3 = verifyNot checkVariableBraces "#shellcheck disable=SC2016\necho '$a'"
 prop_CheckVariableBraces4 = verifyNot checkVariableBraces "echo $* $1"
-checkVariableBraces params t =
-    case t of
-        T_DollarBraced id False _
-            | name `notElem` unbracedVariables ->
-                styleWithFix id 2250
-                    "Prefer putting braces around variable references even when not strictly required."
-                    (fixFor t)
-
-        _ -> return ()
+checkVariableBraces params t@(T_DollarBraced id False l)
+    | name `notElem` unbracedVariables =
+        styleWithFix id 2250
+            "Prefer putting braces around variable references even when not strictly required."
+            (fixFor t)
   where
-    name = getBracedReference $ bracedString t
+    name = getBracedReference $ concat $ oversimplify l
     fixFor token = fixWith [replaceStart (getId token) params 1 "${"
                            ,replaceEnd (getId token) params 0 "}"]
+checkVariableBraces _ _ = return ()
 
 prop_checkQuotesInLiterals1 = verifyTree checkQuotesInLiterals "param='--foo=\"bar\"'; app $param"
 prop_checkQuotesInLiterals1a= verifyTree checkQuotesInLiterals "param=\"--foo='lolbar'\"; app $param"
@@ -2013,7 +2014,7 @@ checkQuotesInLiterals params t =
 
     squashesQuotes t =
         case t of
-            T_DollarBraced id _ _ -> "#" `isPrefixOf` bracedString t
+            T_DollarBraced id _ l -> "#" `isPrefixOf` concat (oversimplify l)
             _ -> False
 
     readF _ expr name = do
@@ -2274,7 +2275,7 @@ checkUnassignedReferences' includeGlobals params t = warnings
     isInArray var t = any isArray $ getPath (parentMap params) t
       where
         isArray T_Array {} = True
-        isArray b@(T_DollarBraced _ _ _) | var /= getBracedReference (bracedString b) = True
+        isArray (T_DollarBraced _ _ l) | var /= getBracedReference (concat $ oversimplify l) = True
         isArray _ = False
 
     isGuarded (T_DollarBraced _ _ v) =
@@ -2402,7 +2403,7 @@ prop_checkPrefixAssign2 = verifyNot checkPrefixAssignmentReference "var=$(echo $
 checkPrefixAssignmentReference params t@(T_DollarBraced id _ value) =
     check path
   where
-    name = getBracedReference $ bracedString t
+    name = getBracedReference $ concat $ oversimplify value
     path = getPath (parentMap params) t
     idPath = map getId path
 
@@ -3035,7 +3036,7 @@ checkReturnAgainstZero _ token =
     isZero t = getLiteralString t == Just "0"
     isExitCode t =
         case getWordParts t of
-            [exp@T_DollarBraced {}] -> bracedString exp == "?"
+            [T_DollarBraced _ _ l] -> concat (oversimplify l) == "?"
             _ -> False
     message id = style id 2181 "Check exit code directly with e.g. 'if mycmd;', not indirectly with $?."
 
@@ -3220,7 +3221,7 @@ checkSplittingInArrays params t =
         T_DollarBraced id _ str |
             not (isCountingReference part)
             && not (isQuotedAlternativeReference part)
-            && getBracedReference (bracedString part) `notElem` variablesWithoutSpaces
+            && getBracedReference (concat $ oversimplify str) `notElem` variablesWithoutSpaces
             -> warn id 2206 $
                 if shellType params == Ksh
                 then "Quote to prevent word splitting/globbing, or split robustly with read -A or while read."

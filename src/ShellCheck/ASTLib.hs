@@ -134,13 +134,9 @@ isUnquotedFlag token = fromMaybe False $ do
     str <- getLeadingUnquotedString token
     return $ "-" `isPrefixOf` str
 
--- Given a T_DollarBraced, return a simplified version of the string contents.
-bracedString (T_DollarBraced _ _ l) = concat $ oversimplify l
-bracedString _ = error "Internal shellcheck error, please report! (bracedString on non-variable)"
-
 -- Is this an expansion of multiple items of an array?
-isArrayExpansion t@(T_DollarBraced _ _ _) =
-    let string = bracedString t in
+isArrayExpansion (T_DollarBraced _ _ l) =
+    let string = concat $ oversimplify l in
         "@" `isPrefixOf` string ||
             not ("#" `isPrefixOf` string) && "[@]" `isInfixOf` string
 isArrayExpansion _ = False
@@ -148,8 +144,8 @@ isArrayExpansion _ = False
 -- Is it possible that this arg becomes multiple args?
 mayBecomeMultipleArgs t = willBecomeMultipleArgs t || f t
   where
-    f t@(T_DollarBraced _ _ _) =
-        let string = bracedString t in
+    f (T_DollarBraced _ _ l) =
+        let string = concat $ oversimplify l in
             "!" `isPrefixOf` string
     f (T_DoubleQuoted _ parts) = any f parts
     f (T_NormalWord _ parts) = any f parts
