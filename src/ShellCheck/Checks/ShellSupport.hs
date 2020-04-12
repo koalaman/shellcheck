@@ -289,10 +289,11 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
         -- Get the literal options from a list of arguments,
         -- up until the first non-literal one
         getLiteralArgs :: [Token] -> [(Id, String)]
-        getLiteralArgs (first:rest) = fromMaybe [] $ do
-            str <- getLiteralString first
-            return $ (getId first, str) : getLiteralArgs rest
-        getLiteralArgs [] = []
+        getLiteralArgs = foldr go []
+          where
+            go first rest = case getLiteralString first of
+                Just str -> (getId first, str) : rest
+                Nothing -> []
 
         -- Check a flag-option pair (such as -o errexit)
         checkOptions (flag@(fid,flag') : opt@(oid,opt') : rest)
@@ -390,11 +391,10 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
             ("unset", Just ["f", "v"]),
             ("wait", Just [])
             ]
-    bashism t@(T_SourceCommand id src _) =
-        let name = fromMaybe "" $ getCommandName src
-        in when (name == "source") $ warnMsg id "'source' in place of '.' is"
-    bashism (TA_Expansion _ (T_Literal id str : _)) | str `matches` radix =
-        when (str `matches` radix) $ warnMsg id "arithmetic base conversion is"
+    bashism t@(T_SourceCommand id src _)
+        | getCommandName src == Just "source" = warnMsg id "'source' in place of '.' is"
+    bashism (TA_Expansion _ (T_Literal id str : _))
+        | str `matches` radix = warnMsg id "arithmetic base conversion is"
       where
         radix = mkRegex "^[0-9]+#"
     bashism _ = return ()
