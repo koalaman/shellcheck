@@ -283,17 +283,11 @@ checkGrepRe = CommandCheck (Basename "grep") check where
         candidates =
             sampleWords ++ map (\(x:r) -> toUpper x : r) sampleWords
 
-    getSuspiciousRegexWildcard str =
-        if not $ str `matches` contra
-        then do
-            match <- matchRegex suspicious str
-            str <- match !!! 0
-            str !!! 0
-        else
-            fail "looks good"
-      where
-        suspicious = mkRegex "([A-Za-z1-9])\\*"
-        contra = mkRegex "[^a-zA-Z1-9]\\*|[][^$+\\\\]"
+    getSuspiciousRegexWildcard str = case matchRegex suspicious str of
+        Just [[c]] | not (str `matches` contra) -> Just c
+        _ -> fail "looks good"
+    suspicious = mkRegex "([A-Za-z1-9])\\*"
+    contra = mkRegex "[^a-zA-Z1-9]\\*|[][^$+\\\\]"
 
 
 prop_checkTrapQuotes1 = verify checkTrapQuotes "trap \"echo $num\" INT"
