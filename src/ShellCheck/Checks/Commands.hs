@@ -957,9 +957,9 @@ checkCatastrophicRm = CommandCheck (Basename "rm") $ \t ->
         f _ = return ""
 
     stripTrailing c = reverse . dropWhile (== c) . reverse
-    skipRepeating c (a:b:rest) | a == b && b == c = skipRepeating c (b:rest)
-    skipRepeating c (a:r) = a:skipRepeating c r
-    skipRepeating _ [] = []
+    skipRepeating c = foldr go []
+      where
+        go a r = a : case r of b:rest | b == c && a == b -> rest; _ -> r
 
     paths = [
         "", "/bin", "/etc", "/home", "/mnt", "/usr", "/usr/share", "/usr/local",
