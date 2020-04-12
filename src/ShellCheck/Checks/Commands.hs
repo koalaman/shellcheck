@@ -19,6 +19,7 @@
 -}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MultiWayIf #-}
 
 -- This module contains checks that examine specific commands by name.
 module ShellCheck.Checks.Commands (checker, optionalChecks, ShellCheck.Checks.Commands.runTests) where
@@ -199,12 +200,11 @@ prop_checkFindNameGlob3 = verifyNot checkFindNameGlob "find * -name '*.php'"
 checkFindNameGlob = CommandCheck (Basename "find") (f . arguments)  where
     acceptsGlob s = s `elem` [ "-ilname", "-iname", "-ipath", "-iregex", "-iwholename", "-lname", "-name", "-path", "-regex", "-wholename" ]
     f [] = return ()
-    f (x:xs) = g x xs
-    g _ [] = return ()
-    g a (b:r) = do
+    f (x:xs) = foldr g (const $ return ()) xs x
+    g b acc a = do
         forM_ (getLiteralString a) $ \s -> when (acceptsGlob s && isGlob b) $
             warn (getId b) 2061 $ "Quote the parameter to " ++ s ++ " so the shell won't interpret it."
-        g b r
+        acc b
 
 
 prop_checkNeedlessExpr = verify checkNeedlessExpr "foo=$(expr 3 + 2)"
@@ -462,8 +462,8 @@ checkMkdirDashPM = CommandCheck (Basename "mkdir") check
   where
     check t = sequence_ $ do
         let flags = getAllFlags t
-        dashP <- find ((\f -> f == "p" || f == "parents") . snd) flags
-        dashM <- find ((\f -> f == "m" || f == "mode") . snd) flags
+        dashP <- find (\(_,f) -> f == "p" || f == "parents") flags
+        dashM <- find (\(_,f) -> f == "m" || f == "mode") flags
         -- mkdir -pm 0700 dir  is fine, so is ../dir, but dir/subdir is not.
         guard $ any couldHaveSubdirs (drop 1 $ arguments t)
         return $ warn (getId $ fst dashM) 2174 "When used with -p, -m only applies to the deepest directory."
@@ -483,7 +483,7 @@ prop_checkNonportableSignals7 = verifyNot checkNonportableSignals "trap 'stop' i
 checkNonportableSignals = CommandCheck (Exactly "trap") (f . arguments)
   where
     f args = case args of
-        first:rest -> unless (isFlag first) $ mapM_ check rest
+        first:rest | not $ isFlag first -> mapM_ check rest
         _ -> return ()
 
     check param = sequence_ $ do
@@ -520,9 +520,9 @@ checkInteractiveSu = CommandCheck (Basename "su") f
             info (getId cmd) 2117
                 "To run commands as another user, use su -c or sudo."
 
-    undirected (T_Pipeline _ _ l) = length l <= 1
+    undirected (T_Pipeline _ _ (_:_:_)) = False
     -- This should really just be modifications to stdin, but meh
-    undirected (T_Redirecting _ list _) = null list
+    undirected (T_Redirecting _ (_:_) _) = False
     undirected _ = True
 
 
@@ -539,9 +539,8 @@ checkSshCommandString = CommandCheck (Basename "ssh") (f . arguments)
             ([], hostport:r@(_:_)) -> checkArg $ last r
             _ -> return ()
     checkArg (T_NormalWord _ [T_DoubleQuoted id parts]) =
-        case filter (not . isConstant) parts of
-            [] -> return ()
-            (x:_) -> info (getId x) 2029
+        forM_ (find (not . isConstant) parts) $
+            \x -> info (getId x) 2029
                 "Note that, unescaped, this expands on the client side."
     checkArg _ = return ()
 
@@ -580,22 +579,21 @@ checkPrintfVar = CommandCheck (Exactly "printf") (f . arguments) where
             let formatCount = length formats
             let argCount = length more
 
-            return $
-                case () of
-                    () | argCount == 0 && formatCount == 0 ->
-                        return () -- This is fine
-                    () | formatCount == 0 && argCount > 0 ->
-                        err (getId format) 2182
-                            "This printf format string has no variables. Other arguments are ignored."
-                    () | any mayBecomeMultipleArgs more ->
-                        return () -- We don't know so trust the user
-                    () | argCount < formatCount && onlyTrailingTs formats argCount ->
-                        return () -- Allow trailing %()Ts since they use the current time
-                    () | argCount > 0 && argCount `mod` formatCount == 0 ->
-                        return () -- Great: a suitable number of arguments
-                    () ->
-                        warn (getId format) 2183 $
-                            "This format string has " ++ show formatCount ++ " variables, but is passed " ++ show argCount ++ " arguments."
+            return $ if
+                | argCount == 0 && formatCount == 0 ->
+                    return () -- This is fine
+                | formatCount == 0 && argCount > 0 ->
+                    err (getId format) 2182
+                        "This printf format string has no variables. Other arguments are ignored."
+                | any mayBecomeMultipleArgs more ->
+                    return () -- We don't know so trust the user
+                | argCount < formatCount && onlyTrailingTs formats argCount ->
+                    return () -- Allow trailing %()Ts since they use the current time
+                | argCount > 0 && argCount `mod` formatCount == 0 ->
+                    return () -- Great: a suitable number of arguments
+                | otherwise ->
+                    warn (getId format) 2183 $
+                        "This format string has " ++ show formatCount ++ " variables, but is passed " ++ show argCount ++ " arguments."
 
         unless ('%' `elem` concat (oversimplify format) || isLiteral format) $
           info (getId format) 2059
@@ -663,16 +661,11 @@ prop_checkSetAssignment5 = verifyNot checkSetAssignment "set 'a=5'"
 prop_checkSetAssignment6 = verifyNot checkSetAssignment "set"
 checkSetAssignment = CommandCheck (Exactly "set") (f . arguments)
   where
-    f (var:value:rest) =
-        let str = literal var in
-            when (isVariableName str || isAssignment str) $
-                msg (getId var)
-    f (var:_) =
-        when (isAssignment $ literal var) $
-            msg (getId var)
+    f (var:rest)
+        | (not (null rest) && isVariableName str) || isAssignment str =
+            warn (getId var) 2121 "To assign a variable, use just 'var=value', no 'set ..'."
+      where str = literal var
     f _ = return ()
-
-    msg id = warn id 2121 "To assign a variable, use just 'var=value', no 'set ..'."
 
     isAssignment str = '=' `elem` str
     literal (T_NormalWord _ l) = concatMap literal l
@@ -885,10 +878,10 @@ checkWhileGetoptsCase = CommandCheck (Exactly "getopts") f
     warnUnhandled optId caseId str =
         warn caseId 2213 $ "getopts specified -" ++ str ++ ", but it's not handled by this 'case'."
 
-    warnRedundant (key, expr) = sequence_ $ do
-        str <- key
-        guard $ str `notElem` ["*", ":", "?"]
-        return $ warn (getId expr) 2214 "This case is not specified by getopts."
+    warnRedundant (Just str, expr)
+        | str `notElem` ["*", ":", "?"] =
+            warn (getId expr) 2214 "This case is not specified by getopts."
+    warnRedundant _ = return ()
 
     getHandledStrings (_, globs, _) =
         map (\x -> (literal x, x)) globs
