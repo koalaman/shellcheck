@@ -273,10 +273,10 @@ getPrefixSum = f 0
   where
     f sum _ PSLeaf = sum
     f sum target (PSBranch pivot left right cumulative) =
-        case () of
-            _ | target < pivot -> f sum target left
-            _ | target > pivot -> f (sum+cumulative) target right
-            _ -> sum+cumulative
+        case target `compare` pivot of
+            LT -> f sum target left
+            GT -> f (sum+cumulative) target right
+            EQ -> sum+cumulative
 
 -- Add a value to the Prefix Sum tree at the given index.
 -- Values accumulate: addPSValue 42 2 . addPSValue 42 3 == addPSValue 42 5
@@ -285,10 +285,10 @@ addPSValue key value tree = if value == 0 then tree else f tree
   where
     f PSLeaf = PSBranch key PSLeaf PSLeaf value
     f (PSBranch pivot left right sum) =
-        case () of
-            _ | key < pivot -> PSBranch pivot (f left) right (sum + value)
-            _ | key > pivot -> PSBranch pivot left (f right) sum
-            _ -> PSBranch pivot left right (sum + value)
+        case key `compare` pivot of
+            LT -> PSBranch pivot (f left) right (sum + value)
+            GT -> PSBranch pivot left (f right) sum
+            EQ -> PSBranch pivot left right (sum + value)
 
 prop_pstreeSumsCorrectly kvs targets =
   let
