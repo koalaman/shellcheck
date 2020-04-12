@@ -22,6 +22,7 @@ module ShellCheck.Formatter.GCC (format) where
 import ShellCheck.Interface
 import ShellCheck.Formatter.Format
 
+import Data.Either
 import Data.List
 import GHC.Exts
 import System.IO
@@ -44,7 +45,7 @@ outputAll cr sys = mapM_ f groups
     f group = do
         let filename = sourceFile (head group)
         result <- (siReadFile sys) filename
-        let contents = either (const "") id result
+        let contents = fromRight "" result
         outputResult filename contents group
 
 outputResult filename contents warnings = do

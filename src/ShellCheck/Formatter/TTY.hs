@@ -25,6 +25,7 @@ import ShellCheck.Formatter.Format
 
 import Control.Monad
 import Data.Array
+import Data.Either
 import Data.Foldable
 import Data.Ord
 import Data.IORef
@@ -122,12 +123,12 @@ outputResult options ref result sys = do
 outputForFile color sys comments = do
     let fileName = sourceFile (head comments)
     result <- (siReadFile sys) fileName
-    let contents = either (const "") id result
+    let contents = fromRight "" result
     let fileLinesList = lines contents
     let lineCount = length fileLinesList
     let fileLines = listArray (1, lineCount) fileLinesList
     let groups = groupWith lineNo comments
-    mapM_ (\commentsForLine -> do
+    forM_ groups $ \commentsForLine -> do
         let lineNum = fromIntegral $ lineNo (head commentsForLine)
         let line = if lineNum < 1 || lineNum > lineCount
                         then ""
@@ -136,10 +137,9 @@ outputForFile color sys comments = do
         putStrLn $ color "message" $
            "In " ++ fileName ++" line " ++ show lineNum ++ ":"
         putStrLn (color "source" line)
-        mapM_ (\c -> putStrLn (color (severityText c) $ cuteIndent c)) commentsForLine
+        forM_ commentsForLine $ \c -> putStrLn $ color (severityText c) $ cuteIndent c
         putStrLn ""
         showFixedString color commentsForLine (fromIntegral lineNum) fileLines
-      ) groups
 
 -- Pick out only the lines necessary to show a fix in action
 sliceFile :: Fix -> Array Int String -> (Fix, Array Int String)
