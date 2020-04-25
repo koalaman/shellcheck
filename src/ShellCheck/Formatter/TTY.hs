@@ -25,7 +25,6 @@ import ShellCheck.Formatter.Format
 
 import Control.Monad
 import Data.Array
-import Data.Either
 import Data.Foldable
 import Data.Ord
 import Data.IORef
@@ -123,7 +122,7 @@ outputResult options ref result sys = do
 outputForFile color sys comments = do
     let fileName = sourceFile (head comments)
     result <- (siReadFile sys) fileName
-    let contents = fromRight "" result
+    let contents = either (const "") id result
     let fileLinesList = lines contents
     let lineCount = length fileLinesList
     let fileLines = listArray (1, lineCount) fileLinesList

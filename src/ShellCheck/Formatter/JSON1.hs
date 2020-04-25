@@ -24,7 +24,6 @@ import ShellCheck.Interface
 import ShellCheck.Formatter.Format
 
 import Data.Aeson
-import Data.Either
 import Data.IORef
 import Data.Monoid
 import GHC.Exts
@@ -119,7 +118,7 @@ collectResult ref cr sys = mapM_ f groups
     f group = do
         let filename = sourceFile (head group)
         result <- siReadFile sys filename
-        let contents = fromRight "" result
+        let contents = either (const "") id result
         let comments' = makeNonVirtual comments contents
         modifyIORef ref (\x -> comments' ++ x)
 
