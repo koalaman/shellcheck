@@ -254,7 +254,7 @@ Valid keys are:
 **shell**
 :   Overrides the shell detected from the shebang.  This is useful for
     files meant to be included (and thus lacking a shebang), or possibly
-    as a more targeted alternative to 'disable=2039'.
+    as a more targeted alternative to 'disable=SC2039'.
 
 # RC FILES
 
