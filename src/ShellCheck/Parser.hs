@@ -2622,7 +2622,7 @@ readFunctionDefinition = called "function" $ do
 
         readWithoutFunction = try $ do
             name <- many1 functionChars
-            guard $ name /= "time"  -- Interfers with time ( foo )
+            guard $ name /= "time"  -- Interferes with time ( foo )
             spacing
             readParens
             return $ \id -> T_Function id (FunctionKeyword False) (FunctionParentheses True) name
