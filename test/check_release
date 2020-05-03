@@ -9,7 +9,7 @@ fail() {
 
 if git diff | grep -q ""
 then
-  fail "There are uncommited changes"
+  fail "There are uncommitted changes"
 fi
 
 current=$(git tag --points-at)
