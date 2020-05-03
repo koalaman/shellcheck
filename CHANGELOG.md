@@ -1,4 +1,7 @@
 ## Git
+### Added
+- SC2259/SC2260: Warn when redirections override pipes
+- SC2261: Warn about multiple competing redirections
 
 ## v0.7.1 - 2020-04-04
 ### Fixed

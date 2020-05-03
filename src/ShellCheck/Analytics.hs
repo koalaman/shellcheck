@@ -3282,25 +3282,92 @@ prop_checkPipeToNowhere6 = verifyNot checkPipeToNowhere "ls | echo $(cat)"
 prop_checkPipeToNowhere7 = verifyNot checkPipeToNowhere "echo foo | var=$(cat) ls"
 prop_checkPipeToNowhere8 = verify checkPipeToNowhere "foo | true"
 prop_checkPipeToNowhere9 = verifyNot checkPipeToNowhere "mv -i f . < /dev/stdin"
+prop_checkPipeToNowhere10 = verify checkPipeToNowhere "ls > file | grep foo"
+prop_checkPipeToNowhere11 = verify checkPipeToNowhere "ls | grep foo < file"
+prop_checkPipeToNowhere12 = verify checkPipeToNowhere "ls > foo > bar"
+prop_checkPipeToNowhere13 = verify checkPipeToNowhere "ls > foo 2> bar > baz"
+prop_checkPipeToNowhere14 = verify checkPipeToNowhere "ls > foo &> bar"
+prop_checkPipeToNowhere15 = verifyNot checkPipeToNowhere "ls > foo 2> bar |& grep 'No space left'"
+prop_checkPipeToNowhere16 = verifyNot checkPipeToNowhere "echo World | cat << EOF\nhello $(cat)\nEOF\n"
+prop_checkPipeToNowhere17 = verify checkPipeToNowhere "echo World | cat << 'EOF'\nhello $(cat)\nEOF\n"
+prop_checkPipeToNowhere18 = verifyNot checkPipeToNowhere "ls 1>&3 3>&1 3>&- | wc -l"
+
+data PipeType = StdoutPipe | StdoutStderrPipe | NoPipe deriving (Eq)
 checkPipeToNowhere :: Parameters -> Token -> WriterT [TokenComment] Identity ()
-checkPipeToNowhere _ t =
+checkPipeToNowhere params t =
     case t of
-        T_Pipeline _ _ (first:rest) -> mapM_ checkPipe rest
+        T_Pipeline _ pipes cmds ->
+            mapM_ checkPipe $ commandsWithContext pipes cmds
         T_Redirecting _ redirects cmd | any redirectsStdin redirects -> checkRedir cmd
         _ -> return ()
   where
-    checkPipe redir = sequence_ $ do
-        cmd <- getCommand redir
-        name <- getCommandBasename cmd
-        guard $ name `elem` nonReadingCommands
-        guard . not $ hasAdditionalConsumers cmd
-        -- Confusing echo for cat is so common that it's worth a special case
-        let suggestion =
-                if name == "echo"
-                then "Did you want 'cat' instead?"
-                else "Wrong command or missing xargs?"
-        return $ warn (getId cmd) 2216 $
-            "Piping to '" ++ name ++ "', a command that doesn't read stdin. " ++ suggestion
+    checkPipe (input, stage, output) = do
+        let hasConsumers = hasAdditionalConsumers stage
+        let hasProducers = hasAdditionalProducers stage
+
+        sequence_ $ do
+            cmd <- getCommand stage
+            name <- getCommandBasename cmd
+            guard $ name `elem` nonReadingCommands
+            guard $ not hasConsumers && input /= NoPipe
+
+            -- Confusing echo for cat is so common that it's worth a special case
+            let suggestion =
+                    if name == "echo"
+                    then "Did you want 'cat' instead?"
+                    else "Wrong command or missing xargs?"
+            return $ warn (getId cmd) 2216 $
+                "Piping to '" ++ name ++ "', a command that doesn't read stdin. " ++ suggestion
+
+        sequence_ $ do
+            T_Redirecting _ redirs cmd <- return stage
+            fds <- sequence $ map getRedirectionFds redirs
+
+            let fdAndToken :: [(Integer, Token)]
+                fdAndToken =
+                  concatMap (\(list, redir) -> map (\n -> (n, redir)) list) $
+                    zip fds redirs
+
+            let fdMap =
+                  Map.fromListWith (++) $
+                    map (\(a,b) -> (a,[b])) fdAndToken
+
+            let inputWarning = sequence_ $ do
+                    guard $ input /= NoPipe && not hasConsumers
+                    (override:_) <- Map.lookup 0 fdMap
+                    return $ err (getOpId override) 2259 $
+                        "This redirection overrides piped input. To use both, merge or pass filename."
+
+            -- Only produce output warnings for regular pipes, since these are
+            -- way more common, and  `foo > out 2> err |& foo` can still write
+            -- to stderr if the files fail to open
+            let outputWarning = sequence_ $ do
+                    guard $ output == StdoutPipe && not hasProducers
+                    (override:_) <- Map.lookup 1 fdMap
+                    return $ err (getOpId override) 2260 $
+                        "This redirection overrides the output pipe. Use 'tee' to output to both."
+
+            return $ do
+                inputWarning
+                outputWarning
+                mapM_ warnAboutDupes $ Map.assocs fdMap
+
+    warnAboutDupes (n, list@(_:_:_)) =
+        forM_ list $ \c -> err (getOpId c) 2261 $
+            "Multiple redirections compete for " ++ str n ++ ". Combine, or use " ++ alternative ++ "."
+    warnAboutDupes _ = return ()
+
+    alternative =
+        if shellType params `elem` [Bash, Ksh]
+        then "process substitutions or temp files"
+        else "temporary files"
+
+    str n =
+        case n of
+            0 -> "stdin"
+            1 -> "stdout"
+            2 -> "stderr"
+            _ -> "FD " ++ show n
 
     checkRedir cmd = sequence_ $ do
         name <- getCommandBasename cmd
@@ -3315,22 +3382,73 @@ checkPipeToNowhere _ t =
             "Redirecting to '" ++ name ++ "', a command that doesn't read stdin. " ++ suggestion
 
     -- Could any words in a SimpleCommand consume stdin (e.g. echo "$(cat)")?
-    hasAdditionalConsumers t = isNothing $
-        doAnalysis (guard . not . mayConsume) t
+    hasAdditionalConsumers = treeContains mayConsume
+    -- Could any words in a SimpleCommand produce stdout? E.g. >(tee foo)
+    hasAdditionalProducers = treeContains mayProduce
+    treeContains pred t = isNothing $
+        doAnalysis (guard . not . pred) t
 
     mayConsume t =
         case t of
-            T_ProcSub {} -> True
+            T_ProcSub _ "<" _ -> True
             T_Backticked {} -> True
             T_DollarExpansion {} -> True
             _ -> False
 
-    redirectsStdin t =
+    mayProduce t =
         case t of
-            T_FdRedirect _ _ (T_IoFile _ T_Less {} _) -> True
-            T_FdRedirect _ _ T_HereDoc {} -> True
-            T_FdRedirect _ _ T_HereString {} -> True
+            T_ProcSub _ ">" _ -> True
             _ -> False
+
+    getOpId t =
+        case t of
+            T_FdRedirect _ _ x -> getOpId x
+            T_IoFile _ op _ -> getId op
+            _ -> getId t
+
+    getRedirectionFds t =
+        case t of
+            T_FdRedirect _ "" x -> getDefaultFds x
+            T_FdRedirect _ "&" _ -> return [1, 2]
+            T_FdRedirect _ num x | all isDigit num ->
+                -- Don't report the number unless we know what it is.
+                -- This avoids triggering on 3>&1 1>&3
+                getDefaultFds x *> return [read num]
+            -- Don't bother with {fd}>42 and such
+            _ -> Nothing
+
+    getDefaultFds redir =
+        case redir of
+            T_HereDoc {} -> return [0]
+            T_HereString {} -> return [0]
+            T_IoFile _ op _ ->
+                case op of
+                    T_Less {} -> return [0]
+                    T_Greater {} -> return [1]
+                    T_DGREAT {} -> return [1]
+                    T_GREATAND {} -> return [1, 2]
+                    T_CLOBBER {} -> return [1]
+                    T_IoDuplicate _ op "-" -> getDefaultFds op
+                    _ -> Nothing
+            _ -> Nothing
+
+    redirectsStdin t =
+        fromMaybe False $ do
+            fds <- getRedirectionFds t
+            return $ 0 `elem` fds
+
+    pipeType t =
+        case t of
+            T_Pipe _ "|" -> StdoutPipe
+            T_Pipe _ "|&" -> StdoutStderrPipe
+            _ -> NoPipe
+
+    commandsWithContext pipes cmds =
+        let pipeTypes = map pipeType pipes
+            inputs = NoPipe : pipeTypes
+            outputs = pipeTypes ++ [NoPipe]
+        in
+            zip3 inputs cmds outputs
 
 prop_checkUseBeforeDefinition1 = verifyTree checkUseBeforeDefinition "f; f() { true; }"
 prop_checkUseBeforeDefinition2 = verifyNotTree checkUseBeforeDefinition "f() { true; }; f"
