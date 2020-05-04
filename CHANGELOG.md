@@ -3,6 +3,11 @@
 - SC2259/SC2260: Warn when redirections override pipes
 - SC2261: Warn about multiple competing redirections
 
+### Fixed
+- SC1072/SC1073 now respond to disable annotations, though ignoring parse errors
+  is still purely cosmetic and does not allow ShellCheck to continue.
+
+
 ## v0.7.1 - 2020-04-04
 ### Fixed
 - `-f diff` no longer claims that it found more issues when it didn't

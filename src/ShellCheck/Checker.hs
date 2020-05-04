@@ -295,6 +295,13 @@ prop_canDisableShebangWarning = null $ result
         csScript = "#shellcheck disable=SC2148\nfoo"
     }
 
+prop_canDisableParseErrors = null $ result
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "file.sh",
+        csScript = "#shellcheck disable=SC1073,SC1072,SC2148\n()"
+    }
+
 prop_shExtensionDoesntMatter = result == [2148]
   where
     result = checkWithSpec [] emptyCheckSpec {
