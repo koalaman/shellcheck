@@ -3336,7 +3336,7 @@ checkPipeToNowhere params t =
                     guard $ input /= NoPipe && not hasConsumers
                     (override:_) <- Map.lookup 0 fdMap
                     return $ err (getOpId override) 2259 $
-                        "This redirection overrides piped input. To use both, merge or pass filename."
+                        "This redirection overrides piped input. To use both, merge or pass filenames."
 
             -- Only produce output warnings for regular pipes, since these are
             -- way more common, and  `foo > out 2> err |& foo` can still write
@@ -3354,7 +3354,7 @@ checkPipeToNowhere params t =
 
     warnAboutDupes (n, list@(_:_:_)) =
         forM_ list $ \c -> err (getOpId c) 2261 $
-            "Multiple redirections compete for " ++ str n ++ ". Combine, or use " ++ alternative ++ "."
+            "Multiple redirections compete for " ++ str n ++ ". Use cat, tee, or pass filenames instead."
     warnAboutDupes _ = return ()
 
     alternative =
