@@ -2555,6 +2555,7 @@ prop_checkUnpassedInFunctions10= verifyNotTree checkUnpassedInFunctions "foo() {
 prop_checkUnpassedInFunctions11= verifyNotTree checkUnpassedInFunctions "foo() { bar() { echo $1; }; bar baz; }; foo;"
 prop_checkUnpassedInFunctions12= verifyNotTree checkUnpassedInFunctions "foo() { echo ${!var*}; }; foo;"
 prop_checkUnpassedInFunctions13= verifyNotTree checkUnpassedInFunctions "# shellcheck disable=SC2120\nfoo() { echo $1; }\nfoo\n"
+prop_checkUnpassedInFunctions14= verifyTree checkUnpassedInFunctions "foo() { echo $#; }; foo"
 checkUnpassedInFunctions params root =
     execWriter $ mapM_ warnForGroup referenceGroups
   where
@@ -2596,7 +2597,7 @@ checkUnpassedInFunctions params root =
         return $ tell [(str, null args, t)]
     checkCommand _ = Nothing
 
-    isPositional str = str == "*" || str == "@"
+    isPositional str = str == "*" || str == "@" || str == "#"
         || (all isDigit str && str /= "0" && str /= "")
 
     isArgumentless (_, b, _) = b
