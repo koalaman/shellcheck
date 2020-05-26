@@ -64,6 +64,7 @@ treeChecks = [
     ,checkUncheckedCdPushdPopd
     ,checkArrayAssignmentIndices
     ,checkUseBeforeDefinition
+    ,checkAliasUsedInSameParsingUnit
     ]
 
 runAnalytics :: AnalysisSpec -> [TokenComment]
@@ -3740,6 +3741,77 @@ checkModifiedArithmeticInRedirection params t = unless (shellType params == Dash
     warnFor id =
         warn id 2257 "Arithmetic modifications in command redirections may be discarded. Do them separately."
 
+prop_checkAliasUsedInSameParsingUnit1 = verifyTree checkAliasUsedInSameParsingUnit "alias x=y; x"
+prop_checkAliasUsedInSameParsingUnit2 = verifyNotTree checkAliasUsedInSameParsingUnit "alias x=y\nx"
+prop_checkAliasUsedInSameParsingUnit3 = verifyTree checkAliasUsedInSameParsingUnit "{ alias x=y\nx\n}"
+prop_checkAliasUsedInSameParsingUnit4 = verifyNotTree checkAliasUsedInSameParsingUnit "alias x=y; 'x';"
+prop_checkAliasUsedInSameParsingUnit5 = verifyNotTree checkAliasUsedInSameParsingUnit ":\n{\n#shellcheck disable=SC2262\nalias x=y\nx\n}"
+prop_checkAliasUsedInSameParsingUnit6 = verifyNotTree checkAliasUsedInSameParsingUnit ":\n{\n#shellcheck disable=SC2262\nalias x=y\nalias x=z\nx\n}" -- Only consider the first instance
+checkAliasUsedInSameParsingUnit :: Parameters -> Token -> [TokenComment]
+checkAliasUsedInSameParsingUnit params root =
+    let
+        -- Get all root commands
+        commands = concat $ getCommandSequences root
+        -- Group them by whether they start on the same line where the previous one ended
+        units = groupByLink followsOnLine commands
+    in
+        execWriter $ sequence_ $ map checkUnit units
+  where
+    lineSpan t =
+        let m = tokenPositions params in do
+            (start, end) <- Map.lookup t m
+            return $ (posLine start, posLine end)
+
+    followsOnLine a b = fromMaybe False $ do
+        (_, end) <- lineSpan (getId a)
+        (start, _) <- lineSpan (getId b)
+        return $ end == start
+
+    checkUnit :: [Token] -> Writer [TokenComment] ()
+    checkUnit unit = evalStateT (mapM_ (doAnalysis findCommands) unit) (Map.empty)
+
+    isSourced t =
+        let
+            f (T_SourceCommand {}) = True
+            f _ = False
+        in
+            any f $ getPath (parentMap params) t
+
+    findCommands :: Token -> StateT (Map.Map String Token) (Writer [TokenComment]) ()
+    findCommands t = case t of
+            T_SimpleCommand _ _ (cmd:args) ->
+                case getUnquotedLiteral cmd of
+                    Just "alias" ->
+                        mapM_ addAlias args
+                    Just name | '/' `notElem` name -> do
+                        cmd <- gets (Map.lookup name)
+                        case cmd of
+                            Just alias ->
+                                unless (isSourced t || shouldIgnoreCode params 2262 alias) $ do
+                                    warn (getId alias) 2262 "This alias can't be defined and used in the same parsing unit. Use a function instead."
+                                    info (getId t) 2263 "Since they're in the same parsing unit, this command will not refer to the previously mentioned alias."
+                            _ -> return ()
+                    _ -> return ()
+            _ -> return ()
+    addAlias arg = do
+        let (name, value) = break (== '=') $ getLiteralStringDef "-" arg
+        when (isVariableName name && not (null value)) $
+            modify (Map.insertWith (\new old -> old) name arg)
+
+-- Like groupBy, but compares pairs of adjacent elements, rather than against the first of the span
+prop_groupByLink1 = groupByLink (\a b -> a+1 == b) [1,2,3,2,3,7,8,9] == [[1,2,3], [2,3], [7,8,9]]
+prop_groupByLink2 = groupByLink (==) ([] :: [()]) == []
+groupByLink :: (a -> a -> Bool) -> [a] -> [[a]]
+groupByLink f list =
+    case list of
+        [] -> []
+        (x:xs) -> g x [] xs
+  where
+    g current span (next:rest) =
+        if f current next
+        then g next (current:span) rest
+        else (reverse $ current:span) : g next [] rest
+    g current span [] = [reverse (current:span)]
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
