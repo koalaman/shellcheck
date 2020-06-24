@@ -2129,7 +2129,7 @@ readSource t@(T_Redirecting _ _ (T_SimpleCommand cmdId _ (cmd:file':rest'))) = d
     case literalFile of
         Nothing -> do
             parseNoteAtId (getId file) WarningC 1090
-                "Can't follow non-constant source. Use a directive to specify location."
+                "ShellCheck can't follow non-constant source. Use a directive to specify location."
             return t
         Just filename -> do
             proceed <- shouldFollow filename
