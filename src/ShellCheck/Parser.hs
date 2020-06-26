@@ -1557,7 +1557,7 @@ readDollarExpression = do
 readDollarExp = arithmetic <|> readDollarExpansion <|> readDollarBracket <|> readDollarBraceCommandExpansion <|> readDollarBraced <|> readDollarVariable
   where
     arithmetic = readAmbiguous "$((" readDollarArithmetic readDollarExpansion (\pos ->
-        parseNoteAt pos ErrorC 1102 "Shells disambiguate $(( differently or not at all. For $(command substition), add space after $( . For $((arithmetics)), fix parsing errors.")
+        parseNoteAt pos ErrorC 1102 "Shells disambiguate $(( differently or not at all. For $(command substitution), add space after $( . For $((arithmetics)), fix parsing errors.")
 
 prop_readDollarSingleQuote = isOk readDollarSingleQuote "$'foo\\\'lol'"
 readDollarSingleQuote = called "$'..' expression" $ do
