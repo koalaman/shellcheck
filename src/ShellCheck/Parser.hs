@@ -2485,18 +2485,30 @@ readForClause = called "for loop" $ do
     readArithmetic id <|> readRegular id
   where
     readArithmetic id = called "arithmetic for condition" $ do
-        try $ string "(("
+        readArithmeticDelimiter '(' "Missing second '(' to start arithmetic for ((;;)) loop"
         x <- readArithmeticContents
         char ';' >> spacing
         y <- readArithmeticContents
         char ';' >> spacing
         z <- readArithmeticContents
         spacing
-        string "))"
+        readArithmeticDelimiter ')' "Missing second ')' to terminate 'for ((;;))' loop condition"
         spacing
         optional $ readSequentialSep >> spacing
         group <- readBraced <|> readDoGroup id
         return $ T_ForArithmetic id x y z group
+
+    -- For c='(' read "((" and be lenient about spaces
+    readArithmeticDelimiter c msg = do
+        char c
+        startPos <- getPosition
+        sp <- spacing
+        endPos <- getPosition
+        char c <|> do
+            parseProblemAt startPos ErrorC 1137 msg
+            fail ""
+        unless (null sp) $
+            parseProblemAtWithEnd startPos endPos ErrorC 1138 $ "Remove spaces between " ++ [c,c] ++ " in arithmetic for loop."
 
     readBraced = do
         (T_BraceGroup _ list) <- readBraceGroup
