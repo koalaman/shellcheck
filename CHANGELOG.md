@@ -8,6 +8,9 @@
 - SC1072/SC1073 now respond to disable annotations, though ignoring parse errors
   is still purely cosmetic and does not allow ShellCheck to continue.
 
+### Changed
+- SC1090: A leading `$x/` or `$(x)/` is now treated as `./` when locating files
+
 
 ## v0.7.1 - 2020-04-04
 ### Fixed

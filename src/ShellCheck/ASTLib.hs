@@ -503,6 +503,11 @@ isCommandSubstitution t = case t of
     T_Backticked {} -> True
     _ -> False
 
+-- Is this an expansion that results in a simple string?
+isStringExpansion t = isCommandSubstitution t || case t of
+    T_DollarArithmetic {} -> True
+    T_DollarBraced {} -> not (isArrayExpansion t)
+    _ -> False
 
 -- Is this a T_Annotation that ignores a specific code?
 isAnnotationIgnoringCode code t =

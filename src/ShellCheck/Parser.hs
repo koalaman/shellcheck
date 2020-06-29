@@ -2122,7 +2122,7 @@ readSource t@(T_Redirecting _ _ (T_SimpleCommand cmdId _ (cmd:file':rest'))) = d
     let file = getFile file' rest'
     override <- getSourceOverride
     let literalFile = do
-        name <- override `mplus` getLiteralString file
+        name <- override `mplus` getLiteralString file `mplus` stripDynamicPrefix file
         -- Hack to avoid 'source ~/foo' trying to read from literal tilde
         guard . not $ "~/" `isPrefixOf` name
         return name
@@ -2180,6 +2180,16 @@ readSource t@(T_Redirecting _ _ (T_SimpleCommand cmdId _ (cmd:file':rest'))) = d
     getSourcePath t =
         case t of
             SourcePath x -> Just x
+            _ -> Nothing
+
+    -- If the word has a single expansion as the directory, try stripping it
+    -- This affects `$foo/bar` but not `${foo}-dir/bar` or `/foo/$file`
+    stripDynamicPrefix word =
+        case getWordParts word of
+            exp : rest | isStringExpansion exp -> do
+                str <- getLiteralString (T_NormalWord (Id 0) rest)
+                guard $ "/" `isPrefixOf` str
+                return $ "." ++ str
             _ -> Nothing
 
     subRead name script =

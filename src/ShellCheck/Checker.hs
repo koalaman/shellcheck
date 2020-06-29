@@ -229,6 +229,12 @@ prop_cantSourceDynamic =
 prop_cantSourceDynamic2 =
     [1090] == checkWithIncludes [("lib", "")] "source ~/foo"
 
+prop_canStripPrefixAndSource =
+    null $ checkWithIncludes [("./lib", "")] "source \"$MYDIR/lib\""
+
+prop_canStripPrefixAndSource2 =
+    null $ checkWithIncludes [("./utils.sh", "")] "source \"$(dirname \"${BASH_SOURCE[0]}\")/utils.sh\""
+
 prop_canSourceDynamicWhenRedirected =
     null $ checkWithIncludes [("lib", "")] "#shellcheck source=lib\n. \"$1\""
 
