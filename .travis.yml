@@ -7,14 +7,47 @@ services:
 jobs:
   include:
     - stage: Build
-
       # This must weirdly not have a dash, otherwise an empty job is created
       env: BUILD=linux
-    - env: BUILD=windows
+      workspaces:
+        create:
+          name: ws-linux
+          paths: deploy
+#   - env: BUILD=windows
+#     workspaces:
+#       create:
+#         name: ws-windows
+#         paths: deploy
     - env: BUILD=armv6hf
+      workspaces:
+        create:
+          name: ws-armv6hf
+          paths: deploy
     - env: BUILD=aarch64
+      workspaces:
+        create:
+          name: ws-aarch64
+          paths: deploy
     - env: BUILD=osx
       os: osx
+      workspaces:
+        create:
+          name: ws-osx
+          paths: deploy
+
+    - stage: Upload Artifacts to GitHub
+      workspaces:
+        use:
+          - ws-osx
+          - ws-linux
+          - ws-armv6hf
+          - ws-aarch64
+      script:
+        - ls -la ${CASHER_DIR}/ || true
+        # Kludge broken TravisCI workspaces
+        - tar -xvf ${CASHER_DIR}/ws-osx-fetch.tgz --strip-components=5
+        - ls -la deploy
+        - ./.github_deploy
 
     - stage: Deploy docker image
       # Deploy only for pushes to master branch, not other branches, not PRs.
@@ -39,7 +72,6 @@ script:
   - ./striptests
   - set -ex; build_"$BUILD"; set +x;
   - ./.prepare_deploy
-  - ./.github_deploy
 
 # This is in global context and runs for every stage that doesn't override it.
 after_failure: |

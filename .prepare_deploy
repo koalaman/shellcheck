@@ -1,7 +1,7 @@
 #!/bin/bash
 # This script packages up Travis compiled binaries
 set -ex
-shopt -s nullglob
+shopt -s nullglob extglob
 cd deploy
 
 cp ../LICENSE LICENSE.txt
@@ -59,7 +59,11 @@ do
   rm "shellcheck"
 done
 
+rm !(*.xz|*.zip)
+
 for file in ./*
 do
   sha512sum "$file" > "$file.sha512sum"
 done
+
+ls -l
