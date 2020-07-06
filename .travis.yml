@@ -13,11 +13,11 @@ jobs:
         create:
           name: ws-linux
           paths: deploy
-#   - env: BUILD=windows
-#     workspaces:
-#       create:
-#         name: ws-windows
-#         paths: deploy
+    - env: BUILD=windows
+      workspaces:
+        create:
+          name: ws-windows
+          paths: deploy
     - env: BUILD=armv6hf
       workspaces:
         create:
@@ -42,6 +42,7 @@ jobs:
           - ws-linux
           - ws-armv6hf
           - ws-aarch64
+          - ws-windows
       script:
         - ls -la ${CASHER_DIR}/ || true
         # Kludge broken TravisCI workspaces
