@@ -16,8 +16,8 @@ build_linux() {
   ls -l shellcheck
   ./shellcheck myscript
   for tag in $TAGS
-  do 
-    cp "shellcheck" "deploy/shellcheck-$tag.linux-x86_64"; 
+  do
+    cp "shellcheck" "deploy/shellcheck-$tag.linux-x86_64";
   done
 }
 
@@ -35,8 +35,8 @@ build_armv6hf() {
   # Linux armv6hf static executable
   docker run -v "$PWD:/mnt" koalaman/armv6hf-builder -c 'compile-shellcheck'
   for tag in $TAGS
-  do 
-    cp "shellcheck" "deploy/shellcheck-$tag.linux-armv6hf"; 
+  do
+    cp "shellcheck" "deploy/shellcheck-$tag.linux-armv6hf";
   done
 }
 
@@ -44,8 +44,8 @@ build_windows() {
   # Windows .exe
   docker run -v "$PWD:/appdata" koalaman/winghc cuib
   for tag in $TAGS
-  do 
-    cp "dist/build/ShellCheck/shellcheck.exe" "deploy/shellcheck-$tag.exe"; 
+  do
+    cp "dist/build/ShellCheck/shellcheck.exe" "deploy/shellcheck-$tag.exe";
   done
 }
 
@@ -66,7 +66,7 @@ build_osx() {
   [[ -e "$path" ]]
 
   for tag in $TAGS
-  do 
+  do
     cp "$path" "deploy/shellcheck-$tag.darwin-x86_64";
   done
 }
