@@ -178,6 +178,8 @@ prop_checkBashisms93 = verify checkBashisms "#!/bin/sh\necho $(( 10#$(date +%m) 
 prop_checkBashisms94 = verify checkBashisms "#!/bin/sh\n[ -v var ]"
 prop_checkBashisms95 = verify checkBashisms "#!/bin/sh\necho $_"
 prop_checkBashisms96 = verifyNot checkBashisms "#!/bin/dash\necho $_"
+prop_checkBashisms97 = verify checkBashisms "#!/bin/sh\necho ${var,}"
+prop_checkBashisms98 = verify checkBashisms "#!/bin/sh\necho ${var^^}"
 checkBashisms = ForShell [Sh, Dash] $ \t -> do
     params <- ask
     kludge params t
@@ -407,6 +409,7 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
         (re $ "^![" ++ varChars ++ "]+[*@]$", "name matching prefixes are"),
         (re $ "^[" ++ varChars ++ "*@]+:[^-=?+]", "string indexing is"),
         (re $ "^([*@][%#]|#[@*])", "string operations on $@/$* are"),
+        (re $ "^[" ++ varChars ++ "*@]+(\\[.*\\])?[,^]", "case modification is"),
         (re $ "^[" ++ varChars ++ "*@]+(\\[.*\\])?/", "string replacement is")
         ]
     bashVars = [
