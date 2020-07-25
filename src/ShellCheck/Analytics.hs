@@ -942,8 +942,10 @@ prop_checkSingleQuotedVariables18= verifyNot checkSingleQuotedVariables "echo '`
 prop_checkSingleQuotedVariables19= verifyNot checkSingleQuotedVariables "echo '```'"
 prop_checkSingleQuotedVariables20= verifyNot checkSingleQuotedVariables "mumps -run %XCMD 'W $O(^GLOBAL(5))'"
 prop_checkSingleQuotedVariables21= verifyNot checkSingleQuotedVariables "mumps -run LOOP%XCMD --xec 'W $O(^GLOBAL(6))'"
-
-
+prop_checkSingleQuotedVariables22= verifyNot checkSingleQuotedVariables "jq '$__loc__'"
+prop_checkSingleQuotedVariables23= verifyNot checkSingleQuotedVariables "command jq '$__loc__'"
+prop_checkSingleQuotedVariables24= verifyNot checkSingleQuotedVariables "exec jq '$__loc__'"
+prop_checkSingleQuotedVariables25= verifyNot checkSingleQuotedVariables "exec -c -a foo jq '$__loc__'"
 
 
 checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
@@ -1677,13 +1679,10 @@ checkSpuriousExec _ = doLists
         doList tail True
     doList' _ _ = return ()
 
-    commentIfExec (T_Pipeline id _ list) =
-      mapM_ commentIfExec $ take 1 list
-    commentIfExec (T_Redirecting _ _ f@(
-      T_SimpleCommand id _ (cmd:arg:_)))
-        | f `isUnqualifiedCommand` "exec" =
-          warn id 2093
-            "Remove \"exec \" if script should continue after this command."
+    commentIfExec (T_Pipeline id _ [c]) = commentIfExec c
+    commentIfExec (T_Redirecting _ _ (T_SimpleCommand id _ (cmd:additionalArg:_))) |
+        getLiteralString cmd == Just "exec" =
+            warn id 2093 "Remove \"exec \" if script should continue after this command."
     commentIfExec _ = return ()
 
 
@@ -2056,17 +2055,26 @@ prop_checkFunctionsUsedExternally6 =
   verifyNotTree checkFunctionsUsedExternally "foo() { :; }; ssh host echo foo"
 prop_checkFunctionsUsedExternally7 =
   verifyNotTree checkFunctionsUsedExternally "install() { :; }; sudo apt-get install foo"
+prop_checkFunctionsUsedExternally8 =
+  verifyTree checkFunctionsUsedExternally "foo() { :; }; command sudo foo"
+prop_checkFunctionsUsedExternally9 =
+  verifyTree checkFunctionsUsedExternally "foo() { :; }; exec -c sudo foo"
 checkFunctionsUsedExternally params t =
     runNodeAnalysis checkCommand params t
   where
-    checkCommand _ t@(T_SimpleCommand _ _ (cmd:args)) =
-        case getCommandBasename t of
-            Just name -> do
+    checkCommand _ t@(T_SimpleCommand _ _ argv) =
+        case getCommandNameAndToken False t of
+            (Just str, t) -> do
+                let name = basename str
+                let args = skipOver t argv
                 let argStrings = map (\x -> (fromMaybe "" $ getLiteralString x, x)) args
                 let candidates = getPotentialCommands name argStrings
                 mapM_ (checkArg name) candidates
             _ -> return ()
     checkCommand _ _ = return ()
+
+    skipOver t list = drop 1 $ dropWhile (\c -> getId c /= id) $ list
+      where id = getId t
 
     -- Try to pick out the argument[s] that may be commands
     getPotentialCommands name argAndString =

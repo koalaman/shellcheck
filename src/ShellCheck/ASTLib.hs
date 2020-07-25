@@ -28,6 +28,7 @@ import Data.Functor
 import Data.Functor.Identity
 import Data.List
 import Data.Maybe
+import qualified Data.Map as Map
 
 -- Is this a type of loop?
 isLoop t = case t of
@@ -133,6 +134,33 @@ isFlag token =
 isUnquotedFlag token = fromMaybe False $ do
     str <- getLeadingUnquotedString token
     return $ "-" `isPrefixOf` str
+
+-- getGnuOpts "erd:u:" will parse a SimpleCommand like
+--     read -re -d : -u 3 bar
+-- into
+--     Just [("r", -re), ("e", -re), ("d", :), ("u", 3), ("", bar)]
+-- where flags with arguments map to arguments, while others map to themselves.
+-- Any unrecognized flag will result in Nothing.
+getGnuOpts str t = getOpts str $ getAllFlags t
+getBsdOpts str t = getOpts str $ getLeadingFlags t
+getOpts :: String -> [(Token, String)] -> Maybe [(String, Token)]
+getOpts string flags = process flags
+  where
+    flagList (c:':':rest) = ([c], True) : flagList rest
+    flagList (c:rest)     = ([c], False) : flagList rest
+    flagList []           = []
+    flagMap = Map.fromList $ ("", False) : flagList string
+
+    process [] = return []
+    process ((token1, flag):rest1) = do
+        takesArg <- Map.lookup flag flagMap
+        (token, rest) <- if takesArg
+            then case rest1 of
+                (token2, ""):rest2 -> return (token2, rest2)
+                _ -> fail "takesArg without valid arg"
+            else return (token1, rest1)
+        more <- process rest
+        return $ (flag, token) : more
 
 -- Is this an expansion of multiple items of an array?
 isArrayExpansion (T_DollarBraced _ _ l) =
@@ -297,7 +325,7 @@ getCommand t =
 
 -- Maybe get the command name string of a token representing a command
 getCommandName :: Token -> Maybe String
-getCommandName = fst . getCommandNameAndToken
+getCommandName = fst . getCommandNameAndToken False
 
 -- Maybe get the name+arguments of a command.
 getCommandArgv t = do
@@ -307,18 +335,37 @@ getCommandArgv t = do
 -- Get the command name token from a command, i.e.
 -- the token representing 'ls' in 'ls -la 2> foo'.
 -- If it can't be determined, return the original token.
-getCommandTokenOrThis = snd . getCommandNameAndToken
+getCommandTokenOrThis = snd . getCommandNameAndToken False
 
-getCommandNameAndToken :: Token -> (Maybe String, Token)
-getCommandNameAndToken t = fromMaybe (Nothing, t) $ do
-    (T_SimpleCommand _ _ (w:rest)) <- getCommand t
+-- Given a command, get the string and token that represents the command name.
+-- If direct, return the actual command (e.g. exec in 'exec ls')
+-- If not, return the logical command (e.g. 'ls' in 'exec ls')
+
+getCommandNameAndToken :: Bool -> Token -> (Maybe String, Token)
+getCommandNameAndToken direct t = fromMaybe (Nothing, t) $ do
+    cmd@(T_SimpleCommand _ _ (w:rest)) <- getCommand t
     s <- getLiteralString w
-    return $ case rest of
-        (applet:_) | "busybox" `isSuffixOf` s || "builtin" == s ->
-            (getLiteralString applet, applet)
-        _ ->
-            (Just s, w)
-
+    return $ fromMaybe (Just s, w) $ do
+        guard $ not direct
+        actual <- getEffectiveCommandToken s cmd rest
+        return (getLiteralString actual, actual)
+  where
+    getEffectiveCommandToken str cmd args =
+        let
+            firstArg = do
+                arg <- listToMaybe args
+                guard . not $ isFlag arg
+                return arg
+        in
+            case str of
+                "busybox" -> firstArg
+                "builtin" -> firstArg
+                "command" -> firstArg
+                "exec" -> do
+                    opts <- getBsdOpts "cla:" cmd
+                    (_, t) <- listToMaybe $ filter (null . fst) opts
+                    return t
+                _ -> fail ""
 
 -- If a command substitution is a single command, get its name.
 --  $(date +%s) = Just "date"
@@ -335,8 +382,8 @@ getCommandNameFromExpansion t =
 
 -- Get the basename of a token representing a command
 getCommandBasename = fmap basename . getCommandName
-  where
-    basename = reverse . takeWhile (/= '/') . reverse
+
+basename = reverse . takeWhile (/= '/') . reverse
 
 isAssignment t =
     case t of

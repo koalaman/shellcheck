@@ -901,33 +901,6 @@ isQuotedAlternativeReference t =
   where
     re = mkRegex "(^|\\]):?\\+"
 
--- getGnuOpts "erd:u:" will parse a SimpleCommand like
---     read -re -d : -u 3 bar
--- into
---     Just [("r", -re), ("e", -re), ("d", :), ("u", 3), ("", bar)]
--- where flags with arguments map to arguments, while others map to themselves.
--- Any unrecognized flag will result in Nothing.
-getGnuOpts str t = getOpts str $ getAllFlags t
-getBsdOpts str t = getOpts str $ getLeadingFlags t
-getOpts :: String -> [(Token, String)] -> Maybe [(String, Token)]
-getOpts string flags = process flags
-  where
-    flagList (c:':':rest) = ([c], True) : flagList rest
-    flagList (c:rest)     = ([c], False) : flagList rest
-    flagList []           = []
-    flagMap = Map.fromList $ ("", False) : flagList string
-
-    process [] = return []
-    process ((token1, flag):rest1) = do
-        takesArg <- Map.lookup flag flagMap
-        (token, rest) <- if takesArg
-            then case rest1 of
-                (token2, ""):rest2 -> return (token2, rest2)
-                _ -> fail "takesArg without valid arg"
-            else return (token1, rest1)
-        more <- process rest
-        return $ (flag, token) : more
-
 supportsArrays Bash = True
 supportsArrays Ksh = True
 supportsArrays _ = False

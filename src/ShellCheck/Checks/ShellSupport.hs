@@ -280,7 +280,7 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
           flagRegex = mkRegex "^-[eEsn]+$"
 
     bashism t@(T_SimpleCommand _ _ (cmd:arg:_))
-        | t `isCommand` "exec" && "-" `isPrefixOf` concat (oversimplify arg) =
+        | getLiteralString cmd == Just "exec" && "-" `isPrefixOf` concat (oversimplify arg) =
             warnMsg (getId arg) "exec flags are"
     bashism t@(T_SimpleCommand id _ _)
         | t `isCommand` "let" = warnMsg id "'let' is"
