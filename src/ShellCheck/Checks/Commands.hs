@@ -560,6 +560,8 @@ prop_checkPrintfVar18= verifyNot checkPrintfVar "printf '%-*s\\n' 1 2"
 prop_checkPrintfVar19= verifyNot checkPrintfVar "printf '%(%s)T'"
 prop_checkPrintfVar20= verifyNot checkPrintfVar "printf '%d %(%s)T' 42"
 prop_checkPrintfVar21= verify checkPrintfVar "printf '%d %(%s)T'"
+prop_checkPrintfVar22= verify checkPrintfVar "printf '%s\n%s' foo"
+
 checkPrintfVar = CommandCheck (Exactly "printf") (f . arguments) where
     f (doubledash:rest) | getLiteralString doubledash == Just "--" = f rest
     f (dashv:var:rest) | getLiteralString dashv == Just "-v" = f rest
@@ -602,6 +604,8 @@ prop_checkGetPrintfFormats2 = getPrintfFormats "%0*s" == "*s"
 prop_checkGetPrintfFormats3 = getPrintfFormats "%(%s)T" == "T"
 prop_checkGetPrintfFormats4 = getPrintfFormats "%d%%%(%s)T" == "dT"
 prop_checkGetPrintfFormats5 = getPrintfFormats "%bPassed: %d, %bFailed: %d%b, Skipped: %d, %bErrored: %d%b\\n" == "bdbdbdbdb"
+prop_checkGetPrintfFormats6 = getPrintfFormats "%s%s" == "ss"
+prop_checkGetPrintfFormats7 = getPrintfFormats "%s\n%s" == "ss"
 getPrintfFormats = getFormats
   where
     -- Get the arguments in the string as a string of type characters,
@@ -620,17 +624,17 @@ getPrintfFormats = getFormats
 
     regexBasedGetFormats rest =
         case matchRegex re rest of
-            Just [width, precision, typ, rest] ->
+            Just [width, precision, typ, rest, _] ->
                 (if width == "*" then "*" else "") ++
                 (if precision == "*" then "*" else "") ++
                 typ ++ getFormats rest
             Nothing -> take 1 rest ++ getFormats rest
       where
         -- constructed based on specifications in "man printf"
-        re = mkRegex "#?-?\\+? ?0?(\\*|\\d*)\\.?(\\d*|\\*)([diouxXfFeEgGaAcsbq])(.*)"
-        --            \____ _____/\___ ____/   \____ ____/\_________ _________/ \ /
-        --                 V          V             V               V            V
-        --               flags    field width  precision   format character     rest
+        re = mkRegex "#?-?\\+? ?0?(\\*|\\d*)\\.?(\\d*|\\*)([diouxXfFeEgGaAcsbq])((\n|.)*)"
+        --            \____ _____/\___ ____/   \____ ____/\_________ _________/ \______ /
+        --                 V          V             V               V               V
+        --               flags    field width  precision   format character        rest
         -- field width and precision can be specified with a '*' instead of a digit,
         -- in which case printf will accept one more argument for each '*' used
 
