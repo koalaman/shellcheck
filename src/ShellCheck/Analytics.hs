@@ -1211,6 +1211,9 @@ prop_checkConstantIfs6 = verifyNot checkConstantIfs "[[ a -ot b ]]"
 prop_checkConstantIfs7 = verifyNot checkConstantIfs "[ a -nt b ]"
 prop_checkConstantIfs8 = verifyNot checkConstantIfs "[[ ~foo == '~foo' ]]"
 prop_checkConstantIfs9 = verify checkConstantIfs "[[ *.png == [a-z] ]]"
+prop_checkConstantIfs10 = verifyNot checkConstantIfs "[[ ~me == ~+ ]]"
+prop_checkConstantIfs11 = verifyNot checkConstantIfs "[[ ~ == ~+ ]]"
+prop_checkConstantIfs12 = verify checkConstantIfs "[[ '~' == x ]]"
 checkConstantIfs _ (TC_Binary id typ op lhs rhs) | not isDynamic =
     if isConstant lhs && isConstant rhs
         then  warn id 2050 "This expression is constant. Did you forget the $ on a variable?"

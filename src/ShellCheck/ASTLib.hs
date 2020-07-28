@@ -463,30 +463,35 @@ data PseudoGlob = PGAny | PGMany | PGChar Char
 -- Turn a word into a PG pattern, replacing all unknown/runtime values with
 -- PGMany.
 wordToPseudoGlob :: Token -> [PseudoGlob]
-wordToPseudoGlob word =
-    simplifyPseudoGlob . concatMap f $ getWordParts word
-  where
-    f x = case x of
-        T_Literal _ s -> map PGChar s
-        T_SingleQuoted _ s -> map PGChar s
-
-        T_Glob _ "?" -> [PGAny]
-        T_Glob _ ('[':_)  -> [PGAny]
-
-        _ -> [PGMany]
+wordToPseudoGlob = fromMaybe [PGMany] . wordToPseudoGlob' False
 
 -- Turn a word into a PG pattern, but only if we can preserve
 -- exact semantics.
 wordToExactPseudoGlob :: Token -> Maybe [PseudoGlob]
-wordToExactPseudoGlob word =
-    simplifyPseudoGlob . concat <$> mapM f (getWordParts word)
+wordToExactPseudoGlob = wordToPseudoGlob' True
+
+wordToPseudoGlob' :: Bool -> Token -> Maybe [PseudoGlob]
+wordToPseudoGlob' exact word =
+    simplifyPseudoGlob <$> toGlob word
   where
+    toGlob :: Token -> Maybe [PseudoGlob]
+    toGlob word =
+        case word of
+            T_NormalWord _ (T_Literal _ ('~':str):rest) -> do
+                guard $ not exact
+                let this = (PGMany : (map PGChar $ dropWhile (/= '/') str))
+                tail <- concat <$> (mapM f $ concatMap getWordParts rest)
+                return $ this ++ tail
+            _ -> concat <$> (mapM f $ getWordParts word)
+
     f x = case x of
-        T_Literal _ s -> return $ map PGChar s
+        T_Literal _ s      -> return $ map PGChar s
         T_SingleQuoted _ s -> return $ map PGChar s
-        T_Glob _ "?" -> return [PGAny]
-        T_Glob _ "*" -> return [PGMany]
-        _ -> fail "Unknown token type"
+        T_Glob _ "?"       -> return [PGAny]
+        T_Glob _ "*"       -> return [PGMany]
+        T_Glob _ ('[':_) | not exact -> return [PGAny]
+        _ -> if exact then fail "" else return [PGMany]
+
 
 -- Reorder a PseudoGlob for more efficient matching, e.g.
 -- f?*?**g -> f??*g
