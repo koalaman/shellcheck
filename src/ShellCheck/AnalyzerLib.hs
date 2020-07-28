@@ -163,6 +163,8 @@ err   id code str = addComment $ makeComment ErrorC id code str
 info  id code str = addComment $ makeComment InfoC id code str
 style id code str = addComment $ makeComment StyleC id code str
 
+errWithFix :: MonadWriter [TokenComment] m => Id -> Code -> String -> Fix -> m ()
+errWithFix  = addCommentWithFix ErrorC
 warnWithFix :: MonadWriter [TokenComment] m => Id -> Code -> String -> Fix -> m ()
 warnWithFix  = addCommentWithFix WarningC
 styleWithFix :: MonadWriter [TokenComment] m => Id -> Code -> String -> Fix -> m ()

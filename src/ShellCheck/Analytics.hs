@@ -191,6 +191,7 @@ nodeChecks = [
     ,checkUselessBang
     ,checkTranslatedStringVariable
     ,checkModifiedArithmeticInRedirection
+    ,checkBlatantRecursion
     ]
 
 optionalChecks = map fst optionalTreeChecks
@@ -3823,6 +3824,42 @@ groupByLink f list =
         then g next (current:span) rest
         else (reverse $ current:span) : g next [] rest
     g current span [] = [reverse (current:span)]
+
+
+prop_checkBlatantRecursion1 = verify checkBlatantRecursion ":(){ :|:& };:"
+prop_checkBlatantRecursion2 = verify checkBlatantRecursion "f() { f; }"
+prop_checkBlatantRecursion3 = verifyNot checkBlatantRecursion "f() { command f; }"
+prop_checkBlatantRecursion4 = verify checkBlatantRecursion "cd() { cd \"$lol/$1\" || exit; }"
+prop_checkBlatantRecursion5 = verifyNot checkBlatantRecursion "cd() { [ -z \"$1\" ] || cd \"$1\"; }"
+prop_checkBlatantRecursion6 = verifyNot checkBlatantRecursion "cd() { something; cd $1; }"
+prop_checkBlatantRecursion7 = verifyNot checkBlatantRecursion "cd() { builtin cd $1; }"
+checkBlatantRecursion :: Parameters -> Token -> Writer [TokenComment] ()
+checkBlatantRecursion params t =
+    case t of
+        T_Function _ _ _ name body ->
+            case getCommandSequences body of
+                    [first : _] -> checkList name first
+                    _ -> return ()
+        _ -> return ()
+  where
+    checkList :: String -> Token -> Writer [TokenComment] ()
+    checkList name t =
+        case t of
+            T_Backgrounded _ t -> checkList name t
+            T_AndIf _ lhs _ -> checkList name lhs
+            T_OrIf _ lhs _ -> checkList name lhs
+            T_Pipeline _ _ cmds -> mapM_ (checkCommand name) cmds
+            _ -> return ()
+
+    checkCommand :: String -> Token -> Writer [TokenComment] ()
+    checkCommand name cmd = sequence_ $ do
+        let (invokedM, t) = getCommandNameAndToken True cmd
+        invoked <- invokedM
+        guard $ name == invoked
+        return $
+            errWithFix (getId t) 2264
+                ("This function unconditionally re-invokes itself. Missing 'command'?")
+                (fixWith [replaceStart (getId t) params 0 $ "command "])
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
