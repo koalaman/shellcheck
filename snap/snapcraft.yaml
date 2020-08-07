@@ -31,6 +31,8 @@ apps:
   shellcheck:
     command: usr/bin/shellcheck
     plugs: [home, removable-media]
+    environment:
+      LANG: C.UTF-8
 
 parts:
   shellcheck:
