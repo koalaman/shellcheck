@@ -3305,6 +3305,8 @@ prop_checkPipeToNowhere15 = verifyNot checkPipeToNowhere "ls > foo 2> bar |& gre
 prop_checkPipeToNowhere16 = verifyNot checkPipeToNowhere "echo World | cat << EOF\nhello $(cat)\nEOF\n"
 prop_checkPipeToNowhere17 = verify checkPipeToNowhere "echo World | cat << 'EOF'\nhello $(cat)\nEOF\n"
 prop_checkPipeToNowhere18 = verifyNot checkPipeToNowhere "ls 1>&3 3>&1 3>&- | wc -l"
+prop_checkPipeToNowhere19 = verifyNot checkPipeToNowhere "find . -print0 | du --files0-from=/dev/stdin"
+prop_checkPipeToNowhere20 = verifyNot checkPipeToNowhere "find . | du --exclude-from=/dev/fd/0"
 
 data PipeType = StdoutPipe | StdoutStderrPipe | NoPipe deriving (Eq)
 checkPipeToNowhere :: Parameters -> Token -> WriterT [TokenComment] Identity ()
@@ -3324,6 +3326,7 @@ checkPipeToNowhere params t =
             name <- getCommandBasename cmd
             guard $ name `elem` nonReadingCommands
             guard $ not hasConsumers && input /= NoPipe
+            guard . not $ commandSpecificException name cmd
 
             -- Confusing echo for cat is so common that it's worth a special case
             let suggestion =
@@ -3365,6 +3368,11 @@ checkPipeToNowhere params t =
                 inputWarning
                 outputWarning
                 mapM_ warnAboutDupes $ Map.assocs fdMap
+
+    commandSpecificException name cmd =
+        case name of
+            "du" -> any (`elem` ["exclude-from", "files0-from"]) $ lt $ map snd $ getAllFlags cmd
+            _ -> False
 
     warnAboutDupes (n, list@(_:_:_)) =
         forM_ list $ \c -> err (getOpId c) 2261 $
