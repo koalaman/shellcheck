@@ -658,13 +658,30 @@ getModifiedVariableCommand base@(T_SimpleCommand id cmdPrefix (T_NormalWord _ (T
         f [] = fail "not found"
 
     -- mapfile has some curious syntax allowing flags plus 0..n variable names
-    -- where only the first non-option one is used if any. Here we cheat and
-    -- just get the last one, if it's a variable name.
-    getMapfileArray base arguments = do
-        lastArg <- listToMaybe (reverse arguments)
-        name <- getLiteralString lastArg
-        guard $ isVariableName name
-        return (base, lastArg, name, DataArray SourceExternal)
+    -- where only the first non-option one is used if any.
+    getMapfileArray base rest = parseArgs `mplus` fallback
+      where
+        parseArgs :: Maybe (Token, Token, String, DataType)
+        parseArgs = do
+            args <- getGnuOpts "d:n:O:s:u:C:c:t" base
+            let names = map snd $ filter (\(x,y) -> null x) args
+            if null names
+                then
+                    return (base, base, "MAPFILE", DataArray SourceExternal)
+                else do
+                    first <- listToMaybe names
+                    name <- getLiteralString first
+                    guard $ isVariableName name
+                    return (base, first, name, DataArray SourceExternal)
+        -- If arg parsing fails (due to bad or new flags), get the last variable name
+        fallback :: Maybe (Token, Token, String, DataType)
+        fallback = do
+            (name, token) <- listToMaybe . mapMaybe f $ reverse rest
+            return (base, token, name, DataArray SourceExternal)
+        f arg = do
+            name <- getLiteralString arg
+            guard $ isVariableName name
+            return (name, arg)
 
     -- get all the array variables used in read, e.g. read -a arr
     getReadArrayVariables args =
