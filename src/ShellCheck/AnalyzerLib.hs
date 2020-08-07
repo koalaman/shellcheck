@@ -659,12 +659,16 @@ getModifiedVariableCommand base@(T_SimpleCommand id cmdPrefix (T_NormalWord _ (T
 
     -- mapfile has some curious syntax allowing flags plus 0..n variable names
     -- where only the first non-option one is used if any. Here we cheat and
-    -- just get the last one, if it's a variable name.
+    -- just get the last one, if it's a variable name, and omitting process
+    -- substitions.
     getMapfileArray base arguments = do
-        lastArg <- listToMaybe (reverse arguments)
+        lastArg <- listToMaybe (filter notProcSub $ reverse arguments)
         name <- getLiteralString lastArg
         guard $ isVariableName name
         return (base, lastArg, name, DataArray SourceExternal)
+
+    notProcSub (T_NormalWord _ (T_ProcSub{} :_)) = False
+    notProcSub _ = True
 
     -- get all the array variables used in read, e.g. read -a arr
     getReadArrayVariables args =
