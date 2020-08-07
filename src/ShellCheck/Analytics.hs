@@ -2228,7 +2228,9 @@ prop_checkUnassignedReferences37= verifyNotTree checkUnassignedReferences "var=h
 prop_checkUnassignedReferences38= verifyTree (checkUnassignedReferences' True) "echo $VAR"
 prop_checkUnassignedReferences39= verifyNotTree checkUnassignedReferences "builtin export var=4; echo $var"
 prop_checkUnassignedReferences40= verifyNotTree checkUnassignedReferences ": ${foo=bar}"
-prop_checkUnassignedReferences41= verifyNotTree checkUnassignedReferences "mapfile -t files <(cat); echo \"${files[@]}\""
+prop_checkUnassignedReferences41= verifyNotTree checkUnassignedReferences "mapfile -t files 123; echo \"${files[@]}\""
+prop_checkUnassignedReferences42= verifyNotTree checkUnassignedReferences "mapfile files -t; echo \"${files[@]}\""
+prop_checkUnassignedReferences43= verifyNotTree checkUnassignedReferences "mapfile --future files; echo \"${files[@]}\""
 
 checkUnassignedReferences = checkUnassignedReferences' False
 checkUnassignedReferences' includeGlobals params t = warnings
