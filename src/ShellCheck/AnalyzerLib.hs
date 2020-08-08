@@ -499,8 +499,9 @@ getModifiedVariables t =
             guard . not . null $ str
             return (t, token, str, DataString SourceChecked)
 
-        TC_Unary _ _ "-n" (T_NormalWord _ [T_DoubleQuoted _ [db@(T_DollarBraced _ _ l)]]) ->
-            [(t, t, getBracedReference (concat $ oversimplify l), DataString SourceChecked)]
+        TC_Unary _ _ "-n" token -> markAsChecked t token
+        TC_Unary _ _ "-z" token -> markAsChecked t token
+        TC_Nullary _ _ token -> markAsChecked t token
 
         T_DollarBraced _ _ l -> maybeToList $ do
             let string = concat $ oversimplify l
@@ -519,6 +520,14 @@ getModifiedVariables t =
         T_ForIn id str words _ -> [(t, t, str, DataString $ SourceFrom words)]
         T_SelectIn id str words _ -> [(t, t, str, DataString $ SourceFrom words)]
         _ -> []
+  where
+    markAsChecked place token = mapMaybe (f place) $ getWordParts token
+    f place t = case t of
+            T_DollarBraced _ _ l ->
+                let str = getBracedReference $ concat $ oversimplify l in do
+                    guard $ isVariableName str
+                    return (place, t, str, DataString SourceChecked)
+            _ -> Nothing
 
 isClosingFileOp op =
     case op of
@@ -726,9 +735,7 @@ getOffsetReferences mods = fromMaybe [] $ do
 getReferencedVariables parents t =
     case t of
         T_DollarBraced id _ l -> let str = concat $ oversimplify l in
-            if isMinusZTest t
-            then []
-            else (t, t, getBracedReference str) :
+            (t, t, getBracedReference str) :
                 map (\x -> (l, l, x)) (
                     getIndexReferences str
                     ++ getOffsetReferences (getBracedModifier str))
@@ -781,10 +788,6 @@ getReferencedVariables parents t =
     isArithmeticAssignment t = case getPath parents t of
         this: TA_Assignment _ "=" lhs _ :_ -> lhs == t
         _                                  -> False
-
-    isMinusZTest t = case getPath parents t of
-        _ : T_DoubleQuoted _ [_] : T_NormalWord _ [_] : TC_Unary _ SingleBracket "-z" _ : _ -> True
-        _ -> False
 
 dataTypeFrom defaultType v = (case v of T_Array {} -> DataArray; _ -> defaultType) $ SourceFrom [v]
 
