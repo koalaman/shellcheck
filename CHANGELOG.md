@@ -11,6 +11,7 @@
 
 ### Changed
 - SC1090: A leading `$x/` or `$(x)/` is now treated as `./` when locating files
+- SC2154: Variables appearing in -z/-n tests are no longer considered unassigned
 
 
 ## v0.7.1 - 2020-04-04

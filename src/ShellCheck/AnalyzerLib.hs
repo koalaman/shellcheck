@@ -499,7 +499,11 @@ getModifiedVariables t =
             guard . not . null $ str
             return (t, token, str, DataString SourceChecked)
 
-        T_DollarBraced _ _ l -> do
+        TC_Unary _ _ "-n" token -> markAsChecked t token
+        TC_Unary _ _ "-z" token -> markAsChecked t token
+        TC_Nullary _ _ token -> markAsChecked t token
+
+        T_DollarBraced _ _ l -> maybeToList $ do
             let string = concat $ oversimplify l
             let modifier = getBracedModifier string
             guard $ any (`isPrefixOf` modifier) ["=", ":="]
@@ -516,6 +520,14 @@ getModifiedVariables t =
         T_ForIn id str words _ -> [(t, t, str, DataString $ SourceFrom words)]
         T_SelectIn id str words _ -> [(t, t, str, DataString $ SourceFrom words)]
         _ -> []
+  where
+    markAsChecked place token = mapMaybe (f place) $ getWordParts token
+    f place t = case t of
+            T_DollarBraced _ _ l ->
+                let str = getBracedReference $ concat $ oversimplify l in do
+                    guard $ isVariableName str
+                    return (place, t, str, DataString SourceChecked)
+            _ -> Nothing
 
 isClosingFileOp op =
     case op of
