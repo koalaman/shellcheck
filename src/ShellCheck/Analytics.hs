@@ -2232,6 +2232,16 @@ prop_checkUnassignedReferences41= verifyNotTree checkUnassignedReferences "mapfi
 prop_checkUnassignedReferences42= verifyNotTree checkUnassignedReferences "mapfile files -t; echo \"${files[@]}\""
 prop_checkUnassignedReferences43= verifyNotTree checkUnassignedReferences "mapfile --future files; echo \"${files[@]}\""
 
+prop_checkUnassignedReferences_minusNPlain   = verifyNotTree checkUnassignedReferences "if [ -n \"$x\" ]; then echo $x; fi"
+prop_checkUnassignedReferences_minusZPlain   = verifyNotTree checkUnassignedReferences "if [ -z \"$x\" ]; then echo \"\"; fi"
+prop_checkUnassignedReferences_minusNBraced  = verifyNotTree checkUnassignedReferences "if [ -n \"${x}\" ]; then echo $x; fi"
+prop_checkUnassignedReferences_minusZBraced  = verifyNotTree checkUnassignedReferences "if [ -z \"${x}\" ]; then echo \"\"; fi"
+prop_checkUnassignedReferences_minusNDefault = verifyNotTree checkUnassignedReferences "if [ -n \"${x:-}\" ]; then echo $x; fi"
+prop_checkUnassignedReferences_minusZDefault = verifyNotTree checkUnassignedReferences "if [ -z \"${x:-}\" ]; then echo \"\"; fi"
+
+prop_checkUnassignedReferences_minusZInsteadOfN       = verifyTree checkUnassignedReferences "if [ -z \"$x\" ]; then echo $x; fi"
+prop_checkUnassignedReferences_minusZInsteadOfNBraced = verifyTree checkUnassignedReferences "if [ -z \"${x}\" ]; then echo $x; fi"
+
 checkUnassignedReferences = checkUnassignedReferences' False
 checkUnassignedReferences' includeGlobals params t = warnings
   where

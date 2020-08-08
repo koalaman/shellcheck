@@ -499,7 +499,10 @@ getModifiedVariables t =
             guard . not . null $ str
             return (t, token, str, DataString SourceChecked)
 
-        T_DollarBraced _ _ l -> do
+        TC_Unary _ _ "-n" (T_NormalWord _ [T_DoubleQuoted _ [db@(T_DollarBraced _ _ l)]]) ->
+            [(t, t, getBracedReference (concat $ oversimplify l), DataString SourceChecked)]
+
+        T_DollarBraced _ _ l -> maybeToList $ do
             let string = concat $ oversimplify l
             let modifier = getBracedModifier string
             guard $ any (`isPrefixOf` modifier) ["=", ":="]
@@ -723,7 +726,9 @@ getOffsetReferences mods = fromMaybe [] $ do
 getReferencedVariables parents t =
     case t of
         T_DollarBraced id _ l -> let str = concat $ oversimplify l in
-            (t, t, getBracedReference str) :
+            if isMinusZTest t
+            then []
+            else (t, t, getBracedReference str) :
                 map (\x -> (l, l, x)) (
                     getIndexReferences str
                     ++ getOffsetReferences (getBracedModifier str))
@@ -776,6 +781,10 @@ getReferencedVariables parents t =
     isArithmeticAssignment t = case getPath parents t of
         this: TA_Assignment _ "=" lhs _ :_ -> lhs == t
         _                                  -> False
+
+    isMinusZTest t = case getPath parents t of
+        _ : T_DoubleQuoted _ [_] : T_NormalWord _ [_] : TC_Unary _ SingleBracket "-z" _ : _ -> True
+        _ -> False
 
 dataTypeFrom defaultType v = (case v of T_Array {} -> DataArray; _ -> defaultType) $ SourceFrom [v]
 
