@@ -192,6 +192,7 @@ nodeChecks = [
     ,checkTranslatedStringVariable
     ,checkModifiedArithmeticInRedirection
     ,checkBlatantRecursion
+    ,checkBadTestAndOr
     ]
 
 optionalChecks = map fst optionalTreeChecks
@@ -3877,6 +3878,51 @@ checkBlatantRecursion params t =
             errWithFix (getId t) 2264
                 ("This function unconditionally re-invokes itself. Missing 'command'?")
                 (fixWith [replaceStart (getId t) params 0 $ "command "])
+
+
+prop_checkBadTestAndOr1 = verify checkBadTestAndOr "[ x ] & [ y ]"
+prop_checkBadTestAndOr2 = verify checkBadTestAndOr "test -e foo & [ y ]"
+prop_checkBadTestAndOr3 = verify checkBadTestAndOr "[ x ] | [ y ]"
+checkBadTestAndOr params t =
+    case t of
+        T_Pipeline _ seps cmds@(_:_:_) -> checkOrs seps cmds
+        T_Backgrounded id cmd -> checkAnds id cmd
+        _ -> return ()
+  where
+    checkOrs seps cmds =
+        let maybeSeps = map Just seps
+            commandWithSeps = zip3 (Nothing:maybeSeps) cmds (maybeSeps ++ [Nothing])
+        in
+            mapM_ checkTest commandWithSeps
+    checkTest (before, cmd, after) =
+        when (isTest cmd) $ do
+            checkPipe before
+            checkPipe after
+
+    checkPipe t =
+        case t of
+            Just (T_Pipe id "|") ->
+                warnWithFix id 2266 "Use || for logical OR. Single | will pipe." $
+                    fixWith [replaceEnd id params 0 "|"]
+            _ -> return ()
+
+    checkAnds id t =
+        case t of
+            T_AndIf _ _ rhs -> checkAnds id rhs
+            T_OrIf _ _ rhs -> checkAnds id rhs
+            T_Pipeline _ _ list | not (null list) -> checkAnds id (last list)
+            cmd -> when (isTest cmd) $
+                errWithFix id 2265 "Use && for logical AND. Single & will background and return true." $
+                    (fixWith [replaceEnd id params 0 "&"])
+
+    isTest t =
+        case t of
+            T_Condition {} -> True
+            T_SimpleCommand {} -> t `isCommand` "test"
+            T_Redirecting _ _ t -> isTest t
+            T_Annotation _ _ t -> isTest t
+            _ -> False
+
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

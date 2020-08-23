@@ -4,6 +4,7 @@
 - SC2261: Warn about multiple competing redirections
 - SC2262/SC2263: Warn about aliases declared and used in the same parsing unit
 - SC2264: Warn about wrapper functions that blatantly recurse
+- SC2265/SC2266: Warn when using & or | with test statements
 
 ### Fixed
 - SC1072/SC1073 now respond to disable annotations, though ignoring parse errors
