@@ -190,7 +190,7 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
     isDash = shellType params == Dash
     warnMsg id s =
         if isDash
-        then warn id 2169 $ "In dash, " ++ s ++ " not supported."
+        then err  id 2169 $ "In dash, " ++ s ++ " not supported."
         else warn id 2039 $ "In POSIX sh, " ++ s ++ " undefined."
 
     bashism (T_ProcSub id _ _) = warnMsg id "process substitution is"
