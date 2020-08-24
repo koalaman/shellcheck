@@ -11,6 +11,7 @@
   is still purely cosmetic and does not allow ShellCheck to continue.
 
 ### Changed
+- Assignments are now parsed to spec, without leniency for leading $ or spaces
 - SC1090: A leading `$x/` or `$(x)/` is now treated as `./` when locating files
 - SC2154: Variables appearing in -z/-n tests are no longer considered unassigned
 

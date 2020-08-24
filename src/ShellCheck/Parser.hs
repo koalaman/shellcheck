@@ -212,6 +212,12 @@ endSpan (IncompleteInterval start) = do
     id <- getNextIdBetween start endPos
     return id
 
+getSpanPositionsFor m = do
+    start <- getPosition
+    m
+    end <- getPosition
+    return (start, end)
+
 addToHereDocMap id list = do
     state <- getState
     let map = hereDocMap state
@@ -2788,17 +2794,13 @@ readLiteralForParser parser = do
 
 prop_readAssignmentWord = isOk readAssignmentWord "a=42"
 prop_readAssignmentWord2 = isOk readAssignmentWord "b=(1 2 3)"
-prop_readAssignmentWord3 = isWarning readAssignmentWord "$b = 13"
-prop_readAssignmentWord4 = isWarning readAssignmentWord "b = $(lol)"
 prop_readAssignmentWord5 = isOk readAssignmentWord "b+=lol"
-prop_readAssignmentWord6 = isWarning readAssignmentWord "b += (1 2 3)"
 prop_readAssignmentWord7 = isOk readAssignmentWord "a[3$n'']=42"
 prop_readAssignmentWord8 = isOk readAssignmentWord "a[4''$(cat foo)]=42"
 prop_readAssignmentWord9 = isOk readAssignmentWord "IFS= "
 prop_readAssignmentWord9a= isOk readAssignmentWord "foo="
 prop_readAssignmentWord9b= isOk readAssignmentWord "foo=  "
 prop_readAssignmentWord9c= isOk readAssignmentWord "foo=  #bar"
-prop_readAssignmentWord10= isWarning readAssignmentWord "foo$n=42"
 prop_readAssignmentWord11= isOk readAssignmentWord "foo=([a]=b [c] [d]= [e f )"
 prop_readAssignmentWord12= isOk readAssignmentWord "a[b <<= 3 + c]='thing'"
 prop_readAssignmentWord13= isOk readAssignmentWord "var=( (1 2) (3 4) )"
@@ -2806,52 +2808,73 @@ prop_readAssignmentWord14= isOk readAssignmentWord "var=( 1 [2]=(3 4) )"
 prop_readAssignmentWord15= isOk readAssignmentWord "var=(1 [2]=(3 4))"
 readAssignmentWord = readAssignmentWordExt True
 readWellFormedAssignment = readAssignmentWordExt False
-readAssignmentWordExt lenient = try $ do
-    start <- startSpan
-    pos <- getPosition
-    when lenient $
-        optional (char '$' >> parseNote ErrorC 1066 "Don't use $ on the left side of assignments.")
-    variable <- readVariableName
-    when lenient $
-        optional (readNormalDollar >> parseNoteAt pos ErrorC
-                                1067 "For indirection, use arrays, declare \"var$n=value\", or (for sh) read/eval.")
-    indices <- many readArrayIndex
-    hasLeftSpace <- fmap (not . null) spacing
-    pos <- getPosition
-    id <- endSpan start
-    op <- readAssignmentOp
+readAssignmentWordExt lenient = called "variable assignment" $ do
+    -- Parse up to and including the = in a 'try'
+    (id, variable, op, indices) <- try $ do
+        start <- startSpan
+        pos <- getPosition
+        leadingDollarPos <-
+            if lenient
+            then optionMaybe $ getSpanPositionsFor (char '$')
+            else return Nothing
+        variable <- readVariableName
+        middleDollarPos <-
+            if lenient
+            then optionMaybe $ getSpanPositionsFor readNormalDollar
+            else return Nothing
+        indices <- many readArrayIndex
+        hasLeftSpace <- fmap (not . null) spacing
+        opStart <- getPosition
+        id <- endSpan start
+        op <- readAssignmentOp
+        opEnd <- getPosition
+
+        when (isJust leadingDollarPos || isJust middleDollarPos || hasLeftSpace) $ do
+            sequence_ $ do
+                (l, r) <- leadingDollarPos
+                return $ parseProblemAtWithEnd l r ErrorC 1066 "Don't use $ on the left side of assignments."
+            sequence_ $ do
+                (l, r) <- middleDollarPos
+                return $ parseProblemAtWithEnd l r ErrorC 1067 "For indirection, use arrays, declare \"var$n=value\", or (for sh) read/eval."
+            when hasLeftSpace $ do
+                parseProblemAtWithEnd opStart opEnd ErrorC 1068 $
+                    "Don't put spaces around the "
+                    ++ (if op == Append
+                        then "+= when appending"
+                        else "= in assignments")
+                    ++ " (or quote to make it literal)."
+
+            -- Fail so that this is not parsed as an assignment.
+            fail ""
+        -- At this point we know for sure.
+        return (id, variable, op, indices)
+
+    rightPosStart <- getPosition
     hasRightSpace <- fmap (not . null) spacing
+    rightPosEnd <- getPosition
     isEndOfCommand <- fmap isJust $ optionMaybe (try . lookAhead $ (void (oneOf "\r\n;&|)") <|> eof))
-    if not hasLeftSpace && (hasRightSpace || isEndOfCommand)
+
+    if hasRightSpace || isEndOfCommand
       then do
-        when (variable /= "IFS" && hasRightSpace && not isEndOfCommand) $
-            parseNoteAt pos WarningC 1007
+        when (variable /= "IFS" && hasRightSpace && not isEndOfCommand) $ do
+            parseProblemAtWithEnd rightPosStart rightPosEnd WarningC 1007
                 "Remove space after = if trying to assign a value (for empty string, use var='' ... )."
         value <- readEmptyLiteral
         return $ T_Assignment id op variable indices value
       else do
-        when (hasLeftSpace || hasRightSpace) $
-            parseNoteAt pos ErrorC 1068 $
-                "Don't put spaces around the "
-                ++ (if op == Append
-                    then "+= when appending"
-                    else "= in assignments")
-                ++ " (or quote to make it literal)."
+        optional $ do
+            lookAhead $ char '='
+            parseProblem ErrorC 1097 "Unexpected ==. For assignment, use =. For comparison, use [/[[. Or quote for literal string."
+
         value <- readArray <|> readNormalWord
         spacing
         return $ T_Assignment id op variable indices value
   where
     readAssignmentOp = do
-        pos <- getPosition
-        unexpecting "" $ string "==="
+        -- This is probably some kind of ascii art border
+        unexpecting "===" (string "===")
         choice [
             string "+=" >> return Append,
-            do
-                try (string "==")
-                parseProblemAt pos ErrorC 1097
-                    "Unexpected ==. For assignment, use =. For comparison, use [/[[."
-                return Assign,
-
             string "=" >> return Assign
             ]
 
