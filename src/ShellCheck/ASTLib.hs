@@ -567,5 +567,5 @@ isAnnotationIgnoringCode code t =
         T_Annotation _ anns _ -> any hasNum anns
         _ -> False
   where
-    hasNum (DisableComment ts) = code == ts
+    hasNum (DisableComment from to) = code >= from && code < to
     hasNum _                   = False

@@ -232,7 +232,8 @@ Valid keys are:
 **disable**
 :   Disables a comma separated list of error codes for the following command.
     The command can be a simple command like `echo foo`, or a compound command
-    like a function definition, subshell block or loop.
+    like a function definition, subshell block or loop. A range can be
+    be specified with a dash, e.g. `disable=SC3000-SC4000` to exclude 3xxx.
 
 **enable**
 :   Enable an optional check by name, as listed with **--list-optional**.

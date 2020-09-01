@@ -270,7 +270,7 @@ contextItemDisablesCode alsoCheckSourced code = disabling alsoCheckSourced
             ContextAnnotation list -> any disabling' list
             ContextSource _ -> not $ checkSourced
             _ -> False
-    disabling' (DisableComment n) = code == n
+    disabling' (DisableComment n m) = code >= n && code < m
     disabling' _ = False
 
 
@@ -973,6 +973,7 @@ prop_readAnnotation3 = isOk readAnnotation "# shellcheck disable=SC1234 source=/
 prop_readAnnotation4 = isWarning readAnnotation "# shellcheck cats=dogs disable=SC1234\n"
 prop_readAnnotation5 = isOk readAnnotation "# shellcheck disable=SC2002 # All cats are precious\n"
 prop_readAnnotation6 = isOk readAnnotation "# shellcheck disable=SC1234 # shellcheck foo=bar\n"
+prop_readAnnotation7 = isOk readAnnotation "# shellcheck disable=SC1000,SC2000-SC3000,SC1001\n"
 readAnnotation = called "shellcheck directive" $ do
     try readAnnotationPrefix
     many1 linewhitespace
@@ -993,12 +994,16 @@ readAnnotationWithoutPrefix = do
         key <- many1 (letter <|> char '-')
         char '=' <|> fail "Expected '=' after directive key"
         annotations <- case key of
-            "disable" -> readCode `sepBy` char ','
+            "disable" -> readRange `sepBy` char ','
               where
+                readRange = do
+                    from <- readCode
+                    to <- choice [ char '-' *> readCode, return $ from+1 ]
+                    return $ DisableComment from to
                 readCode = do
                     optional $ string "SC"
                     int <- many1 digit
-                    return $ DisableComment (read int)
+                    return $ read int
 
             "enable" -> readName `sepBy` char ','
               where

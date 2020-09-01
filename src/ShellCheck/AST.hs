@@ -145,7 +145,7 @@ data InnerToken t =
     deriving (Show, Eq, Functor, Foldable, Traversable)
 
 data Annotation =
-    DisableComment Integer
+    DisableComment Integer Integer -- [from, to)
     | EnableComment String
     | SourceOverride String
     | ShellOverride String
