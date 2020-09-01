@@ -2320,8 +2320,11 @@ prop_checkGlobsAsOptions1 = verify checkGlobsAsOptions "rm *.txt"
 prop_checkGlobsAsOptions2 = verify checkGlobsAsOptions "ls ??.*"
 prop_checkGlobsAsOptions3 = verifyNot checkGlobsAsOptions "rm -- *.txt"
 prop_checkGlobsAsOptions4 = verifyNot checkGlobsAsOptions "*.txt"
-checkGlobsAsOptions _ (T_SimpleCommand _ _ args) =
-    mapM_ check $ takeWhile (not . isEndOfArgs) (drop 1 args)
+prop_checkGlobsAsOptions5 = verifyNot checkGlobsAsOptions "echo 'Files:' *.txt"
+prop_checkGlobsAsOptions6 = verifyNot checkGlobsAsOptions "printf '%s\\n' *"
+checkGlobsAsOptions _ cmd@(T_SimpleCommand _ _ args) =
+    unless ((fromMaybe "" $ getCommandBasename cmd) `elem` ["echo", "printf"]) $
+        mapM_ check $ takeWhile (not . isEndOfArgs) (drop 1 args)
   where
     check v@(T_NormalWord _ (T_Glob id s:_)) | s == "*" || s == "?" =
         info id 2035 "Use ./*glob* or -- *glob* so names with dashes won't become options."
