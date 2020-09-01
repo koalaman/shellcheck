@@ -13,6 +13,7 @@
 
 ### Changed
 - Assignments are now parsed to spec, without leniency for leading $ or spaces
+- POSIX/dash unsupported feature warnings now have individual SC3xxx codes
 - SC1090: A leading `$x/` or `$(x)/` is now treated as `./` when locating files
 - SC2154: Variables appearing in -z/-n tests are no longer considered unassigned
 

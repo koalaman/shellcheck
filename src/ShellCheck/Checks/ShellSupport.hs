@@ -188,102 +188,102 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
   kludge params = bashism
    where
     isDash = shellType params == Dash
-    warnMsg id s =
+    warnMsg id code s =
         if isDash
-        then err  id 2169 $ "In dash, " ++ s ++ " not supported."
-        else warn id 2039 $ "In POSIX sh, " ++ s ++ " undefined."
+        then err  id code $ "In dash, " ++ s ++ " not supported."
+        else warn id code $ "In POSIX sh, " ++ s ++ " undefined."
 
-    bashism (T_ProcSub id _ _) = warnMsg id "process substitution is"
-    bashism (T_Extglob id _ _) = warnMsg id "extglob is"
-    bashism (T_DollarSingleQuoted id _) = warnMsg id "$'..' is"
-    bashism (T_DollarDoubleQuoted id _) = warnMsg id "$\"..\" is"
-    bashism (T_ForArithmetic id _ _ _ _) = warnMsg id "arithmetic for loops are"
-    bashism (T_Arithmetic id _) = warnMsg id "standalone ((..)) is"
-    bashism (T_DollarBracket id _) = warnMsg id "$[..] in place of $((..)) is"
-    bashism (T_SelectIn id _ _ _) = warnMsg id "select loops are"
-    bashism (T_BraceExpansion id _) = warnMsg id "brace expansion is"
-    bashism (T_Condition id DoubleBracket _) = warnMsg id "[[ ]] is"
-    bashism (T_HereString id _) = warnMsg id "here-strings are"
+    bashism (T_ProcSub id _ _) = warnMsg id 3001 "process substitution is"
+    bashism (T_Extglob id _ _) = warnMsg id 3002 "extglob is"
+    bashism (T_DollarSingleQuoted id _) = warnMsg id 3003 "$'..' is"
+    bashism (T_DollarDoubleQuoted id _) = warnMsg id 3004 "$\"..\" is"
+    bashism (T_ForArithmetic id _ _ _ _) = warnMsg id 3005 "arithmetic for loops are"
+    bashism (T_Arithmetic id _) = warnMsg id 3006 "standalone ((..)) is"
+    bashism (T_DollarBracket id _) = warnMsg id 3007 "$[..] in place of $((..)) is"
+    bashism (T_SelectIn id _ _ _) = warnMsg id 3008 "select loops are"
+    bashism (T_BraceExpansion id _) = warnMsg id 3009 "brace expansion is"
+    bashism (T_Condition id DoubleBracket _) = warnMsg id 3010 "[[ ]] is"
+    bashism (T_HereString id _) = warnMsg id 3011 "here-strings are"
     bashism (TC_Binary id SingleBracket op _ _)
         | op `elem` [ "<", ">", "\\<", "\\>", "<=", ">=", "\\<=", "\\>="] =
-            unless isDash $ warnMsg id $ "lexicographical " ++ op ++ " is"
+            unless isDash $ warnMsg id 3012 $ "lexicographical " ++ op ++ " is"
     bashism (TC_Binary id SingleBracket op _ _)
         | op `elem` [ "-ot", "-nt", "-ef" ] =
-            unless isDash $ warnMsg id $ op ++ " is"
+            unless isDash $ warnMsg id 3013 $ op ++ " is"
     bashism (TC_Binary id SingleBracket "==" _ _) =
-            warnMsg id "== in place of = is"
+            warnMsg id 3014 "== in place of = is"
     bashism (TC_Binary id SingleBracket "=~" _ _) =
-            warnMsg id "=~ regex matching is"
+            warnMsg id 3015 "=~ regex matching is"
     bashism (TC_Unary id SingleBracket "-v" _) =
-            warnMsg id "unary -v (in place of [ -n \"${var+x}\" ]) is"
+            warnMsg id 3016 "unary -v (in place of [ -n \"${var+x}\" ]) is"
     bashism (TC_Unary id _ "-a" _) =
-            warnMsg id "unary -a in place of -e is"
+            warnMsg id 3017 "unary -a in place of -e is"
     bashism (TA_Unary id op _)
         | op `elem` [ "|++", "|--", "++|", "--|"] =
-            warnMsg id $ filter (/= '|') op ++ " is"
-    bashism (TA_Binary id "**" _ _) = warnMsg id "exponentials are"
-    bashism (T_FdRedirect id "&" (T_IoFile _ (T_Greater _) _)) = warnMsg id "&> is"
-    bashism (T_FdRedirect id "" (T_IoFile _ (T_GREATAND _) _)) = warnMsg id ">& is"
-    bashism (T_FdRedirect id ('{':_) _) = warnMsg id "named file descriptors are"
+            warnMsg id 3018 $ filter (/= '|') op ++ " is"
+    bashism (TA_Binary id "**" _ _) = warnMsg id 3019 "exponentials are"
+    bashism (T_FdRedirect id "&" (T_IoFile _ (T_Greater _) _)) = warnMsg id 3020 "&> is"
+    bashism (T_FdRedirect id "" (T_IoFile _ (T_GREATAND _) _)) = warnMsg id 3021 ">& is"
+    bashism (T_FdRedirect id ('{':_) _) = warnMsg id 3022 "named file descriptors are"
     bashism (T_FdRedirect id num _)
-        | all isDigit num && length num > 1 = warnMsg id "FDs outside 0-9 are"
+        | all isDigit num && length num > 1 = warnMsg id 3023 "FDs outside 0-9 are"
     bashism (T_Assignment id Append _ _ _) =
-        warnMsg id "+= is"
+        warnMsg id 3024 "+= is"
     bashism (T_IoFile id _ word) | isNetworked =
-            warnMsg id "/dev/{tcp,udp} is"
+            warnMsg id 3025 "/dev/{tcp,udp} is"
         where
             file = onlyLiteralString word
             isNetworked = any (`isPrefixOf` file) ["/dev/tcp", "/dev/udp"]
     bashism (T_Glob id str) | "[^" `isInfixOf` str =
-            warnMsg id "^ in place of ! in glob bracket expressions is"
+            warnMsg id 3026 "^ in place of ! in glob bracket expressions is"
 
     bashism t@(TA_Variable id str _) | isBashVariable str =
-        warnMsg id $ str ++ " is"
+        warnMsg id 3027 $ str ++ " is"
 
     bashism t@(T_DollarBraced id _ token) = do
         mapM_ check expansion
         when (isBashVariable var) $
-                    warnMsg id $ var ++ " is"
+            warnMsg id 3028 $ var ++ " is"
       where
         str = concat $ oversimplify token
         var = getBracedReference str
         check (regex, feature) =
-            when (isJust $ matchRegex regex str) $ warnMsg id feature
+            when (isJust $ matchRegex regex str) $ warnMsg id 3053 feature
 
     bashism t@(T_Pipe id "|&") =
-        warnMsg id "|& in place of 2>&1 | is"
+        warnMsg id 3029 "|& in place of 2>&1 | is"
     bashism (T_Array id _) =
-        warnMsg id "arrays are"
+        warnMsg id 3030 "arrays are"
     bashism (T_IoFile id _ t) | isGlob t =
-        warnMsg id "redirecting to/from globs is"
+        warnMsg id 3031 "redirecting to/from globs is"
     bashism (T_CoProc id _ _) =
-        warnMsg id "coproc is"
+        warnMsg id 3032 "coproc is"
 
     bashism (T_Function id _ _ str _) | not (isVariableName str) =
-        warnMsg id "naming functions outside [a-zA-Z_][a-zA-Z0-9_]* is"
+        warnMsg id 3033 "naming functions outside [a-zA-Z_][a-zA-Z0-9_]* is"
 
     bashism (T_DollarExpansion id [x]) | isOnlyRedirection x =
-        warnMsg id "$(<file) to read files is"
+        warnMsg id 3034 "$(<file) to read files is"
     bashism (T_Backticked id [x]) | isOnlyRedirection x =
-        warnMsg id "`<file` to read files is"
+        warnMsg id 3035 "`<file` to read files is"
 
     bashism t@(T_SimpleCommand _ _ (cmd:arg:_))
         | t `isCommand` "echo" && argString `matches` flagRegex =
             if isDash
             then
                 when (argString /= "-n") $
-                    warnMsg (getId arg) "echo flags besides -n"
+                    warnMsg (getId arg) 3036 "echo flags besides -n"
             else
-                warnMsg (getId arg) "echo flags are"
+                warnMsg (getId arg) 3037 "echo flags are"
       where
           argString = concat $ oversimplify arg
           flagRegex = mkRegex "^-[eEsn]+$"
 
     bashism t@(T_SimpleCommand _ _ (cmd:arg:_))
         | getLiteralString cmd == Just "exec" && "-" `isPrefixOf` concat (oversimplify arg) =
-            warnMsg (getId arg) "exec flags are"
+            warnMsg (getId arg) 3038 "exec flags are"
     bashism t@(T_SimpleCommand id _ _)
-        | t `isCommand` "let" = warnMsg id "'let' is"
+        | t `isCommand` "let" = warnMsg id 3039 "'let' is"
     bashism t@(T_SimpleCommand _ _ (cmd:args))
         | t `isCommand` "set" = unless isDash $
             checkOptions $ getLiteralArgs args
@@ -301,7 +301,7 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
         checkOptions (flag@(fid,flag') : opt@(oid,opt') : rest)
             | flag' `matches` oFlagRegex = do
                 when (opt' `notElem` longOptions) $
-                  warnMsg oid $ "set option " <> opt' <> " is"
+                  warnMsg oid 3040 $ "set option " <> opt' <> " is"
                 checkFlags (flag:rest)
             | otherwise = checkFlags (flag:opt:rest)
         checkOptions (flag:rest) = checkFlags (flag:rest)
@@ -314,10 +314,10 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
                 unless (flag' `matches` validFlagsRegex) $
                   forM_ (tail flag') $ \letter ->
                     when (letter `notElem` optionsSet) $
-                      warnMsg fid $ "set flag " <> ('-':letter:" is")
+                      warnMsg fid 3041 $ "set flag " <> ('-':letter:" is")
                 checkOptions rest
             | beginsWithDoubleDash flag' = do
-                warnMsg fid $ "set flag " <> flag' <> " is"
+                warnMsg fid 3042 $ "set flag " <> flag' <> " is"
                 checkOptions rest
             -- Either a word that doesn't start with a dash, or simply '--',
             -- so stop checking.
@@ -339,16 +339,19 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
         let name = fromMaybe "" $ getCommandName t
             flags = getLeadingFlags t
         in do
+            when (name == "local" && not isDash) $
+                -- This is so commonly accepted that we'll make it a special case
+                warnMsg id 3043 $ "'local' is"
             when (name `elem` unsupportedCommands) $
-                warnMsg id $ "'" ++ name ++ "' is"
+                warnMsg id 3044 $ "'" ++ name ++ "' is"
             sequence_ $ do
                 allowed' <- Map.lookup name allowedFlags
                 allowed <- allowed'
                 (word, flag) <- find
                     (\x -> (not . null . snd $ x) && snd x `notElem` allowed) flags
-                return . warnMsg (getId word) $ name ++ " -" ++ flag ++ " is"
+                return . warnMsg (getId word) 3045 $ name ++ " -" ++ flag ++ " is"
 
-            when (name == "source") $ warnMsg id "'source' in place of '.' is"
+            when (name == "source") $ warnMsg id 3046 "'source' in place of '.' is"
             when (name == "trap") $
                 let
                     check token = sequence_ $ do
@@ -356,12 +359,12 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
                         let upper = map toUpper str
                         return $ do
                             when (upper `elem` ["ERR", "DEBUG", "RETURN"]) $
-                                warnMsg (getId token) $ "trapping " ++ str ++ " is"
+                                warnMsg (getId token) 3047 $ "trapping " ++ str ++ " is"
                             when ("SIG" `isPrefixOf` upper) $
-                                warnMsg (getId token)
+                                warnMsg (getId token) 3048
                                     "prefixing signal names with 'SIG' is"
                             when (not isDash && upper /= str) $
-                                warnMsg (getId token)
+                                warnMsg (getId token) 3049
                                     "using lower/mixed case for signal names is"
                 in
                     mapM_ check (drop 1 rest)
@@ -370,13 +373,13 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
                 format <- rest !!! 0  -- flags are covered by allowedFlags
                 let literal = onlyLiteralString format
                 guard $ "%q" `isInfixOf` literal
-                return $ warnMsg (getId format) "printf %q is"
+                return $ warnMsg (getId format) 3050 "printf %q is"
       where
         unsupportedCommands = [
             "let", "caller", "builtin", "complete", "compgen", "declare", "dirs", "disown",
             "enable", "mapfile", "readarray", "pushd", "popd", "shopt", "suspend",
             "typeset"
-            ] ++ if not isDash then ["local"] else []
+            ]
         allowedFlags = Map.fromList [
             ("cd", Just ["L", "P"]),
             ("exec", Just []),
@@ -394,9 +397,9 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
             ("wait", Just [])
             ]
     bashism t@(T_SourceCommand id src _)
-        | getCommandName src == Just "source" = warnMsg id "'source' in place of '.' is"
+        | getCommandName src == Just "source" = warnMsg id 3051 "'source' in place of '.' is"
     bashism (TA_Expansion _ (T_Literal id str : _))
-        | str `matches` radix = warnMsg id "arithmetic base conversion is"
+        | str `matches` radix = warnMsg id 3052 "arithmetic base conversion is"
       where
         radix = mkRegex "^[0-9]+#"
     bashism _ = return ()

@@ -6,7 +6,7 @@ then
   exit 1
 fi
 
-for i in 1 2
+for i in 1 2 3
 do
   last=$(grep -hv "^prop" ./**/*.hs | grep -Ewo "${i}[0-9]{3}" | sort -n | tail -n 1)
   echo "Next ${i}xxx: $((last+1))"
