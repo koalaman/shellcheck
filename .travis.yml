@@ -29,6 +29,7 @@ jobs:
           name: ws-aarch64
           paths: deploy
     - env: BUILD=s390x
+      arch: s390x
       workspaces:
         create:
           name: ws-s390x
