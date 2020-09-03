@@ -51,6 +51,14 @@ do
   rm "shellcheck"
 done
 
+for file in *.linux-s390x
+do
+  base="${file%.*}"
+  cp "$file" "shellcheck"
+  tar -cJf "$base.linux.s390x.tar.xz" --transform="s:^:$base/:" README.txt LICENSE.txt shellcheck
+  rm "shellcheck"
+done
+
 for file in *.darwin-x86_64
 do
   base="${file%.*}"

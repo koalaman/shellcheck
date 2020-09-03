@@ -28,6 +28,11 @@ jobs:
         create:
           name: ws-aarch64
           paths: deploy
+    - env: BUILD=s390x
+      workspaces:
+        create:
+          name: ws-s390x
+          paths: deploy
     - env: BUILD=osx
       os: osx
       workspaces:
@@ -42,6 +47,7 @@ jobs:
           - ws-linux
           - ws-armv6hf
           - ws-aarch64
+          - ws-s390x
           - ws-windows
       script:
         - ls -la ${CASHER_DIR}/ || true

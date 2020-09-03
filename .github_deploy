@@ -12,9 +12,23 @@ install_deps() {
   version="2.7.0"  # 2.14.1 fails to overwrite duplicates
   case "$(uname)" in
     Linux)
+     if [[ $(uname -m) == 's390x' ]]; then
+      sudo apt-get update ;
+      sudo apt-get install -y wget tar git make ruby2.3-dev gcc groff bsdmainutils bsdmainutils locales-all golang-1.10 tmux ;
+      sudo ln -s /usr/bin/tmux ~/bin/tmux
+      gem install bundler:1.16.0
+      export GOPATH=$PWD ;
+      export LC_ALL="en_US.UTF-8"
+      export PATH=/usr/lib/go-1.10/bin:$PATH ;
+      mkdir -p $GOPATH/src/github.com/github ;
+      git clone --config transfer.fsckobjects=false --config receive.fsckobjects=false --config fetch.fsckobjects=false https://github.com/github/hub.git $GOPATH/src/github.com/github/hub ;
+      cd $GOPATH/src/github.com/github/hub && git checkout v2.7.0 ;
+      sudo env PATH=$PATH GOPATH=$GOPATH make install ;
+     else
       sudo apt-get update
       sudo apt-get install curl
       curl -L "https://github.com/github/hub/releases/download/v$version/hub-linux-amd64-$version.tgz" | tar xvz --strip-components=1 "hub-linux-amd64-$version/bin/hub"
+     fi 
       ;;
     Darwin)
       curl -L "https://github.com/github/hub/releases/download/v$version/hub-darwin-amd64-$version.tgz" | tar xvz --strip-components=1 "hub-darwin-amd64-$version/bin/hub"

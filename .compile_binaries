@@ -40,6 +40,22 @@ build_armv6hf() {
   done
 }
 
+build_s390x() {
+ # Linux s390x static executable
+ sudo apt-get update
+ sudo apt-get -y install ghc cabal-install
+ cabal update
+ cabal -j1 install --dependencies-only
+ cabal build shellcheck
+
+ path="$(find . -name 'shellcheck' -type f)"
+  [[ -e "$path" ]]
+  for tag in $TAGS
+  do 
+    cp "$path" "deploy/shellcheck-$tag.linux-s390x"; 
+  done
+ }
+  
 build_windows() {
   # Windows .exe
   docker run -v "$PWD:/appdata" koalaman/winghc cuib
