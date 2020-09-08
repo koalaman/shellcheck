@@ -180,6 +180,7 @@ prop_checkBashisms95 = verify checkBashisms "#!/bin/sh\necho $_"
 prop_checkBashisms96 = verifyNot checkBashisms "#!/bin/dash\necho $_"
 prop_checkBashisms97 = verify checkBashisms "#!/bin/sh\necho ${var,}"
 prop_checkBashisms98 = verify checkBashisms "#!/bin/sh\necho ${var^^}"
+prop_checkBashisms99 = verifyNot checkBashisms "#!/bin/dash\necho [^f]oo"
 checkBashisms = ForShell [Sh, Dash] $ \t -> do
     params <- ask
     kludge params t
@@ -234,11 +235,11 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
         where
             file = onlyLiteralString word
             isNetworked = any (`isPrefixOf` file) ["/dev/tcp", "/dev/udp"]
-    bashism (T_Glob id str) | "[^" `isInfixOf` str =
+    bashism (T_Glob id str) | not isDash && "[^" `isInfixOf` str =
             warnMsg id 3026 "^ in place of ! in glob bracket expressions is"
 
     bashism t@(TA_Variable id str _) | isBashVariable str =
-        warnMsg id 3027 $ str ++ " is"
+        warnMsg id 3028 $ str ++ " is"
 
     bashism t@(T_DollarBraced id _ token) = do
         mapM_ check expansion
@@ -247,8 +248,8 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
       where
         str = concat $ oversimplify token
         var = getBracedReference str
-        check (regex, feature) =
-            when (isJust $ matchRegex regex str) $ warnMsg id 3053 feature
+        check (regex, code, feature) =
+            when (isJust $ matchRegex regex str) $ warnMsg id code feature
 
     bashism t@(T_Pipe id "|&") =
         warnMsg id 3029 "|& in place of 2>&1 | is"
@@ -406,14 +407,14 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
 
     varChars="_0-9a-zA-Z"
     expansion = let re = mkRegex in [
-        (re $ "^![" ++ varChars ++ "]", "indirect expansion is"),
-        (re $ "^[" ++ varChars ++ "]+\\[.*\\]$", "array references are"),
-        (re $ "^![" ++ varChars ++ "]+\\[[*@]]$", "array key expansion is"),
-        (re $ "^![" ++ varChars ++ "]+[*@]$", "name matching prefixes are"),
-        (re $ "^[" ++ varChars ++ "*@]+:[^-=?+]", "string indexing is"),
-        (re $ "^([*@][%#]|#[@*])", "string operations on $@/$* are"),
-        (re $ "^[" ++ varChars ++ "*@]+(\\[.*\\])?[,^]", "case modification is"),
-        (re $ "^[" ++ varChars ++ "*@]+(\\[.*\\])?/", "string replacement is")
+        (re $ "^![" ++ varChars ++ "]", 3053, "indirect expansion is"),
+        (re $ "^[" ++ varChars ++ "]+\\[.*\\]$", 3054, "array references are"),
+        (re $ "^![" ++ varChars ++ "]+\\[[*@]]$", 3055, "array key expansion is"),
+        (re $ "^![" ++ varChars ++ "]+[*@]$", 3056, "name matching prefixes are"),
+        (re $ "^[" ++ varChars ++ "*@]+:[^-=?+]", 3057, "string indexing is"),
+        (re $ "^([*@][%#]|#[@*])", 3058, "string operations on $@/$* are"),
+        (re $ "^[" ++ varChars ++ "*@]+(\\[.*\\])?[,^]", 3059, "case modification is"),
+        (re $ "^[" ++ varChars ++ "*@]+(\\[.*\\])?/", 3060, "string replacement is")
         ]
     bashVars = [
         "OSTYPE", "MACHTYPE", "HOSTTYPE", "HOSTNAME",
