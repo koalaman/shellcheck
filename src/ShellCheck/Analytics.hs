@@ -1692,19 +1692,17 @@ checkSpuriousExec _ = doLists
 
 
 prop_checkSpuriousExpansion1 = verify checkSpuriousExpansion "if $(true); then true; fi"
-prop_checkSpuriousExpansion2 = verify checkSpuriousExpansion "while \"$(cmd)\"; do :; done"
 prop_checkSpuriousExpansion3 = verifyNot checkSpuriousExpansion "$(cmd) --flag1 --flag2"
 prop_checkSpuriousExpansion4 = verify checkSpuriousExpansion "$((i++))"
 checkSpuriousExpansion _ (T_SimpleCommand _ _ [T_NormalWord _ [word]]) = check word
   where
     check word = case word of
         T_DollarExpansion id _ ->
-            warn id 2091 "Remove surrounding $() to avoid executing output."
+            warn id 2091 "Remove surrounding $() to avoid executing output (or use eval if intentional)."
         T_Backticked id _ ->
-            warn id 2092 "Remove backticks to avoid executing output."
+            warn id 2092 "Remove backticks to avoid executing output (or use eval if intentional)."
         T_DollarArithmetic id _ ->
             err id 2084 "Remove '$' or use '_=$((expr))' to avoid executing output."
-        T_DoubleQuoted id [subword] -> check subword
         _ -> return ()
 checkSpuriousExpansion _ _ = return ()
 
