@@ -2925,8 +2925,8 @@ checkReadWithoutR _ t@T_SimpleCommand {} | t `isUnqualifiedCommand` "read"
   where
     flags = getAllFlags t
     has_t0 = Just "0" == do
-        parsed <- getOpts flagsForRead flags
-        t <- lookup "t" parsed
+        parsed <- getGnuOpts flagsForRead $ arguments t
+        (_, t) <- lookup "t" parsed
         getLiteralString t
 
 checkReadWithoutR _ _ = return ()
@@ -3383,7 +3383,7 @@ checkPipeToNowhere params t =
 
     commandSpecificException name cmd =
         case name of
-            "du" -> any (`elem` ["exclude-from", "files0-from"]) $ lt $ map snd $ getAllFlags cmd
+            "du" -> any (`elem` ["exclude-from", "files0-from"]) $ map snd $ getAllFlags cmd
             _ -> False
 
     warnAboutDupes (n, list@(_:_:_)) =

@@ -30,6 +30,8 @@ import Data.List
 import Data.Maybe
 import qualified Data.Map as Map
 
+arguments (T_SimpleCommand _ _ (cmd:args)) = args
+
 -- Is this a type of loop?
 isLoop t = case t of
         T_WhileExpression {} -> True
@@ -135,32 +137,91 @@ isUnquotedFlag token = fromMaybe False $ do
     str <- getLeadingUnquotedString token
     return $ "-" `isPrefixOf` str
 
--- getGnuOpts "erd:u:" will parse a SimpleCommand like
---     read -re -d : -u 3 bar
+-- getGnuOpts "erd:u:" will parse a list of arguments tokens like `read`
+--     -re -d : -u 3 bar
 -- into
---     Just [("r", -re), ("e", -re), ("d", :), ("u", 3), ("", bar)]
--- where flags with arguments map to arguments, while others map to themselves.
--- Any unrecognized flag will result in Nothing.
-getGnuOpts str t = getOpts str $ getAllFlags t
-getBsdOpts str t = getOpts str $ getLeadingFlags t
-getOpts :: String -> [(Token, String)] -> Maybe [(String, Token)]
-getOpts string flags = process flags
+--     Just [("r", (-re, -re)), ("e", (-re, -re)), ("d", (-d,:)), ("u", (-u,3)), ("", (bar,bar))]
+--
+-- Each string flag maps to a tuple of (flag, argument), where argument=flag if it
+-- doesn't take a specific one.
+--
+-- Any unrecognized flag will result in Nothing. The exception is if arbitraryLongOpts
+-- is set, in which case --anything will map to "anything".
+getGnuOpts :: String -> [Token] -> Maybe [(String, (Token, Token))]
+getGnuOpts str args = getOpts (True, False) str [] args
+
+-- As above, except the first non-arg string will treat the rest as arguments
+getBsdOpts :: String -> [Token] -> Maybe [(String, (Token, Token))]
+getBsdOpts str args = getOpts (False, False) str [] args
+
+-- Tests for this are in Commands.hs where it's more frequently used
+getOpts ::
+    -- Behavioral config: gnu style, allow arbitrary long options
+    (Bool, Bool)
+    -- A getopts style string
+    -> String
+    -- List of long options and whether they take arguments
+    -> [(String, Bool)]
+    -- List of arguments (excluding command)
+    -> [Token]
+    -- List of flags to tuple of (optionToken, valueToken)
+    -> Maybe [(String, (Token, Token))]
+
+getOpts (gnu, arbitraryLongOpts) string longopts args = process args
   where
     flagList (c:':':rest) = ([c], True) : flagList rest
     flagList (c:rest)     = ([c], False) : flagList rest
-    flagList []           = []
+    flagList []           = longopts
     flagMap = Map.fromList $ ("", False) : flagList string
 
     process [] = return []
-    process ((token1, flag):rest1) = do
-        takesArg <- Map.lookup flag flagMap
-        (token, rest) <- if takesArg
-            then case rest1 of
-                (token2, ""):rest2 -> return (token2, rest2)
-                _ -> fail "takesArg without valid arg"
-            else return (token1, rest1)
-        more <- process rest
-        return $ (flag, token) : more
+    process (token:rest) = do
+        case getLiteralStringDef "\0" token of
+            '-':'-':[] -> return $ listToArgs rest
+            '-':'-':word -> do
+                let (name, arg) = span (/= '=') word
+                needsArg <-
+                    if arbitraryLongOpts
+                    then return $ Map.findWithDefault False name flagMap
+                    else Map.lookup name flagMap
+
+                if needsArg && null arg
+                  then
+                    case rest of
+                        (arg:rest2) -> do
+                            more <- process rest2
+                            return $ (name, (token, arg)) : more
+                        _ -> fail "Missing arg"
+                  else do
+                    more <- process rest
+                    -- Consider splitting up token to get arg
+                    return $ (name, (token, token)) : more
+            '-':opts -> shortToOpts opts token rest
+            arg ->
+                if gnu
+                then do
+                    more <- process rest
+                    return $ ("", (token, token)):more
+                else return $ listToArgs (token:rest)
+
+    shortToOpts opts token args =
+        case opts of
+            c:rest -> do
+                needsArg <- Map.lookup [c] flagMap
+                case () of
+                    _ | needsArg && null rest -> do
+                        (next:restArgs) <- return args
+                        more <- process restArgs
+                        return $ ([c], (token, next)):more
+                    _ | needsArg -> do
+                        more <- process args
+                        return $ ([c], (token, token)):more
+                    _ -> do
+                        more <- shortToOpts rest token args
+                        return $ ([c], (token, token)):more
+            [] -> process args
+
+    listToArgs = map (\x -> ("", (x, x)))
 
 -- Is this an expansion of multiple items of an array?
 isArrayExpansion (T_DollarBraced _ _ l) =
@@ -362,8 +423,8 @@ getCommandNameAndToken direct t = fromMaybe (Nothing, t) $ do
                 "builtin" -> firstArg
                 "command" -> firstArg
                 "exec" -> do
-                    opts <- getBsdOpts "cla:" cmd
-                    (_, t) <- listToMaybe $ filter (null . fst) opts
+                    opts <- getBsdOpts "cla:" args
+                    (_, (t, _)) <- listToMaybe $ filter (null . fst) opts
                     return t
                 _ -> fail ""
 

@@ -678,13 +678,13 @@ getModifiedVariableCommand base@(T_SimpleCommand id cmdPrefix (T_NormalWord _ (T
       where
         parseArgs :: Maybe (Token, Token, String, DataType)
         parseArgs = do
-            args <- getGnuOpts "d:n:O:s:u:C:c:t" base
+            args <- getGnuOpts "d:n:O:s:u:C:c:t" rest
             let names = map snd $ filter (\(x,y) -> null x) args
             if null names
                 then
                     return (base, base, "MAPFILE", DataArray SourceExternal)
                 else do
-                    first <- listToMaybe names
+                    (_, first) <- listToMaybe names
                     name <- getLiteralString first
                     guard $ isVariableName name
                     return (base, first, name, DataArray SourceExternal)
