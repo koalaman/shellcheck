@@ -578,10 +578,14 @@ getModifiedVariableCommand base@(T_SimpleCommand id cmdPrefix (T_NormalWord _ (T
         "builtin" ->
             getModifiedVariableCommand $ T_SimpleCommand id cmdPrefix rest
         "read" ->
-            let params = map getLiteral rest
-                readArrayVars = getReadArrayVariables rest
-            in
-                catMaybes $ takeWhile isJust (reverse params) ++ readArrayVars
+            let fallback = catMaybes $ takeWhile isJust (reverse $ map getLiteral rest)
+            in fromMaybe fallback $ do
+                parsed <- getGnuOpts flagsForRead rest
+                case lookup "a" parsed of
+                    Just (_, var) -> (:[]) <$> getLiteralArray var
+                    Nothing -> return $ catMaybes $
+                        map (getLiteral . snd . snd) $ filter (null . fst) parsed
+
         "getopts" ->
             case rest of
                 opts:var:_ -> maybeToList $ getLiteral var
@@ -697,16 +701,6 @@ getModifiedVariableCommand base@(T_SimpleCommand id cmdPrefix (T_NormalWord _ (T
             name <- getLiteralString arg
             guard $ isVariableName name
             return (name, arg)
-
-    -- get all the array variables used in read, e.g. read -a arr
-    getReadArrayVariables args =
-        map (getLiteralArray . snd)
-            (filter (isArrayFlag . fst) (zip args (tail args)))
-
-    isArrayFlag x = case getLiteralString x of
-                       Just ('-':'-':_) -> False
-                       Just ('-':str) -> 'a' `elem` str
-                       _ -> False
 
     -- get the FLAGS_ variable created by a shflags DEFINE_ call
     getFlagVariable (n:v:_) = do

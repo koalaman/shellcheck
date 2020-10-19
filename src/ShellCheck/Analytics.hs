@@ -851,7 +851,8 @@ prop_checkArrayWithoutIndex6 = verifyTree checkArrayWithoutIndex "echo $PIPESTAT
 prop_checkArrayWithoutIndex7 = verifyTree checkArrayWithoutIndex "a=(a b); a+=c"
 prop_checkArrayWithoutIndex8 = verifyTree checkArrayWithoutIndex "declare -a foo; foo=bar;"
 prop_checkArrayWithoutIndex9 = verifyTree checkArrayWithoutIndex "read -r -a arr <<< 'foo bar'; echo \"$arr\""
-prop_checkArrayWithoutIndex10= verifyTree checkArrayWithoutIndex "read -ra arr <<< 'foo bar'; echo \"$arr\""
+prop_checkArrayWithoutIndex10 = verifyTree checkArrayWithoutIndex "read -ra arr <<< 'foo bar'; echo \"$arr\""
+prop_checkArrayWithoutIndex11 = verifyNotTree checkArrayWithoutIndex "read -rpfoobar r; r=42"
 checkArrayWithoutIndex params _ =
     doVariableFlowAnalysis readF writeF defaultMap (variableFlow params)
   where
