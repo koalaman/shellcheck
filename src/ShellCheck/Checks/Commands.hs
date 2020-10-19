@@ -94,6 +94,7 @@ commandChecks = [
     ,checkSudoArgs
     ,checkSourceArgs
     ,checkChmodDashr
+    ,checkXargsDashi
     ]
 
 optionalChecks = map fst optionalCommandChecks
@@ -1128,6 +1129,19 @@ checkChmodDashr = CommandCheck (Basename "chmod") f
         flag <- getLiteralString t
         guard $ flag == "-r"
         return $ warn (getId t) 2253 "Use -R to recurse, or explicitly a-r to remove read permissions."
+
+prop_checkXargsDashi1 = verify checkXargsDashi "xargs -i{} echo {}"
+prop_checkXargsDashi2 = verifyNot checkXargsDashi "xargs -I{} echo {}"
+prop_checkXargsDashi3 = verifyNot checkXargsDashi "xargs sed -i -e foo"
+prop_checkXargsDashi4 = verify checkXargsDashi "xargs -e sed -i foo"
+prop_checkXargsDashi5 = verifyNot checkXargsDashi "xargs -x sed -i foo"
+checkXargsDashi = CommandCheck (Basename "xargs") f
+  where
+    f t = sequence_ $ do
+        opts <- parseOpts $ arguments t
+        (option, value) <- lookup "i" opts
+        return $ info (getId option) 2267 "GNU xargs -i is deprecated in favor of -I{}"
+    parseOpts = getBsdOpts "0oprtxadR:S:J:L:l:n:P:s:e:E:i:I:"
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
