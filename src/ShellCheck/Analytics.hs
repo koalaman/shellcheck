@@ -240,6 +240,13 @@ optionalTreeChecks = [
         cdPositive = "echo $VAR",
         cdNegative = "VAR=hello; echo $VAR"
     }, checkUnassignedReferences' True)
+
+    ,(newCheckDescription {
+        cdName = "avoid-x-comparisons",
+        cdDescription = "Warn about 'x'-prefix in comparisons",
+        cdPositive = "[ \"x$var\" = xval ]",
+        cdNegative = "[ \"$var\" = val ]"
+    }, nodeChecksToTreeCheck [checkComparisonWithLeadingX])
     ]
 
 optionalCheckMap :: Map.Map String (Parameters -> Token -> [TokenComment])
@@ -3926,6 +3933,41 @@ checkBadTestAndOr params t =
             T_Annotation _ _ t -> isTest t
             _ -> False
 
+prop_checkComparisonWithLeadingX1 = verify checkComparisonWithLeadingX "[ x$foo = xlol ]"
+prop_checkComparisonWithLeadingX2 = verify checkComparisonWithLeadingX "test x$foo = xlol"
+prop_checkComparisonWithLeadingX3 = verifyNot checkComparisonWithLeadingX "[ $foo = xbar ]"
+prop_checkComparisonWithLeadingX4 = verifyNot checkComparisonWithLeadingX "test $foo = xbar"
+prop_checkComparisonWithLeadingX5 = verify checkComparisonWithLeadingX "[ \"x$foo\" = 'xlol' ]"
+prop_checkComparisonWithLeadingX6 = verify checkComparisonWithLeadingX "[ x\"$foo\" = x'lol' ]"
+checkComparisonWithLeadingX params t =
+    case t of
+        TC_Binary id typ op lhs rhs | op == "=" || op == "==" ->
+            check lhs rhs
+        T_SimpleCommand _ _ [cmd, lhs, op, rhs] |
+            getLiteralString cmd == Just "test" &&
+                getLiteralString op `elem` [Just "=", Just "=="] ->
+                    check lhs rhs
+        _ -> return ()
+  where
+    msg = "Avoid outdated x-prefix in comparisons as it no longer serves a purpose."
+    check lhs rhs = sequence_ $ do
+        l <- fixLeadingX lhs
+        r <- fixLeadingX rhs
+        return $ styleWithFix (getId lhs) 2268 msg $ fixWith [l, r]
+
+    fixLeadingX token =
+         case getWordParts token of
+            T_Literal id ('x':_):_ ->
+                case token of
+                    -- The side is a single, unquoted x, so we have to quote
+                    T_NormalWord _ [T_Literal id "x"] ->
+                        return $ replaceStart id params 1 "\"\""
+                    -- Otherwise we can just delete it
+                    _ -> return $ replaceStart id params 1 ""
+            T_SingleQuoted id ('x':_):_ ->
+                -- Replace the single quote and x
+                return $ replaceStart id params 2 "'"
+            _ -> Nothing
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
