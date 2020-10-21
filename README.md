@@ -111,6 +111,7 @@ Services and platforms that have ShellCheck pre-installed and ready to use:
 * [Code Factor](https://www.codefactor.io/)
 * [CircleCI](https://circleci.com) via the [ShellCheck Orb](https://circleci.com/orbs/registry/orb/circleci/shellcheck)
 * [Github](https://github.com/features/actions) (only Linux)
+* [Mega-Linter](https://github.com/nvuillam/mega-linter)
 
 Services and platforms with third party plugins:
 
