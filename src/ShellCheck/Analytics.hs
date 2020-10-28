@@ -2361,6 +2361,7 @@ prop_checkWhileReadPitfalls11 = verifyNot checkWhileReadPitfalls "while read foo
 prop_checkWhileReadPitfalls12 = verifyNot checkWhileReadPitfalls "while read foo\ndo\nmplayer foo.ogv << EOF\nq\nEOF\ndone"
 prop_checkWhileReadPitfalls13 = verify checkWhileReadPitfalls "while read foo; do x=$(ssh host cmd); done"
 prop_checkWhileReadPitfalls14 = verify checkWhileReadPitfalls "while read foo; do echo $(ssh host cmd) < /dev/null; done"
+prop_checkWhileReadPitfalls15 = verify checkWhileReadPitfalls "while read foo; do ssh $foo cmd & done"
 
 checkWhileReadPitfalls params (T_WhileExpression id [command] contents)
         | isStdinReadCommand command =
@@ -2411,6 +2412,7 @@ checkWhileReadPitfalls params (T_WhileExpression id [command] contents)
                     warnWithFix (getId cmd) 2095
                         ("Use " ++ name ++ " " ++ flag ++ " to prevent " ++ name ++ " from swallowing stdin.")
                         (fix flag cmd)
+    checkMuncher (T_Backgrounded _ t) = checkMuncher t
     checkMuncher _ = return ()
 
     stdinRedirect (T_FdRedirect _ fd op)
