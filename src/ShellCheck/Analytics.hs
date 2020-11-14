@@ -2902,11 +2902,14 @@ checkTestArgumentSplitting params t =
 prop_checkMaskedReturns1 = verify checkMaskedReturns "f() { local a=$(false); }"
 prop_checkMaskedReturns2 = verify checkMaskedReturns "declare a=$(false)"
 prop_checkMaskedReturns3 = verify checkMaskedReturns "declare a=\"`false`\""
-prop_checkMaskedReturns4 = verifyNot checkMaskedReturns "declare a; a=$(false)"
-prop_checkMaskedReturns5 = verifyNot checkMaskedReturns "f() { local -r a=$(false); }"
+prop_checkMaskedReturns4 = verify checkMaskedReturns "readonly a=$(false)"
+prop_checkMaskedReturns5 = verify checkMaskedReturns "readonly a=\"`false`\""
+prop_checkMaskedReturns6 = verifyNot checkMaskedReturns "declare a; a=$(false)"
+prop_checkMaskedReturns7 = verifyNot checkMaskedReturns "f() { local -r a=$(false); }"
+prop_checkMaskedReturns8 = verifyNot checkMaskedReturns "a=$(false); readonly a"
 checkMaskedReturns _ t@(T_SimpleCommand id _ (cmd:rest)) = sequence_ $ do
     name <- getCommandName t
-    guard $ name `elem` ["declare", "export"]
+    guard $ name `elem` ["declare", "export", "readonly"]
         || name == "local" && "r" `notElem` map snd (getAllFlags t)
     return $ mapM_ checkArgs rest
   where
