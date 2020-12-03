@@ -417,9 +417,15 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
         (re $ "^[" ++ varChars ++ "*@]+(\\[.*\\])?/", 3060, "string replacement is")
         ]
     bashVars = [
+        -- This list deliberately excludes $BASH_VERSION as it's often used
+        -- for shell identification.
         "OSTYPE", "MACHTYPE", "HOSTTYPE", "HOSTNAME",
         "DIRSTACK", "EUID", "UID", "SHLVL", "PIPESTATUS", "SHELLOPTS",
-        "_"
+        "_", "BASHOPTS", "BASHPID", "BASH_ALIASES", "BASH_ARGC",
+        "BASH_ARGV", "BASH_ARGV0", "BASH_CMDS", "BASH_COMMAND",
+        "BASH_EXECUTION_STRING", "BASH_LINENO", "BASH_REMATCH", "BASH_SOURCE",
+        "BASH_SUBSHELL", "BASH_VERSINFO", "EPOCHREALTIME", "EPOCHSECONDS",
+        "FUNCNAME", "GROUPS", "MACHTYPE", "MAPFILE"
         ]
     bashDynamicVars = [ "RANDOM", "SECONDS" ]
     dashVars = [ "_" ]
