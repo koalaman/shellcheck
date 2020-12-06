@@ -27,35 +27,14 @@ do
   zip "${file%.*}.zip" README.txt LICENSE.txt "$file"
 done
 
-for file in *.linux-x86_64
+for file in *.{linux,darwin}-*
 do
   base="${file%.*}"
+  ext="${file##*.}"
+  os="${ext%-*}"
+  arch="${ext##*-}"
   cp "$file" "shellcheck"
-  tar -cJf "$base.linux.x86_64.tar.xz" --transform="s:^:$base/:" README.txt LICENSE.txt shellcheck
-  rm "shellcheck"
-done
-
-for file in *.linux-aarch64
-do
-  base="${file%.*}"
-  cp "$file" "shellcheck"
-  tar -cJf "$base.linux.aarch64.tar.xz" --transform="s:^:$base/:" README.txt LICENSE.txt shellcheck
-  rm "shellcheck"
-done
-
-for file in *.linux-armv6hf
-do
-  base="${file%.*}"
-  cp "$file" "shellcheck"
-  tar -cJf "$base.linux.armv6hf.tar.xz" --transform="s:^:$base/:" README.txt LICENSE.txt shellcheck
-  rm "shellcheck"
-done
-
-for file in *.darwin-x86_64
-do
-  base="${file%.*}"
-  cp "$file" "shellcheck"
-  tar -cJf "$base.darwin.x86_64.tar.xz" --transform="s:^:$base/:" README.txt LICENSE.txt shellcheck
+  tar -cJf "$base.$os.$arch.tar.xz" --transform="s:^:$base/:" README.txt LICENSE.txt shellcheck
   rm "shellcheck"
 done
 
