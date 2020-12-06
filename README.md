@@ -172,6 +172,10 @@ On macOS (OS X) with Homebrew:
 
     brew install shellcheck
 
+Or with MacPorts:
+
+    sudo port install shellcheck
+
 On OpenBSD:
 
     pkg_add shellcheck
