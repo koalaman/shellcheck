@@ -12,6 +12,7 @@
 ### Fixed
 - SC1072/SC1073 now respond to disable annotations, though ignoring parse errors
   is still purely cosmetic and does not allow ShellCheck to continue.
+- Improved error reporting for trailing tokens after ]/]] and compound commands
 
 ### Changed
 - Assignments are now parsed to spec, without leniency for leading $ or spaces

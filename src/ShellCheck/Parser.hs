@@ -392,6 +392,8 @@ unexpecting s p = try $
 
 notFollowedBy2 = unexpecting ""
 
+isFollowedBy p = (lookAhead . try $ p *> return True) <|> return False
+
 reluctantlyTill p end =
     (lookAhead (void (try end) <|> eof) >> return []) <|> do
         x <- p
@@ -923,8 +925,9 @@ prop_readCondition20 = isOk readCondition "[[ echo_rc -eq 0 ]]"
 prop_readCondition21 = isOk readCondition "[[ $1 =~ ^(a\\ b)$ ]]"
 prop_readCondition22 = isOk readCondition "[[ $1 =~ \\.a\\.(\\.b\\.)\\.c\\. ]]"
 prop_readCondition23 = isOk readCondition "[[ -v arr[$var] ]]"
-prop_readCondition24 = isWarning readCondition "[[ 1 == 2 ]]]"
 prop_readCondition25 = isOk readCondition "[[ lex.yy.c -ot program.l ]]"
+prop_readCondition26 = isOk readScript "[[ foo ]]\\\n && bar"
+prop_readCondition27 = not $ isOk readConditionCommand "[[ x ]] foo"
 readCondition = called "test expression" $ do
     opos <- getPosition
     start <- startSpan
@@ -953,13 +956,7 @@ readCondition = called "test expression" $ do
     id <- endSpan start
     when (open == "[[" && close /= "]]") $ parseProblemAt cpos ErrorC 1033 "Test expression was opened with double [[ but closed with single ]. Make sure they match."
     when (open == "[" && close /= "]" ) $ parseProblemAt opos ErrorC 1034 "Test expression was opened with single [ but closed with double ]]. Make sure they match."
-    optional $ lookAhead $ do
-        pos <- getPosition
-        notFollowedBy2 readCmdWord <|>
-            parseProblemAt pos ErrorC 1136
-                ("Unexpected characters after terminating " ++ close ++ ". Missing semicolon/linefeed?")
     spacing
-    many readCmdWord -- Read and throw away remainders to get then/do warnings. Fixme?
     return $ T_Condition id typ condition
 
 readAnnotationPrefix = do
@@ -1617,6 +1614,7 @@ readArithmeticExpression = called "((..)) command" $ do
     c <- readArithmeticContents
     string "))"
     id <- endSpan start
+    spacing
     return (T_Arithmetic id c)
 
 -- If the next characters match prefix, try two different parsers and warn if the alternate parser had to be used
@@ -1969,8 +1967,6 @@ readIoRedirect = do
     spacing
     return $ T_FdRedirect id n redir
 
-readRedirectList = many1 readIoRedirect
-
 prop_readHereString = isOk readHereString "<<< \"Hello $world\""
 readHereString = called "here string" $ do
     start <- startSpan
@@ -2300,6 +2296,7 @@ readPipe = do
 
 readCommand = choice [
     readCompoundCommand,
+    readConditionCommand,
     readCoProc,
     readSimpleCommand
     ]
@@ -2412,6 +2409,7 @@ readSubshell = called "explicit subshell" $ do
     allspacing
     char ')' <|> fail "Expected ) closing the subshell"
     id <- endSpan start
+    spacing
     return $ T_Subshell id list
 
 prop_readBraceGroup = isOk readBraceGroup "{ a; b | c | d; e; }"
@@ -2432,6 +2430,7 @@ readBraceGroup = called "brace group" $ do
         parseProblem ErrorC 1056 "Expected a '}'. If you have one, try a ; or \\n in front of it."
         fail "Missing '}'"
     id <- endSpan start
+    spacing
     return $ T_BraceGroup id list
 
 prop_readBatsTest = isOk readBatsTest "@test 'can parse' {\n  true\n}"
@@ -2484,6 +2483,11 @@ readDoGroup kwId = do
             parseProblemAtId (getId doKw) ErrorC 1061 "Couldn't find 'done' for this 'do'."
             parseProblem ErrorC 1062 "Expected 'done' matching previously mentioned 'do'."
             return "Expected 'done'"
+
+    optional . lookAhead $ do
+        pos <- getPosition
+        try $ string "<("
+        parseProblemAt pos ErrorC 1142 "Use 'done < <(cmd)' to redirect from process substitution (currently missing one '<')."
     return commands
 
 
@@ -2701,8 +2705,37 @@ readCoProc = called "coproc" $ do
         id <- endSpan start
         return $ T_CoProcBody id body
 
-
 readPattern = (readPatternWord `thenSkip` spacing) `sepBy1` (char '|' `thenSkip` spacing)
+
+prop_readConditionCommand = isOk readConditionCommand "[[ x ]] > foo 2>&1"
+readConditionCommand = do
+    cmd <- readCondition
+    redirs <- many readIoRedirect
+    id <- getNextIdSpanningTokenList (cmd:redirs)
+
+    pos <- getPosition
+    hasDashAo <- isFollowedBy $ do
+        c <- choice $ map (\s -> try $ string s) ["-o", "-a", "or", "and"]
+        posEnd <- getPosition
+        parseProblemAtWithEnd pos posEnd ErrorC 1139 $
+            "Use " ++ alt c ++ " instead of '" ++ c ++ "' between test commands."
+
+    -- If the next word is a keyword, readNormalWord will trigger a warning
+    hasKeyword <- isFollowedBy readKeyword
+    hasWord <- isFollowedBy readNormalWord
+
+    when (hasWord && not (hasKeyword || hasDashAo)) $ do
+        -- We have other words following, and no error has been emitted.
+        posEnd <- getPosition
+        parseProblemAtWithEnd pos posEnd ErrorC 1140 "Unexpected parameters after condition. Missing &&/||, or bad expression?"
+
+    return $ T_Redirecting id redirs cmd
+  where
+    alt "or" = "||"
+    alt "-o" = "||"
+    alt "and" = "&&"
+    alt "-a" = "&&"
+    alt _ = "|| or &&"
 
 prop_readCompoundCommand = isOk readCompoundCommand "{ echo foo; }>/dev/null"
 readCompoundCommand = do
@@ -2711,7 +2744,6 @@ readCompoundCommand = do
         readAmbiguous "((" readArithmeticExpression readSubshell (\pos ->
             parseNoteAt pos ErrorC 1105 "Shells disambiguate (( differently or not at all. For subshell, add spaces around ( . For ((, fix parsing errors."),
         readSubshell,
-        readCondition,
         readWhileClause,
         readUntilClause,
         readIfClause,
@@ -2721,15 +2753,15 @@ readCompoundCommand = do
         readBatsTest,
         readFunctionDefinition
         ]
-    spacing
     redirs <- many readIoRedirect
     id <- getNextIdSpanningTokenList (cmd:redirs)
-    unless (null redirs) $ optional $ do
-        lookAhead $ try (spacing >> needsSeparator)
-        parseProblem WarningC 1013 "Bash requires ; or \\n here, after redirecting nested compound commands."
+    optional . lookAhead $ do
+        notFollowedBy2 $ choice [readKeyword, g_Lbrace]
+        pos <- getPosition
+        many1 readNormalWord
+        posEnd <- getPosition
+        parseProblemAtWithEnd pos posEnd ErrorC 1141 "Unexpected tokens after compound command. Bad redirection or missing ;/&&/||/|?"
     return $ T_Redirecting id redirs cmd
-  where
-    needsSeparator = choice [ g_Then, g_Else, g_Elif, g_Fi, g_Do, g_Done, g_Esac, g_Rbrace ]
 
 
 readCompoundList = readTerm
