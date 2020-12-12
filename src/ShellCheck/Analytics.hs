@@ -193,6 +193,7 @@ nodeChecks = [
     ,checkModifiedArithmeticInRedirection
     ,checkBlatantRecursion
     ,checkBadTestAndOr
+    ,checkAssignToSelf
     ]
 
 optionalChecks = map fst optionalTreeChecks
@@ -3973,6 +3974,27 @@ checkComparisonWithLeadingX params t =
                 -- Replace the single quote and x
                 return $ replaceStart id params 2 "'"
             _ -> Nothing
+
+prop_checkAssignToSelf1 = verify checkAssignToSelf "x=$x"
+prop_checkAssignToSelf2 = verify checkAssignToSelf "x=${x}"
+prop_checkAssignToSelf3 = verify checkAssignToSelf "x=\"$x\""
+prop_checkAssignToSelf4 = verifyNot checkAssignToSelf "x=$x mycmd"
+checkAssignToSelf _ t =
+    case t of
+        T_SimpleCommand _ vars [] -> mapM_ check vars
+        _ -> return ()
+  where
+    check t =
+        case t of
+            T_Assignment id Assign name [] t ->
+                case getWordParts t of
+                    [T_DollarBraced _ _ b] -> do
+                        when (Just name == getLiteralString b) $
+                            msg id
+                    _ -> return ()
+            _ -> return ()
+    msg id = info id 2269 "This variable is assigned to itself, so the assignment does nothing."
+
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
