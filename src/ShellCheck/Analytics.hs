@@ -546,9 +546,14 @@ indexOfSublists sub = f 0
 
 prop_checkShebangParameters1 = verifyTree checkShebangParameters "#!/usr/bin/env bash -x\necho cow"
 prop_checkShebangParameters2 = verifyNotTree checkShebangParameters "#! /bin/sh  -l "
+prop_checkShebangParameters3 = verifyNotTree checkShebangParameters "#!/usr/bin/env -S bash -x\necho cow"
+prop_checkShebangParameters4 = verifyNotTree checkShebangParameters "#!/usr/bin/env --split-string bash -x\necho cow"
 checkShebangParameters p (T_Annotation _ _ t) = checkShebangParameters p t
 checkShebangParameters _ (T_Script _ (T_Literal id sb) _) =
-    [makeComment ErrorC id 2096 "On most OS, shebangs can only specify a single parameter." | length (words sb) > 2]
+    [makeComment ErrorC id 2096 "On most OS, shebangs can only specify a single parameter." | isMultiWord]
+  where
+    isMultiWord = length (words sb) > 2 && not (sb `matches` re)
+    re = mkRegex "env +(-S|--split-string)"
 
 prop_checkShebang1 = verifyNotTree checkShebang "#!/usr/bin/env bash -x\necho cow"
 prop_checkShebang2 = verifyNotTree checkShebang "#! /bin/sh  -l "

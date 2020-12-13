@@ -238,6 +238,8 @@ prop_determineShell5 = determineShellTest "#shellcheck shell=sh\nfoo" == Sh
 prop_determineShell6 = determineShellTest "#! /bin/sh" == Sh
 prop_determineShell7 = determineShellTest "#! /bin/ash" == Dash
 prop_determineShell8 = determineShellTest' (Just Ksh) "#!/bin/sh" == Sh
+prop_determineShell9 = determineShellTest "#!/bin/env -S dash -x" == Dash
+prop_determineShell10 = determineShellTest "#!/bin/env --split-string= dash -x" == Dash
 
 determineShellTest = determineShellTest' Nothing
 determineShellTest' fallbackShell = determineShell fallbackShell . fromJust . prRoot . pScript
@@ -256,10 +258,12 @@ determineShell fallbackShell t = fromMaybe Bash $
 executableFromShebang :: String -> String
 executableFromShebang = shellFor
   where
-    shellFor s | "/env " `isInfixOf` s = headOrDefault "" (drop 1 $ words s)
+    shellFor s | "/env " `isInfixOf` s = fromMaybe "" $ do
+        [flag, shell] <- matchRegex re s
+        return shell
     shellFor s | ' ' `elem` s = shellFor $ takeWhile (/= ' ') s
     shellFor s = reverse . takeWhile (/= '/') . reverse $ s
-
+    re = mkRegex "/env +(-S|--split-string=?)? *([^ ]*)"
 
 
 -- Given a root node, make a map from Id to parent Token.
