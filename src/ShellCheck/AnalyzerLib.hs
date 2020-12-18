@@ -370,8 +370,8 @@ usedAsCommandName tree token = go (getId token) (tail $ getPath tree token)
         | currentId == getId word = go id rest
     go currentId (T_DoubleQuoted id [word]:rest)
         | currentId == getId word = go id rest
-    go currentId (T_SimpleCommand _ _ (word:_):_)
-        | currentId == getId word = True
+    go currentId (t@(T_SimpleCommand _ _ (word:_)):_) =
+        getId word == currentId || getId (getCommandTokenOrThis t) == currentId
     go _ _ = False
 
 -- A list of the element and all its parents up to the root node.

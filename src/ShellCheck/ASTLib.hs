@@ -422,6 +422,7 @@ getCommandNameAndToken direct t = fromMaybe (Nothing, t) $ do
                 "busybox" -> firstArg
                 "builtin" -> firstArg
                 "command" -> firstArg
+                "run" -> firstArg -- Used by bats
                 "exec" -> do
                     opts <- getBsdOpts "cla:" args
                     (_, (t, _)) <- listToMaybe $ filter (null . fst) opts

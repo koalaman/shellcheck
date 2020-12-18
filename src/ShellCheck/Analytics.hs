@@ -1853,6 +1853,8 @@ prop_checkSpacefulness37v = verifyTree checkVerboseSpacefulness "@test 'status' 
 prop_checkSpacefulness38= verifyTree checkSpacefulness "a=; echo $a"
 prop_checkSpacefulness39= verifyNotTree checkSpacefulness "a=''\"\"''; b=x$a; echo $b"
 prop_checkSpacefulness40= verifyNotTree checkSpacefulness "a=$((x+1)); echo $a"
+prop_checkSpacefulness41= verifyNotTree checkSpacefulness "exec $1 --flags"
+prop_checkSpacefulness42= verifyNotTree checkSpacefulness "run $1 --flags"
 
 data SpaceStatus = SpaceSome | SpaceNone | SpaceEmpty deriving (Eq)
 instance Semigroup SpaceStatus where
