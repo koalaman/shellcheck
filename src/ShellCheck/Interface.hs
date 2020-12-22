@@ -73,15 +73,15 @@ import qualified Data.Map as Map
 
 
 data SystemInterface m = SystemInterface {
-    -- Read a file by filename, or return an error
+    -- | Read a file by filename, or return an error
     siReadFile :: String -> m (Either ErrorMessage String),
-    -- Given:
+    -- | Given:
     --   the current script,
     --   a list of source-path annotations in effect,
     --   and a sourced file,
     --   find the sourced file
     siFindSource :: String -> [String] -> String -> m FilePath,
-    -- Get the configuration file (name, contents) for a filename
+    -- | Get the configuration file (name, contents) for a filename
     siGetConfig :: String -> m (Maybe (FilePath, String))
 }
 
