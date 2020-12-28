@@ -3858,13 +3858,13 @@ groupByLink :: (a -> a -> Bool) -> [a] -> [[a]]
 groupByLink f list =
     case list of
         [] -> []
-        (x:xs) -> g x [] xs
+        (x:xs) -> foldr c n xs x []
   where
-    g current span (next:rest) =
+    c next rest current span =
         if f current next
-        then g next (current:span) rest
-        else (reverse $ current:span) : g next [] rest
-    g current span [] = [reverse (current:span)]
+        then rest next (current:span)
+        else (reverse $ current:span) : rest next []
+    n current span = [reverse (current:span)]
 
 
 prop_checkBlatantRecursion1 = verify checkBlatantRecursion ":(){ :|:& };:"
