@@ -209,8 +209,7 @@ startSpan = IncompleteInterval <$> getPosition
 
 endSpan (IncompleteInterval start) = do
     endPos <- getPosition
-    id <- getNextIdBetween start endPos
-    return id
+    getNextIdBetween start endPos
 
 getSpanPositionsFor m = do
     start <- getPosition
