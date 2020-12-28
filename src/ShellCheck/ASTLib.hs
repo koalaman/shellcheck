@@ -425,7 +425,7 @@ getCommandNameAndToken direct t = fromMaybe (Nothing, t) $ do
                 "run" -> firstArg -- Used by bats
                 "exec" -> do
                     opts <- getBsdOpts "cla:" args
-                    (_, (t, _)) <- listToMaybe $ filter (null . fst) opts
+                    (_, (t, _)) <- find (null . fst) opts
                     return t
                 _ -> fail ""
 
