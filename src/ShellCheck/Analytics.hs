@@ -3808,7 +3808,7 @@ checkAliasUsedInSameParsingUnit params root =
         -- Group them by whether they start on the same line where the previous one ended
         units = groupByLink followsOnLine commands
     in
-        execWriter $ sequence_ $ map checkUnit units
+        execWriter $ mapM_ checkUnit units
   where
     lineSpan t =
         let m = tokenPositions params in do
