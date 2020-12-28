@@ -270,7 +270,7 @@ executableFromShebang = shellFor
 -- This is used to populate parentMap in Parameters
 getParentTree :: Token -> Map.Map Id Token
 getParentTree t =
-    snd . snd $ runState (doStackAnalysis pre post t) ([], Map.empty)
+    snd $ execState (doStackAnalysis pre post t) ([], Map.empty)
   where
     pre t = modify (first ((:) t))
     post t = do
