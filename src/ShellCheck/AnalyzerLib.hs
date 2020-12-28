@@ -258,9 +258,9 @@ determineShell fallbackShell t = fromMaybe Bash $
 executableFromShebang :: String -> String
 executableFromShebang = shellFor
   where
-    shellFor s | "/env " `isInfixOf` s = fromMaybe "" $ do
-        [flag, shell] <- matchRegex re s
-        return shell
+    shellFor s | "/env " `isInfixOf` s = case matchRegex re s of
+        Just [flag, shell] -> shell
+        _ -> ""
     shellFor s | ' ' `elem` s = shellFor $ takeWhile (/= ' ') s
     shellFor s = reverse . takeWhile (/= '/') . reverse $ s
     re = mkRegex "/env +(-S|--split-string=?)? *([^ ]*)"
