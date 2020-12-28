@@ -2481,7 +2481,7 @@ checkCharRangeGlob p t@(T_Glob id str) |
   where
     isCharClass str = "[" `isPrefixOf` str && "]" `isSuffixOf` str
     contents = dropNegation . drop 1 . take (length str - 1) $ str
-    hasDupes = any (>1) . map length . group . sort . filter (/= '-') $ contents
+    hasDupes = any ((>1) . length) . group . sort . filter (/= '-') $ contents
     dropNegation s =
         case s of
             '!':rest -> rest
@@ -3404,7 +3404,7 @@ checkPipeToNowhere params t =
 
     commandSpecificException name cmd =
         case name of
-            "du" -> any (`elem` ["exclude-from", "files0-from"]) $ map snd $ getAllFlags cmd
+            "du" -> any ((`elem` ["exclude-from", "files0-from"]) . snd) $ getAllFlags cmd
             _ -> False
 
     warnAboutDupes (n, list@(_:_:_)) =
