@@ -392,7 +392,7 @@ unexpecting s p = try $
 
 notFollowedBy2 = unexpecting ""
 
-isFollowedBy p = (lookAhead . try $ p *> return True) <|> return False
+isFollowedBy p = (lookAhead . try $ p $> True) <|> return False
 
 reluctantlyTill p end =
     (lookAhead (void (try end) <|> eof) >> return []) <|> do
@@ -2715,7 +2715,7 @@ readConditionCommand = do
 
     pos <- getPosition
     hasDashAo <- isFollowedBy $ do
-        c <- choice $ map (\s -> try $ string s) ["-o", "-a", "or", "and"]
+        c <- choice $ try . string <$> ["-o", "-a", "or", "and"]
         posEnd <- getPosition
         parseProblemAtWithEnd pos posEnd ErrorC 1139 $
             "Use " ++ alt c ++ " instead of '" ++ c ++ "' between test commands."
