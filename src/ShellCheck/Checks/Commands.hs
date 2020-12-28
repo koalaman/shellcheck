@@ -951,7 +951,7 @@ checkCatastrophicRm = CommandCheck (Basename "rm") $ \t ->
     when (isRecursive t) $
         mapM_ (mapM_ checkWord . braceExpand) $ arguments t
   where
-    isRecursive = any (`elem` ["r", "R", "recursive"]) . map snd . getAllFlags
+    isRecursive = any ((`elem` ["r", "R", "recursive"]) . snd) . getAllFlags
 
     checkWord token =
         case getLiteralString token of
