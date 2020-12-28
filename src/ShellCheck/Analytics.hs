@@ -394,7 +394,7 @@ prop_checkAssignAteCommand4 = verifyNot checkAssignAteCommand "A=foo ls -l"
 prop_checkAssignAteCommand5 = verify checkAssignAteCommand "PAGER=cat grep bar"
 prop_checkAssignAteCommand6 = verifyNot checkAssignAteCommand "PAGER=\"cat\" grep bar"
 prop_checkAssignAteCommand7 = verify checkAssignAteCommand "here=pwd"
-checkAssignAteCommand _ (T_SimpleCommand id (T_Assignment _ _ _ _ assignmentTerm:[]) list) =
+checkAssignAteCommand _ (T_SimpleCommand id [T_Assignment _ _ _ _ assignmentTerm] list) =
     -- Check if first word is intended as an argument (flag or glob).
     if firstWordIsArg list
     then
@@ -426,7 +426,7 @@ checkArithmeticOpCommand _ _ = return ()
 
 prop_checkWrongArit = verify checkWrongArithmeticAssignment "i=i+1"
 prop_checkWrongArit2 = verify checkWrongArithmeticAssignment "n=2; i=n*2"
-checkWrongArithmeticAssignment params (T_SimpleCommand id (T_Assignment _ _ _ _ val:[]) []) =
+checkWrongArithmeticAssignment params (T_SimpleCommand id [T_Assignment _ _ _ _ val] []) =
   sequence_ $ do
     str <- getNormalString val
     match <- matchRegex regex str
@@ -2844,7 +2844,7 @@ checkTestArgumentSplitting params t =
                 then
                     -- Ksh appears to stop processing after unrecognized tokens, so operators
                     -- will effectively work with globs, but only the first match.
-                    when (op `elem` ['-':c:[] | c <- "bcdfgkprsuwxLhNOGRS" ]) $
+                    when (op `elem` [['-', c] | c <- "bcdfgkprsuwxLhNOGRS" ]) $
                         warn (getId token) 2245 $
                             op ++ " only applies to the first expansion of this glob. Use a loop to check any/all."
                 else

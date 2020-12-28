@@ -177,7 +177,7 @@ getOpts (gnu, arbitraryLongOpts) string longopts args = process args
     process [] = return []
     process (token:rest) = do
         case getLiteralStringDef "\0" token of
-            '-':'-':[] -> return $ listToArgs rest
+            "--" -> return $ listToArgs rest
             '-':'-':word -> do
                 let (name, arg) = span (/= '=') word
                 needsArg <-

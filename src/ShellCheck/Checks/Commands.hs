@@ -916,7 +916,7 @@ checkWhileGetoptsCase = CommandCheck (Exactly "getopts") f
 
     fromGlob t =
         case t of
-            T_Glob _ ('[':c:']':[]) -> return [c]
+            T_Glob _ ['[', c, ']'] -> return [c]
             T_Glob _ "*" -> return "*"
             T_Glob _ "?" -> return "?"
             _ -> Nothing
