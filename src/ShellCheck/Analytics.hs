@@ -3371,7 +3371,7 @@ checkPipeToNowhere params t =
 
         sequence_ $ do
             T_Redirecting _ redirs cmd <- return stage
-            fds <- sequence $ map getRedirectionFds redirs
+            fds <- mapM getRedirectionFds redirs
 
             let fdAndToken :: [(Integer, Token)]
                 fdAndToken =
