@@ -2088,10 +2088,6 @@ readSimpleCommand = called "simple command" $ do
         then action
         else getParser def cmd rest
 
-    cStyleComment cmd =
-        case cmd of
-            _ -> False
-
     validateCommand cmd =
         case cmd of
             (T_NormalWord _ [T_Literal _ "//"]) -> commentWarning (getId cmd)
