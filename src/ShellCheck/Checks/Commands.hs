@@ -122,7 +122,7 @@ checkGetOpts str flags args f =
     toTokens = map (T_Literal (Id 0)) . words
     opts = fromMaybe [] $ f (toTokens str)
     actualFlags = filter (not . null) $ map fst opts
-    actualArgs = map (\(_, (_, x)) -> onlyLiteralString x) $ filter (null . fst) opts
+    actualArgs = [onlyLiteralString x | ("", (_, x)) <- opts]
 
 -- Short options
 prop_checkGetOptsS1 = checkGetOpts "-f x" ["f"] [] $ getOpts (True, True) "f:" []
