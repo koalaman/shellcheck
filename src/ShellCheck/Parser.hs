@@ -1904,14 +1904,14 @@ readPendingHereDocs = do
     debugHereDoc tokenId endToken doc
         | endToken `isInfixOf` doc =
             let lookAt line = when (endToken `isInfixOf` line) $
-                      parseProblemAtId tokenId ErrorC 1042 ("Close matches include '" ++ line ++ "' (!= '" ++ endToken ++ "').")
+                      parseProblemAtId tokenId ErrorC 1042 ("Close matches include '" ++ (e4m line) ++ "' (!= '" ++ (e4m endToken) ++ "').")
             in do
-                  parseProblemAtId tokenId ErrorC 1041 ("Found '" ++ endToken ++ "' further down, but not on a separate line.")
+                  parseProblemAtId tokenId ErrorC 1041 ("Found '" ++ (e4m endToken) ++ "' further down, but not on a separate line.")
                   mapM_ lookAt (lines doc)
         | map toLower endToken `isInfixOf` map toLower doc =
-            parseProblemAtId tokenId ErrorC 1043 ("Found " ++ endToken ++ " further down, but with wrong casing.")
+            parseProblemAtId tokenId ErrorC 1043 ("Found " ++ (e4m endToken) ++ " further down, but with wrong casing.")
         | otherwise =
-            parseProblemAtId tokenId ErrorC 1044 ("Couldn't find end token `" ++ endToken ++ "' in the here document.")
+            parseProblemAtId tokenId ErrorC 1044 ("Couldn't find end token `" ++ (e4m endToken) ++ "' in the here document.")
 
 
 readFilename = readNormalWord
@@ -3168,7 +3168,7 @@ readConfigFile filename = do
         let line = "line " ++ (show . sourceLine $ errorPos err)
             suggestion = getStringFromParsec $ errorMessages err
         in
-            "Failed to process " ++ filename ++ ", " ++ line ++ ": "
+            "Failed to process " ++ (e4m filename) ++ ", " ++ line ++ ": "
                 ++ suggestion
 
 prop_readConfigKVs1 = isOk readConfigKVs "disable=1234"

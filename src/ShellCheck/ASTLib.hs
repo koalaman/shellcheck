@@ -29,6 +29,7 @@ import Data.Functor.Identity
 import Data.List
 import Data.Maybe
 import qualified Data.Map as Map
+import Numeric (showHex)
 
 arguments (T_SimpleCommand _ _ (cmd:args)) = args
 
@@ -367,6 +368,37 @@ getLiteralStringExt more = g
 -- Is this token a string literal?
 isLiteral t = isJust $ getLiteralString t
 
+-- Escape user data for messages.
+-- Messages generally avoid repeating user data, but sometimes it's helpful.
+e4m = escapeForMessage
+escapeForMessage :: String -> String
+escapeForMessage str = concatMap f str
+  where
+    f '\\' = "\\\\"
+    f '\n' = "\\n"
+    f '\r' = "\\r"
+    f '\t' = "\\t"
+    f '\x1B' = "\\e"
+    f c =
+        if shouldEscape c
+        then
+            if ord c < 256
+            then "\\x" ++ (pad0 2 $ toHex c)
+            else "\\U" ++ (pad0 4 $ toHex c)
+        else [c]
+
+    shouldEscape c =
+        (not $ isPrint c)
+        || (not (isAscii c) && not (isLetter c))
+
+    pad0 :: Int -> String -> String
+    pad0 n s =
+        let l = length s in
+            if l < n
+            then (replicate (n-l) '0') ++ s
+            else s
+    toHex :: Char -> String
+    toHex c = map toUpper $ showHex (ord c) ""
 
 -- Turn a NormalWord like foo="bar $baz" into a series of constituent elements like [foo=,bar ,$baz]
 getWordParts (T_NormalWord _ l)   = concatMap getWordParts l

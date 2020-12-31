@@ -1759,7 +1759,7 @@ checkSshHereDoc _ (T_Redirecting _ redirs cmd)
     hasVariables = mkRegex "[`$]"
     checkHereDoc (T_FdRedirect _ _ (T_HereDoc id _ Unquoted token tokens))
         | not (all isConstant tokens) =
-        warn id 2087 $ "Quote '" ++ token ++ "' to make here document expansions happen on the server side rather than on the client."
+        warn id 2087 $ "Quote '" ++ (e4m token) ++ "' to make here document expansions happen on the server side rather than on the client."
     checkHereDoc _ = return ()
 checkSshHereDoc _ _ = return ()
 
@@ -2694,7 +2694,7 @@ checkUnpassedInFunctions params root =
 
     suggestParams (name, _, thing) =
         info (getId thing) 2119 $
-            "Use " ++ name ++ " \"$@\" if function's $1 should mean script's $1."
+            "Use " ++ (e4m name) ++ " \"$@\" if function's $1 should mean script's $1."
     warnForDeclaration func name =
         warn (getId func) 2120 $
             name ++ " references arguments, but none are ever passed."

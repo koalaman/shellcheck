@@ -900,7 +900,7 @@ checkWhileGetoptsCase = CommandCheck (Exactly "getopts") f
             notRequested = Map.difference handledMap requestedMap
 
     warnUnhandled optId caseId str =
-        warn caseId 2213 $ "getopts specified -" ++ str ++ ", but it's not handled by this 'case'."
+        warn caseId 2213 $ "getopts specified -" ++ (e4m str) ++ ", but it's not handled by this 'case'."
 
     warnRedundant (Just str, expr)
         | str `notElem` ["*", ":", "?"] =
