@@ -14,6 +14,7 @@
   is still purely cosmetic and does not allow ShellCheck to continue.
 - Improved error reporting for trailing tokens after ]/]] and compound commands
 - `#!/usr/bin/env -S shell` is now handled correctly
+- Here docs with \r are now parsed correctly and give better warnings
 
 ### Changed
 - Assignments are now parsed to spec, without leniency for leading $ or spaces

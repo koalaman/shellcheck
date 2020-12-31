@@ -123,8 +123,10 @@ readUnicodeQuote = do
     return $ T_Literal id [c]
 
 carriageReturn = do
-    parseNote ErrorC 1017 "Literal carriage return. Run script through tr -d '\\r' ."
+    pos <- getPosition
     char '\r'
+    parseProblemAt pos ErrorC 1017 "Literal carriage return. Run script through tr -d '\\r' ."
+    return '\r'
 
 almostSpace =
     choice [
@@ -1761,6 +1763,8 @@ prop_readHereDoc17= isWarning readScript "cat <<- ' foo'\nbar\n  foo\n foo\n"
 prop_readHereDoc18= isOk readScript "cat <<'\"foo'\nbar\n\"foo\n"
 prop_readHereDoc20= isWarning readScript "cat << foo\n  foo\n()\nfoo\n"
 prop_readHereDoc21= isOk readScript "# shellcheck disable=SC1039\ncat << foo\n  foo\n()\nfoo\n"
+prop_readHereDoc22 = isWarning readScript "cat << foo\r\ncow\r\nfoo\r\n"
+prop_readHereDoc23 = isNotOk readScript "cat << foo \r\ncow\r\nfoo\r\n"
 readHereDoc = called "here document" $ do
     pos <- getPosition
     try $ string "<<"
@@ -1789,7 +1793,9 @@ readHereDoc = called "here document" $ do
     -- Fun fact: bash considers << foo"" quoted, but not << <("foo").
     readToken = do
         str <- readStringForParser readNormalWord
-        return $ unquote str
+        -- A here doc actually works with \r\n because the \r becomes part of the token
+        crstr <- (carriageReturn >> (return $ str ++ "\r")) <|> return str
+        return $ unquote crstr
 
 readPendingHereDocs = do
     docs <- popPendingHereDocs
