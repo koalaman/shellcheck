@@ -846,6 +846,7 @@ prop_getBracedReference8 = getBracedReference "foo-bar" == "foo"
 prop_getBracedReference9 = getBracedReference "foo:-bar" == "foo"
 prop_getBracedReference10= getBracedReference "foo: -1" == "foo"
 prop_getBracedReference11= getBracedReference "!os*" == ""
+prop_getBracedReference11b= getBracedReference "!os@" == ""
 prop_getBracedReference12= getBracedReference "!os?bar**" == ""
 prop_getBracedReference13= getBracedReference "foo[bar]" == "foo"
 getBracedReference s = fromMaybe s $
@@ -864,7 +865,7 @@ getBracedReference s = fromMaybe s $
     nameExpansion ('!':next:rest) = do -- e.g. ${!foo*bar*}
         guard $ isVariableChar next -- e.g. ${!@}
         first <- find (not . isVariableChar) rest
-        guard $ first `elem` "*?"
+        guard $ first `elem` "*?@"
         return ""
     nameExpansion _ = Nothing
 
