@@ -2850,15 +2850,13 @@ readAssignmentWordExt lenient = called "variable assignment" $ do
     (id, variable, op, indices) <- try $ do
         start <- startSpan
         pos <- getPosition
+        -- Check for a leading $ at parse time, to warn for $foo=(bar) which
+        -- would otherwise cause a parse failure so it can't be checked later.
         leadingDollarPos <-
             if lenient
             then optionMaybe $ getSpanPositionsFor (char '$')
             else return Nothing
         variable <- readVariableName
-        middleDollarPos <-
-            if lenient
-            then optionMaybe $ getSpanPositionsFor readNormalDollar
-            else return Nothing
         indices <- many readArrayIndex
         hasLeftSpace <- fmap (not . null) spacing
         opStart <- getPosition
@@ -2866,20 +2864,12 @@ readAssignmentWordExt lenient = called "variable assignment" $ do
         op <- readAssignmentOp
         opEnd <- getPosition
 
-        when (isJust leadingDollarPos || isJust middleDollarPos || hasLeftSpace) $ do
-            sequence_ $ do
-                (l, r) <- leadingDollarPos
-                return $ parseProblemAtWithEnd l r ErrorC 1066 "Don't use $ on the left side of assignments."
-            sequence_ $ do
-                (l, r) <- middleDollarPos
-                return $ parseProblemAtWithEnd l r ErrorC 1067 "For indirection, use arrays, declare \"var$n=value\", or (for sh) read/eval."
-            when hasLeftSpace $ do
-                parseProblemAtWithEnd opStart opEnd ErrorC 1068 $
-                    "Don't put spaces around the "
-                    ++ (if op == Append
-                        then "+= when appending"
-                        else "= in assignments")
-                    ++ " (or quote to make it literal)."
+        when (isJust leadingDollarPos || hasLeftSpace) $ do
+            hasParen <- isFollowedBy (spacing >> char '(')
+            when hasParen $
+                sequence_ $ do
+                    (l, r) <- leadingDollarPos
+                    return $ parseProblemAtWithEnd l r ErrorC 1066 "Don't use $ on the left side of assignments."
 
             -- Fail so that this is not parsed as an assignment.
             fail ""

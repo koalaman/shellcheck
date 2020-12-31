@@ -194,6 +194,8 @@ nodeChecks = [
     ,checkBlatantRecursion
     ,checkBadTestAndOr
     ,checkAssignToSelf
+    ,checkEqualsInCommand
+    ,checkSecondArgIsComparison
     ]
 
 optionalChecks = map fst optionalTreeChecks
@@ -277,15 +279,23 @@ checkUnqualifiedCommand str f t@(T_SimpleCommand id _ (cmd:rest))
     | t `isUnqualifiedCommand` str = f cmd rest
 checkUnqualifiedCommand _ _ _ = return ()
 
+verifyCodes :: (Parameters -> Token -> Writer [TokenComment] ()) -> [Code] -> String -> Bool
+verifyCodes f l s = codes == Just l
+  where
+    treeCheck = runNodeAnalysis f
+    comments = runAndGetComments treeCheck s
+    codes = map (cCode . tcComment) <$> comments
 
 checkNode f = producesComments (runNodeAnalysis f)
 producesComments :: (Parameters -> Token -> [TokenComment]) -> String -> Maybe Bool
-producesComments f s = do
+producesComments f s = not . null <$> runAndGetComments f s
+
+runAndGetComments f s = do
         let pr = pScript s
         prRoot pr
         let spec = defaultSpec pr
         let params = makeParameters spec
-        return . not . null $
+        return $
             filterByAnnotation spec params $
                 runList spec [f]
 
@@ -364,6 +374,19 @@ replaceEnd id params n r =
         repPrecedence = depth,
         repInsertionPoint = InsertBefore
     }
+replaceToken id params r =
+    let tp = tokenPositions params
+        (start, end) = tp Map.! id
+        depth = length $ getPath (parentMap params) (T_EOF id)
+    in
+    newReplacement {
+        repStartPos = start,
+        repEndPos = end,
+        repString = r,
+        repPrecedence = depth,
+        repInsertionPoint = InsertBefore
+    }
+
 surroundWidth id params s = fixWith [replaceStart id params 0 s, replaceEnd id params 0 s]
 fixWith fixes = newFix { fixReplacements = fixes }
 
@@ -1855,6 +1878,7 @@ prop_checkSpacefulness39= verifyNotTree checkSpacefulness "a=''\"\"''; b=x$a; ec
 prop_checkSpacefulness40= verifyNotTree checkSpacefulness "a=$((x+1)); echo $a"
 prop_checkSpacefulness41= verifyNotTree checkSpacefulness "exec $1 --flags"
 prop_checkSpacefulness42= verifyNotTree checkSpacefulness "run $1 --flags"
+prop_checkSpacefulness43= verifyNotTree checkSpacefulness "$foo=42"
 
 data SpaceStatus = SpaceSome | SpaceNone | SpaceEmpty deriving (Eq)
 instance Semigroup SpaceStatus where
@@ -1879,9 +1903,10 @@ checkSpacefulness params = checkSpacefulness' onFind params
                 emit $ makeComment InfoC (getId token) 2223
                          "This default assignment may cause DoS due to globbing. Quote it."
             else
-                emit $ makeCommentWithFix InfoC (getId token) 2086
-                         "Double quote to prevent globbing and word splitting."
-                         (addDoubleQuotesAround params token)
+                unless (quotesMayConflictWithSC2281 params token) $
+                    emit $ makeCommentWithFix InfoC (getId token) 2086
+                             "Double quote to prevent globbing and word splitting."
+                                (addDoubleQuotesAround params token)
 
     isDefaultAssignment parents token =
         let modifier = getBracedModifier $ bracedString token in
@@ -1896,13 +1921,24 @@ prop_checkSpacefulness4v= verifyTree checkVerboseSpacefulness "foo=3; foo=$(echo
 prop_checkSpacefulness8v= verifyTree checkVerboseSpacefulness "a=foo\\ bar; a=foo; rm $a"
 prop_checkSpacefulness28v = verifyTree checkVerboseSpacefulness "exec {n}>&1; echo $n"
 prop_checkSpacefulness36v = verifyTree checkVerboseSpacefulness "arg=$#; echo $arg"
+prop_checkSpacefulness44v = verifyNotTree checkVerboseSpacefulness "foo=3; $foo=4"
 checkVerboseSpacefulness params = checkSpacefulness' onFind params
   where
     onFind spaces token name =
-        when (spaces == SpaceNone && name `notElem` specialVariablesWithoutSpaces) $
+        when (spaces == SpaceNone
+                && name `notElem` specialVariablesWithoutSpaces
+                && not (quotesMayConflictWithSC2281 params token)) $
             tell [makeCommentWithFix StyleC (getId token) 2248
                     "Prefer double quoting even when variables don't contain special characters."
                     (addDoubleQuotesAround params token)]
+
+-- Don't suggest quotes if this will instead be autocorrected
+-- from $foo=bar to foo=bar. This is not pretty but ok.
+quotesMayConflictWithSC2281 params t =
+    case getPath (parentMap params) t of
+        _ : T_NormalWord parentId (me:T_Literal _ ('=':_):_) : T_SimpleCommand _ _ (cmd:_) : _ ->
+            (getId t) == (getId me) && (parentId == getId cmd)
+        _ -> False
 
 addDoubleQuotesAround params token = (surroundWidth (getId token) params "\"")
 checkSpacefulness'
@@ -1978,8 +2014,9 @@ prop_CheckVariableBraces1 = verify checkVariableBraces "a='123'; echo $a"
 prop_CheckVariableBraces2 = verifyNot checkVariableBraces "a='123'; echo ${a}"
 prop_CheckVariableBraces3 = verifyNot checkVariableBraces "#shellcheck disable=SC2016\necho '$a'"
 prop_CheckVariableBraces4 = verifyNot checkVariableBraces "echo $* $1"
+prop_CheckVariableBraces5 = verifyNot checkVariableBraces "$foo=42"
 checkVariableBraces params t@(T_DollarBraced id False l)
-    | name `notElem` unbracedVariables =
+    | name `notElem` unbracedVariables && not (quotesMayConflictWithSC2281 params t) =
         styleWithFix id 2250
             "Prefer putting braces around variable references even when not strictly required."
             (fixFor t)
@@ -4002,6 +4039,213 @@ checkAssignToSelf _ t =
             _ -> return ()
     msg id = info id 2269 "This variable is assigned to itself, so the assignment does nothing."
 
+
+prop_checkEqualsInCommand1a = verifyCodes checkEqualsInCommand [2277] "#!/bin/bash\n0='foo'"
+prop_checkEqualsInCommand2a = verifyCodes checkEqualsInCommand [2278] "#!/bin/ksh \n$0='foo'"
+prop_checkEqualsInCommand3a = verifyCodes checkEqualsInCommand [2279] "#!/bin/dash\n${0}='foo'"
+prop_checkEqualsInCommand4a = verifyCodes checkEqualsInCommand [2280] "#!/bin/sh  \n0='foo'"
+
+prop_checkEqualsInCommand1b = verifyCodes checkEqualsInCommand [2270] "1='foo'"
+prop_checkEqualsInCommand2b = verifyCodes checkEqualsInCommand [2270] "${2}='foo'"
+
+prop_checkEqualsInCommand1c = verifyCodes checkEqualsInCommand [2271] "var$((n+1))=value"
+prop_checkEqualsInCommand2c = verifyCodes checkEqualsInCommand [2271] "var${x}=value"
+prop_checkEqualsInCommand3c = verifyCodes checkEqualsInCommand [2271] "var$((cmd))x='foo'"
+prop_checkEqualsInCommand4c = verifyCodes checkEqualsInCommand [2271] "$(cmd)='foo'"
+
+prop_checkEqualsInCommand1d = verifyCodes checkEqualsInCommand [2273] "======="
+prop_checkEqualsInCommand2d = verifyCodes checkEqualsInCommand [2274] "======= Here ======="
+prop_checkEqualsInCommand3d = verifyCodes checkEqualsInCommand [2275] "foo\n=42"
+
+prop_checkEqualsInCommand1e = verifyCodes checkEqualsInCommand [] "--foo=bar"
+prop_checkEqualsInCommand2e = verifyCodes checkEqualsInCommand [] "$(cmd)'=foo'"
+prop_checkEqualsInCommand3e = verifyCodes checkEqualsInCommand [2276] "var${x}/=value"
+prop_checkEqualsInCommand4e = verifyCodes checkEqualsInCommand [2276] "${}=value"
+prop_checkEqualsInCommand5e = verifyCodes checkEqualsInCommand [2276] "${#x}=value"
+
+prop_checkEqualsInCommand1f = verifyCodes checkEqualsInCommand [2281] "$var=foo"
+prop_checkEqualsInCommand2f = verifyCodes checkEqualsInCommand [2281] "$a=$b"
+prop_checkEqualsInCommand3f = verifyCodes checkEqualsInCommand [2281] "${var}=foo"
+prop_checkEqualsInCommand4f = verifyCodes checkEqualsInCommand [2281] "${var[42]}=foo"
+prop_checkEqualsInCommand5f = verifyCodes checkEqualsInCommand [2281] "$var+=foo"
+
+prop_checkEqualsInCommand1g = verifyCodes checkEqualsInCommand [2282] "411toppm=true"
+
+checkEqualsInCommand params originalToken =
+    case originalToken of
+        T_SimpleCommand _ _ (word:_) -> check word
+        _ -> return ()
+  where
+    hasEquals t =
+        case t of
+            T_Literal _ s -> '=' `elem` s
+            _ -> False
+
+    check t@(T_NormalWord _ list) | any hasEquals list =
+        case break hasEquals list of
+            (leading, (eq:_)) -> msg t (stripSinglePlus leading) eq
+            _ -> return ()
+    check _ = return ()
+
+    -- This is a workaround for the parser adding + and = as separate literals
+    stripSinglePlus l =
+        case reverse l of
+            (T_Literal _ "+"):rest -> reverse rest
+            _ -> l
+
+    positionalAssignmentRe = mkRegex "^[0-9][0-9]?="
+    positionalMsg id =
+        err id 2270 "To assign positional parameters, use 'set -- first second ..' (or use [ ] to compare)."
+    indirectionMsg id =
+        err id 2271 "For indirection, use arrays, declare \"var$n=value\", or (for sh) read/eval."
+    badComparisonMsg id =
+        err id 2272 "Command name contains ==. For comparison, use [ \"$var\" = value ]."
+    conflictMarkerMsg id =
+        err id 2273 "Sequence of ===s found. Merge conflict or intended as a commented border?"
+    borderMsg id =
+        err id 2274 "Command name starts with ===. Intended as a commented border?"
+    prefixMsg id =
+        err id 2275 "Command name starts with =. Bad line break?"
+    genericMsg id =
+        err id 2276 "This is interpreted as a command name containing '='. Bad assignment or comparison?"
+    assign0Msg id bashfix =
+        case shellType params of
+            Bash -> errWithFix id 2277 "Use BASH_ARGV0 to assign to $0 in bash (or use [ ] to compare)." bashfix
+            Ksh -> err id 2278 "$0 can't be assigned in Ksh (but it does reflect the current function)."
+            Dash -> err id 2279 "$0 can't be assigned in Dash. This becomes a command name."
+            _ -> err id 2280 "$0 can't be assigned this way, and there is no portable alternative."
+    leadingNumberMsg id =
+        err id 2282 "Variable names can't start with numbers, so this is interpreted as a command."
+
+    isExpansion t =
+        case t of
+            T_Arithmetic {} -> True
+            _ -> isQuoteableExpansion t
+
+    isConflictMarker cmd = fromMaybe False $ do
+        str <- getUnquotedLiteral cmd
+        guard $ all (== '=') str
+        guard $ length str >= 4 && length str <= 12 -- Git uses 7 but who knows
+        return True
+
+    mayBeVariableName l = fromMaybe False $ do
+        guard . not $ any isQuotes l
+        guard . not $ any willBecomeMultipleArgs l
+        str <- getLiteralStringExt (\_ -> Just "x") (T_NormalWord (Id 0) l)
+        return $ isVariableName str
+
+    isLeadingNumberVar s =
+        let lead = takeWhile (/= '=') s
+        in not (null lead) && isDigit (head lead)
+            && all isVariableChar lead && not (all isDigit lead)
+
+    msg cmd leading (T_Literal litId s) = do
+        -- There are many different cases, and the order of the branches matter.
+        case leading of
+            -- --foo=42
+            [] | "-" `isPrefixOf` s -> -- There's SC2215 for these
+                return ()
+
+            -- ======Hello======
+            [] | "=" `isPrefixOf` s ->
+                case originalToken of
+                    T_SimpleCommand _ [] [word] | isConflictMarker word ->
+                        conflictMarkerMsg (getId originalToken)
+                    _ | "===" `isPrefixOf` s -> borderMsg (getId originalToken)
+                    _ -> prefixMsg (getId cmd)
+
+            -- $var==42
+            _ | "==" `isInfixOf` s ->
+                badComparisonMsg (getId cmd)
+
+            -- ${foo[x]}=42 and $foo=42
+            [T_DollarBraced id braced l] | "=" `isPrefixOf` s -> do
+                let variableStr = concat $ oversimplify l
+                let variableReference = getBracedReference variableStr
+                let variableModifier = getBracedModifier variableStr
+                let isPlain = isVariableName variableStr
+                let isPositional = all isDigit variableStr
+
+                let isArray = variableReference /= ""
+                                && "[" `isPrefixOf` variableModifier
+                                && "]" `isSuffixOf` variableModifier
+
+                case () of
+                    -- $foo=bar should already have caused a parse-time SC1066
+                    -- _ | not braced && isPlain ->
+                    --    return ()
+
+                    _ | variableStr == "" -> -- Don't try to fix ${}=foo
+                        genericMsg (getId cmd)
+
+                    -- $#=42 or ${#var}=42
+                    _ | "#" `isPrefixOf` variableStr ->
+                        genericMsg (getId cmd)
+
+                    -- ${0}=42
+                    _ | variableStr == "0" ->
+                        assign0Msg id $ fixWith [replaceToken id params "BASH_ARGV0"]
+
+                    -- $2=2
+                    _ | isPositional ->
+                        positionalMsg id
+
+                    _ | isArray || isPlain ->
+                        errWithFix id 2281
+                            ("Don't use " ++ (if braced then "${}" else "$") ++ " on the left side of assignments.") $
+                                fixWith $
+                                    if braced
+                                      then [ replaceStart id params 2 "", replaceEnd id params 1 "" ]
+                                      else [ replaceStart id params 1 "" ]
+
+                    _ -> indirectionMsg id
+
+            -- 2=42
+            [] | s `matches` positionalAssignmentRe ->
+                if "0=" `isPrefixOf` s
+                then
+                    assign0Msg litId $ fixWith [replaceStart litId params 1 "BASH_ARGV0"]
+                else
+                    positionalMsg litId
+
+            -- 9foo=42
+            [] | isLeadingNumberVar s ->
+                leadingNumberMsg (getId cmd)
+
+            -- var${foo}x=42
+            (_:_) | mayBeVariableName leading && (all isVariableChar $ takeWhile (/= '=') s) ->
+                indirectionMsg (getId cmd)
+
+            _ -> genericMsg (getId cmd)
+
+
+prop_checkSecondArgIsComparison1 = verify checkSecondArgIsComparison "foo = $bar"
+prop_checkSecondArgIsComparison2 = verify checkSecondArgIsComparison "$foo = $bar"
+prop_checkSecondArgIsComparison3 = verify checkSecondArgIsComparison "2f == $bar"
+prop_checkSecondArgIsComparison4 = verify checkSecondArgIsComparison "'var' =$bar"
+prop_checkSecondArgIsComparison5 = verify checkSecondArgIsComparison "foo ='$bar'"
+prop_checkSecondArgIsComparison6 = verify checkSecondArgIsComparison "$foo =$bar"
+prop_checkSecondArgIsComparison7 = verify checkSecondArgIsComparison "2f ==$bar"
+prop_checkSecondArgIsComparison8 = verify checkSecondArgIsComparison "'var' =$bar"
+prop_checkSecondArgIsComparison9 = verify checkSecondArgIsComparison "var += $(foo)"
+prop_checkSecondArgIsComparison10 = verify checkSecondArgIsComparison "var +=$(foo)"
+checkSecondArgIsComparison _ t =
+    case t of
+        T_SimpleCommand _ _ (lhs:arg:_) -> sequence_ $ do
+            argString <- getLeadingUnquotedString arg
+            case argString of
+                '=':'=':'=':'=':_ -> Nothing -- Don't warn about `echo ======` and such
+                '+':'=':_ ->
+                        return $ err (getId t) 2285 $
+                            "Remove spaces around += to assign (or quote '+=' if literal)."
+                '=':'=':_ ->
+                        return $ err (getId t) 2284 $
+                            "Use [ x = y ] to compare values (or quote '==' if literal)."
+                '=':_ ->
+                        return $ err (getId t) 2283 $
+                            "Use [ ] to compare values, or remove spaces around = to assign (or quote '=' if literal)."
+                _ -> Nothing
+        _ -> return ()
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

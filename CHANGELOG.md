@@ -20,6 +20,7 @@
 - POSIX/dash unsupported feature warnings now have individual SC3xxx codes
 - SC1090: A leading `$x/` or `$(x)/` is now treated as `./` when locating files
 - SC2154: Variables appearing in -z/-n tests are no longer considered unassigned
+- SC2270-SC2285: Improved warnings about misused =, e.g. `${var}=42`
 
 
 ## v0.7.1 - 2020-04-04

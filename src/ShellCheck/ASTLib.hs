@@ -278,6 +278,12 @@ getUnquotedLiteral (T_NormalWord _ list) =
     str _ = Nothing
 getUnquotedLiteral _ = Nothing
 
+isQuotes t =
+    case t of
+        T_DoubleQuoted {} -> True
+        T_SingleQuoted {} -> True
+        _ -> False
+
 -- Get the last unquoted T_Literal in a word like "${var}foo"THIS
 -- or nothing if the word does not end in an unquoted literal.
 getTrailingUnquotedLiteral :: Token -> Maybe Token
@@ -296,8 +302,11 @@ getTrailingUnquotedLiteral t =
 getLeadingUnquotedString :: Token -> Maybe String
 getLeadingUnquotedString t =
     case t of
-        T_NormalWord _ ((T_Literal _ s) : _) -> return s
+        T_NormalWord _ ((T_Literal _ s) : rest) -> return $ s ++ from rest
         _ -> Nothing
+  where
+    from ((T_Literal _ s):rest) = s ++ from rest
+    from _ = ""
 
 -- Maybe get the literal string of this token and any globs in it.
 getGlobOrLiteralString = getLiteralStringExt f
