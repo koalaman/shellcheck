@@ -164,7 +164,7 @@
 - SC2204/SC2205: Warn about `( -z foo )` and `( foo -eq bar )`
 - SC2200/SC2201: Warn about brace expansion in [/[[
 - SC2198/SC2199: Warn about arrays in [/[[
-- SC2196/SC2197: Warn about deprected egrep/fgrep
+- SC2196/SC2197: Warn about deprecated egrep/fgrep
 - SC2195: Warn about unmatchable case branches
 - SC2194: Warn about constant 'case' statements
 - SC2193: Warn about `[[ file.png == *.mp3 ]]` and other unmatchables
@@ -181,7 +181,7 @@
 ### Fixed
 - `-c` no longer suggested when using `grep -o | wc`
 - Comments and whitespace are now allowed before filewide directives
-- Here doc delimters with esoteric quoting like `foo""` are now handled
+- Here doc delimiters with esoteric quoting like `foo""` are now handled
 - SC2095 about `ssh` in while read loops is now suppressed when using `-n`
 - `%(%Y%M%D)T` now recognized as a single formatter in `printf` checks
 - `grep -F` now suppresses regex related suggestions
