@@ -4236,16 +4236,22 @@ checkSecondArgIsComparison _ t =
             case argString of
                 '=':'=':'=':'=':_ -> Nothing -- Don't warn about `echo ======` and such
                 '+':'=':_ ->
-                        return $ err (getId t) 2285 $
+                        return $ err (headId t) 2285 $
                             "Remove spaces around += to assign (or quote '+=' if literal)."
                 '=':'=':_ ->
                         return $ err (getId t) 2284 $
                             "Use [ x = y ] to compare values (or quote '==' if literal)."
                 '=':_ ->
-                        return $ err (getId t) 2283 $
-                            "Use [ ] to compare values, or remove spaces around = to assign (or quote '=' if literal)."
+                        return $ err (headId arg) 2283 $
+                            "Remove spaces around = to assign (or use [ ] to compare, or quote '=' if literal)."
                 _ -> Nothing
         _ -> return ()
+  where
+    -- We don't pinpoint exactly, but this helps cases like foo =$bar
+    headId t =
+        case t of
+            T_NormalWord _ (x:_) -> getId x
+            _ -> getId t
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
