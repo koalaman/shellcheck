@@ -122,7 +122,7 @@ checkGetOpts str flags args f =
     toTokens = map (T_Literal (Id 0)) . words
     opts = fromMaybe [] $ f (toTokens str)
     actualFlags = filter (not . null) $ map fst opts
-    actualArgs = map (\(_, (_, x)) -> onlyLiteralString x) $ filter (null . fst) opts
+    actualArgs = [onlyLiteralString x | ("", (_, x)) <- opts]
 
 -- Short options
 prop_checkGetOptsS1 = checkGetOpts "-f x" ["f"] [] $ getOpts (True, True) "f:" []
@@ -916,7 +916,7 @@ checkWhileGetoptsCase = CommandCheck (Exactly "getopts") f
 
     fromGlob t =
         case t of
-            T_Glob _ ('[':c:']':[]) -> return [c]
+            T_Glob _ ['[', c, ']'] -> return [c]
             T_Glob _ "*" -> return "*"
             T_Glob _ "?" -> return "?"
             _ -> Nothing
@@ -951,7 +951,7 @@ checkCatastrophicRm = CommandCheck (Basename "rm") $ \t ->
     when (isRecursive t) $
         mapM_ (mapM_ checkWord . braceExpand) $ arguments t
   where
-    isRecursive = any (`elem` ["r", "R", "recursive"]) . map snd . getAllFlags
+    isRecursive = any ((`elem` ["r", "R", "recursive"]) . snd) . getAllFlags
 
     checkWord token =
         case getLiteralString token of

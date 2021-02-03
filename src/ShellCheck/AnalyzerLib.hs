@@ -258,9 +258,9 @@ determineShell fallbackShell t = fromMaybe Bash $
 executableFromShebang :: String -> String
 executableFromShebang = shellFor
   where
-    shellFor s | "/env " `isInfixOf` s = fromMaybe "" $ do
-        [flag, shell] <- matchRegex re s
-        return shell
+    shellFor s | "/env " `isInfixOf` s = case matchRegex re s of
+        Just [flag, shell] -> shell
+        _ -> ""
     shellFor s | ' ' `elem` s = shellFor $ takeWhile (/= ' ') s
     shellFor s = reverse . takeWhile (/= '/') . reverse $ s
     re = mkRegex "/env +(-S|--split-string=?)? *([^ ]*)"
@@ -270,7 +270,7 @@ executableFromShebang = shellFor
 -- This is used to populate parentMap in Parameters
 getParentTree :: Token -> Map.Map Id Token
 getParentTree t =
-    snd . snd $ runState (doStackAnalysis pre post t) ([], Map.empty)
+    snd $ execState (doStackAnalysis pre post t) ([], Map.empty)
   where
     pre t = modify (first ((:) t))
     post t = do
@@ -687,12 +687,10 @@ getModifiedVariableCommand base@(T_SimpleCommand id cmdPrefix (T_NormalWord _ (T
         parseArgs :: Maybe (Token, Token, String, DataType)
         parseArgs = do
             args <- getGnuOpts "d:n:O:s:u:C:c:t" rest
-            let names = map snd $ filter (\(x,y) -> null x) args
-            if null names
-                then
+            case [y | ("",(_,y)) <- args] of
+                [] ->
                     return (base, base, "MAPFILE", DataArray SourceExternal)
-                else do
-                    (_, first) <- listToMaybe names
+                first:_ -> do
                     name <- getLiteralString first
                     guard $ isVariableName name
                     return (base, first, name, DataArray SourceExternal)

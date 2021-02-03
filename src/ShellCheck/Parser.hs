@@ -211,8 +211,7 @@ startSpan = IncompleteInterval <$> getPosition
 
 endSpan (IncompleteInterval start) = do
     endPos <- getPosition
-    id <- getNextIdBetween start endPos
-    return id
+    getNextIdBetween start endPos
 
 getSpanPositionsFor m = do
     start <- getPosition
@@ -394,7 +393,7 @@ unexpecting s p = try $
 
 notFollowedBy2 = unexpecting ""
 
-isFollowedBy p = (lookAhead . try $ p *> return True) <|> return False
+isFollowedBy p = (lookAhead . try $ p $> True) <|> return False
 
 reluctantlyTill p end =
     (lookAhead (void (try end) <|> eof) >> return []) <|> do
@@ -2095,10 +2094,6 @@ readSimpleCommand = called "simple command" $ do
         then action
         else getParser def cmd rest
 
-    cStyleComment cmd =
-        case cmd of
-            _ -> False
-
     validateCommand cmd =
         case cmd of
             (T_NormalWord _ [T_Literal _ "//"]) -> commentWarning (getId cmd)
@@ -2721,7 +2716,7 @@ readConditionCommand = do
 
     pos <- getPosition
     hasDashAo <- isFollowedBy $ do
-        c <- choice $ map (\s -> try $ string s) ["-o", "-a", "or", "and"]
+        c <- choice $ try . string <$> ["-o", "-a", "or", "and"]
         posEnd <- getPosition
         parseProblemAtWithEnd pos posEnd ErrorC 1139 $
             "Use " ++ alt c ++ " instead of '" ++ c ++ "' between test commands."

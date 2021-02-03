@@ -507,7 +507,7 @@ ioInterface options files = do
       where
         find filename deflt = do
             sources <- findM ((allowable inputs) `andM` doesFileExist) $
-                        (adjustPath filename):(map (</> filename) $ map adjustPath $ sourcePathFlag ++ sourcePathAnnotation)
+                        (adjustPath filename):(map ((</> filename) . adjustPath) $ sourcePathFlag ++ sourcePathAnnotation)
             case sources of
                 Nothing -> return deflt
                 Just first -> return first

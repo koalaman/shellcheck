@@ -178,7 +178,7 @@ getOpts (gnu, arbitraryLongOpts) string longopts args = process args
     process [] = return []
     process (token:rest) = do
         case getLiteralStringDef "\0" token of
-            '-':'-':[] -> return $ listToArgs rest
+            "--" -> return $ listToArgs rest
             '-':'-':word -> do
                 let (name, arg) = span (/= '=') word
                 needsArg <-
@@ -466,7 +466,7 @@ getCommandNameAndToken direct t = fromMaybe (Nothing, t) $ do
                 "run" -> firstArg -- Used by bats
                 "exec" -> do
                     opts <- getBsdOpts "cla:" args
-                    (_, (t, _)) <- listToMaybe $ filter (null . fst) opts
+                    (_, (t, _)) <- find (null . fst) opts
                     return t
                 _ -> fail ""
 
