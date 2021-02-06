@@ -3238,7 +3238,9 @@ readScriptFile sourced = do
             (first:second:_) ->
                 if basename first == "env"
                     then second
-                    else basename first
+                else if basename first == "busybox"
+                    then second
+                else basename first
 
     verifyShebang pos s = do
         case isValidShell s of
