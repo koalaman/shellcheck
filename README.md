@@ -259,10 +259,16 @@ On Redhat/Fedora/CentOS, `yum -y install xz`.
 A simple installer may do something like:
 
 ```bash
-scversion="stable" # or "v0.4.7", or "latest"
-wget -qO- "https://github.com/koalaman/shellcheck/releases/download/${scversion?}/shellcheck-${scversion?}.linux.x86_64.tar.xz" | tar -xJv
-cp "shellcheck-${scversion}/shellcheck" /usr/bin/
+scversion="v0.7.1"
+curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/${scversion?}/shellcheck-${scversion}.$(uname -s).$(uname -m).tar.xz" \
+    | sudo tar -xJf - --strip-components=1 -C /usr/local/bin shellcheck-${scversion}/shellcheck
 shellcheck --version
+```
+
+If you want to install the latest version, you can use something like with `jq`:
+
+```bash
+scversion=$(curl -fsSL https://api.github.com/repos/koalaman/shellcheck/releases/latest | jq .tag_name -er)
 ```
 
 ## Compiling from source
