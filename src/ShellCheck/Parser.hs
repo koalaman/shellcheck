@@ -3190,6 +3190,7 @@ prop_readScript2 = isWarning readScript "#!/bin/bash\r\necho hello world\n"
 prop_readScript3 = isWarning readScript "#!/bin/bash\necho hello\xA0world"
 prop_readScript4 = isWarning readScript "#!/usr/bin/perl\nfoo=("
 prop_readScript5 = isOk readScript "#!/bin/bash\n#This is an empty script\n\n"
+prop_readScript6 = isOk readScript "#!/usr/bin/env -S X=FOO bash\n#This is an empty script\n\n"
 readScriptFile sourced = do
     start <- startSpan
     pos <- getPosition
@@ -3231,13 +3232,14 @@ readScriptFile sourced = do
 
   where
     basename s = reverse . takeWhile (/= '/') . reverse $ s
+    skipFlags = dropWhile ("-" `isPrefixOf`)
     getShell sb =
         case words sb of
             [] -> ""
             [x] -> basename x
-            (first:second:_) ->
+            (first:args) ->
                 if basename first == "env"
-                    then second
+                    then fromMaybe "" $ find (notElem '=') $ skipFlags args
                     else basename first
 
     verifyShebang pos s = do
