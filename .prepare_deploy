@@ -1,8 +1,9 @@
 #!/bin/bash
-# This script packages up Travis compiled binaries
+# This script packages up compiled binaries
 set -ex
 shopt -s nullglob extglob
-cd deploy
+
+ls -l
 
 cp ../LICENSE LICENSE.txt
 sed -e $'s/$/\r/' > README.txt << END
@@ -22,26 +23,31 @@ This binary was compiled on $(date -u).
 $(git log -n 3)
 END
 
-for file in ./*.exe
+for dir in */
 do
-  zip "${file%.*}.zip" README.txt LICENSE.txt "$file"
+  cp LICENSE.txt README.txt "$dir"
 done
 
-for file in *.{linux,darwin}-*
-do
-  base="${file%.*}"
-  ext="${file##*.}"
-  os="${ext%-*}"
-  arch="${ext##*-}"
-  cp "$file" "shellcheck"
-  tar -cJf "$base.$os.$arch.tar.xz" --transform="s:^:$base/:" README.txt LICENSE.txt shellcheck
-  rm "shellcheck"
-done
+echo "Tags are $TAGS"
 
-rm !(*.xz|*.zip)
+for tag in $TAGS
+do
+
+  for dir in windows.*/
+  do
+    ( cd "$dir" && zip "../shellcheck-$tag.zip" * )
+  done
+
+  for dir in {linux,darwin}.*/
+  do
+    base="${dir%/}"
+    ( cd "$dir" && tar -cJf "../shellcheck-$tag.$base.tar.xz" --transform="s:^:shellcheck-$tag/:" * )
+  done
+done
 
 for file in ./*
 do
+  [[ -f "$file" ]] || continue
   sha512sum "$file" > "$file.sha512sum"
 done
 

@@ -1,0 +1,124 @@
+name: Build Lol
+
+# Run this workflow every time a new commit pushed to your repository
+on: push
+
+jobs:
+  package_source:
+    name: Package Source Code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-mark manual ghc # Don't bother installing ghc just to tar up source
+          sudo apt-get install cabal-install
+
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Package Source
+        run: |
+          mkdir source
+          cabal sdist
+          mv dist/*.tar.gz source/source.tar.gz
+
+      - name: Deduce tags
+        run: |
+          exec > source/tags
+          echo "latest"
+          if tag=$(git describe --exact-match --tags)
+          then
+            echo "stable"
+            echo "$tag"
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: source
+          path: source/
+
+  build_source:
+    name: Build Source Code
+    needs: package_source
+    strategy:
+      matrix:
+        build: [linux.x86_64, linux.aarch64, linux.armv6hf, darwin.x86_64, windows.x86_64]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v2
+
+      - name: Build source
+        run: |
+          mkdir -p bin
+          mkdir -p bin/${{matrix.build}}
+          ( cd bin && ../build/run_builder ../source/source.tar.gz ../build/${{matrix.build}} )
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: bin
+          path: bin/
+
+  package_binary:
+    name: Package Binaries
+    needs: build_source
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v2
+
+      - name: Work around GitHub permissions bug
+        run: chmod +x bin/*/shellcheck*
+
+      - name: Package binaries
+        run: |
+          export TAGS="$(cat source/tags)"
+          mkdir -p deploy
+          cp -r bin/* deploy
+          cd deploy
+          ../.prepare_deploy
+          rm -rf */ README* LICENSE*
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: deploy
+          path: deploy/
+
+  deploy:
+    name: Deploy binaries
+    needs: package_binary
+    runs-on: ubuntu-latest
+    environment: Deploy
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v2
+
+      - name: Upload to GitHub
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          export TAGS="$(cat source/tags)"
+          ./.github_deploy
+
+      - name: Upload to Docker Hub
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+          DOCKER_EMAIL: ${{ secrets.DOCKER_EMAIL }}
+          DOCKER_BASE: ${{ secrets.DOCKER_USERNAME }}/shellcheck
+        run: |
+          export TAGS="$(cat source/tags)"
+          ( source ./.multi_arch_docker && set -eux && multi_arch_docker::main )
