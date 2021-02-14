@@ -1039,9 +1039,14 @@ readComment = do
     unexpecting "shellcheck annotation" readAnnotationPrefix
     readAnyComment
 
+prop_readAnyComment = isOk readAnyComment "# Comment"
+prop_readAnyComment1 = not $ isOk readAnyComment "# Comment \\\n"
 readAnyComment = do
     char '#'
-    many $ noneOf "\r\n"
+    comment <- many $ noneOf "\\\r\n"
+    bs <- many $ oneOf "\\"
+    unless (null bs) (fail "Backslash in or directly after comment")
+    return comment
 
 prop_readNormalWord = isOk readNormalWord "'foo'\"bar\"{1..3}baz$(lol)"
 prop_readNormalWord2 = isOk readNormalWord "foo**(foo)!!!(@@(bar))"
