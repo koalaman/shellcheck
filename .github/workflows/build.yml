@@ -1,4 +1,4 @@
-name: Build Lol
+name: Build ShellCheck
 
 # Run this workflow every time a new commit pushed to your repository
 on: push
@@ -21,7 +21,7 @@ jobs:
         run: |
           mkdir source
           cabal sdist
-          mv dist/*.tar.gz source/source.tar.gz
+          mv dist-newstyle/sdist/*.tar.gz source/source.tar.gz
 
       - name: Deduce tags
         run: |

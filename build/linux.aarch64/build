@@ -2,7 +2,7 @@
 set -xe
 {
   tar xzv --strip-components=1
-  ./striptests
+  chmod +x striptests && ./striptests
   mkdir "$TARGETNAME"
   cabal update
   ( IFS=';'; cabal build $CABALOPTS --enable-executable-static )

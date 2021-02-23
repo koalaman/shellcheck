@@ -3,7 +3,7 @@ set -xe
 cd /scratch
 {
   tar xzv --strip-components=1
-  ./striptests
+  chmod +x striptests && ./striptests
   mkdir "$TARGETNAME"
   # This script does not cabal update because compiling anything new is slow
   ( IFS=';'; cabal build $CABALOPTS --enable-executable-static )
