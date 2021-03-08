@@ -1216,8 +1216,8 @@ checkQuotedCondRegex _ (TC_Binary _ _ "=~" _ rhs) =
   where
     error t =
         unless (isConstantNonRe t) $
-            err (getId t) 2076
-                "Don't quote right-hand side of =~, it'll match literally rather than as a regex."
+            warn (getId t) 2076
+                "Remove quotes from right-hand side of =~ to match as a regex rather than literally."
     re = mkRegex "[][*.+()|]"
     hasMetachars s = s `matches` re
     isConstantNonRe t = fromMaybe False $ do
