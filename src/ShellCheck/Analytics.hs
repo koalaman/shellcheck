@@ -1015,6 +1015,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
                 ,"alias"
                 ,"sudo" -- covering "sudo sh" and such
                 ,"docker" -- like above
+                ,"podman"
                 ,"dpkg-query"
                 ,"jq"  -- could also check that user provides --arg
                 ,"rename"
