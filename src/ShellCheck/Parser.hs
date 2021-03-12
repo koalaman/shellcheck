@@ -3237,10 +3237,11 @@ readScriptFile sourced = do
         case words sb of
             [] -> ""
             [x] -> basename x
-            (first:args) ->
-                if basename first == "env"
-                    then fromMaybe "" $ find (notElem '=') $ skipFlags args
-                    else basename first
+            (first:args) | basename first == "env" ->
+                fromMaybe "" $ find (notElem '=') $ skipFlags args
+            (first:second:args) | basename first == "busybox" ->
+                second
+            (first:_) -> basename first
 
     verifyShebang pos s = do
         case isValidShell s of
