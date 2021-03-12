@@ -4,6 +4,7 @@ import Control.Monad
 import System.Exit
 import qualified ShellCheck.Analytics
 import qualified ShellCheck.AnalyzerLib
+import qualified ShellCheck.ASTLib
 import qualified ShellCheck.Checker
 import qualified ShellCheck.Checks.Commands
 import qualified ShellCheck.Checks.Custom
@@ -17,6 +18,7 @@ main = do
     results <- sequence [
         ShellCheck.Analytics.runTests
         ,ShellCheck.AnalyzerLib.runTests
+        ,ShellCheck.ASTLib.runTests
         ,ShellCheck.Checker.runTests
         ,ShellCheck.Checks.Commands.runTests
         ,ShellCheck.Checks.Custom.runTests

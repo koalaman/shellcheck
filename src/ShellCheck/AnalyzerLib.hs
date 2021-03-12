@@ -240,6 +240,8 @@ prop_determineShell7 = determineShellTest "#! /bin/ash" == Dash
 prop_determineShell8 = determineShellTest' (Just Ksh) "#!/bin/sh" == Sh
 prop_determineShell9 = determineShellTest "#!/bin/env -S dash -x" == Dash
 prop_determineShell10 = determineShellTest "#!/bin/env --split-string= dash -x" == Dash
+prop_determineShell11 = determineShellTest "#!/bin/busybox sh" == Dash -- busybox sh is a specific shell, not posix sh
+prop_determineShell12 = determineShellTest "#!/bin/busybox ash" == Dash
 
 determineShellTest = determineShellTest' Nothing
 determineShellTest' fallbackShell = determineShell fallbackShell . fromJust . prRoot . pScript
@@ -252,19 +254,6 @@ determineShell fallbackShell t = fromMaybe Bash $
     getCandidate (T_Annotation _ annotations s) =
         headOrDefault (fromShebang s) [s | ShellOverride s <- annotations]
     fromShebang (T_Script _ (T_Literal _ s) _) = executableFromShebang s
-
--- Given a string like "/bin/bash" or "/usr/bin/env dash",
--- return the shell basename like "bash" or "dash"
-executableFromShebang :: String -> String
-executableFromShebang = shellFor
-  where
-    shellFor s | "/env " `isInfixOf` s = case matchRegex re s of
-        Just [flag, shell] -> shell
-        _ -> ""
-    shellFor s | ' ' `elem` s = shellFor $ takeWhile (/= ' ') s
-    shellFor s = reverse . takeWhile (/= '/') . reverse $ s
-    re = mkRegex "/env +(-S|--split-string=?)? *([^ ]*)"
-
 
 -- Given a root node, make a map from Id to parent Token.
 -- This is used to populate parentMap in Parameters

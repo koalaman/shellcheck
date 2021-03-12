@@ -591,7 +591,7 @@ prop_checkShebang10= verifyNotTree checkShebang "#!foo\n# shellcheck shell=sh ig
 prop_checkShebang11= verifyTree checkShebang "#!/bin/sh/\ntrue"
 prop_checkShebang12= verifyTree checkShebang "#!/bin/sh/ -xe\ntrue"
 prop_checkShebang13= verifyTree checkShebang "#!/bin/busybox sh"
-prop_checkShebang14= verifyTree checkShebang "#!/bin/busybox sh\n# shellcheck shell=sh\n"
+prop_checkShebang14= verifyNotTree checkShebang "#!/bin/busybox sh\n# shellcheck shell=sh\n"
 prop_checkShebang15= verifyNotTree checkShebang "#!/bin/busybox sh\n# shellcheck shell=dash\n"
 prop_checkShebang16= verifyTree checkShebang "#!/bin/busybox ash"
 prop_checkShebang17= verifyNotTree checkShebang "#!/bin/busybox ash\n# shellcheck shell=dash\n"
