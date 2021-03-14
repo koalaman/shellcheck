@@ -17,9 +17,11 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -}
+{-# LANGUAGE TemplateHaskell #-}
 module ShellCheck.ASTLib where
 
 import ShellCheck.AST
+import ShellCheck.Regex
 
 import Control.Monad.Writer
 import Control.Monad
@@ -30,6 +32,8 @@ import Data.List
 import Data.Maybe
 import qualified Data.Map as Map
 import Numeric (showHex)
+
+import Test.QuickCheck
 
 arguments (T_SimpleCommand _ _ (cmd:args)) = args
 
@@ -672,3 +676,43 @@ isAnnotationIgnoringCode code t =
   where
     hasNum (DisableComment from to) = code >= from && code < to
     hasNum _                   = False
+
+prop_executableFromShebang1 = executableFromShebang "/bin/sh" == "sh"
+prop_executableFromShebang2 = executableFromShebang "/bin/bash" == "bash"
+prop_executableFromShebang3 = executableFromShebang "/usr/bin/env ksh" == "ksh"
+prop_executableFromShebang4 = executableFromShebang "/usr/bin/env -S foo=bar bash -x" == "bash"
+prop_executableFromShebang5 = executableFromShebang "/usr/bin/env --split-string=bash -x" == "bash"
+prop_executableFromShebang6 = executableFromShebang "/usr/bin/env --split-string=foo=bar bash -x" == "bash"
+prop_executableFromShebang7 = executableFromShebang "/usr/bin/env --split-string bash -x" == "bash"
+prop_executableFromShebang8 = executableFromShebang "/usr/bin/env --split-string foo=bar bash -x" == "bash"
+prop_executableFromShebang9 = executableFromShebang "/usr/bin/env foo=bar dash" == "dash"
+prop_executableFromShebang10 = executableFromShebang "/bin/busybox sh" == "ash"
+prop_executableFromShebang11 = executableFromShebang "/bin/busybox ash" == "ash"
+
+-- Get the shell executable from a string like '/usr/bin/env bash'
+executableFromShebang :: String -> String
+executableFromShebang = shellFor
+  where
+    re = mkRegex "/env +(-S|--split-string=?)? *(.*)"
+    shellFor s | s `matches` re =
+        case matchRegex re s of
+            Just [flag, shell] -> fromEnvArgs (words shell)
+            _ -> ""
+    shellFor sb =
+        case words sb of
+            [] -> ""
+            [x] -> basename x
+            (first:second:args) | basename first == "busybox" ->
+                case basename second of
+                   "sh" -> "ash" -- busybox sh is ash
+                   x -> x
+            (first:args) | basename first == "env" ->
+                fromEnvArgs args
+            (first:_) -> basename first
+
+    fromEnvArgs args = fromMaybe "" $ find (notElem '=') $ skipFlags args
+    basename s = reverse . takeWhile (/= '/') . reverse $ s
+    skipFlags = dropWhile ("-" `isPrefixOf`)
+
+return []
+runTests = $quickCheckAll

@@ -24,7 +24,7 @@
 module ShellCheck.Parser (parseScript, runTests) where
 
 import ShellCheck.AST
-import ShellCheck.ASTLib
+import ShellCheck.ASTLib hiding (runTests)
 import ShellCheck.Data
 import ShellCheck.Interface
 
@@ -3216,8 +3216,8 @@ readScriptFile sourced = do
     let ignoreShebang = shellAnnotationSpecified || shellFlagSpecified
 
     unless ignoreShebang $
-        verifyShebang pos (getShell shebangString)
-    if ignoreShebang || isValidShell (getShell shebangString) /= Just False
+        verifyShebang pos (executableFromShebang shebangString)
+    if ignoreShebang || isValidShell (executableFromShebang shebangString) /= Just False
       then do
             commands <- withAnnotations annotations readCompoundListOrEmpty
             id <- endSpan start
@@ -3231,17 +3231,6 @@ readScriptFile sourced = do
             return $ T_Script id shebang []
 
   where
-    basename s = reverse . takeWhile (/= '/') . reverse $ s
-    skipFlags = dropWhile ("-" `isPrefixOf`)
-    getShell sb =
-        case words sb of
-            [] -> ""
-            [x] -> basename x
-            (first:args) ->
-                if basename first == "env"
-                    then fromMaybe "" $ find (notElem '=') $ skipFlags args
-                    else basename first
-
     verifyShebang pos s = do
         case isValidShell s of
             Just True -> return ()
