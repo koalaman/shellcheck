@@ -1,6 +1,7 @@
 ## Git
 ### Added
 - `disable` directives can now be a range, e.g. `disable=SC3000-SC4000`
+- SC1143: Warn about line continuations in comments
 - SC2259/SC2260: Warn when redirections override pipes
 - SC2261: Warn about multiple competing redirections
 - SC2262/SC2263: Warn about aliases declared and used in the same parsing unit

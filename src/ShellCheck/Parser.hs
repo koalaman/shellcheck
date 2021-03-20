@@ -87,11 +87,23 @@ extglobStart = oneOf extglobStartChars
 unicodeDoubleQuotes = "\x201C\x201D\x2033\x2036"
 unicodeSingleQuotes = "\x2018\x2019"
 
-prop_spacing = isOk spacing "  \\\n # Comment"
+prop_spacing1 = isOk spacing "  \\\n # Comment"
+prop_spacing2 = isOk spacing "# We can continue lines with \\"
+prop_spacing3 = isWarning spacing "   \\\n #  --verbose=true \\"
 spacing = do
-    x <- many (many1 linewhitespace <|> try (string "\\\n" >> return ""))
+    x <- many (many1 linewhitespace <|> continuation)
     optional readComment
     return $ concat x
+  where
+    continuation = do
+        try (string "\\\n")
+        -- The line was continued. Warn if this next line is a comment with a trailing \
+        whitespace <- many linewhitespace
+        optional $ do
+            x <- readComment
+            when ("\\" `isSuffixOf` x) $
+                parseProblem ErrorC 1143 "This backslash is part of a comment and does not continue the line."
+        return whitespace
 
 spacing1 = do
     spacing <- spacing
@@ -1040,13 +1052,9 @@ readComment = do
     readAnyComment
 
 prop_readAnyComment = isOk readAnyComment "# Comment"
-prop_readAnyComment1 = not $ isOk readAnyComment "# Comment \\\n"
 readAnyComment = do
     char '#'
-    comment <- many $ noneOf "\\\r\n"
-    bs <- many $ oneOf "\\"
-    unless (null bs) (fail "Backslash in or directly after comment")
-    return comment
+    many $ noneOf "\r\n"
 
 prop_readNormalWord = isOk readNormalWord "'foo'\"bar\"{1..3}baz$(lol)"
 prop_readNormalWord2 = isOk readNormalWord "foo**(foo)!!!(@@(bar))"
@@ -1409,6 +1417,8 @@ readNormalEscaped = called "escaped char" $ do
     do
         next <- quotable <|> oneOf "?*@!+[]{}.,~#"
         when (next == ' ') $ checkTrailingSpaces pos <|> return ()
+        -- Check if this line is followed by a commented line with a trailing backslash
+        when (next == '\n') $ try . lookAhead $ void spacing
         return $ if next == '\n' then "" else [next]
       <|>
         do
