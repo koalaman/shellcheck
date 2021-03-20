@@ -5,7 +5,7 @@ ENV TARGETNAME windows.x86_64
 # We don't need wine32, even though it complains
 USER root
 ENV DEBIAN_FRONTEND noninteractive
-RUN apt-get update && apt-get install -y curl busybox wine
+RUN apt-get update && apt-get install -y curl busybox wine winbind
 
 # Fetch Windows version, will be available under z:\haskell
 WORKDIR /haskell
