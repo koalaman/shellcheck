@@ -1056,7 +1056,7 @@ checkFindRedirections = CommandCheck (Basename "find") f
 
 prop_checkWhich = verify checkWhich "which '.+'"
 checkWhich = CommandCheck (Basename "which") $
-    \t -> info (getId $ getCommandTokenOrThis t) 2230 "which is non-standard. Use builtin 'command -v' instead."
+    \t -> info (getId $ getCommandTokenOrThis t) 2230 "'which' is non-standard. Use builtin 'command -v' instead."
 
 prop_checkSudoRedirect1 = verify checkSudoRedirect "sudo echo 3 > /proc/file"
 prop_checkSudoRedirect2 = verify checkSudoRedirect "sudo cmd < input"
