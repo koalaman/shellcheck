@@ -196,6 +196,7 @@ nodeChecks = [
     ,checkAssignToSelf
     ,checkEqualsInCommand
     ,checkSecondArgIsComparison
+    ,checkComparisonWithLeadingX
     ]
 
 optionalChecks = map fst optionalTreeChecks
@@ -243,13 +244,6 @@ optionalTreeChecks = [
         cdPositive = "echo $VAR",
         cdNegative = "VAR=hello; echo $VAR"
     }, checkUnassignedReferences' True)
-
-    ,(newCheckDescription {
-        cdName = "avoid-x-comparisons",
-        cdDescription = "Warn about 'x'-prefix in comparisons",
-        cdPositive = "[ \"x$var\" = xval ]",
-        cdNegative = "[ \"$var\" = val ]"
-    }, nodeChecksToTreeCheck [checkComparisonWithLeadingX])
     ]
 
 optionalCheckMap :: Map.Map String (Parameters -> Token -> [TokenComment])
@@ -4006,7 +4000,7 @@ checkComparisonWithLeadingX params t =
                     check lhs rhs
         _ -> return ()
   where
-    msg = "Avoid outdated x-prefix in comparisons as it no longer serves a purpose."
+    msg = "Avoid x-prefix in comparisons as it no longer serves a purpose."
     check lhs rhs = sequence_ $ do
         l <- fixLeadingX lhs
         r <- fixLeadingX rhs

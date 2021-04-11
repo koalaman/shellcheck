@@ -8,7 +8,7 @@
 - SC2264: Warn about wrapper functions that blatantly recurse
 - SC2265/SC2266: Warn when using & or | with test statements
 - SC2267: Warn when using xargs -i instead of -I
-- Optional avoid-x-comparisons: Style warning SC2268 for `[ x$var = xval ]`
+- SC2268: Warn about unnecessary x-comparisons like `[ x$var = xval ]`
 
 ### Fixed
 - SC1072/SC1073 now respond to disable annotations, though ignoring parse errors
