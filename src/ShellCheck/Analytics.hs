@@ -3123,7 +3123,7 @@ checkReturnAgainstZero _ token =
         case getWordParts t of
             [T_DollarBraced _ _ l] -> concat (oversimplify l) == "?"
             _ -> False
-    message id = style id 2181 "Check exit code directly with e.g. 'if mycmd;', not indirectly with $?."
+    message id = style id 2181 "Check exit code directly, not indirectly with $?."
 
 prop_checkRedirectedNowhere1 = verify checkRedirectedNowhere "> file"
 prop_checkRedirectedNowhere2 = verify checkRedirectedNowhere "> file | grep foo"
