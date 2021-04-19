@@ -1,4 +1,4 @@
-## Git
+## v0.7.2 - 2021-04-19
 ### Added
 - `disable` directives can now be a range, e.g. `disable=SC3000-SC4000`
 - SC1143: Warn about line continuations in comments
@@ -22,7 +22,7 @@
 - POSIX/dash unsupported feature warnings now have individual SC3xxx codes
 - SC1090: A leading `$x/` or `$(x)/` is now treated as `./` when locating files
 - SC2154: Variables appearing in -z/-n tests are no longer considered unassigned
-- SC2270-SC2285: Improved warnings about misused =, e.g. `${var}=42`
+- SC2270-SC2285: Improved warnings about misused `=`, e.g. `${var}=42`
 
 
 ## v0.7.1 - 2020-04-04
