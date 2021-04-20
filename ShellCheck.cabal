@@ -8,7 +8,7 @@ Author:           Vidar Holen
 Maintainer:       vidar@vidarholen.net
 Homepage:         https://www.shellcheck.net/
 Build-Type:       Simple
-Cabal-Version:    >= 1.8
+Cabal-Version:    >= 1.10
 Bug-reports:      https://github.com/koalaman/shellcheck/issues
 Description:
   The goals of ShellCheck are:
@@ -83,6 +83,7 @@ library
       ShellCheck.Regex
     other-modules:
       Paths_ShellCheck
+    default-language: Haskell98
 
 executable shellcheck
     if impl(ghc < 8.0)
@@ -103,6 +104,7 @@ executable shellcheck
       QuickCheck >= 2.7.4,
       regex-tdfa,
       ShellCheck
+    default-language: Haskell98
     main-is: shellcheck.hs
 
 test-suite test-shellcheck
@@ -122,5 +124,6 @@ test-suite test-shellcheck
       QuickCheck >= 2.7.4,
       regex-tdfa,
       ShellCheck
+    default-language: Haskell98
     main-is: test/shellcheck.hs
 
