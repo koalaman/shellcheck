@@ -4143,11 +4143,11 @@ checkEqualsInCommand params originalToken =
     msg cmd leading (T_Literal litId s) = do
         -- There are many different cases, and the order of the branches matter.
         case leading of
-            -- --foo=42
+            --- --foo=42
             [] | "-" `isPrefixOf` s -> -- There's SC2215 for these
                 return ()
 
-            -- ======Hello======
+            --- ======Hello======
             [] | "=" `isPrefixOf` s ->
                 case originalToken of
                     T_SimpleCommand _ [] [word] | isConflictMarker word ->
@@ -4155,11 +4155,11 @@ checkEqualsInCommand params originalToken =
                     _ | "===" `isPrefixOf` s -> borderMsg (getId originalToken)
                     _ -> prefixMsg (getId cmd)
 
-            -- $var==42
+            --- $var==42
             _ | "==" `isInfixOf` s ->
                 badComparisonMsg (getId cmd)
 
-            -- ${foo[x]}=42 and $foo=42
+            --- ${foo[x]}=42 and $foo=42
             [T_DollarBraced id braced l] | "=" `isPrefixOf` s -> do
                 let variableStr = concat $ oversimplify l
                 let variableReference = getBracedReference variableStr
@@ -4172,22 +4172,22 @@ checkEqualsInCommand params originalToken =
                                 && "]" `isSuffixOf` variableModifier
 
                 case () of
-                    -- $foo=bar should already have caused a parse-time SC1066
-                    -- _ | not braced && isPlain ->
-                    --    return ()
+                    --- $foo=bar should already have caused a parse-time SC1066
+                    --- _ | not braced && isPlain ->
+                    ---    return ()
 
                     _ | variableStr == "" -> -- Don't try to fix ${}=foo
                         genericMsg (getId cmd)
 
-                    -- $#=42 or ${#var}=42
+                    --- $#=42 or ${#var}=42
                     _ | "#" `isPrefixOf` variableStr ->
                         genericMsg (getId cmd)
 
-                    -- ${0}=42
+                    --- ${0}=42
                     _ | variableStr == "0" ->
                         assign0Msg id $ fixWith [replaceToken id params "BASH_ARGV0"]
 
-                    -- $2=2
+                    --- $2=2
                     _ | isPositional ->
                         positionalMsg id
 
@@ -4201,7 +4201,7 @@ checkEqualsInCommand params originalToken =
 
                     _ -> indirectionMsg id
 
-            -- 2=42
+            --- 2=42
             [] | s `matches` positionalAssignmentRe ->
                 if "0=" `isPrefixOf` s
                 then
@@ -4209,11 +4209,11 @@ checkEqualsInCommand params originalToken =
                 else
                     positionalMsg litId
 
-            -- 9foo=42
+            --- 9foo=42
             [] | isLeadingNumberVar s ->
                 leadingNumberMsg (getId cmd)
 
-            -- var${foo}x=42
+            --- var${foo}x=42
             (_:_) | mayBeVariableName leading && (all isVariableChar $ takeWhile (/= '=') s) ->
                 indirectionMsg (getId cmd)
 
