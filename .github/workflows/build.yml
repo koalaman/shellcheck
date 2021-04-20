@@ -113,6 +113,10 @@ jobs:
           export TAGS="$(cat source/tags)"
           ./.github_deploy
 
+      - name: Waiting for GitHub to replicate uploaded releases
+        run: |
+          sleep 300
+
       - name: Upload to Docker Hub
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
