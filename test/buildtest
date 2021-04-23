@@ -29,6 +29,8 @@ cabal build ||
   die "build failed"
 cabal test ||
   die "test failed"
+cabal haddock ||
+  die "haddock failed"
 
 sc="$(find . -name shellcheck -type f -perm -111)"
 [ -x "$sc" ] || die "Can't find executable"
