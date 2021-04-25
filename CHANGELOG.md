@@ -4,6 +4,7 @@
 ### Fixed
 
 ### Changed
+- SC2048: Warning about $\* now also applies to ${array[\*]}
 
 
 ## v0.7.2 - 2021-04-19

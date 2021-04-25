@@ -820,10 +820,17 @@ checkShorthandIf _ _ = return ()
 prop_checkDollarStar = verify checkDollarStar "for f in $*; do ..; done"
 prop_checkDollarStar2 = verifyNot checkDollarStar "a=$*"
 prop_checkDollarStar3 = verifyNot checkDollarStar "[[ $* = 'a b' ]]"
+prop_checkDollarStar4 = verify checkDollarStar "for f in ${var[*]}; do ..; done"
+prop_checkDollarStar5 = verify checkDollarStar "ls ${*//foo/bar}"
+prop_checkDollarStar6 = verify checkDollarStar "ls ${var[*]%%.*}"
 checkDollarStar p t@(T_NormalWord _ [T_DollarBraced id _ l])
-      | concat (oversimplify l) == "*" &&
-        not (isStrictlyQuoteFree (parentMap p) t) =
+        | not (isStrictlyQuoteFree (parentMap p) t) = do
+      let str = concat (oversimplify l)
+      when ("*" `isPrefixOf` str) $
             warn id 2048 "Use \"$@\" (with quotes) to prevent whitespace problems."
+      when ("[*]" `isPrefixOf` (getBracedModifier str)) $
+            warn id 2048 "Use \"${array[@]}\" (with quotes) to prevent whitespace problems."
+
 checkDollarStar _ _ = return ()
 
 
