@@ -823,12 +823,16 @@ prop_checkDollarStar3 = verifyNot checkDollarStar "[[ $* = 'a b' ]]"
 prop_checkDollarStar4 = verify checkDollarStar "for f in ${var[*]}; do ..; done"
 prop_checkDollarStar5 = verify checkDollarStar "ls ${*//foo/bar}"
 prop_checkDollarStar6 = verify checkDollarStar "ls ${var[*]%%.*}"
+prop_checkDollarStar7 = verify checkDollarStar "ls ${*}"
+prop_checkDollarStar8 = verifyNot checkDollarStar "ls ${#*}"
+prop_checkDollarStar9 = verify checkDollarStar "ls ${arr[*]}"
+prop_checkDollarStar10 = verifyNot checkDollarStar "ls ${#arr[*]}"
 checkDollarStar p t@(T_NormalWord _ [T_DollarBraced id _ l])
         | not (isStrictlyQuoteFree (parentMap p) t) = do
       let str = concat (oversimplify l)
       when ("*" `isPrefixOf` str) $
             warn id 2048 "Use \"$@\" (with quotes) to prevent whitespace problems."
-      when ("[*]" `isPrefixOf` (getBracedModifier str)) $
+      when ("[*]" `isPrefixOf` (getBracedModifier str) && isVariableChar (headOrDefault '!' str)) $
             warn id 2048 "Use \"${array[@]}\" (with quotes) to prevent whitespace problems."
 
 checkDollarStar _ _ = return ()
