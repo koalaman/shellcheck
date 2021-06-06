@@ -197,6 +197,7 @@ nodeChecks = [
     ,checkEqualsInCommand
     ,checkSecondArgIsComparison
     ,checkComparisonWithLeadingX
+    ,checkCommandWithTrailingSymbol
     ]
 
 optionalChecks = map fst optionalTreeChecks
@@ -4264,6 +4265,43 @@ checkSecondArgIsComparison _ t =
         case t of
             T_NormalWord _ (x:_) -> getId x
             _ -> getId t
+
+
+prop_checkCommandWithTrailingSymbol1 = verify checkCommandWithTrailingSymbol "/"
+prop_checkCommandWithTrailingSymbol2 = verify checkCommandWithTrailingSymbol "/foo/ bar/baz"
+prop_checkCommandWithTrailingSymbol3 = verify checkCommandWithTrailingSymbol "/"
+prop_checkCommandWithTrailingSymbol4 = verifyNot checkCommandWithTrailingSymbol "/*"
+prop_checkCommandWithTrailingSymbol5 = verifyNot checkCommandWithTrailingSymbol "$foo/$bar"
+prop_checkCommandWithTrailingSymbol6 = verify checkCommandWithTrailingSymbol "foo, bar"
+prop_checkCommandWithTrailingSymbol7 = verifyNot checkCommandWithTrailingSymbol ". foo.sh"
+prop_checkCommandWithTrailingSymbol8 = verifyNot checkCommandWithTrailingSymbol ": foo"
+prop_checkCommandWithTrailingSymbol9 = verifyNot checkCommandWithTrailingSymbol "/usr/bin/python[23] file.py"
+
+checkCommandWithTrailingSymbol _ t =
+    case t of
+        T_SimpleCommand _ _ (cmd:_) ->
+            let str = fromJust $ getLiteralStringExt (\_ -> Just "x") cmd
+                last = lastOrDefault 'x' str
+            in
+                case str of
+                    "." -> return ()  -- The . command
+                    ":" -> return ()  -- The : command
+                    " " -> return ()  -- Probably caught by SC1101
+                    "//" -> return () -- Probably caught by SC1127
+                    "" -> err (getId cmd) 2286 "This empty string is interpreted as a command name. Double check syntax (or use 'true' as a no-op)."
+                    _ | last == '/' -> err (getId cmd) 2287 "This is interpreted as a command name ending with '/'. Double check syntax."
+                    _ | last `elem` "\\.,([{<>}])#\"\'% " -> warn (getId cmd) 2288 ("This is interpreted as a command name ending with " ++ (format last) ++ ". Double check syntax.")
+                    _ | '\t' `elem` str -> err (getId cmd) 2289 "This is interpreted as a command name containing a tab. Double check syntax."
+                    _ | '\n' `elem` str -> err (getId cmd) 2289 "This is interpreted as a command name containing a linefeed. Double check syntax."
+                    _ -> return ()
+        _ -> return ()
+  where
+    format x =
+        case x of
+            ' ' -> "space"
+            '\'' -> "apostrophe"
+            '\"' -> "doublequote"
+            x -> '\'' : x : "\'"
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

@@ -877,6 +877,10 @@ getBracedModifier s = headOrDefault "" $ do
 headOrDefault _ (a:_) = a
 headOrDefault def _   = def
 
+-- Get the last element or a default. Like `last` but safe.
+lastOrDefault def [] = def
+lastOrDefault _ list = last list
+
 --- Get element n of a list, or Nothing. Like `!!` but safe.
 (!!!) list i =
     case drop i list of

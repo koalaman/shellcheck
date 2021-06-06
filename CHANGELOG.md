@@ -1,5 +1,7 @@
 ## Git
 ### Added
+- SC2286-SC2288: Warn when command name ends in a symbol like `/.)'"`
+- SC2289: Warn when command name contains tabs or linefeeds
 
 ### Fixed
 
