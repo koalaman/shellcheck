@@ -1068,7 +1068,7 @@ prop_readNormalWord9 = isOk readSubshell "(foo\\ ;\nbar)"
 prop_readNormalWord10 = isWarning readNormalWord "\x201Chello\x201D"
 prop_readNormalWord11 = isWarning readNormalWord "\x2018hello\x2019"
 prop_readNormalWord12 = isWarning readNormalWord "hello\x2018"
-readNormalWord = readNormalishWord "" ["do", "done", "then", "fi", "esac"]
+readNormalWord = readNormalishWord "" ["do", "done", "fi", "esac"]
 
 readPatternWord = readNormalishWord "" ["esac"]
 
