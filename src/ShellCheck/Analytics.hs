@@ -1596,7 +1596,7 @@ prop_checkBackticks2 = verifyNot checkBackticks "echo $(foo)"
 prop_checkBackticks3 = verifyNot checkBackticks "echo `#inlined comment` foo"
 checkBackticks params (T_Backticked id list) | not (null list) =
     addComment $
-        makeCommentWithFix StyleC id 2006  "Use $(...) notation instead of legacy backticked `...`."
+        makeCommentWithFix StyleC id 2006  "Use $(...) notation instead of legacy backticks `...`."
             (fixWith [replaceStart id params 1 "$(", replaceEnd id params 1 ")"])
 checkBackticks _ _ = return ()
 
