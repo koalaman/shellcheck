@@ -66,7 +66,7 @@ doubleQuote = char '"'
 variableStart = upper <|> lower <|> oneOf "_"
 variableChars = upper <|> lower <|> digit <|> oneOf "_"
 -- Chars to allow in function names
-functionChars = variableChars <|> oneOf ":+?-./^@"
+functionChars = variableChars <|> oneOf ":+?-./^@,"
 -- Chars to allow in functions using the 'function' keyword
 extendedFunctionChars = functionChars <|> oneOf "[]*=!"
 specialVariable = oneOf (concat specialVariables)
