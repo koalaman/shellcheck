@@ -8,7 +8,7 @@ Author:           Vidar Holen
 Maintainer:       vidar@vidarholen.net
 Homepage:         https://www.shellcheck.net/
 Build-Type:       Simple
-Cabal-Version:    >= 1.10
+Cabal-Version:    1.18
 Bug-reports:      https://github.com/koalaman/shellcheck/issues
 Description:
   The goals of ShellCheck are:
@@ -22,9 +22,11 @@ Description:
   * To point out subtle caveats, corner cases and pitfalls, that may cause an
     advanced user's otherwise working script to fail under future circumstances.
 
+Extra-Doc-Files:
+    README.md
+    CHANGELOG.md
 Extra-Source-Files:
     -- documentation
-    README.md
     shellcheck.1.md
     -- A script to build the man page using pandoc
     manpage
@@ -126,4 +128,3 @@ test-suite test-shellcheck
       ShellCheck
     default-language: Haskell98
     main-is: test/shellcheck.hs
-
