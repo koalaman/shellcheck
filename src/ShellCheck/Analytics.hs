@@ -3118,24 +3118,29 @@ prop_checkReturnAgainstZero8 = verify checkReturnAgainstZero "(( $? ))"
 prop_checkReturnAgainstZero9 = verify checkReturnAgainstZero "(( ! $? ))"
 checkReturnAgainstZero _ token =
     case token of
-        TC_Binary id _ _ lhs rhs -> check lhs rhs
-        TA_Binary id _ lhs rhs -> check lhs rhs
-        TA_Unary id _ exp
-            | isExitCode exp -> message (getId exp)
+        TC_Binary id _ op lhs rhs -> check op lhs rhs
+        TA_Binary id op lhs rhs -> check op lhs rhs
+        TA_Unary id op exp
+            | isExitCode exp -> message (checksSuccessLhs op) (getId exp)
         TA_Sequence _ [exp]
-            | isExitCode exp -> message (getId exp)
+            | isExitCode exp -> message False (getId exp)
         _ -> return ()
   where
-    check lhs rhs =
+    -- Is "$? op 0" trying to check if the command succeeded?
+    checksSuccessLhs op = not $ op `elem` ["-gt", "-ne", "!=", "!"]
+    -- Is "0 op $?" trying to check if the command succeeded?
+    checksSuccessRhs op = op `notElem` ["-ne", "!="]
+    check op lhs rhs =
         if isZero rhs && isExitCode lhs
-        then message (getId lhs)
-        else when (isZero lhs && isExitCode rhs) $ message (getId rhs)
+        then message (checksSuccessLhs op) (getId lhs)
+        else when (isZero lhs && isExitCode rhs) $ message (checksSuccessRhs op) (getId rhs)
     isZero t = getLiteralString t == Just "0"
     isExitCode t =
         case getWordParts t of
             [T_DollarBraced _ _ l] -> concat (oversimplify l) == "?"
             _ -> False
-    message id = style id 2181 "Check exit code directly with e.g. 'if mycmd;', not indirectly with $?."
+    message forSuccess id = style id 2181 $
+        "Check exit code directly with e.g. 'if " ++ (if forSuccess then "" else "! ") ++ "mycmd;', not indirectly with $?."
 
 prop_checkRedirectedNowhere1 = verify checkRedirectedNowhere "> file"
 prop_checkRedirectedNowhere2 = verify checkRedirectedNowhere "> file | grep foo"
