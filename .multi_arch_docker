@@ -36,6 +36,11 @@ function multi_arch_docker::login_to_docker_hub() {
   echo "$DOCKER_PASSWORD" | docker login -u="$DOCKER_USERNAME" --password-stdin
 }
 
+# Log in to Github container registry for deployment.
+function multi_arch_docker::login_to_github_container_registry() {
+  echo "$GITHUB_GHCR_TOKEN" | docker login -u="$DOCKER_USERNAME" --password-stdin
+}
+
 # Run buildx build and push. Passed in arguments augment the command line.
 function multi_arch_docker::buildx() {
   mkdir -p /tmp/empty
@@ -51,10 +56,13 @@ function multi_arch_docker::buildx() {
 
 # Build and push plain and alpine docker images for all tags.
 function multi_arch_docker::build_and_push_all() {
+  declare -a registries=("" "ghcr.io/")
   for tag in $TAGS; do
-    multi_arch_docker::buildx -t "$DOCKER_BASE:$tag" --build-arg "tag=$tag"
-    multi_arch_docker::buildx -t "$DOCKER_BASE-alpine:$tag" \
-      --build-arg "tag=$tag" --target alpine
+    for registry in "${registries[@]}"; do
+      multi_arch_docker::buildx -t "${registry}$DOCKER_BASE:$tag" --build-arg "tag=$tag"
+      multi_arch_docker::buildx -t "${registry}$DOCKER_BASE-alpine:$tag" \
+        --build-arg "tag=$tag" --target alpine
+    done
   done
 }
 
@@ -101,6 +109,7 @@ function multi_arch_docker::main() {
 
   multi_arch_docker::install_docker_buildx
   multi_arch_docker::login_to_docker_hub
+  multi_arch_docker::login_to_github_container_registry
   multi_arch_docker::build_and_push_all
   multi_arch_docker::test_all
 }

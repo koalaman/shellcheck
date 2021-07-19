@@ -210,10 +210,11 @@ From Snap Store:
 
     snap install --channel=edge shellcheck
 
-From Docker Hub:
+From Docker Hub / GitHub Container Registry:
 
 ```sh
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable myscript
+docker run --rm -v "$PWD:/mnt" ghcr.io/koalaman/shellcheck:stable myscript
 # Or :v0.4.7 for that version, or :latest for daily builds
 ```
 

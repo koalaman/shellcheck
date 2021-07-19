@@ -121,6 +121,7 @@ jobs:
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+          GITHUB_GHCR_TOKEN: ${{ secrets.GITHUB_GHCR_TOKEN }}
           DOCKER_EMAIL: ${{ secrets.DOCKER_EMAIL }}
           DOCKER_BASE: ${{ secrets.DOCKER_USERNAME }}/shellcheck
         run: |
