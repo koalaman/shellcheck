@@ -2061,6 +2061,7 @@ prop_readSimpleCommand4 = isOk readSimpleCommand "typeset -a foo=(lol)"
 prop_readSimpleCommand5 = isOk readSimpleCommand "time if true; then echo foo; fi"
 prop_readSimpleCommand6 = isOk readSimpleCommand "time -p ( ls -l; )"
 prop_readSimpleCommand7 = isOk readSimpleCommand "\\ls"
+prop_readSimpleCommand7b = isOk readSimpleCommand "\\:"
 prop_readSimpleCommand8 = isWarning readSimpleCommand "// Lol"
 prop_readSimpleCommand9 = isWarning readSimpleCommand "/* Lolbert */"
 prop_readSimpleCommand10 = isWarning readSimpleCommand "/**** Lolbert */"
@@ -2321,7 +2322,7 @@ readCmdName = do
     -- Ignore alias suppression
     optional . try $ do
         char '\\'
-        lookAhead $ variableChars
+        lookAhead $ variableChars <|> oneOf ":."
     readCmdWord
 
 readCmdWord = do
