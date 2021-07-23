@@ -1996,12 +1996,14 @@ readHereString = called "here string" $ do
     word <- readNormalWord
     return $ T_HereString id word
 
+prop_readNewlineList1 = isOk readScript "&> /dev/null echo foo"
 readNewlineList =
     many1 ((linefeed <|> carriageReturn) `thenSkip` spacing) <* checkBadBreak
   where
     checkBadBreak = optional $ do
                 pos <- getPosition
                 try $ lookAhead (oneOf "|&") --  See if the next thing could be |, || or &&
+                notFollowedBy2 (string "&>") --  Except &> or &>> which is valid
                 parseProblemAt pos ErrorC 1133
                     "Unexpected start of line. If breaking lines, |/||/&& should be at the end of the previous one."
 readLineBreak = optional readNewlineList
