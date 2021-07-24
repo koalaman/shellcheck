@@ -4,6 +4,7 @@
 - SC2289: Warn when command name contains tabs or linefeeds
 
 ### Fixed
+- SC2290: Warn about misused = in declare & co, which were not caught by SC2270+
 
 ### Changed
 - SC2048: Warning about $\* now also applies to ${array[\*]}

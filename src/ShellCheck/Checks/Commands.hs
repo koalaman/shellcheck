@@ -95,6 +95,11 @@ commandChecks = [
     ,checkSourceArgs
     ,checkChmodDashr
     ,checkXargsDashi
+    ,checkArgComparison "local"
+    ,checkArgComparison "declare"
+    ,checkArgComparison "export"
+    ,checkArgComparison "readonly"
+    ,checkArgComparison "typeset"
     ]
 
 optionalChecks = map fst optionalCommandChecks
@@ -1142,6 +1147,32 @@ checkXargsDashi = CommandCheck (Basename "xargs") f
         (option, value) <- lookup "i" opts
         return $ info (getId option) 2267 "GNU xargs -i is deprecated in favor of -I{}"
     parseOpts = getBsdOpts "0oprtxadR:S:J:L:l:n:P:s:e:E:i:I:"
+
+
+prop_checkArgComparison1 = verify (checkArgComparison "declare") "declare a = b"
+prop_checkArgComparison2 = verify (checkArgComparison "declare") "declare a =b"
+prop_checkArgComparison3 = verifyNot (checkArgComparison "declare") "declare a=b"
+prop_checkArgComparison4 = verify (checkArgComparison "export") "export a +=b"
+prop_checkArgComparison7 = verifyNot (checkArgComparison "declare") "declare -a +i foo"
+-- This mirrors checkSecondArgIsComparison but for arguments to local/readonly/declare/export
+checkArgComparison str = CommandCheck (Exactly str) wordsWithEqual
+  where
+    wordsWithEqual t = mapM_ check $ drop 1 $ arguments t
+    check arg = sequence_ $ do
+        str <- getLeadingUnquotedString arg
+        case str of
+            '=':_ ->
+                return $ err (headId arg) 2290 $
+                    "Remove spaces around = to assign."
+            '+':'=':_ ->
+                return $ err (headId arg) 2290 $
+                    "Remove spaces around += to append."
+            _ -> Nothing
+
+    headId t =
+        case t of
+            T_NormalWord _ (x:_) -> getId x
+            _ -> getId t
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
