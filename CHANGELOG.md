@@ -4,6 +4,7 @@
 - SC2289: Warn when command name contains tabs or linefeeds
 
 ### Fixed
+- SC2102 about repetitions in ranges no longer triggers on [[ -v arr[xx] ]]
 - SC2290: Warn about misused = in declare & co, which were not caught by SC2270+
 
 ### Changed

@@ -737,7 +737,7 @@ getReferencedVariables parents t =
         TC_Unary id _ "-v" token -> getIfReference t token
         TC_Unary id _ "-R" token -> getIfReference t token
         TC_Binary id DoubleBracket op lhs rhs ->
-            if isDereferencing op
+            if isDereferencingBinaryOp op
             then concatMap (getIfReference t) [lhs, rhs]
             else []
 
@@ -771,11 +771,11 @@ getReferencedVariables parents t =
             when (isDigit h) $ fail "is a number"
             return (context, token, getBracedReference str)
 
-    isDereferencing = (`elem` ["-eq", "-ne", "-lt", "-le", "-gt", "-ge"])
-
     isArithmeticAssignment t = case getPath parents t of
         this: TA_Assignment _ "=" lhs _ :_ -> lhs == t
         _                                  -> False
+
+isDereferencingBinaryOp = (`elem` ["-eq", "-ne", "-lt", "-le", "-gt", "-ge"])
 
 dataTypeFrom defaultType v = (case v of T_Array {} -> DataArray; _ -> defaultType) $ SourceFrom [v]
 

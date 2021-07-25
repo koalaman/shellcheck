@@ -2519,8 +2519,10 @@ prop_checkCharRangeGlob3 = verify checkCharRangeGlob "ls [10-15]"
 prop_checkCharRangeGlob4 = verifyNot checkCharRangeGlob "ls [a-zA-Z]"
 prop_checkCharRangeGlob5 = verifyNot checkCharRangeGlob "tr -d [a-zA-Z]" -- tr has 2060
 prop_checkCharRangeGlob6 = verifyNot checkCharRangeGlob "[[ $x == [!!]* ]]"
+prop_checkCharRangeGlob7 = verifyNot checkCharRangeGlob "[[ -v arr[keykey] ]]"
+prop_checkCharRangeGlob8 = verifyNot checkCharRangeGlob "[[ arr[keykey] -gt 1 ]]"
 checkCharRangeGlob p t@(T_Glob id str) |
-  isCharClass str && not (isParamTo (parentMap p) "tr" t) =
+  isCharClass str && not (isParamTo (parentMap p) "tr" t) && not (isDereferenced t) =
     if ":" `isPrefixOf` contents
         && ":" `isSuffixOf` contents
         && contents /= ":"
@@ -2537,6 +2539,15 @@ checkCharRangeGlob p t@(T_Glob id str) |
             '!':rest -> rest
             '^':rest -> rest
             x -> x
+
+    -- Check if this is a dereferencing context like [[ -v array[operandhere] ]]
+    isDereferenced = fromMaybe False . msum . map isDereferencingOp . getPath (parentMap p)
+    isDereferencingOp t =
+        case t of
+            TC_Binary _ DoubleBracket str _ _ -> return $ isDereferencingBinaryOp str
+            TC_Unary _ _ str _ -> return $ str == "-v"
+            T_SimpleCommand {} -> return False
+            _ -> Nothing
 checkCharRangeGlob _ _ = return ()
 
 
