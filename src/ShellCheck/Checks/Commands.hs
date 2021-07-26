@@ -95,12 +95,12 @@ commandChecks = [
     ,checkSourceArgs
     ,checkChmodDashr
     ,checkXargsDashi
-    ,checkArgComparison "local"
-    ,checkArgComparison "declare"
-    ,checkArgComparison "export"
-    ,checkArgComparison "readonly"
-    ,checkArgComparison "typeset"
     ]
+    ++ map checkArgComparison declaringCommands
+    ++ map checkMaskedReturns declaringCommands
+
+declaringCommands = ["local", "declare", "export", "readonly", "typeset"]
+
 
 optionalChecks = map fst optionalCommandChecks
 optionalCommandChecks :: [(CheckDescription, CommandCheck)]
@@ -1173,6 +1173,63 @@ checkArgComparison str = CommandCheck (Exactly str) wordsWithEqual
         case t of
             T_NormalWord _ (x:_) -> getId x
             _ -> getId t
+
+
+prop_checkMaskedReturns1 = verify (checkMaskedReturns "local") "f() { local a=$(false); }"
+prop_checkMaskedReturns2 = verify (checkMaskedReturns "declare") "declare a=$(false)"
+prop_checkMaskedReturns3 = verify (checkMaskedReturns "declare") "declare a=\"`false`\""
+prop_checkMaskedReturns4 = verify (checkMaskedReturns "readonly") "readonly a=$(false)"
+prop_checkMaskedReturns5 = verify (checkMaskedReturns "readonly") "readonly a=\"`false`\""
+prop_checkMaskedReturns6 = verifyNot (checkMaskedReturns "declare") "declare a; a=$(false)"
+prop_checkMaskedReturns7 = verifyNot (checkMaskedReturns "local") "f() { local -r a=$(false); }"
+prop_checkMaskedReturns8 = verifyNot (checkMaskedReturns "readonly") "a=$(false); readonly a"
+prop_checkMaskedReturns9 = verify (checkMaskedReturns "typeset") "#!/bin/ksh\n f() { typeset -r x=$(false); }"
+prop_checkMaskedReturns10 = verifyNot (checkMaskedReturns "typeset") "#!/bin/ksh\n function f { typeset -r x=$(false); }"
+prop_checkMaskedReturns11 = verifyNot (checkMaskedReturns "typeset") "#!/bin/bash\n f() { typeset -r x=$(false); }"
+prop_checkMaskedReturns12 = verify (checkMaskedReturns "typeset") "typeset -r x=$(false);"
+prop_checkMaskedReturns13 = verify (checkMaskedReturns "typeset") "f() { typeset -g x=$(false); }"
+prop_checkMaskedReturns14 = verify (checkMaskedReturns "declare") "declare x=${ false; }"
+prop_checkMaskedReturns15 = verify (checkMaskedReturns "declare") "f() { declare x=$(false); }"
+checkMaskedReturns str = CommandCheck (Exactly str) checkCmd
+  where
+    checkCmd t = do
+        path <- getPathM t
+        shell <- asks shellType
+        sequence_ $ do
+            name <- getCommandName t
+
+            let flags = map snd (getAllFlags t)
+            let hasDashR =  "r" `elem` flags
+            let hasDashG =  "g" `elem` flags
+            let isInScopedFunction = any (isScopedFunction shell) path
+
+            let isLocal = not hasDashG && isLocalInFunction name && isInScopedFunction
+            let isReadOnly = name == "readonly" || hasDashR
+
+            -- Don't warn about local variables that are declared readonly,
+            -- because the workaround `local x; x=$(false); local -r x;` is annoying
+            guard . not $ isLocal && isReadOnly
+
+            return $ mapM_ checkArgs $ arguments t
+
+    checkArgs (T_Assignment id _ _ _ word) | any hasReturn $ getWordParts word =
+        warn id 2155 "Declare and assign separately to avoid masking return values."
+    checkArgs _ = return ()
+
+    isLocalInFunction = (`elem` ["local", "declare", "typeset"])
+    isScopedFunction shell t =
+        case t of
+            T_BatsTest {} -> True
+            -- In ksh, only functions declared with 'function' have their own scope
+            T_Function _ (FunctionKeyword hasFunction) _ _ _ -> shell /= Ksh || hasFunction
+            _ -> False
+
+    hasReturn t = case t of
+        T_Backticked {} -> True
+        T_DollarExpansion {} -> True
+        T_DollarBraceCommandExpansion {} -> True
+        _ -> False
+
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

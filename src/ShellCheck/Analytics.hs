@@ -169,7 +169,6 @@ nodeChecks = [
     ,checkTestArgumentSplitting
     ,checkConcatenatedDollarAt
     ,checkTildeInPath
-    ,checkMaskedReturns
     ,checkReadWithoutR
     ,checkLoopVariableReassignment
     ,checkTrailingBracket
@@ -2968,31 +2967,6 @@ checkTestArgumentSplitting params t =
         -- var[x] and x*2 look like globs
         when (shellType params /= Ksh && isGlob token) $
             err (getId token) 2255 "[ ] does not apply arithmetic evaluation. Evaluate with $((..)) for numbers, or use string comparator for strings."
-
-
-prop_checkMaskedReturns1 = verify checkMaskedReturns "f() { local a=$(false); }"
-prop_checkMaskedReturns2 = verify checkMaskedReturns "declare a=$(false)"
-prop_checkMaskedReturns3 = verify checkMaskedReturns "declare a=\"`false`\""
-prop_checkMaskedReturns4 = verify checkMaskedReturns "readonly a=$(false)"
-prop_checkMaskedReturns5 = verify checkMaskedReturns "readonly a=\"`false`\""
-prop_checkMaskedReturns6 = verifyNot checkMaskedReturns "declare a; a=$(false)"
-prop_checkMaskedReturns7 = verifyNot checkMaskedReturns "f() { local -r a=$(false); }"
-prop_checkMaskedReturns8 = verifyNot checkMaskedReturns "a=$(false); readonly a"
-checkMaskedReturns _ t@(T_SimpleCommand id _ (cmd:rest)) = sequence_ $ do
-    name <- getCommandName t
-    guard $ name `elem` ["declare", "export", "readonly"]
-        || name == "local" && "r" `notElem` map snd (getAllFlags t)
-    return $ mapM_ checkArgs rest
-  where
-    checkArgs (T_Assignment id _ _ _ word) | any hasReturn $ getWordParts word =
-        warn id 2155 "Declare and assign separately to avoid masking return values."
-    checkArgs _ = return ()
-
-    hasReturn t = case t of
-        T_Backticked {} -> True
-        T_DollarExpansion {} -> True
-        _ -> False
-checkMaskedReturns _ _ = return ()
 
 
 prop_checkReadWithoutR1 = verify checkReadWithoutR "read -a foo"
