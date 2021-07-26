@@ -11,6 +11,7 @@
 
 ### Changed
 - SC2048: Warning about $\* now also applies to ${array[\*]}
+- Quote warnings are now emitted for declaration utilities in sh
 
 
 ## v0.7.2 - 2021-04-19

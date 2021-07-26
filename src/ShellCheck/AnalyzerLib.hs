@@ -287,14 +287,14 @@ isStrictlyQuoteFree = isQuoteFreeNode True
 isQuoteFree = isQuoteFreeNode False
 
 
-isQuoteFreeNode strict tree t =
+isQuoteFreeNode strict shell tree t =
     isQuoteFreeElement t ||
-        headOrDefault False (mapMaybe isQuoteFreeContext (drop 1 $ getPath tree t))
+        (fromMaybe False $ msum $ map isQuoteFreeContext $ drop 1 $ getPath tree t)
   where
     -- Is this node self-quoting in itself?
     isQuoteFreeElement t =
         case t of
-            T_Assignment {} -> True
+            T_Assignment {} -> assignmentIsQuoting t
             T_FdRedirect {} -> True
             _               -> False
 
@@ -306,7 +306,7 @@ isQuoteFreeNode strict tree t =
             TC_Binary _ DoubleBracket _ _ _ -> return True
             TA_Sequence {}                  -> return True
             T_Arithmetic {}                 -> return True
-            T_Assignment {}                 -> return True
+            T_Assignment {}                 -> return $ assignmentIsQuoting t
             T_Redirecting {}                -> return False
             T_DoubleQuoted _ _              -> return True
             T_DollarDoubleQuoted _ _        -> return True
@@ -317,6 +317,18 @@ isQuoteFreeNode strict tree t =
             T_ForIn {}                      -> return (not strict)
             T_SelectIn {}                   -> return (not strict)
             _                               -> Nothing
+
+    -- Check whether this assigment is self-quoting due to being a recognized
+    -- assignment passed to a Declaration Utility. This will soon be required
+    -- by POSIX: https://austingroupbugs.net/view.php?id=351
+    assignmentIsQuoting t = shellParsesParamsAsAssignments || not (isAssignmentParamToCommand t)
+    shellParsesParamsAsAssignments = shell /= Sh
+
+    -- Is this assignment a parameter to a command like export/typeset/etc?
+    isAssignmentParamToCommand (T_Assignment id _ _ _ _) =
+        case Map.lookup id tree of
+            Just (T_SimpleCommand _ _ (_:args)) -> id `elem` (map getId args)
+            _ -> False
 
 -- Check if a token is a parameter to a certain command by name:
 -- Example: isParamTo (parentMap params) "sed" t

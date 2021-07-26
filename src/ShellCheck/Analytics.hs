@@ -728,6 +728,7 @@ prop_checkUnquotedExpansions6 = verifyNot checkUnquotedExpansions "$(cmd)"
 prop_checkUnquotedExpansions7 = verifyNot checkUnquotedExpansions "cat << foo\n$(ls)\nfoo"
 prop_checkUnquotedExpansions8 = verifyNot checkUnquotedExpansions "set -- $(seq 1 4)"
 prop_checkUnquotedExpansions9 = verifyNot checkUnquotedExpansions "echo foo `# inline comment`"
+prop_checkUnquotedExpansions10 = verify checkUnquotedExpansions "#!/bin/sh\nexport var=$(val)"
 checkUnquotedExpansions params =
     check
   where
@@ -737,7 +738,7 @@ checkUnquotedExpansions params =
     check _ = return ()
     tree = parentMap params
     examine t contents =
-        unless (null contents || shouldBeSplit t || isQuoteFree tree t || usedAsCommandName tree t) $
+        unless (null contents || shouldBeSplit t || isQuoteFree (shellType params) tree t || usedAsCommandName tree t) $
             warn (getId t) 2046 "Quote this to prevent word splitting."
 
     shouldBeSplit t =
@@ -828,7 +829,7 @@ prop_checkDollarStar8 = verifyNot checkDollarStar "ls ${#*}"
 prop_checkDollarStar9 = verify checkDollarStar "ls ${arr[*]}"
 prop_checkDollarStar10 = verifyNot checkDollarStar "ls ${#arr[*]}"
 checkDollarStar p t@(T_NormalWord _ [T_DollarBraced id _ l])
-        | not (isStrictlyQuoteFree (parentMap p) t) = do
+        | not (isStrictlyQuoteFree (shellType p) (parentMap p) t) = do
       let str = concat (oversimplify l)
       when ("*" `isPrefixOf` str) $
             warn id 2048 "Use \"$@\" (with quotes) to prevent whitespace problems."
@@ -849,7 +850,7 @@ prop_checkUnquotedDollarAt7 = verify checkUnquotedDollarAt "for f in ${var[@]}; 
 prop_checkUnquotedDollarAt8 = verifyNot checkUnquotedDollarAt "echo \"${args[@]:+${args[@]}}\""
 prop_checkUnquotedDollarAt9 = verifyNot checkUnquotedDollarAt "echo ${args[@]:+\"${args[@]}\"}"
 prop_checkUnquotedDollarAt10 = verifyNot checkUnquotedDollarAt "echo ${@+\"$@\"}"
-checkUnquotedDollarAt p word@(T_NormalWord _ parts) | not $ isStrictlyQuoteFree (parentMap p) word =
+checkUnquotedDollarAt p word@(T_NormalWord _ parts) | not $ isStrictlyQuoteFree (shellType p) (parentMap p) word =
     forM_ (find isArrayExpansion parts) $ \x ->
         unless (isQuotedAlternativeReference x) $
             err (getId x) 2068
@@ -862,7 +863,7 @@ prop_checkConcatenatedDollarAt3 = verify checkConcatenatedDollarAt "echo $a$@"
 prop_checkConcatenatedDollarAt4 = verifyNot checkConcatenatedDollarAt "echo $@"
 prop_checkConcatenatedDollarAt5 = verifyNot checkConcatenatedDollarAt "echo \"${arr[@]}\""
 checkConcatenatedDollarAt p word@T_NormalWord {}
-    | not $ isQuoteFree (parentMap p) word
+    | not $ isQuoteFree (shellType p) (parentMap p) word
     || null (drop 1 parts) =
         mapM_ for array
   where
@@ -1891,6 +1892,7 @@ prop_checkSpacefulness40= verifyNotTree checkSpacefulness "a=$((x+1)); echo $a"
 prop_checkSpacefulness41= verifyNotTree checkSpacefulness "exec $1 --flags"
 prop_checkSpacefulness42= verifyNotTree checkSpacefulness "run $1 --flags"
 prop_checkSpacefulness43= verifyNotTree checkSpacefulness "$foo=42"
+prop_checkSpacefulness44= verifyTree checkSpacefulness "#!/bin/dash\nexport var=$value"
 
 data SpaceStatus = SpaceSome | SpaceNone | SpaceEmpty deriving (Eq)
 instance Semigroup SpaceStatus where
@@ -1972,7 +1974,7 @@ checkSpacefulness' onFind params t =
                   isExpansion token
                   && not (isArrayExpansion token) -- There's another warning for this
                   && not (isCountingReference token)
-                  && not (isQuoteFree parents token)
+                  && not (isQuoteFree (shellType params) parents token)
                   && not (isQuotedAlternativeReference token)
                   && not (usedAsCommandName parents token)
 
@@ -2090,7 +2092,7 @@ checkQuotesInLiterals params t =
         return $ case assignment of
           Just j
               | not (isParamTo parents "eval" expr)
-              && not (isQuoteFree parents expr)
+              && not (isQuoteFree (shellType params) parents expr)
               && not (squashesQuotes expr)
               -> [
                   makeComment WarningC j 2089 $
