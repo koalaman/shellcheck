@@ -95,6 +95,7 @@ commandChecks = [
     ,checkSourceArgs
     ,checkChmodDashr
     ,checkXargsDashi
+    ,checkUnquotedEchoSpaces
     ]
     ++ map checkArgComparison declaringCommands
     ++ map checkMaskedReturns declaringCommands
@@ -1229,6 +1230,32 @@ checkMaskedReturns str = CommandCheck (Exactly str) checkCmd
         T_DollarExpansion {} -> True
         T_DollarBraceCommandExpansion {} -> True
         _ -> False
+
+
+prop_checkUnquotedEchoSpaces1 = verify checkUnquotedEchoSpaces "echo foo         bar"
+prop_checkUnquotedEchoSpaces2 = verifyNot checkUnquotedEchoSpaces "echo       foo"
+prop_checkUnquotedEchoSpaces3 = verifyNot checkUnquotedEchoSpaces "echo foo  bar"
+prop_checkUnquotedEchoSpaces4 = verifyNot checkUnquotedEchoSpaces "echo 'foo          bar'"
+prop_checkUnquotedEchoSpaces5 = verifyNot checkUnquotedEchoSpaces "echo a > myfile.txt b"
+prop_checkUnquotedEchoSpaces6 = verifyNot checkUnquotedEchoSpaces "        echo foo\\\n        bar"
+checkUnquotedEchoSpaces = CommandCheck (Basename "echo") check
+  where
+    check t = do
+        let args = arguments t
+        m <- asks tokenPositions
+        redir <- getClosestCommandM t
+        sequence_ $ do
+            let positions = mapMaybe (\c -> Map.lookup (getId c) m) args
+            let pairs = zip positions (drop 1 positions)
+            (T_Redirecting _ redirTokens _) <- redir
+            let redirPositions = mapMaybe (\c -> fst <$> Map.lookup (getId c) m) redirTokens
+            guard $ any (hasSpacesBetween redirPositions) pairs
+            return $ info (getId t) 2291 "Quote repeated spaces to avoid them collapsing into one."
+
+    hasSpacesBetween redirs ((a,b), (c,d)) =
+        posLine a == posLine d
+        && ((posColumn c) - (posColumn b)) >= 4
+        && not (any (\x -> b < x && x < c) redirs)
 
 
 return []

@@ -2,6 +2,7 @@
 ### Added
 - SC2286-SC2288: Warn when command name ends in a symbol like `/.)'"`
 - SC2289: Warn when command name contains tabs or linefeeds
+- SC2291: Warn about repeated unquoted spaces between words in echo
 
 ### Fixed
 - SC2102 about repetitions in ranges no longer triggers on [[ -v arr[xx] ]]
