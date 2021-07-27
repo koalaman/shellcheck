@@ -1800,6 +1800,9 @@ prop_subshellAssignmentCheck17 = verifyNotTree subshellAssignmentCheck "foo=${ {
 prop_subshellAssignmentCheck18 = verifyTree subshellAssignmentCheck "( exec {n}>&2; ); echo $n"
 prop_subshellAssignmentCheck19 = verifyNotTree subshellAssignmentCheck "#!/bin/bash\nshopt -s lastpipe; echo a | read -r b; echo \"$b\""
 prop_subshellAssignmentCheck20 = verifyTree subshellAssignmentCheck "@test 'foo' { a=1; }\n@test 'bar' { echo $a; }\n"
+prop_subshellAssignmentCheck21 = verifyNotTree subshellAssignmentCheck "test1() { echo foo | if [[ $var ]]; then echo $var; fi; }; test2() { echo $var; }"
+prop_subshellAssignmentCheck22 = verifyNotTree subshellAssignmentCheck "( [[ -n $foo || -z $bar ]] ); echo $foo $bar"
+prop_subshellAssignmentCheck23 = verifyNotTree subshellAssignmentCheck "( export foo ); echo $foo"
 subshellAssignmentCheck params t =
     let flow = variableFlow params
         check = findSubshelled flow [("oops",[])] Map.empty
@@ -1807,8 +1810,19 @@ subshellAssignmentCheck params t =
 
 
 findSubshelled [] _ _ = return ()
-findSubshelled (Assignment x@(_, _, str, _):rest) ((reason,scope):lol) deadVars =
-    findSubshelled rest ((reason, x:scope):lol) $ Map.insert str Alive deadVars
+findSubshelled (Assignment x@(_, _, str, data_):rest) scopes@((reason,scope):restscope) deadVars =
+    if isTrueAssignment data_
+    then findSubshelled rest ((reason, x:scope):restscope) $ Map.insert str Alive deadVars
+    else findSubshelled rest scopes deadVars
+  where
+    isTrueAssignment c =
+        case c of
+            DataString SourceChecked -> False
+            DataString SourceDeclaration -> False
+            DataArray SourceChecked -> False
+            DataArray SourceDeclaration -> False
+            _ -> True
+
 findSubshelled (Reference (_, readToken, str):rest) scopes deadVars = do
     unless (shouldIgnore str) $ case Map.findWithDefault Alive str deadVars of
         Alive -> return ()
