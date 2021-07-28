@@ -178,7 +178,8 @@ makeCommentWithFix :: Severity -> Id -> Code -> String -> Fix -> TokenComment
 makeCommentWithFix severity id code str fix =
     let comment = makeComment severity id code str
         withFix = comment {
-            tcFix = Just fix
+            -- If fix is empty, pretend it wasn't there.
+            tcFix = if null (fixReplacements fix) then Nothing else Just fix
         }
     in force withFix
 

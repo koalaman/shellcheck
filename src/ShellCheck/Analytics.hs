@@ -244,6 +244,13 @@ optionalTreeChecks = [
         cdPositive = "echo $VAR",
         cdNegative = "VAR=hello; echo $VAR"
     }, checkUnassignedReferences' True)
+
+    ,(newCheckDescription {
+        cdName = "require-double-brackets",
+        cdDescription = "Require [[ and warn about [ in Bash/Ksh",
+        cdPositive = "[ -e /etc/issue ]",
+        cdNegative = "[[ -e /etc/issue ]]"
+    }, checkRequireDoubleBracket)
     ]
 
 optionalCheckMap :: Map.Map String (Parameters -> Token -> [TokenComment])
@@ -4310,6 +4317,40 @@ checkCommandWithTrailingSymbol _ t =
             '\'' -> "apostrophe"
             '\"' -> "doublequote"
             x -> '\'' : x : "\'"
+
+
+prop_checkRequireDoubleBracket1 = verifyTree checkRequireDoubleBracket "[ -x foo ]"
+prop_checkRequireDoubleBracket2 = verifyTree checkRequireDoubleBracket "[ foo -o bar ]"
+prop_checkRequireDoubleBracket3 = verifyNotTree checkRequireDoubleBracket "#!/bin/sh\n[ -x foo ]"
+prop_checkRequireDoubleBracket4 = verifyNotTree checkRequireDoubleBracket "[[ -x foo ]]"
+checkRequireDoubleBracket params =
+    if isBashLike params
+    then nodeChecksToTreeCheck [check] params
+    else const []
+  where
+    check _ t = case t of
+        T_Condition id SingleBracket _ ->
+            styleWithFix id 2292 "Prefer [[ ]] over [ ] for tests in Bash/Ksh." (fixFor t)
+        _ -> return ()
+
+    fixFor t = fixWith $
+        if isSimple t
+        then
+            [
+                replaceStart (getId t) params 0 "[",
+                replaceEnd (getId t) params 0 "]"
+            ]
+        else []
+
+    -- We don't tag operators like < and -o well enough to replace them,
+    -- so just handle the simple cases.
+    isSimple t = case t of
+        T_Condition _ _ s -> isSimple s
+        TC_Binary _ _ op _ _ -> not $ any (\x -> x `elem` op) "<>"
+        TC_Unary {} -> True
+        TC_Nullary {} -> True
+        _ -> False
+
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
