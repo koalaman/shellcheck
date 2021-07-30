@@ -3126,20 +3126,71 @@ prop_checkReturnAgainstZero6 = verifyNot checkReturnAgainstZero "[[ $R -eq 0 ]]"
 prop_checkReturnAgainstZero7 = verify checkReturnAgainstZero "(( $? == 0 ))"
 prop_checkReturnAgainstZero8 = verify checkReturnAgainstZero "(( $? ))"
 prop_checkReturnAgainstZero9 = verify checkReturnAgainstZero "(( ! $? ))"
-checkReturnAgainstZero _ token =
+prop_checkReturnAgainstZero10 = verifyNot checkReturnAgainstZero "x=$(( $? > 0 ))"
+prop_checkReturnAgainstZero11 = verify checkReturnAgainstZero "(( ! ! ! $? ))"
+prop_checkReturnAgainstZero12 = verify checkReturnAgainstZero "[ ! $? -eq 0 ]"
+prop_checkReturnAgainstZero13 = verifyNot checkReturnAgainstZero "(( ! $? && $? > 42))"
+prop_checkReturnAgainstZero14 = verifyNot checkReturnAgainstZero "[[ -e foo || $? -eq 0 ]]"
+prop_checkReturnAgainstZero15 = verifyNot checkReturnAgainstZero "(( $?, n=1 ))"
+prop_checkReturnAgainstZero16 = verifyNot checkReturnAgainstZero "(( $? || $? == 4 ))"
+prop_checkReturnAgainstZero17 = verifyNot checkReturnAgainstZero "(( $? + 0 ))"
+prop_checkReturnAgainstZero18 = verifyNot checkReturnAgainstZero "f() { if [ $? -eq 0 ]; then :; fi; }"
+prop_checkReturnAgainstZero19 = verifyNot checkReturnAgainstZero "f() ( [ $? -eq 0 ] || exit 42; )"
+prop_checkReturnAgainstZero20 = verify checkReturnAgainstZero "f() { if :; then x; [ $? -eq 0 ] && exit; fi; }"
+prop_checkReturnAgainstZero21 = verify checkReturnAgainstZero "(( ( $? ) ))"
+prop_checkReturnAgainstZero22 = verify checkReturnAgainstZero "[[ ( $? -eq 0 ) ]]"
+checkReturnAgainstZero params token =
     case token of
         TC_Binary id _ op lhs rhs -> check op lhs rhs
-        TA_Binary id op lhs rhs -> check op lhs rhs
-        TA_Unary id op exp
+        TA_Binary id op lhs rhs
+            | op `elem` [">", "<", ">=", "<=", "==", "!="] -> check op lhs rhs
+        TA_Unary id op@"!" exp
             | isExitCode exp -> message (checksSuccessLhs op) (getId exp)
         TA_Sequence _ [exp]
             | isExitCode exp -> message False (getId exp)
         _ -> return ()
   where
+    -- We don't want to warn about composite expressions like
+    -- [[ $? -eq 0 || $? -eq 4 ]] since these can be annoying to rewrite.
+    isOnlyTestInCommand t =
+        case getPath (parentMap params) t of
+            _:(T_Condition {}):_ -> True
+            _:(T_Arithmetic {}):_ -> True
+            _:(TA_Sequence _ [_]):(T_Arithmetic {}):_ -> True
+
+            -- Some negations and groupings are also fine
+            _:next@(TC_Unary _ _ "!" _):_ -> isOnlyTestInCommand next
+            _:next@(TA_Unary _ "!" _):_ -> isOnlyTestInCommand next
+            _:next@(TC_Group {}):_ -> isOnlyTestInCommand next
+            _:next@(TA_Sequence _ [_]):_ -> isOnlyTestInCommand next
+            _ -> False
+
+    -- TODO: Do better $? tracking and filter on whether
+    -- the target command is in the same function
+    getFirstCommandInFunction = f
+      where
+        f t = case t of
+            T_Function _ _ _ _ x -> f x
+            T_BraceGroup _ (x:_) -> f x
+            T_Subshell _ (x:_) -> f x
+            T_Annotation _ _ x -> f x
+            T_AndIf _ x _ -> f x
+            T_OrIf _ x _ -> f x
+            T_Pipeline _ _ (x:_) -> f x
+            T_Redirecting _ _ (T_IfExpression _ (((x:_),_):_) _) -> f x
+            x -> x
+
+    isFirstCommandInFunction = fromMaybe False $ do
+        let path = getPath (parentMap params) token
+        func <- listToMaybe $ filter isFunction path
+        cmd <- getClosestCommand (parentMap params) token
+        return $ getId cmd == getId (getFirstCommandInFunction func)
+
     -- Is "$? op 0" trying to check if the command succeeded?
     checksSuccessLhs op = not $ op `elem` ["-gt", "-ne", "!=", "!"]
     -- Is "0 op $?" trying to check if the command succeeded?
     checksSuccessRhs op = op `notElem` ["-ne", "!="]
+
     check op lhs rhs =
         if isZero rhs && isExitCode lhs
         then message (checksSuccessLhs op) (getId lhs)
@@ -3149,8 +3200,10 @@ checkReturnAgainstZero _ token =
         case getWordParts t of
             [T_DollarBraced _ _ l] -> concat (oversimplify l) == "?"
             _ -> False
-    message forSuccess id = style id 2181 $
+
+    message forSuccess id = when (isOnlyTestInCommand token && not isFirstCommandInFunction) $ style id 2181 $
         "Check exit code directly with e.g. 'if " ++ (if forSuccess then "" else "! ") ++ "mycmd;', not indirectly with $?."
+
 
 prop_checkRedirectedNowhere1 = verify checkRedirectedNowhere "> file"
 prop_checkRedirectedNowhere2 = verify checkRedirectedNowhere "> file | grep foo"
