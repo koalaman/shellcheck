@@ -143,7 +143,7 @@ On systems with Stack (installs to `~/.local/bin`):
 
 On Debian based distros:
 
-    apt-get install shellcheck
+    sudo apt install shellcheck
 
 On Arch Linux based distros:
 
@@ -157,8 +157,8 @@ On Gentoo based distros:
 
 On EPEL based distros:
 
-    yum -y install epel-release
-    yum install ShellCheck
+    sudo yum -y install epel-release
+    sudo yum install ShellCheck
 
 On Fedora based distros:
 
@@ -166,7 +166,7 @@ On Fedora based distros:
 
 On FreeBSD:
 
-    pkg install hs-ShellCheck
+    sudo pkg install hs-ShellCheck
 
 On macOS (OS X) with Homebrew:
 
