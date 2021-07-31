@@ -872,6 +872,8 @@ getBracedReference s = fromMaybe s $
 prop_getBracedModifier1 = getBracedModifier "foo:bar:baz" == ":bar:baz"
 prop_getBracedModifier2 = getBracedModifier "!var:-foo" == ":-foo"
 prop_getBracedModifier3 = getBracedModifier "foo[bar]" == "[bar]"
+prop_getBracedModifier4 = getBracedModifier "foo[@]@Q" == "[@]@Q"
+prop_getBracedModifier5 = getBracedModifier "@@Q" == "@Q"
 getBracedModifier s = headOrDefault "" $ do
     let var = getBracedReference s
     a <- dropModifier s

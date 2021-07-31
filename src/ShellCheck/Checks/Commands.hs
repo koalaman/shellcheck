@@ -96,6 +96,7 @@ commandChecks = [
     ,checkChmodDashr
     ,checkXargsDashi
     ,checkUnquotedEchoSpaces
+    ,checkEvalArray
     ]
     ++ map checkArgComparison declaringCommands
     ++ map checkMaskedReturns declaringCommands
@@ -1256,6 +1257,26 @@ checkUnquotedEchoSpaces = CommandCheck (Basename "echo") check
         posLine a == posLine d
         && ((posColumn c) - (posColumn b)) >= 4
         && not (any (\x -> b < x && x < c) redirs)
+
+
+prop_checkEvalArray1 = verify checkEvalArray  "eval $@"
+prop_checkEvalArray2 = verify checkEvalArray  "eval \"${args[@]}\""
+prop_checkEvalArray3 = verify checkEvalArray  "eval \"${args[@]@Q}\""
+prop_checkEvalArray4 = verifyNot checkEvalArray  "eval \"${args[*]@Q}\""
+prop_checkEvalArray5 = verifyNot checkEvalArray  "eval \"$*\""
+checkEvalArray = CommandCheck (Exactly "eval") (mapM_ check . concatMap getWordParts . arguments)
+  where
+    check t =
+        when (isArrayExpansion t) $
+            if isEscaped t
+            then style (getId t) 2293 "When eval'ing @Q-quoted words, use * rather than @ as the index."
+            else warn (getId t) 2294 "eval negates the benefit of arrays. Drop eval to preserve whitespace/symbols (or eval as string)."
+
+    isEscaped q =
+        case q of
+            -- Match ${arr[@]@Q} and ${@@Q} and such
+            T_DollarBraced _ _ l -> 'Q' `elem` getBracedModifier (concat $ oversimplify l)
+            _ -> False
 
 
 return []
