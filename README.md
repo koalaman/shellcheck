@@ -166,7 +166,7 @@ On Fedora based distros:
 
 On FreeBSD:
 
-    sudo pkg install hs-ShellCheck
+    pkg install hs-ShellCheck
 
 On macOS (OS X) with Homebrew:
 
