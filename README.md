@@ -1,4 +1,5 @@
-[![Build Status](https://travis-ci.org/koalaman/shellcheck.svg?branch=master)](https://travis-ci.org/koalaman/shellcheck)
+[![Build Status](https://github.com/koalaman/shellcheck/actions/workflows/build.yml/badge.svg)](https://github.com/koalaman/shellcheck/actions/workflows/build.yml)
+
 
 # ShellCheck - A shell script static analysis tool
 
