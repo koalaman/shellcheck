@@ -167,6 +167,8 @@ errWithFix :: MonadWriter [TokenComment] m => Id -> Code -> String -> Fix -> m (
 errWithFix  = addCommentWithFix ErrorC
 warnWithFix :: MonadWriter [TokenComment] m => Id -> Code -> String -> Fix -> m ()
 warnWithFix  = addCommentWithFix WarningC
+infoWithFix :: MonadWriter [TokenComment] m => Id -> Code -> String -> Fix -> m ()
+infoWithFix = addCommentWithFix InfoC
 styleWithFix :: MonadWriter [TokenComment] m => Id -> Code -> String -> Fix -> m ()
 styleWithFix = addCommentWithFix StyleC
 

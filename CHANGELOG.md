@@ -5,6 +5,7 @@
 - SC2291: Warn about repeated unquoted spaces between words in echo
 - SC2292: Suggest [[ over [ in Bash/Ksh scripts (optional)
 - SC2293/SC2294: Warn when calling `eval` with arrays
+- SC2295: Warn about "${x#$y}" treating $y as a pattern when not quoted
 
 ### Fixed
 - SC2102 about repetitions in ranges no longer triggers on [[ -v arr[xx] ]]

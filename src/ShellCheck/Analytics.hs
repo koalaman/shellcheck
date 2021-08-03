@@ -197,6 +197,7 @@ nodeChecks = [
     ,checkSecondArgIsComparison
     ,checkComparisonWithLeadingX
     ,checkCommandWithTrailingSymbol
+    ,checkUnquotedParameterExpansionPattern
     ]
 
 optionalChecks = map fst optionalTreeChecks
@@ -388,7 +389,7 @@ replaceToken id params r =
         repInsertionPoint = InsertBefore
     }
 
-surroundWidth id params s = fixWith [replaceStart id params 0 s, replaceEnd id params 0 s]
+surroundWith id params s = fixWith [replaceStart id params 0 s, replaceEnd id params 0 s]
 fixWith fixes = newFix { fixReplacements = fixes }
 
 prop_checkEchoWc3 = verify checkEchoWc "n=$(echo $foo | wc -c)"
@@ -1977,7 +1978,7 @@ quotesMayConflictWithSC2281 params t =
             (getId t) == (getId me) && (parentId == getId cmd)
         _ -> False
 
-addDoubleQuotesAround params token = (surroundWidth (getId token) params "\"")
+addDoubleQuotesAround params token = (surroundWith (getId token) params "\"")
 checkSpacefulness'
     :: (SpaceStatus -> Token -> String -> Writer [TokenComment] ()) ->
             Parameters -> Token -> [TokenComment]
@@ -3274,7 +3275,7 @@ checkArrayAssignmentIndices params root =
                     T_Literal id str <- parts
                     let (before, after) = break ('=' ==) str
                     guard $ all isDigit before && not (null after)
-                    return $ warnWithFix id 2191 "The = here is literal. To assign by index, use ( [index]=value ) with no spaces. To keep as literal, quote it." (surroundWidth id params "\"")
+                    return $ warnWithFix id 2191 "The = here is literal. To assign by index, use ( [index]=value ) with no spaces. To keep as literal, quote it." (surroundWith id params "\"")
                 in
                     if null literalEquals && isAssociative
                     then warn (getId t) 2190 "Elements in associative arrays need index, e.g. array=( [index]=value ) ."
@@ -4403,6 +4404,32 @@ checkRequireDoubleBracket params =
         TC_Unary {} -> True
         TC_Nullary {} -> True
         _ -> False
+
+
+prop_checkUnquotedParameterExpansionPattern1 = verify checkUnquotedParameterExpansionPattern  "echo \"${var#$x}\""
+prop_checkUnquotedParameterExpansionPattern2 = verify checkUnquotedParameterExpansionPattern  "echo \"${var%%$(x)}\""
+prop_checkUnquotedParameterExpansionPattern3 = verifyNot checkUnquotedParameterExpansionPattern  "echo \"${var[#$x]}\""
+prop_checkUnquotedParameterExpansionPattern4 = verifyNot checkUnquotedParameterExpansionPattern  "echo \"${var%\"$x\"}\""
+
+checkUnquotedParameterExpansionPattern params x =
+    case x of
+        T_DollarBraced _ True word@(T_NormalWord _ (T_Literal _ s : rest@(_:_))) -> do
+            let modifier = getBracedModifier $ concat $ oversimplify word
+            when ("%" `isPrefixOf` modifier || "#" `isPrefixOf` modifier) $
+                mapM_ check rest
+        _ -> return ()
+  where
+    check t =
+        case t of
+            T_DollarBraced {} -> inform t
+            T_DollarExpansion {} -> inform t
+            T_Backticked {} -> inform t
+            _ -> return ()
+
+    inform t =
+        infoWithFix (getId t) 2295
+            "Expansions inside ${..} need to be quoted separately, otherwise they match as patterns." $
+                surroundWith (getId t) params "\""
 
 
 return []
