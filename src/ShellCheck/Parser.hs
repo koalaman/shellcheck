@@ -2810,7 +2810,7 @@ readLetSuffix = many1 (readIoRedirect <|> try readLetExpression <|> readCmdWord)
         startPos <- getPosition
         expression <- readStringForParser readCmdWord
         let (unQuoted, newPos) = kludgeAwayQuotes expression startPos
-        subParse newPos readArithmeticContents unQuoted
+        subParse newPos (readArithmeticContents <* eof) unQuoted
 
     kludgeAwayQuotes :: String -> SourcePos -> (String, SourcePos)
     kludgeAwayQuotes s p =

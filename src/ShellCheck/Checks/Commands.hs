@@ -101,7 +101,7 @@ commandChecks = [
     ++ map checkArgComparison declaringCommands
     ++ map checkMaskedReturns declaringCommands
 
-declaringCommands = ["local", "declare", "export", "readonly", "typeset"]
+declaringCommands = ["local", "declare", "export", "readonly", "typeset", "let"]
 
 
 optionalChecks = map fst optionalCommandChecks
@@ -1156,11 +1156,13 @@ prop_checkArgComparison2 = verify (checkArgComparison "declare") "declare a =b"
 prop_checkArgComparison3 = verifyNot (checkArgComparison "declare") "declare a=b"
 prop_checkArgComparison4 = verify (checkArgComparison "export") "export a +=b"
 prop_checkArgComparison7 = verifyNot (checkArgComparison "declare") "declare -a +i foo"
+prop_checkArgComparison8 = verify (checkArgComparison "let") "let x = 0"
 -- This mirrors checkSecondArgIsComparison but for arguments to local/readonly/declare/export
-checkArgComparison str = CommandCheck (Exactly str) wordsWithEqual
+checkArgComparison cmd = CommandCheck (Exactly cmd) wordsWithEqual
   where
-    wordsWithEqual t = mapM_ check $ drop 1 $ arguments t
-    check arg = sequence_ $ do
+    wordsWithEqual t = mapM_ check $ arguments t
+    check arg = do
+      sequence_ $ do
         str <- getLeadingUnquotedString arg
         case str of
             '=':_ ->
@@ -1170,6 +1172,15 @@ checkArgComparison str = CommandCheck (Exactly str) wordsWithEqual
                 return $ err (headId arg) 2290 $
                     "Remove spaces around += to append."
             _ -> Nothing
+
+       -- 'let' is parsed as a sequence of arithmetic expansions,
+       -- so we want the additional warning for "x="
+      when (cmd == "let") $ sequence_ $ do
+        token <- getTrailingUnquotedLiteral arg
+        str <- getLiteralString token
+        guard $ "=" `isSuffixOf` str
+        return $ err (getId token) 2290 $
+            "Remove spaces around = to assign."
 
     headId t =
         case t of
