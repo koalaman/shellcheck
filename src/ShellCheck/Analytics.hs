@@ -3069,6 +3069,7 @@ checkUncheckedCdPushdPopd params root =
 prop_checkLoopVariableReassignment1 = verify checkLoopVariableReassignment "for i in *; do for i in *.bar; do true; done; done"
 prop_checkLoopVariableReassignment2 = verify checkLoopVariableReassignment "for i in *; do for((i=0; i<3; i++)); do true; done; done"
 prop_checkLoopVariableReassignment3 = verifyNot checkLoopVariableReassignment "for i in *; do for j in *.bar; do true; done; done"
+prop_checkLoopVariableReassignment4 = verifyNot checkLoopVariableReassignment "for _ in *; do for _ in *.bar; do true; done; done"
 checkLoopVariableReassignment params token =
     sequence_ $ case token of
         T_ForIn {} -> check
@@ -3077,6 +3078,7 @@ checkLoopVariableReassignment params token =
   where
     check = do
         str <- loopVariable token
+        guard $ str /= "_"
         next <- find (\x -> loopVariable x == Just str) path
         return $ do
             warn (getId token) 2165 "This nested loop overrides the index variable of its parent."
