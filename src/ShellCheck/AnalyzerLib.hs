@@ -816,6 +816,7 @@ isConfusedGlobRegex _       = False
 
 isVariableStartChar x = x == '_' || isAsciiLower x || isAsciiUpper x
 isVariableChar x = isVariableStartChar x || isDigit x
+isSpecialVariableChar = (`elem` "*@#?-$!")
 variableNameRegex = mkRegex "[_a-zA-Z][_a-zA-Z0-9]*"
 
 prop_isVariableName1 = isVariableName "_fo123"
@@ -861,7 +862,7 @@ getBracedReference s = fromMaybe s $
         let name = takeWhile isVariableChar s
         guard . not $ null name
         return name
-    getSpecial (c:_) | c `elem` "*@#?-$!" = return [c]
+    getSpecial (c:_) | isSpecialVariableChar c = return [c]
     getSpecial _ = fail "empty or not special"
 
     nameExpansion ('!':next:rest) = do -- e.g. ${!foo*bar*}
@@ -954,6 +955,18 @@ isBashLike params =
         Ksh -> True
         Dash -> False
         Sh -> False
+
+-- Returns whether a token is a parameter expansion without any modifiers.
+-- True for $var ${var} $1 $#
+-- False for ${#var} ${var[x]} ${var:-0}
+isUnmodifiedParameterExpansion t =
+    case t of
+        T_DollarBraced _ False _ -> True
+        T_DollarBraced _ _ list ->
+            let str = concat $ oversimplify list
+            in getBracedReference str == str
+        _ -> False
+
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

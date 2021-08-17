@@ -136,7 +136,7 @@ nodeChecks = [
     ,checkValidCondOps
     ,checkGlobbedRegex
     ,checkTestRedirects
-    ,checkIndirectExpansion
+    ,checkBadParameterSubstitution
     ,checkPS1Assignments
     ,checkBackticks
     ,checkInexplicablyUnquoted
@@ -1608,29 +1608,79 @@ checkBackticks params (T_Backticked id list) | not (null list) =
             (fixWith [replaceStart id params 1 "$(", replaceEnd id params 1 ")"])
 checkBackticks _ _ = return ()
 
-prop_checkIndirectExpansion1 = verify checkIndirectExpansion "${foo$n}"
-prop_checkIndirectExpansion2 = verifyNot checkIndirectExpansion "${foo//$n/lol}"
-prop_checkIndirectExpansion3 = verify checkIndirectExpansion "${$#}"
-prop_checkIndirectExpansion4 = verify checkIndirectExpansion "${var${n}_$((i%2))}"
-prop_checkIndirectExpansion5 = verifyNot checkIndirectExpansion "${bar}"
-checkIndirectExpansion _ (T_DollarBraced i _ (T_NormalWord _ contents))
-    | isIndirection contents =
-        err i 2082 "To expand via indirection, use arrays, ${!name} or (for sh only) eval."
+
+prop_checkBadParameterSubstitution1 = verify checkBadParameterSubstitution "${foo$n}"
+prop_checkBadParameterSubstitution2 = verifyNot checkBadParameterSubstitution "${foo//$n/lol}"
+prop_checkBadParameterSubstitution3 = verify checkBadParameterSubstitution "${$#}"
+prop_checkBadParameterSubstitution4 = verify checkBadParameterSubstitution "${var${n}_$((i%2))}"
+prop_checkBadParameterSubstitution5 = verifyNot checkBadParameterSubstitution "${bar}"
+prop_checkBadParameterSubstitution6 = verify checkBadParameterSubstitution "${\"bar\"}"
+prop_checkBadParameterSubstitution7 = verify checkBadParameterSubstitution "${{var}"
+prop_checkBadParameterSubstitution8 = verify checkBadParameterSubstitution "${$(x)//x/y}"
+prop_checkBadParameterSubstitution9 = verifyNot checkBadParameterSubstitution "$# ${#} $! ${!} ${!#} ${#!}"
+prop_checkBadParameterSubstitution10 = verify checkBadParameterSubstitution "${'foo'}"
+prop_checkBadParameterSubstitution11 = verify checkBadParameterSubstitution "${${x%.*}##*/}"
+
+checkBadParameterSubstitution _ t =
+    case t of
+        (T_DollarBraced i _ (T_NormalWord _ contents@(first:_))) ->
+            if isIndirection contents
+            then err i 2082 "To expand via indirection, use arrays, ${!name} or (for sh only) eval."
+            else checkFirst first
+        _ -> return ()
+
   where
+
     isIndirection vars =
         let list = mapMaybe isIndirectionPart vars in
             not (null list) && and list
+
     isIndirectionPart t =
-        case t of T_DollarExpansion _ _ ->  Just True
-                  T_Backticked _ _ ->       Just True
-                  T_DollarBraced _ _ _ ->     Just True
-                  T_DollarArithmetic _ _ -> Just True
+        case t of T_DollarExpansion {} ->  Just True
+                  T_Backticked {} ->       Just True
+                  T_DollarBraced {} ->     Just True
+                  T_DollarArithmetic {} -> Just True
                   T_Literal _ s -> if all isVariableChar s
                                     then Nothing
                                     else Just False
                   _ -> Just False
 
-checkIndirectExpansion _ _ = return ()
+    checkFirst t =
+        case t of
+            T_Literal id (c:_) ->
+                if isVariableChar c || isSpecialVariableChar c
+                then return ()
+                else err id 2296 $ "Parameter expansions can't start with " ++ e4m [c] ++ ". Double check syntax."
+
+            T_ParamSubSpecialChar {} -> return ()
+
+            T_DoubleQuoted id [T_Literal _ s] | isVariable s ->
+                err id 2297 "Double quotes must be outside ${}: ${\"invalid\"} vs \"${valid}\"."
+
+            T_DollarBraced id braces _ | isUnmodifiedParameterExpansion t ->
+                err id 2298 $
+                    (if braces then "${${x}}" else "${$x}")
+                      ++ " is invalid. For expansion, use ${x}. For indirection, use arrays, ${!x} or (for sh) eval."
+
+            T_DollarBraced {} ->
+                err (getId t) 2299 "Parameter expansions can't be nested. Use temporary variables."
+
+            _ | isCommandSubstitution t ->
+                err (getId t) 2300 "Parameter expansion can't be applied to command substitutions. Use temporary variables."
+
+            _ -> err (getId t) 2301 $ "Parameter expansion starts with unexpected " ++ name t ++ ". Double check syntax."
+
+    isVariable str =
+        case str of
+            [c] -> isVariableStartChar c || isSpecialVariableChar c || isDigit c
+            x -> isVariableName x
+
+    name t =
+        case t of
+            T_SingleQuoted {} -> "quotes"
+            T_DoubleQuoted {} -> "quotes"
+            _ -> "syntax"
+
 
 prop_checkInexplicablyUnquoted1 = verify checkInexplicablyUnquoted "echo 'var='value';'"
 prop_checkInexplicablyUnquoted2 = verifyNot checkInexplicablyUnquoted "'foo'*"
@@ -4432,6 +4482,7 @@ checkUnquotedParameterExpansionPattern params x =
         infoWithFix (getId t) 2295
             "Expansions inside ${..} need to be quoted separately, otherwise they match as patterns." $
                 surroundWith (getId t) params "\""
+
 
 
 return []
