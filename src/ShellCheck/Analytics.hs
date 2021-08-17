@@ -2379,6 +2379,8 @@ prop_checkUnassignedReferences_minusNBraced  = verifyNotTree checkUnassignedRefe
 prop_checkUnassignedReferences_minusZBraced  = verifyNotTree checkUnassignedReferences "if [ -z \"${x}\" ]; then echo \"\"; fi"
 prop_checkUnassignedReferences_minusNDefault = verifyNotTree checkUnassignedReferences "if [ -n \"${x:-}\" ]; then echo $x; fi"
 prop_checkUnassignedReferences_minusZDefault = verifyNotTree checkUnassignedReferences "if [ -z \"${x:-}\" ]; then echo \"\"; fi"
+prop_checkUnassignedReferences50 = verifyNotTree checkUnassignedReferences "echo ${foo:+bar}"
+prop_checkUnassignedReferences51 = verifyNotTree checkUnassignedReferences "echo ${foo:+$foo}"
 
 checkUnassignedReferences = checkUnassignedReferences' False
 checkUnassignedReferences' includeGlobals params t = warnings
@@ -2411,8 +2413,8 @@ checkUnassignedReferences' includeGlobals params t = warnings
 
     warningForGlobals var place = do
         match <- getBestMatch var
-        return $ warn (getId place) 2153 $
-            "Possible misspelling: " ++ var ++ " may not be assigned, but " ++ match ++ " is."
+        return $ info (getId place) 2153 $
+            "Possible misspelling: " ++ var ++ " may not be assigned. Did you mean " ++ match ++ "?"
 
     warningForLocals var place =
         return $ warn (getId place) 2154 $
@@ -2427,7 +2429,7 @@ checkUnassignedReferences' includeGlobals params t = warnings
 
     warningFor (var, place) = do
         guard $ isVariableName var
-        guard . not $ isInArray var place || isGuarded place
+        guard . not $ isException var place || isGuarded place
         (if includeGlobals || isLocal var
          then warningForLocals
          else warningForGlobals) var place
@@ -2436,11 +2438,22 @@ checkUnassignedReferences' includeGlobals params t = warnings
 
     -- Due to parsing, foo=( [bar]=baz ) parses 'bar' as a reference even for assoc arrays.
     -- Similarly, ${foo[bar baz]} may not be referencing bar/baz. Just skip these.
-    isInArray var t = any isArray $ getPath (parentMap params) t
+    -- We can also have ${foo:+$foo} should be treated like [[ -n $foo ]] && echo $foo
+    isException var t = any shouldExclude $ getPath (parentMap params) t
       where
-        isArray T_Array {} = True
-        isArray (T_DollarBraced _ _ l) | var /= getBracedReference (concat $ oversimplify l) = True
-        isArray _ = False
+        shouldExclude t =
+            case t of
+                T_Array {} -> True
+                (T_DollarBraced _ _ l) ->
+                    let str = concat $ oversimplify l
+                        ref = getBracedReference str
+                        mod = getBracedModifier str
+                    in
+                        -- Either we're used as an array index like ${arr[here]}
+                        ref /= var ||
+                        -- or the reference is guarded by a parent, ${here:+foo$here}
+                        "+" `isPrefixOf` mod || ":+" `isPrefixOf` mod
+                _ -> False
 
     isGuarded (T_DollarBraced _ _ v) =
         rest `matches` guardRegex
