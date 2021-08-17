@@ -7,6 +7,7 @@
 - SC2293/SC2294: Warn when calling `eval` with arrays
 - SC2295: Warn about "${x#$y}" treating $y as a pattern when not quoted
 - SC2296-SC2301: Improved warnings for bad parameter expansions
+- SC2302/SC2303: Warn about loops over array values when using them as keys
 
 ### Fixed
 - SC2102 about repetitions in ranges no longer triggers on [[ -v arr[xx] ]]

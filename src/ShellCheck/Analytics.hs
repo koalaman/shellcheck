@@ -65,6 +65,7 @@ treeChecks = [
     ,checkArrayAssignmentIndices
     ,checkUseBeforeDefinition
     ,checkAliasUsedInSameParsingUnit
+    ,checkArrayValueUsedAsIndex
     ]
 
 runAnalytics :: AnalysisSpec -> [TokenComment]
@@ -4483,6 +4484,89 @@ checkUnquotedParameterExpansionPattern params x =
             "Expansions inside ${..} need to be quoted separately, otherwise they match as patterns." $
                 surroundWith (getId t) params "\""
 
+
+prop_checkArrayValueUsedAsIndex1 = verifyTree checkArrayValueUsedAsIndex  "for i in ${arr[@]}; do echo ${arr[i]}; done"
+prop_checkArrayValueUsedAsIndex2 = verifyTree checkArrayValueUsedAsIndex  "for i in ${arr[@]}; do echo ${arr[$i]}; done"
+prop_checkArrayValueUsedAsIndex3 = verifyTree checkArrayValueUsedAsIndex  "for i in ${arr[@]}; do echo $((arr[i])); done"
+prop_checkArrayValueUsedAsIndex4 = verifyTree checkArrayValueUsedAsIndex  "for i in ${arr1[@]} ${arr2[@]}; do echo ${arr1[$i]}; done"
+prop_checkArrayValueUsedAsIndex5 = verifyTree checkArrayValueUsedAsIndex  "for i in ${arr1[@]} ${arr2[@]}; do echo ${arr2[$i]}; done"
+prop_checkArrayValueUsedAsIndex7 = verifyNotTree checkArrayValueUsedAsIndex  "for i in ${arr[@]}; do echo ${arr[K]}; done"
+prop_checkArrayValueUsedAsIndex8 = verifyNotTree checkArrayValueUsedAsIndex  "for i in ${arr[@]}; do i=42; echo ${arr[i]}; done"
+prop_checkArrayValueUsedAsIndex9 = verifyNotTree checkArrayValueUsedAsIndex  "for i in ${arr[@]}; do echo ${arr2[i]}; done"
+
+checkArrayValueUsedAsIndex params _ =
+    doVariableFlowAnalysis read write Map.empty (variableFlow params)
+  where
+    write loop@T_ForIn {}  _ name (DataString (SourceFrom words)) = do
+        modify $ Map.insert name (loop, mapMaybe f words)
+        return []
+      where
+        f x = do
+            name <- getArrayName x
+            return (x, name)
+
+    write _ _ name _ = do
+        modify $ Map.delete name
+        return []
+
+    read _ t name = do
+        varMap <- get
+        return $ fromMaybe [] $ do
+            (loop, arrays) <- Map.lookup name varMap
+            (arrayRef, arrayName) <- getArrayIfUsedAsIndex name t
+            -- Is this one of the 'for' arrays?
+            (loopWord, _) <- find ((==arrayName) . snd) arrays
+            -- Are we still in this loop?
+            guard $ getId loop `elem` map getId (getPath parents t)
+            return [
+                makeComment WarningC (getId loopWord) 2302 "This loops over values. To loop over keys, use \"${!array[@]}\".",
+                makeComment WarningC (getId arrayRef) 2303 $ (e4m name) ++ " is an array value, not a key. Use directly or loop over keys instead."
+                ]
+
+    parents = parentMap params
+
+    getArrayName :: Token -> Maybe String
+    getArrayName t = do
+        [T_DollarBraced _ _ l] <- return $ getWordParts t
+        let str = concat $ oversimplify l
+        guard $ getBracedModifier str == "[@]" && not ("!" `isPrefixOf` str)
+        return $ getBracedReference str
+
+    -- This is much uglier than it should be
+    getArrayIfUsedAsIndex :: String -> Token -> Maybe (Token, String)
+    getArrayIfUsedAsIndex name t =
+        case t of
+            T_DollarBraced _ _ list -> do
+                let ref = getBracedReference $ concat $ oversimplify list
+                guard $ ref == name
+                -- We found a $name. Look up the chain to see if it's ${arr[$name]}
+                list@T_NormalWord {} <- Map.lookup (getId t) parents
+                (T_DollarBraced _ _ parentList) <- Map.lookup (getId list) parents
+                (T_Literal _ head : index : T_Literal _ tail : _) <- return $ getWordParts parentList
+                let str = concat $ oversimplify list
+                let modifier = getBracedModifier str
+                guard $ getId index == getId t
+                guard $ "[${VAR}]" `isPrefixOf` modifier
+                return (t, getBracedReference str)
+
+            T_NormalWord wordId list -> do
+                    -- We found just name. Check if it's part of ${something[name]}
+                    parent@(T_DollarBraced _ _ parentList) <- Map.lookup wordId parents
+                    let str = concat $ oversimplify t
+                    let modifier = getBracedModifier str
+                    guard $ ("[" ++ name ++ "]") `isPrefixOf` modifier
+                    return (parent, getBracedReference str)
+
+            TA_Variable indexId ref [] -> do
+                -- We found arithmetic name. See if it's part of arithmetic arr[name]
+                guard $ ref == name
+                (TA_Sequence seqId [element]) <- Map.lookup indexId parents
+                guard $ getId element == indexId
+                parent@(TA_Variable arrayId arrayName [element]) <- Map.lookup seqId parents
+                guard $ getId element == seqId
+                return (parent, arrayName)
+
+            _ -> Nothing
 
 
 return []
