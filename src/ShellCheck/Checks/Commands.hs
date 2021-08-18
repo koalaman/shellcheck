@@ -138,17 +138,29 @@ prop_checkGetOptsS3 = checkGetOpts "-f -x" ["f", "x"] [] $ getOpts (True, True) 
 prop_checkGetOptsS4 = checkGetOpts "-f -x" ["f"] [] $ getOpts (True, True) "f:" []
 prop_checkGetOptsS5 = checkGetOpts "-fx" [] [] $ getOpts (True, True) "fx:" []
 
+prop_checkGenericOptsS1 = checkGetOpts "-f x" ["f"] [] $ return . getGenericOpts
+prop_checkGenericOptsS2 = checkGetOpts "-abc x" ["a", "b", "c"] [] $ return . getGenericOpts
+prop_checkGenericOptsS3 = checkGetOpts "-abc -x" ["a", "b", "c", "x"] [] $ return . getGenericOpts
+prop_checkGenericOptsS4 = checkGetOpts "-x" ["x"] [] $ return . getGenericOpts
+
 -- Long options
 prop_checkGetOptsL1 = checkGetOpts "--foo=bar baz" ["foo"] ["baz"] $ getOpts (True, False) "" [("foo", True)]
 prop_checkGetOptsL2 = checkGetOpts "--foo bar baz" ["foo"] ["baz"] $ getOpts (True, False) "" [("foo", True)]
 prop_checkGetOptsL3 = checkGetOpts "--foo baz" ["foo"] ["baz"] $ getOpts (True, True) "" []
 prop_checkGetOptsL4 = checkGetOpts "--foo baz" [] [] $ getOpts (True, False) "" []
 
+prop_checkGenericOptsL1 = checkGetOpts "--foo=bar" ["foo"] [] $ return . getGenericOpts
+prop_checkGenericOptsL2 = checkGetOpts "--foo bar" ["foo"] ["bar"] $ return . getGenericOpts
+prop_checkGenericOptsL3 = checkGetOpts "-x --foo" ["x", "foo"] [] $ return . getGenericOpts
+
 -- Know when to terminate
 prop_checkGetOptsT1 = checkGetOpts "-a x -b" ["a", "b"] ["x"] $ getOpts (True, True) "ab" []
 prop_checkGetOptsT2 = checkGetOpts "-a x -b" ["a"] ["x","-b"] $ getOpts (False, True) "ab" []
 prop_checkGetOptsT3 = checkGetOpts "-a -- -b" ["a"] ["-b"] $ getOpts (True, True) "ab" []
 prop_checkGetOptsT4 = checkGetOpts "-a -- -b" ["a", "b"] [] $ getOpts (True, True) "a:b" []
+
+prop_checkGenericOptsT1 = checkGetOpts "-x -- -y" ["x"] ["-y"] $ return . getGenericOpts
+prop_checkGenericOptsT2 = checkGetOpts "-xy --" ["x", "y"] [] $ return . getGenericOpts
 
 
 buildCommandMap :: [CommandCheck] -> Map.Map CommandName (Token -> Analysis)

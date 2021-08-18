@@ -617,6 +617,7 @@ getModifiedVariableCommand base@(T_SimpleCommand id cmdPrefix (T_NormalWord _ (T
             return (base, base, "@", DataString $ SourceFrom params)
 
         "printf" -> maybeToList $ getPrintfVariable rest
+        "wait" ->   maybeToList $ getWaitVariable rest
 
         "mapfile" -> maybeToList $ getMapfileArray base rest
         "readarray" -> maybeToList $ getMapfileArray base rest
@@ -674,15 +675,15 @@ getModifiedVariableCommand base@(T_SimpleCommand id cmdPrefix (T_NormalWord _ (T
                 _            -> return (t:fromMaybe [] (getSetParams rest))
     getSetParams [] = Nothing
 
-    getPrintfVariable list = f $ map (\x -> (x, getLiteralString x)) list
-      where
-        f ((_, Just "-v") : (t, Just var) : _) = return (base, t, varName, varType $ SourceFrom list)
-            where
-                (varName, varType) = case elemIndex '[' var of
-                    Just i -> (take i var, DataArray)
-                    Nothing -> (var, DataString)
-        f (_:rest) = f rest
-        f [] = fail "not found"
+    getPrintfVariable list = getFlagAssignedVariable "v" (SourceFrom list) $ getBsdOpts "v:" list
+    getWaitVariable   list = getFlagAssignedVariable "p" SourceInteger     $ return $ getGenericOpts list
+
+    getFlagAssignedVariable str dataSource maybeFlags = do
+        flags <- maybeFlags
+        (_, (flag, value)) <- find ((== str) . fst) flags
+        variableName <- getLiteralStringExt (const $ return "!") value
+        let (baseName, index) = span (/= '[') variableName
+        return (base, value, baseName, (if null index then DataString else DataArray) dataSource)
 
     -- mapfile has some curious syntax allowing flags plus 0..n variable names
     -- where only the first non-option one is used if any.

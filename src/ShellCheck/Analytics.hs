@@ -1968,6 +1968,7 @@ prop_checkSpacefulness41= verifyNotTree checkSpacefulness "exec $1 --flags"
 prop_checkSpacefulness42= verifyNotTree checkSpacefulness "run $1 --flags"
 prop_checkSpacefulness43= verifyNotTree checkSpacefulness "$foo=42"
 prop_checkSpacefulness44= verifyTree checkSpacefulness "#!/bin/sh\nexport var=$value"
+prop_checkSpacefulness45= verifyNotTree checkSpacefulness "wait -zzx -p foo; echo $foo"
 
 data SpaceStatus = SpaceSome | SpaceNone | SpaceEmpty deriving (Eq)
 instance Semigroup SpaceStatus where
@@ -2381,6 +2382,7 @@ prop_checkUnassignedReferences_minusNDefault = verifyNotTree checkUnassignedRefe
 prop_checkUnassignedReferences_minusZDefault = verifyNotTree checkUnassignedReferences "if [ -z \"${x:-}\" ]; then echo \"\"; fi"
 prop_checkUnassignedReferences50 = verifyNotTree checkUnassignedReferences "echo ${foo:+bar}"
 prop_checkUnassignedReferences51 = verifyNotTree checkUnassignedReferences "echo ${foo:+$foo}"
+prop_checkUnassignedReferences52 = verifyNotTree checkUnassignedReferences "wait -p pid; echo $pid"
 
 checkUnassignedReferences = checkUnassignedReferences' False
 checkUnassignedReferences' includeGlobals params t = warnings
