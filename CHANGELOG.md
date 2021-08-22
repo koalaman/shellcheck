@@ -8,6 +8,9 @@
 - SC2295: Warn about "${x#$y}" treating $y as a pattern when not quoted
 - SC2296-SC2301: Improved warnings for bad parameter expansions
 - SC2302/SC2303: Warn about loops over array values when using them as keys
+- SC2304-SC2306: Warn about unquoted globs in expr arguments
+- SC2307: Warn about insufficient number of arguments to expr
+- SC2308: Suggest other approaches for non-standard expr extensions
 
 ### Fixed
 - SC2102 about repetitions in ranges no longer triggers on [[ -v arr[xx] ]]

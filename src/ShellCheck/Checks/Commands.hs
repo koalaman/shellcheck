@@ -57,7 +57,7 @@ commandChecks :: [CommandCheck]
 commandChecks = [
     checkTr
     ,checkFindNameGlob
-    ,checkNeedlessExpr
+    ,checkExpr
     ,checkGrepRe
     ,checkTrapQuotes
     ,checkReturn
@@ -254,18 +254,73 @@ checkFindNameGlob = CommandCheck (Basename "find") (f . arguments)  where
         acc b
 
 
-prop_checkNeedlessExpr = verify checkNeedlessExpr "foo=$(expr 3 + 2)"
-prop_checkNeedlessExpr2 = verify checkNeedlessExpr "foo=`echo \\`expr 3 + 2\\``"
-prop_checkNeedlessExpr3 = verifyNot checkNeedlessExpr "foo=$(expr foo : regex)"
-prop_checkNeedlessExpr4 = verifyNot checkNeedlessExpr "foo=$(expr foo \\< regex)"
-checkNeedlessExpr = CommandCheck (Basename "expr") f where
-    f t =
+prop_checkExpr = verify checkExpr "foo=$(expr 3 + 2)"
+prop_checkExpr2 = verify checkExpr "foo=`echo \\`expr 3 + 2\\``"
+prop_checkExpr3 = verifyNot checkExpr "foo=$(expr foo : regex)"
+prop_checkExpr4 = verifyNot checkExpr "foo=$(expr foo \\< regex)"
+prop_checkExpr5 = verify checkExpr "# shellcheck disable=SC2003\nexpr match foo bar"
+prop_checkExpr6 = verify checkExpr "# shellcheck disable=SC2003\nexpr foo : fo*"
+prop_checkExpr7 = verify checkExpr "# shellcheck disable=SC2003\nexpr 5 -3"
+prop_checkExpr8 = verifyNot checkExpr "# shellcheck disable=SC2003\nexpr \"$@\""
+prop_checkExpr9 = verifyNot checkExpr "# shellcheck disable=SC2003\nexpr 5 $rest"
+prop_checkExpr10 = verify checkExpr "# shellcheck disable=SC2003\nexpr length \"$var\""
+prop_checkExpr11 = verify checkExpr "# shellcheck disable=SC2003\nexpr foo > bar"
+prop_checkExpr12 = verify checkExpr "# shellcheck disable=SC2003\nexpr 1 | 2"
+prop_checkExpr13 = verify checkExpr "# shellcheck disable=SC2003\nexpr 1 * 2"
+prop_checkExpr14 = verify checkExpr "# shellcheck disable=SC2003\nexpr \"$x\" >=  \"$y\""
+
+checkExpr = CommandCheck (Basename "expr") f where
+    f t = do
         when (all (`notElem` exceptions) (words $ arguments t)) $
             style (getId $ getCommandTokenOrThis t) 2003
                 "expr is antiquated. Consider rewriting this using $((..)), ${} or [[ ]]."
+
+        case arguments t of
+            [lhs, op, rhs] -> do
+                checkOp lhs
+                case getWordParts op of
+                    [T_Glob _ "*"] ->
+                        err (getId op) 2304
+                            "* must be escaped to multiply: \\*. Modern $((x * y)) avoids this issue."
+                    [T_Literal _ ":"] | isGlob rhs ->
+                        warn (getId rhs) 2305
+                            "Quote regex argument to expr to avoid it expanding as a glob."
+                    _ -> return ()
+
+            [single] | not (willSplit single) ->
+                warn (getId single) 2307
+                    "'expr' expects 3+ arguments but sees 1. Make sure each operator/operand is a separate argument, and escape <>&|."
+
+            [first, second] |
+                (fromMaybe "" $ getLiteralString first) /= "length"
+                  && not (willSplit first || willSplit second) -> do
+                    checkOp first
+                    warn (getId t) 2307
+                        "'expr' expects 3+ arguments, but sees 2. Make sure each operator/operand is a separate argument, and escape <>&|."
+
+            (first:rest) -> do
+                checkOp first
+                forM_ rest $ \t ->
+                    -- We already find 95%+ of multiplication and regex earlier, so don't bother classifying this further.
+                    when (isGlob t) $ warn (getId t) 2306 "Escape glob characters in arguments to expr to avoid pathname expansion."
+
+            _ -> return ()
+
     -- These operators are hard to replicate in POSIX
-    exceptions = [ ":", "<", ">", "<=", ">=" ]
+    exceptions = [ ":", "<", ">", "<=", ">=",
+        -- We can offer better suggestions for these
+        "match", "length", "substr", "index"]
     words = mapMaybe getLiteralString
+
+    checkOp side =
+        case getLiteralString side of
+            Just "match" -> msg "'expr match' has unspecified results. Prefer 'expr str : regex'."
+            Just "length" -> msg "'expr length' has unspecified results. Prefer ${#var}."
+            Just "substr" -> msg "'expr substr' has unspecified results. Prefer 'cut' or ${var#???}."
+            Just "index" -> msg "'expr index' has unspecified results. Prefer x=${var%%[chars]*}; $((${#x}+1))."
+            _ -> return ()
+      where
+        msg = info (getId side) 2308
 
 
 prop_checkGrepRe1 = verify checkGrepRe "cat foo | grep *.mp3"
