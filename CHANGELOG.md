@@ -222,7 +222,7 @@
 - SC2185: Suggest explicitly adding path for `find`
 - SC2184: Warn about unsetting globs (e.g. `unset foo[1]`)
 - SC2183: Warn about `printf` with more formatters than variables
-- SC2182: Warn about ignored arguments with `printf` 
+- SC2182: Warn about ignored arguments with `printf`
 - SC2181: Suggest using command directly instead of `if [ $? -eq 0 ]`
 - SC1106: Warn when using `test` operators in `(( 1 -eq 2 ))`
 
@@ -393,7 +393,7 @@
 ### Added
 - SC2121: Warn about trying to `set` variables, e.g. `set var = value`
 - SC2120/SC2119: Warn when a function uses `$1..` if none are ever passed
-- SC2117: Warn when using `su` in interactive mode, e.g. `su foo; whoami` 
+- SC2117: Warn when using `su` in interactive mode, e.g. `su foo; whoami`
 - SC2116: Detect useless use of echo, e.g. `for i in $(echo $var)`
 - SC2115/SC2114: Detect some catastrophic `rm -r "$empty/"` mistakes
 - SC1081: Warn when capitalizing keywords like `While`
@@ -444,7 +444,7 @@
 
 ### Removed
 - Suggestions about using parameter expansion over basename
-- The `jsoncheck` binary. Use `shellcheck -f json` instead. 
+- The `jsoncheck` binary. Use `shellcheck -f json` instead.
 
 
 ## v0.2.0 - 2013-10-27

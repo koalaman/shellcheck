@@ -26,4 +26,3 @@ do
   done
   gh release upload "$tag" "${files[@]}" --clobber || exit 1
 done
-

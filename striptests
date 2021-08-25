@@ -75,4 +75,3 @@ find . -name '.git' -prune -o -type f -name '*.hs' -print |
   do
     modify "$file" detestify
   done
-
