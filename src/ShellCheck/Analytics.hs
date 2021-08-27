@@ -1040,6 +1040,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
                 ,"dpkg-query"
                 ,"jq"  -- could also check that user provides --arg
                 ,"rename"
+                ,"rg"
                 ,"unset"
                 ,"git filter-branch"
                 ,"mumps -run %XCMD"
