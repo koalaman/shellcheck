@@ -845,6 +845,9 @@ checkAliasesExpandEarly = CommandCheck (Exactly "alias") (f . arguments)
 
 prop_checkUnsetGlobs1 = verify checkUnsetGlobs "unset foo[1]"
 prop_checkUnsetGlobs2 = verifyNot checkUnsetGlobs "unset foo"
+prop_checkUnsetGlobs3 = verify checkUnsetGlobs "unset foo[$i]"
+prop_checkUnsetGlobs4 = verify checkUnsetGlobs "unset foo[x${i}y]"
+prop_checkUnsetGlobs5 = verifyNot checkUnsetGlobs "unset foo]["
 checkUnsetGlobs = CommandCheck (Exactly "unset") (mapM_ check . arguments)
   where
     check arg =

@@ -497,14 +497,8 @@ getModifiedVariables t =
 
         -- Count [[ -v foo ]] as an "assignment".
         -- This is to prevent [ -v foo ] being unassigned or unused.
-        TC_Unary id _ "-v" token -> do
-            str <- fmap (takeWhile (/= '[')) $ -- Quoted index
-                    flip getLiteralStringExt token $ \x ->
-                case x of
-                    T_Glob _ s -> return s -- Unquoted index
-                    _          -> []
-
-            guard . not . null $ str
+        TC_Unary id _ "-v" token -> maybeToList $ do
+            str <- getVariableForTestDashV token
             return (t, token, str, DataString SourceChecked)
 
         TC_Unary _ _ "-n" token -> markAsChecked t token
@@ -724,6 +718,20 @@ getIndexReferences s = fromMaybe [] $ do
   where
     re = mkRegex "(\\[.*\\])"
 
+-- Given a NormalWord like foo or foo[$bar], get foo.
+-- Primarily used to get references for [[ -v foo[bar] ]]
+getVariableForTestDashV :: Token -> Maybe String
+getVariableForTestDashV t = do
+    str <- takeWhile ('[' /=) <$> getLiteralStringExt toStr t
+    guard $ isVariableName str
+    return str
+  where
+    -- foo[bar] gets parsed with [bar] as a glob, so undo that
+    toStr (T_Glob _ s) = return s
+    -- Turn foo[$x] into foo[\0] so that we can get the constant array name
+    -- in a non-constant expression (while filtering out foo$x[$y])
+    toStr _ = return "\0"
+
 prop_getOffsetReferences1 = getOffsetReferences ":bar" == ["bar"]
 prop_getOffsetReferences2 = getOffsetReferences ":bar:baz" == ["bar", "baz"]
 prop_getOffsetReferences3 = getOffsetReferences "[foo]:bar" == ["bar"]
@@ -782,9 +790,8 @@ getReferencedVariables parents t =
         T_Glob _ s -> return s    -- Also when parsed as globs
         _          -> []
 
-    getIfReference context token = do
-            str@(h:_) <- getLiteralStringExt literalizer token
-            when (isDigit h) $ fail "is a number"
+    getIfReference context token = maybeToList $ do
+            str <- getVariableForTestDashV token
             return (context, token, getBracedReference str)
 
     isArithmeticAssignment t = case getPath parents t of

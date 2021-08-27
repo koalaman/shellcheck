@@ -59,10 +59,28 @@ willSplit x =
     T_NormalWord _ l -> any willSplit l
     _ -> False
 
-isGlob T_Extglob {} = True
-isGlob T_Glob {} = True
-isGlob (T_NormalWord _ l) = any isGlob l
-isGlob _ = False
+isGlob t = case t of
+    T_Extglob {} -> True
+    T_Glob {} -> True
+    T_NormalWord _ l -> any isGlob l || hasSplitRange l
+    _ -> False
+  where
+    -- foo[x${var}y] gets parsed as foo,[,x,$var,y],
+    -- so check if there's such an interval
+    hasSplitRange l =
+        let afterBracket = dropWhile (not . isHalfOpenRange) l
+        in any isClosingRange afterBracket
+
+    isHalfOpenRange t =
+        case t of
+            T_Literal _ "[" -> True
+            _ -> False
+
+    isClosingRange t =
+        case t of
+            T_Literal _ str -> ']' `elem` str
+            _ -> False
+
 
 -- Is this shell word a constant?
 isConstant token =

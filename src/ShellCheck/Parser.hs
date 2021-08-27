@@ -1372,6 +1372,8 @@ prop_readGlob5 = isOk readGlob "[^[:alpha:]1-9]"
 prop_readGlob6 = isOk readGlob "[\\|]"
 prop_readGlob7 = isOk readGlob "[^[]"
 prop_readGlob8 = isOk readGlob "[*?]"
+prop_readGlob9 = isOk readGlob "[!]^]"
+prop_readGlob10 = isOk readGlob "[]]"
 readGlob = readExtglob <|> readSimple <|> readClass <|> readGlobbyLiteral
     where
         readSimple = do
@@ -1379,22 +1381,25 @@ readGlob = readExtglob <|> readSimple <|> readClass <|> readGlobbyLiteral
             c <- oneOf "*?"
             id <- endSpan start
             return $ T_Glob id [c]
-        -- Doesn't handle weird things like [^]a] and [$foo]. fixme?
         readClass = try $ do
             start <- startSpan
             char '['
-            s <- many1 (predefined <|> readNormalLiteralPart "]" <|> globchars)
+            negation <- charToString (oneOf "!^") <|> return ""
+            leadingBracket <- charToString (oneOf "]") <|> return ""
+            s <- many (predefined <|> readNormalLiteralPart "]" <|> globchars)
+            guard $ not (null leadingBracket) || not (null s)
             char ']'
             id <- endSpan start
-            return $ T_Glob id $ "[" ++ concat s ++ "]"
+            return $ T_Glob id $ "[" ++ concat (negation:leadingBracket:s) ++ "]"
           where
-           globchars = fmap return . oneOf $ "!$[" ++ extglobStartChars
+           globchars = charToString $ oneOf $ "![" ++ extglobStartChars
            predefined = do
               try $ string "[:"
               s <- many1 letter
               string ":]"
               return $ "[:" ++ s ++ ":]"
 
+        charToString = fmap return
         readGlobbyLiteral = do
             start <- startSpan
             c <- extglobStart <|> char '['
