@@ -2310,6 +2310,7 @@ prop_checkUnused44= verifyNotTree checkUnusedAssignments "DEFINE_string \"foo$ib
 prop_checkUnused45= verifyTree checkUnusedAssignments "readonly foo=bar"
 prop_checkUnused46= verifyTree checkUnusedAssignments "readonly foo=(bar)"
 prop_checkUnused47= verifyNotTree checkUnusedAssignments "a=1; alias hello='echo $a'"
+prop_checkUnused48= verifyNotTree checkUnusedAssignments "_a=1"
 checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
     flow = variableFlow params
@@ -2326,8 +2327,9 @@ checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
     unused = Map.assocs $ Map.difference assignments references
 
     warnFor (name, token) =
-        warn (getId token) 2034 $
-            name ++ " appears unused. Verify use (or export if used externally)."
+        unless ("_" `isPrefixOf` name) $
+            warn (getId token) 2034 $
+                name ++ " appears unused. Verify use (or export if used externally)."
 
     stripSuffix = takeWhile isVariableChar
     defaultMap = Map.fromList $ zip internalVariables $ repeat ()

@@ -23,6 +23,7 @@
 - SC2048: Warning about $\* now also applies to ${array[\*]}
 - SC2181 now only triggers on single condition tests like `[ $? = 0 ]`.
 - Quote warnings are now emitted for declaration utilities in sh
+- Leading `_` can now be used to suppress warnings about unused variables
 
 
 ## v0.7.2 - 2021-04-19
