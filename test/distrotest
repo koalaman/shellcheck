@@ -1,6 +1,9 @@
 #!/bin/bash
 # This script runs 'buildtest' on each of several distros
 # via Docker.
+
+# shellcheck disable=SC2016
+
 set -o pipefail
 
 exec 3>&1 4>&2
@@ -32,6 +35,33 @@ echo "Logging to $log" >&3
 exec >> "$log" 2>&1
 
 final=0
+
+echo "Trying to build pre-commit docker image"
+if ! docker build --tag precommit .
+then
+  final=1
+  echo "pre-commit image failed to build"
+else
+  if printf '%s\n' '#!/bin/sh' 'echo $1' | docker run -i precommit -
+  then
+    final=1
+    echo "pre-commit image succeeds with incorrect example"
+  fi
+
+  if ! printf '%s\n' '#!/bin/sh' 'echo "$1"' | docker run -i precommit -
+  then
+    final=1
+    echo "pre-commit image fails with correct example"
+  fi
+fi
+
+if [[ $final -ne 0 ]]
+then
+  echo >&3 "pre-commit image failure, see log"
+else
+  echo >&3 "pre-commit image succeeded"
+fi
+
 while read -r distro setup
 do
   [[ "$distro" = "#"* || -z "$distro" ]] && continue

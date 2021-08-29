@@ -1,6 +1,3 @@
-*
-!LICENSE
-!Setup.hs
-!ShellCheck.cabal
-!shellcheck.hs
-!src
+dist
+dist-newstyle
+.git
