@@ -3742,21 +3742,27 @@ checkForLoopGlobVariables _ t =
     suggest t = info (getId t) 2231
         "Quote expansions in this for loop glob to prevent wordsplitting, e.g. \"$dir\"/*.txt ."
 
+
 prop_checkSubshelledTests1 = verify checkSubshelledTests "a && ( [ b ] || ! [ c ] )"
 prop_checkSubshelledTests2 = verify checkSubshelledTests "( [ a ] )"
 prop_checkSubshelledTests3 = verify checkSubshelledTests "( [ a ] && [ b ] || test c )"
 prop_checkSubshelledTests4 = verify checkSubshelledTests "( [ a ] && { [ b ] && [ c ]; } )"
+prop_checkSubshelledTests5 = verifyNot checkSubshelledTests "( [[ ${var:=x} = y ]] )"
+prop_checkSubshelledTests6 = verifyNot checkSubshelledTests "( [[ $((i++)) = 10 ]] )"
+prop_checkSubshelledTests7 = verifyNot checkSubshelledTests "( [[ $((i+=1)) = 10 ]] )"
+prop_checkSubshelledTests8 = verify checkSubshelledTests "# shellcheck disable=SC2234\nf() ( [[ x ]] )"
+
 checkSubshelledTests params t =
     case t of
-        T_Subshell id list | all isTestStructure list ->
+        T_Subshell id list | all isTestStructure list && (not (hasAssignment t))  ->
             case () of
                 -- Special case for if (test) and while (test)
                 _ | isCompoundCondition (getPath (parentMap params) t) ->
-                    style id 2233 "Remove superfluous (..) around condition."
+                    style id 2233 "Remove superfluous (..) around condition to avoid subshell overhead."
 
-                -- Special case for ([ x ])
-                _ | isSingleTest list ->
-                    style id 2234 "Remove superfluous (..) around test command."
+                -- Special case for ([ x ]), except for func() ( [ x ] )
+                _ | isSingleTest list && (not $ isFunctionBody (getPath (parentMap params) t)) ->
+                    style id 2234 "Remove superfluous (..) around test command to avoid subshell overhead."
 
                 -- General case for ([ x ] || [ y ] && etc)
                 _ -> style id 2235 "Use { ..; } instead of (..) to avoid subshell overhead."
@@ -3766,6 +3772,11 @@ checkSubshelledTests params t =
     isSingleTest cmds =
         case cmds of
             [c] | isTestCommand c -> True
+            _ -> False
+
+    isFunctionBody path =
+        case path of
+            (_:f:_) -> isFunction f
             _ -> False
 
     isTestStructure t =
@@ -3797,6 +3808,19 @@ checkSubshelledTests params t =
             T_WhileExpression {} : _ -> True
             T_UntilExpression {} : _ -> True
             _ -> False
+
+    hasAssignment t = isNothing $ doAnalysis guardNotAssignment t
+    guardNotAssignment t =
+        case t of
+            TA_Assignment {} -> Nothing
+            TA_Unary _ s _ -> guard . not $ "++" `isInfixOf` s || "--" `isInfixOf` s
+            T_DollarBraced _ _ l ->
+                let str = concat $ oversimplify l
+                    modifier = getBracedModifier str
+                in
+                    guard . not $ "=" `isPrefixOf` modifier || ":=" `isPrefixOf` modifier
+            T_DollarBraceCommandExpansion {} -> Nothing
+            _ -> Just ()
 
     -- Skip any parent of a T_Subshell until we reach something interesting
     skippable t =
