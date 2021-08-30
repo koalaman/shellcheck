@@ -241,16 +241,15 @@ sudo mv shellcheck.1 /usr/share/man/man1
 
 ### pre-commit
 
-To run ShellCheck via [pre-commit](https://pre-commit.com/), add the Docker image to your `.pre-commit-config.yaml`:
+To run ShellCheck via [pre-commit](https://pre-commit.com/), add the hook to your `.pre-commit-config.yaml`:
 
 ```
-- repo: local
-  hooks:
-    - id: shellcheck
-      name: shellcheck
-      language: docker_image
-      entry: koalaman/shellcheck:stable  # or e.g. ":v0.7.2"
-      types: [shell]
+repos:
+-   repo: https://github.com/koalaman/shellcheck-precommit
+    rev: v0.7.2
+    hooks:
+    -   id: shellcheck
+#       args: ["--severity=warning"]  # Optionally only show errors and warnings
 ```
 
 ### Travis CI
