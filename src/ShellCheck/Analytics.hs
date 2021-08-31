@@ -1109,6 +1109,12 @@ prop_checkNumberComparisons13 = verify checkNumberComparisons "[ $foo > $bar ]"
 prop_checkNumberComparisons14 = verifyNot checkNumberComparisons "[[ foo < bar ]]"
 prop_checkNumberComparisons15 = verifyNot checkNumberComparisons "[ $foo '>' $bar ]"
 prop_checkNumberComparisons16 = verify checkNumberComparisons "[ foo -eq 'y' ]"
+prop_checkNumberComparisons17 = verify checkNumberComparisons "[[ 'foo' -eq 2 ]]"
+prop_checkNumberComparisons18 = verify checkNumberComparisons "[[ foo -eq 2 ]]"
+prop_checkNumberComparisons19 = verifyNot checkNumberComparisons "foo=1; [[ foo -eq 2 ]]"
+prop_checkNumberComparisons20 = verify checkNumberComparisons "[[ 2 -eq / ]]"
+prop_checkNumberComparisons21 = verify checkNumberComparisons "[[ foo -eq foo ]]"
+
 checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
     if isNum lhs || isNum rhs
       then do
@@ -1134,8 +1140,8 @@ checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
 
     when (op `elem` arithmeticBinaryTestOps) $ do
         mapM_ checkDecimals [lhs, rhs]
-        when (typ == SingleBracket) $
-            checkStrings [lhs, rhs]
+        mapM_ checkString [lhs, rhs]
+
 
   where
       hasStringComparison = shellType params /= Sh
@@ -1148,19 +1154,45 @@ checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
       decimalError = "Decimals are not supported. " ++
         "Either use integers only, or use bc or awk to compare."
 
-      checkStrings =
-        mapM_ stringError . find isNonNum
+      checkString t =
+        let
+            asString = getLiteralStringDef "\0" t
+            isVar = isVariableName asString
+            kind = if isVar then "a variable" else "an arithmetic expression"
+            fix = if isVar then "$var" else "$((expr))"
+        in
+            when (isNonNum t) $
+                if typ == SingleBracket
+                then
+                    err (getId t) 2170 $
+                        "Invalid number for " ++ op ++ ". Use " ++ seqv op ++
+                        " to compare as string (or use " ++ fix ++
+                        " to expand as " ++ kind ++ ")."
+                else
+                    -- We should warn if any of the following holds:
+                    --   The string is not a variable name
+                    --   Any part of it is quoted
+                    --   It's not a recognized variable name
+                    when (not isVar || any isQuotes (getWordParts t) || asString `notElem` assignedVariables) $
+                        warn (getId t) 2309 $
+                            op ++ " treats this as " ++ kind ++ ". " ++
+                            "Use " ++ seqv op ++ " to compare as string (or expand explicitly with " ++ fix ++ ")."
+
+      assignedVariables :: [String]
+      assignedVariables = mapMaybe f (variableFlow params)
+        where
+            f t = do
+                Assignment (_, _, name, _) <- return t
+                return name
 
       isNonNum t = not . all numChar $ onlyLiteralString t
       numChar x = isDigit x || x `elem` "+-. "
-
-      stringError t = err (getId t) 2170 $
-          "Numerical " ++ op ++ " does not dereference in [..]. Expand or use string operator."
 
       isNum t =
         case oversimplify t of
             [v] -> all isDigit v
             _ -> False
+
       isFraction t =
         case oversimplify t of
             [v] -> isJust $ matchRegex floatRegex v
