@@ -79,6 +79,8 @@ composeAnalyzers f g x = f x >> g x
 data Parameters = Parameters {
     -- Whether this script has the 'lastpipe' option set/default.
     hasLastpipe        :: Bool,
+    -- Whether this script has the 'inherit_errexit' option set/default.
+    hasInheritErrexit  :: Bool,
     -- Whether this script has 'set -e' anywhere.
     hasSetE            :: Bool,
     -- A linear (bad) analysis of data flow
@@ -196,7 +198,12 @@ makeParameters spec =
                 Dash -> False
                 Sh   -> False
                 Ksh  -> True,
-
+        hasInheritErrexit =
+            case shellType params of
+                Bash -> containsInheritErrexit root
+                Dash -> True
+                Sh   -> True
+                Ksh  -> False,
         shellTypeSpecified = isJust (asShellType spec) || isJust (asFallbackShell spec),
         parentMap = getParentTree root,
         variableFlow = getVariableFlow params root,
@@ -219,17 +226,22 @@ containsSetE root = isNothing $ doAnalysis (guard . not . isSetE) root
             _ -> False
     re = mkRegex "[[:space:]]-[^-]*e"
 
--- Does this script mention 'shopt -s lastpipe' anywhere?
--- Also used as a hack.
-containsLastpipe root =
+containsShopt shopt root =
         isNothing $ doAnalysis (guard . not . isShoptLastPipe) root
     where
         isShoptLastPipe t =
             case t of
                 T_SimpleCommand {}  ->
                     t `isUnqualifiedCommand` "shopt" &&
-                        ("lastpipe" `elem` oversimplify t)
+                        (shopt `elem` oversimplify t)
                 _ -> False
+
+-- Does this script mention 'shopt -s inherit_errexit' anywhere?
+containsInheritErrexit = containsShopt "inherit_errexit"
+
+-- Does this script mention 'shopt -s lastpipe' anywhere?
+-- Also used as a hack.
+containsLastpipe = containsShopt "lastpipe"
 
 
 prop_determineShell0 = determineShellTest "#!/bin/sh" == Sh
