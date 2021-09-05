@@ -260,6 +260,13 @@ optionalTreeChecks = [
         cdPositive = "set -e; func() { cp *.txt ~/backup; rm *.txt; }; func && echo ok",
         cdNegative = "set -e; func() { cp *.txt ~/backup; rm *.txt; }; func; echo ok"
     }, checkSetESuppressed)
+
+    ,(newCheckDescription {
+        cdName = "check-extra-masked-returns",
+        cdDescription = "Check for additional cases where exit codes are masked",
+        cdPositive = "rm -r \"$(get_chroot_dir)/home\"",
+        cdNegative = "set -e; dir=\"$(get_chroot_dir)\"; rm -r \"$dir/home\""
+    }, checkExtraMaskedReturns)
     ]
 
 optionalCheckMap :: Map.Map String (Parameters -> Token -> [TokenComment])
@@ -4732,6 +4739,108 @@ checkSetESuppressed params t =
                 "Add set -e; before it or enable inherit_errexit.")
         errExitEnabled t = hasInheritErrexit params || containsSetE t
         isIn t cmds = getId t `elem` map getId cmds
+
+
+prop_checkExtraMaskedReturns1  = verifyTree    checkExtraMaskedReturns "cat < <(ls)"
+prop_checkExtraMaskedReturns2  = verifyTree    checkExtraMaskedReturns "read -ra arr <(ls)"
+prop_checkExtraMaskedReturns3  = verifyTree    checkExtraMaskedReturns "ls >(cat)"
+prop_checkExtraMaskedReturns4  = verifyTree    checkExtraMaskedReturns "false | true"
+prop_checkExtraMaskedReturns5  = verifyNotTree checkExtraMaskedReturns "set -o pipefail; false | true"
+prop_checkExtraMaskedReturns6  = verifyNotTree checkExtraMaskedReturns "false | true || true"
+prop_checkExtraMaskedReturns7  = verifyTree    checkExtraMaskedReturns "true $(false)"
+prop_checkExtraMaskedReturns8  = verifyTree    checkExtraMaskedReturns "x=$(false)$(true)"
+prop_checkExtraMaskedReturns9  = verifyNotTree checkExtraMaskedReturns "x=$(false)true"
+prop_checkExtraMaskedReturns10 = verifyTree    checkExtraMaskedReturns "x=`false``false`"
+prop_checkExtraMaskedReturns11 = verifyTree    checkExtraMaskedReturns "x=\"$(false)$(true)\""
+prop_checkExtraMaskedReturns12 = verifyTree    checkExtraMaskedReturns "x=\"$(false)\"\"$(true)\""
+prop_checkExtraMaskedReturns13 = verifyTree    checkExtraMaskedReturns "true <<<$(false)"
+prop_checkExtraMaskedReturns14 = verifyNotTree checkExtraMaskedReturns "echo asdf | false"
+prop_checkExtraMaskedReturns15 = verifyNotTree checkExtraMaskedReturns "readonly x=$(false)"
+prop_checkExtraMaskedReturns16 = verifyTree    checkExtraMaskedReturns "readarray -t files < <(ls)"
+prop_checkExtraMaskedReturns17 = verifyNotTree checkExtraMaskedReturns "x=( $(false) false )"
+prop_checkExtraMaskedReturns18 = verifyTree    checkExtraMaskedReturns "x=( $(false) $(false) )"
+prop_checkExtraMaskedReturns19 = verifyNotTree checkExtraMaskedReturns "x=( $(false) [4]=false )"
+prop_checkExtraMaskedReturns20 = verifyTree    checkExtraMaskedReturns "x=( $(false) [4]=$(false) )"
+prop_checkExtraMaskedReturns21 = verifyTree    checkExtraMaskedReturns "cat << foo\n $(false)\nfoo"
+prop_checkExtraMaskedReturns22 = verifyTree    checkExtraMaskedReturns "[[ $(false) ]]"
+prop_checkExtraMaskedReturns23 = verifyNotTree checkExtraMaskedReturns "x=$(false) y=z"
+prop_checkExtraMaskedReturns24 = verifyNotTree checkExtraMaskedReturns "x=$(( $(date +%s) ))"
+prop_checkExtraMaskedReturns25 = verifyTree    checkExtraMaskedReturns "echo $(( $(date +%s) ))"
+prop_checkExtraMaskedReturns26 = verifyNotTree checkExtraMaskedReturns "x=( $(false) )"
+prop_checkExtraMaskedReturns27 = verifyTree    checkExtraMaskedReturns "x=$(false) false"
+prop_checkExtraMaskedReturns28 = verifyTree    checkExtraMaskedReturns "x=$(false) y=$(false)"
+prop_checkExtraMaskedReturns29 = verifyNotTree checkExtraMaskedReturns "false < <(set -e)"
+prop_checkExtraMaskedReturns30 = verifyNotTree checkExtraMaskedReturns "false < <(shopt -s cdspell)"
+prop_checkExtraMaskedReturns31 = verifyNotTree checkExtraMaskedReturns "false < <(dirname \"${BASH_SOURCE[0]}\")"
+prop_checkExtraMaskedReturns32 = verifyNotTree checkExtraMaskedReturns "false < <(basename \"${BASH_SOURCE[0]}\")"
+prop_checkExtraMaskedReturns33 = verifyNotTree checkExtraMaskedReturns "{ false || true; } | true"
+prop_checkExtraMaskedReturns34 = verifyNotTree checkExtraMaskedReturns "{ false || :; } | true"
+checkExtraMaskedReturns params t = runNodeAnalysis findMaskingNodes params t
+  where
+    findMaskingNodes _ (T_Arithmetic _ list) = findMaskedNodesInList [list]
+    findMaskingNodes _ (T_Array _ list) = findMaskedNodesInList $ allButLastSimpleCommands list
+    findMaskingNodes _ (T_Condition _ _ condition) = findMaskedNodesInList [condition]
+    findMaskingNodes _ (T_DoubleQuoted _ list) = findMaskedNodesInList $ allButLastSimpleCommands list
+    findMaskingNodes _ (T_HereDoc _ _ _ _ list) = findMaskedNodesInList list
+    findMaskingNodes _ (T_HereString _ word) = findMaskedNodesInList [word]
+    findMaskingNodes _ (T_NormalWord _ parts) = findMaskedNodesInList $ allButLastSimpleCommands parts
+    findMaskingNodes _ (T_Pipeline _ _ cmds) | not (hasPipefail params) = findMaskedNodesInList $ allButLastSimpleCommands cmds
+    findMaskingNodes _ (T_ProcSub _ _ list) = findMaskedNodesInList list
+    findMaskingNodes _ (T_SimpleCommand _ assigns (_:args)) = findMaskedNodesInList $ assigns ++ args
+    findMaskingNodes _ (T_SimpleCommand _ assigns []) = findMaskedNodesInList $ allButLastSimpleCommands assigns
+    findMaskingNodes _ _ = return ()
+
+    findMaskedNodesInList = mapM_ (doAnalysis findMaskedNodes)
+
+    isMaskedNode t = not (isHarmlessCommand t || isCheckedElsewhere t || isMaskDeliberate t)
+    findMaskedNodes t@(T_SimpleCommand _ _ (_:_)) = when (isMaskedNode t) $ inform t
+    findMaskedNodes t@T_Condition {} = when (isMaskedNode t) $ inform t
+    findMaskedNodes _ = return ()
+
+    containsSimpleCommand t = isNothing $ doAnalysis go t
+      where
+        go t = case t of
+            T_SimpleCommand {} -> fail ""
+            _ -> return ()
+
+    allButLastSimpleCommands cmds =
+        if null simpleCommands then [] else init simpleCommands
+      where
+        simpleCommands = filter containsSimpleCommand cmds
+
+    inform t = info (getId t) 2312 ("Consider invoking this command "
+        ++ "separately to avoid masking its return value (or use '|| true' "
+        ++ "to ignore).")
+
+    isMaskDeliberate t = hasParent isOrIf t
+      where
+        isOrIf _ (T_OrIf _ _ (T_Pipeline _ _ [T_Redirecting _ _ cmd]))
+            = getCommandBasename cmd `elem` [Just "true", Just ":"]
+        isOrIf _ _ = False
+
+    isCheckedElsewhere t = hasParent isDeclaringCommand t
+      where
+        isDeclaringCommand t _ = fromMaybe False $ do
+            basename <- getCommandBasename t
+            return $ basename `elem` declaringCommands
+
+    isHarmlessCommand t = fromMaybe False $ do
+        basename <- getCommandBasename t
+        return $ basename `elem` [
+            "echo"
+            ,"basename"
+            ,"dirname"
+            ,"printf"
+            ,"set"
+            ,"shopt"
+            ]
+
+    parentChildPairs t = go $ parents params t
+      where
+        go (child:parent:rest) = (parent, child):go (parent:rest)
+        go _ = []
+
+    hasParent pred t = any (uncurry pred) (parentChildPairs t)
 
 
 return []

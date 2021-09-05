@@ -101,8 +101,6 @@ commandChecks = [
     ++ map checkArgComparison declaringCommands
     ++ map checkMaskedReturns declaringCommands
 
-declaringCommands = ["local", "declare", "export", "readonly", "typeset", "let"]
-
 
 optionalChecks = map fst optionalCommandChecks
 optionalCommandChecks :: [(CheckDescription, CommandCheck)]
