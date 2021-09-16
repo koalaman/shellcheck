@@ -234,7 +234,7 @@ runFormatter sys format options files = do
 
     process :: FilePath -> IO Status
     process filename = do
-        input <- siReadFile sys filename
+        input <- siReadFile sys Nothing filename
         either (reportFailure filename) check input
       where
         check contents = do
@@ -389,6 +389,7 @@ parseOption flag options =
             throwError SyntaxFailure
         return (Prelude.read num :: Integer)
 
+ioInterface :: Options -> [FilePath] -> IO (SystemInterface IO)
 ioInterface options files = do
     inputs <- mapM normalize files
     cache <- newIORef emptyCache
@@ -402,14 +403,14 @@ ioInterface options files = do
     emptyCache :: Map.Map FilePath String
     emptyCache = Map.empty
 
-    get cache inputs file = do
+    get cache inputs rcSuggestsExternal file = do
         map <- readIORef cache
         case Map.lookup file map of
             Just x  -> return $ Right x
-            Nothing -> fetch cache inputs file
+            Nothing -> fetch cache inputs rcSuggestsExternal file
 
-    fetch cache inputs file = do
-        ok <- allowable inputs file
+    fetch cache inputs rcSuggestsExternal file = do
+        ok <- allowable rcSuggestsExternal inputs file
         if ok
           then (do
             (contents, shouldCache) <- inputFile file
@@ -417,13 +418,16 @@ ioInterface options files = do
                 modifyIORef cache $ Map.insert file contents
             return $ Right contents
             ) `catch` handler
-          else return $ Left (file ++ " was not specified as input (see shellcheck -x).")
+          else
+            if rcSuggestsExternal == Just False
+            then return $ Left (file ++ " was not specified as input, and external files were disabled via directive.")
+            else return $ Left (file ++ " was not specified as input (see shellcheck -x).")
       where
         handler :: IOException -> IO (Either ErrorMessage String)
         handler ex = return . Left $ show ex
 
-    allowable inputs x =
-        if externalSources options
+    allowable rcSuggestsExternal inputs x =
+        if fromMaybe (externalSources options) rcSuggestsExternal
         then return True
         else do
             path <- normalize x
@@ -497,7 +501,7 @@ ioInterface options files = do
             b <- p x
             if b then pure (Just x) else acc
 
-    findSourceFile inputs sourcePathFlag currentScript sourcePathAnnotation original =
+    findSourceFile inputs sourcePathFlag currentScript rcSuggestsExternal sourcePathAnnotation original =
         if isAbsolute original
         then
             let (_, relative) = splitDrive original
@@ -506,7 +510,7 @@ ioInterface options files = do
             find original original
       where
         find filename deflt = do
-            sources <- findM ((allowable inputs) `andM` doesFileExist) $
+            sources <- findM ((allowable rcSuggestsExternal inputs) `andM` doesFileExist) $
                         (adjustPath filename):(map ((</> filename) . adjustPath) $ sourcePathFlag ++ sourcePathAnnotation)
             case sources of
                 Nothing -> return deflt

@@ -121,7 +121,7 @@ outputResult options ref result sys = do
 
 outputForFile color sys comments = do
     let fileName = sourceFile (head comments)
-    result <- (siReadFile sys) fileName
+    result <- siReadFile sys (Just True) fileName
     let contents = either (const "") id result
     let fileLinesList = lines contents
     let lineCount = length fileLinesList

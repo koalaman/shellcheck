@@ -73,14 +73,18 @@ import qualified Data.Map as Map
 
 
 data SystemInterface m = SystemInterface {
-    -- | Read a file by filename, or return an error
-    siReadFile :: String -> m (Either ErrorMessage String),
+    -- | Given:
+    --   What annotations say about including external files (if anything)
+    --   A resolved filename from siFindSource
+    --   Read the file or return an error
+    siReadFile :: Maybe Bool -> String -> m (Either ErrorMessage String),
     -- | Given:
     --   the current script,
+    --   what annotations say about including external files (if anything)
     --   a list of source-path annotations in effect,
     --   and a sourced file,
     --   find the sourced file
-    siFindSource :: String -> [String] -> String -> m FilePath,
+    siFindSource :: String -> Maybe Bool -> [String] -> String -> m FilePath,
     -- | Get the configuration file (name, contents) for a filename
     siGetConfig :: String -> m (Maybe (FilePath, String))
 }
@@ -313,11 +317,11 @@ mockedSystemInterface files = SystemInterface {
     siGetConfig = const $ return Nothing
 }
   where
-    rf file = return $
+    rf _ file = return $
         case find ((== file) . fst) files of
             Nothing -> Left "File not included in mock."
             Just (_, contents) -> Right contents
-    fs _ _ file = return file
+    fs _ _ _ file = return file
 
 mockRcFile rcfile mock = mock {
     siGetConfig = const . return $ Just (".shellcheckrc", rcfile)

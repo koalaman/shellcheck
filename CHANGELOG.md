@@ -1,5 +1,7 @@
-## Git
+## Git (0.8.0)
 ### Added
+- `external-sources=true` directive can be added to .shellcheckrc to make
+  shellcheck behave as if `-x` was specified.
 - SC2286-SC2288: Warn when command name ends in a symbol like `/.)'"`
 - SC2289: Warn when command name contains tabs or linefeeds
 - SC2291: Warn about repeated unquoted spaces between words in echo

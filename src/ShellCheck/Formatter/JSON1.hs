@@ -117,7 +117,7 @@ collectResult ref cr sys = mapM_ f groups
     f :: [PositionedComment] -> IO ()
     f group = do
         let filename = sourceFile (head group)
-        result <- siReadFile sys filename
+        result <- siReadFile sys (Just True) filename
         let contents = either (const "") id result
         let comments' = makeNonVirtual comments contents
         modifyIORef ref (\x -> comments' ++ x)

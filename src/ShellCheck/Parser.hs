@@ -987,9 +987,9 @@ prop_readAnnotation7 = isOk readAnnotation "# shellcheck disable=SC1000,SC2000-S
 readAnnotation = called "shellcheck directive" $ do
     try readAnnotationPrefix
     many1 linewhitespace
-    readAnnotationWithoutPrefix
+    readAnnotationWithoutPrefix True
 
-readAnnotationWithoutPrefix = do
+readAnnotationWithoutPrefix sandboxed = do
     values <- many1 readKey
     optional readAnyComment
     void linefeed <|> eof <|> do
@@ -1034,6 +1034,21 @@ readAnnotationWithoutPrefix = do
                     parseNoteAt pos ErrorC 1103
                         "This shell type is unknown. Use e.g. sh or bash."
                 return [ShellOverride shell]
+
+            "external-sources" -> do
+                pos <- getPosition
+                value <- many1 letter
+                case value of
+                    "true" ->
+                        if sandboxed
+                        then do
+                            parseNoteAt pos ErrorC 1144 "external-sources can only be enabled in .shellcheckrc, not in individual files."
+                            return []
+                        else return [ExternalSources True]
+                    "false" -> return [ExternalSources False]
+                    _ -> do
+                        parseNoteAt pos ErrorC 1145 "Unknown external-sources value. Expected true/false."
+                        return []
 
             _ -> do
                 parseNoteAt keyPos WarningC 1107 "This directive is unknown. It will be ignored."
@@ -2176,10 +2191,12 @@ readSource t@(T_Redirecting _ _ (T_SimpleCommand cmdId _ (cmd:file':rest'))) = d
                     if filename == "/dev/null" -- always allow /dev/null
                     then return (Right "", filename)
                     else do
+                        allAnnotations <- getCurrentAnnotations True
                         currentScript <- Mr.asks currentFilename
-                        paths <- mapMaybe getSourcePath <$> getCurrentAnnotations True
-                        resolved <- system $ siFindSource sys currentScript paths filename
-                        contents <- system $ siReadFile sys resolved
+                        let paths = mapMaybe getSourcePath allAnnotations
+                        let externalSources = listToMaybe $ mapMaybe getExternalSources allAnnotations
+                        resolved <- system $ siFindSource sys currentScript externalSources paths filename
+                        contents <- system $ siReadFile sys externalSources resolved
                         return (contents, resolved)
                 case input of
                     Left err -> do
@@ -2211,6 +2228,11 @@ readSource t@(T_Redirecting _ _ (T_SimpleCommand cmdId _ (cmd:file':rest'))) = d
     getSourcePath t =
         case t of
             SourcePath x -> Just x
+            _ -> Nothing
+
+    getExternalSources t =
+        case t of
+            ExternalSources b -> Just b
             _ -> Nothing
 
     -- If the word has a single expansion as the directory, try stripping it
@@ -3202,7 +3224,7 @@ prop_readConfigKVs4 = isOk readConfigKVs "\n\n\n\n\t \n"
 prop_readConfigKVs5 = isOk readConfigKVs "# shellcheck accepts annotation-like comments in rc files\ndisable=1234"
 readConfigKVs = do
     anySpacingOrComment
-    annotations <- many (readAnnotationWithoutPrefix <* anySpacingOrComment)
+    annotations <- many (readAnnotationWithoutPrefix False <* anySpacingOrComment)
     eof
     return $ concat annotations
 anySpacingOrComment =

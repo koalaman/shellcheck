@@ -150,6 +150,7 @@ data Annotation =
     | SourceOverride String
     | ShellOverride String
     | SourcePath String
+    | ExternalSources Bool
     deriving (Show, Eq)
 data ConditionType = DoubleBracket | SingleBracket deriving (Show, Eq)
 

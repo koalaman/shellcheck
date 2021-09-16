@@ -112,6 +112,9 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
     line (plus `/dev/null`). This option allows following any file the script
     may `source`.
 
+    This option may also be enabled using `external-sources=true` in
+    `.shellcheckrc`. This flag takes precedence.
+
 **FILES...**
 
 :   One or more script files to check, or "-" for standard input.
@@ -239,6 +242,14 @@ Valid keys are:
 :   Enable an optional check by name, as listed with **--list-optional**.
     Only file-wide `enable` directives are considered.
 
+**external-sources**
+:   Set to `true` in `.shellcheckrc` to always allow ShellCheck to open
+    arbitrary files from 'source' statements (the way most tools do).
+
+    This option defaults to `false` only due to ShellCheck's origin as a
+    remote service for checking untrusted scripts. It can safely be enabled
+    for normal development.
+
 **source**
 :   Overrides the filename included by a `source`/`.` statement. This can be
     used to tell shellcheck where to look for a file whose name is determined
@@ -269,6 +280,9 @@ Here is an example `.shellcheckrc`:
     # and also look for absolute paths in /mnt/chroot
     source-path=SCRIPTDIR
     source-path=/mnt/chroot
+
+    # Allow opening any 'source'd file, even if not specified as input
+    external-sources=true
 
     # Turn on warnings for unquoted variables with safe values
     enable=quote-safe-variables

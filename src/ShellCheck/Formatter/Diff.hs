@@ -90,7 +90,7 @@ reportResult foundIssues reportedIssues color result sys = do
     mapM_ output $ M.toList fixmap
   where
     output (name, fix) = do
-        file <- (siReadFile sys) name
+        file <- siReadFile sys (Just True) name
         case file of
             Right contents -> do
                 putStrLn $ formatDoc color $ makeDiff name contents fix

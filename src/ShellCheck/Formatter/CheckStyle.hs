@@ -48,7 +48,7 @@ outputResults cr sys =
     fileGroups = groupWith sourceFile comments
     outputGroup group = do
         let filename = sourceFile (head group)
-        result <- (siReadFile sys) filename
+        result <- siReadFile sys (Just True) filename
         let contents = either (const "") id result
         outputFile filename contents group
 
