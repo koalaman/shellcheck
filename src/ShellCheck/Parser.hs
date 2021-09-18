@@ -984,6 +984,7 @@ prop_readAnnotation4 = isWarning readAnnotation "# shellcheck cats=dogs disable=
 prop_readAnnotation5 = isOk readAnnotation "# shellcheck disable=SC2002 # All cats are precious\n"
 prop_readAnnotation6 = isOk readAnnotation "# shellcheck disable=SC1234 # shellcheck foo=bar\n"
 prop_readAnnotation7 = isOk readAnnotation "# shellcheck disable=SC1000,SC2000-SC3000,SC1001\n"
+prop_readAnnotation8 = isOk readAnnotation "# shellcheck disable=all\n"
 readAnnotation = called "shellcheck directive" $ do
     try readAnnotationPrefix
     many1 linewhitespace
@@ -1004,8 +1005,12 @@ readAnnotationWithoutPrefix sandboxed = do
         key <- many1 (letter <|> char '-')
         char '=' <|> fail "Expected '=' after directive key"
         annotations <- case key of
-            "disable" -> readRange `sepBy` char ','
+            "disable" -> readElement `sepBy` char ','
               where
+                readElement = readRange <|> readAll
+                readAll = do
+                    string "all"
+                    return $ DisableComment 0 1000000
                 readRange = do
                     from <- readCode
                     to <- choice [ char '-' *> readCode, return $ from+1 ]

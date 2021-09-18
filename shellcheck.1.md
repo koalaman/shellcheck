@@ -237,6 +237,7 @@ Valid keys are:
     The command can be a simple command like `echo foo`, or a compound command
     like a function definition, subshell block or loop. A range can be
     be specified with a dash, e.g. `disable=SC3000-SC4000` to exclude 3xxx.
+    All warnings can be disabled with `disable=all`.
 
 **enable**
 :   Enable an optional check by name, as listed with **--list-optional**.

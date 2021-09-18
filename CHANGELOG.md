@@ -1,5 +1,6 @@
 ## Git (0.8.0)
 ### Added
+- `disable=all` now conveniently disables all warnings
 - `external-sources=true` directive can be added to .shellcheckrc to make
   shellcheck behave as if `-x` was specified.
 - SC2286-SC2288: Warn when command name ends in a symbol like `/.)'"`
