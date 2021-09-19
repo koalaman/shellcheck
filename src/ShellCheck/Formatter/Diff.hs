@@ -38,9 +38,6 @@ import System.FilePath
 
 import Test.QuickCheck
 
-import Debug.Trace
-ltt x = trace (show x) x
-
 format :: FormatterOptions -> IO Formatter
 format options = do
     foundIssues <- newIORef False

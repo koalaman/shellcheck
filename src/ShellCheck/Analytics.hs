@@ -42,7 +42,7 @@ import Data.List
 import Data.Maybe
 import Data.Ord
 import Data.Semigroup
-import Debug.Trace
+import Debug.Trace -- STRIP
 import qualified Data.Map.Strict as Map
 import Test.QuickCheck.All (forAllProperties)
 import Test.QuickCheck.Test (quickCheckWithResult, stdArgs, maxSuccess)
@@ -1011,8 +1011,8 @@ checkStderrRedirect params redir@(T_Redirecting _ [
 
 checkStderrRedirect _ _ = return ()
 
-lt x = trace ("Tracing " ++ show x) x
-ltt t = trace ("Tracing " ++ show t)
+lt x = trace ("Tracing " ++ show x) x -- STRIP
+ltt t = trace ("Tracing " ++ show t)  -- STRIP
 
 
 prop_checkSingleQuotedVariables  = verify checkSingleQuotedVariables "echo '$foo'"

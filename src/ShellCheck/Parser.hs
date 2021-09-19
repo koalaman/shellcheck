@@ -37,7 +37,7 @@ import Data.Functor
 import Data.List (isPrefixOf, isInfixOf, isSuffixOf, partition, sortBy, intercalate, nub, find)
 import Data.Maybe
 import Data.Monoid
-import Debug.Trace
+import Debug.Trace -- STRIP
 import GHC.Exts (sortWith)
 import Prelude hiding (readList)
 import System.IO
@@ -3372,13 +3372,13 @@ parsesCleanly parser string = runIdentity $ do
 
 -- For printf debugging: print the value of an expression
 -- Example: return $ dump $ T_Literal id [c]
-dump :: Show a => a -> a
-dump x = trace (show x) x
+dump :: Show a => a -> a     -- STRIP
+dump x = trace (show x) x    -- STRIP
 
 -- Like above, but print a specific expression:
 -- Example: return $ dumps ("Returning: " ++ [c])  $ T_Literal id [c]
-dumps :: Show x => x -> a -> a
-dumps t = trace (show t)
+dumps :: Show x => x -> a -> a -- STRIP
+dumps t = trace (show t)       -- STRIP
 
 parseWithNotes parser = do
     item <- parser

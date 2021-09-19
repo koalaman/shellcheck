@@ -29,6 +29,7 @@ detestify() {
       state = 0;
     }
 
+    /STRIP/ { next; }
     /LANGUAGE TemplateHaskell/ { next; }
     /^import.*Test\./ { next; }
 
