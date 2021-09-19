@@ -4,7 +4,7 @@ import ShellCheck.Interface
 import Data.Version (showVersion)
 import Paths_ShellCheck (version)
 
-shellcheckVersion = showVersion version
+shellcheckVersion = showVersion version -- VERSIONSTRING
 
 internalVariables = [
     -- Generic
