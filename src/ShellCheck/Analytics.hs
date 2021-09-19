@@ -1763,6 +1763,7 @@ prop_checkInexplicablyUnquoted6 = verifyNot checkInexplicablyUnquoted "\"$dir\"s
 prop_checkInexplicablyUnquoted7 = verifyNot checkInexplicablyUnquoted "${dir/\"foo\"/\"bar\"}"
 prop_checkInexplicablyUnquoted8 = verifyNot checkInexplicablyUnquoted "  'foo'\\\n  'bar'"
 prop_checkInexplicablyUnquoted9 = verifyNot checkInexplicablyUnquoted "[[ $x =~ \"foo\"(\"bar\"|\"baz\") ]]"
+prop_checkInexplicablyUnquoted10 = verifyNot checkInexplicablyUnquoted "cmd ${x+--name=\"$x\" --output=\"$x.out\"}"
 checkInexplicablyUnquoted params (T_NormalWord id tokens) = mapM_ check (tails tokens)
   where
     check (T_SingleQuoted _ _:T_Literal id str:_)
@@ -1774,19 +1775,20 @@ checkInexplicablyUnquoted params (T_NormalWord id tokens) = mapM_ check (tails t
             T_DollarExpansion id _ -> warnAboutExpansion id
             T_DollarBraced id _ _ -> warnAboutExpansion id
             T_Literal id s
-                | not (quotesSingleThing a && quotesSingleThing b || isRegex (getPath (parentMap params) trapped)) ->
+                | not (quotesSingleThing a && quotesSingleThing b || isSpecial (getPath (parentMap params) trapped)) ->
                     warnAboutLiteral id
             _ -> return ()
 
     check _ = return ()
 
     -- Regexes for [[ .. =~ re ]] are parsed with metacharacters like ()| as unquoted
-    -- literals, so avoid overtriggering on these.
-    isRegex t =
+    -- literals. The same is true for ${x+"foo" "bar"}. Avoid overtriggering on these.
+    isSpecial t =
         case t of
             (T_Redirecting {} : _) -> False
+            T_DollarBraced {} : _ -> True
             (a:(TC_Binary _ _ "=~" lhs rhs):rest) -> getId a == getId rhs
-            _:rest -> isRegex rest
+            _:rest -> isSpecial rest
             _ -> False
 
     -- If the surrounding quotes quote single things, like "$foo"_and_then_some_"$stuff",
