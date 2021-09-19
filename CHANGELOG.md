@@ -28,6 +28,9 @@
 - Quote warnings are now emitted for declaration utilities in sh
 - Leading `_` can now be used to suppress warnings about unused variables
 
+### Removed
+- SC1003: Literal backslash+linefeed in '' was found to be usually correct
+
 
 ## v0.7.2 - 2021-04-19
 ### Added

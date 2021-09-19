@@ -1511,7 +1511,6 @@ readSingleEscaped = do
 
     case x of
         '\'' -> parseProblemAt pos InfoC 1003 "Want to escape a single quote? echo 'This is how it'\\''s done'.";
-        '\n' -> parseProblemAt pos InfoC 1004 "This backslash+linefeed is literal. Break outside single quotes if you just want to break the line."
         _ -> return ()
 
     return [s]
