@@ -29,7 +29,7 @@
 - Leading `_` can now be used to suppress warnings about unused variables
 
 ### Removed
-- SC1003: Literal backslash+linefeed in '' was found to be usually correct
+- SC1004: Literal backslash+linefeed in '' was found to be usually correct
 
 
 ## v0.7.2 - 2021-04-19
