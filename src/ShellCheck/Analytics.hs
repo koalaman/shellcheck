@@ -791,6 +791,7 @@ prop_checkRedirectToSame5 = verifyNot checkRedirectToSame "foo > bar 2> bar"
 prop_checkRedirectToSame6 = verifyNot checkRedirectToSame "echo foo > foo"
 prop_checkRedirectToSame7 = verifyNot checkRedirectToSame "sed 's/foo/bar/g' file | sponge file"
 prop_checkRedirectToSame8 = verifyNot checkRedirectToSame "while read -r line; do _=\"$fname\"; done <\"$fname\""
+prop_checkRedirectToSame9 = verifyNot checkRedirectToSame "while read -r line; do cat < \"$fname\"; done <\"$fname\""
 checkRedirectToSame params s@(T_Pipeline _ _ list) =
     mapM_ (\l -> (mapM_ (\x -> doAnalysis (checkOccurrences x) l) (getAllRedirs list))) list
   where
@@ -799,6 +800,7 @@ checkRedirectToSame params s@(T_Pipeline _ _ list) =
     checkOccurrences t@(T_NormalWord exceptId x) u@(T_NormalWord newId y) |
         exceptId /= newId
                 && x == y
+                && not (isInput t && isInput u)
                 && not (isOutput t && isOutput u)
                 && not (special t)
                 && not (any isHarmlessCommand [t,u])
@@ -817,6 +819,13 @@ checkRedirectToSame params s@(T_Pipeline _ _ list) =
                        _ -> []
     getRedirs _ = []
     special x = "/dev/" `isPrefixOf` concat (oversimplify x)
+    isInput t =
+        case drop 1 $ getPath (parentMap params) t of
+            T_IoFile _ op _:_ ->
+                case op of
+                    T_Less _  -> True
+                    _ -> False
+            _ -> False
     isOutput t =
         case drop 1 $ getPath (parentMap params) t of
             T_IoFile _ op _:_ ->
