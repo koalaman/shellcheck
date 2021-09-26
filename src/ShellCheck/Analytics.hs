@@ -1766,6 +1766,8 @@ prop_checkInexplicablyUnquoted7 = verifyNot checkInexplicablyUnquoted "${dir/\"f
 prop_checkInexplicablyUnquoted8 = verifyNot checkInexplicablyUnquoted "  'foo'\\\n  'bar'"
 prop_checkInexplicablyUnquoted9 = verifyNot checkInexplicablyUnquoted "[[ $x =~ \"foo\"(\"bar\"|\"baz\") ]]"
 prop_checkInexplicablyUnquoted10 = verifyNot checkInexplicablyUnquoted "cmd ${x+--name=\"$x\" --output=\"$x.out\"}"
+prop_checkInexplicablyUnquoted11 = verifyNot checkInexplicablyUnquoted "echo \"foo\"/\"bar\""
+prop_checkInexplicablyUnquoted12 = verifyNot checkInexplicablyUnquoted "declare \"foo\"=\"bar\""
 checkInexplicablyUnquoted params (T_NormalWord id tokens) = mapM_ check (tails tokens)
   where
     check (T_SingleQuoted _ _:T_Literal id str:_)
@@ -1777,7 +1779,10 @@ checkInexplicablyUnquoted params (T_NormalWord id tokens) = mapM_ check (tails t
             T_DollarExpansion id _ -> warnAboutExpansion id
             T_DollarBraced id _ _ -> warnAboutExpansion id
             T_Literal id s
-                | not (quotesSingleThing a && quotesSingleThing b || isSpecial (getPath (parentMap params) trapped)) ->
+                | not (quotesSingleThing a && quotesSingleThing b
+                    || s `elem` ["=", ":", "/"]
+                    || isSpecial (getPath (parentMap params) trapped)
+                ) ->
                     warnAboutLiteral id
             _ -> return ()
 
