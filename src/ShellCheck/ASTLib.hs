@@ -287,14 +287,14 @@ isArrayExpansion (T_DollarBraced _ _ l) =
 isArrayExpansion _ = False
 
 -- Is it possible that this arg becomes multiple args?
-mayBecomeMultipleArgs t = willBecomeMultipleArgs t || f t
+mayBecomeMultipleArgs t = willBecomeMultipleArgs t || f False t
   where
-    f (T_DollarBraced _ _ l) =
+    f quoted (T_DollarBraced _ _ l) =
         let string = concat $ oversimplify l in
-            "!" `isPrefixOf` string
-    f (T_DoubleQuoted _ parts) = any f parts
-    f (T_NormalWord _ parts) = any f parts
-    f _ = False
+            not quoted || "!" `isPrefixOf` string
+    f quoted (T_DoubleQuoted _ parts) = any (f True) parts
+    f quoted (T_NormalWord _ parts) = any (f quoted) parts
+    f _ _ = False
 
 -- Is it certain that this word will becomes multiple words?
 willBecomeMultipleArgs t = willConcatInAssignment t || f t
@@ -302,7 +302,6 @@ willBecomeMultipleArgs t = willConcatInAssignment t || f t
     f T_Extglob {} = True
     f T_Glob {} = True
     f T_BraceExpansion {} = True
-    f (T_DoubleQuoted _ parts) = any f parts
     f (T_NormalWord _ parts) = any f parts
     f _ = False
 

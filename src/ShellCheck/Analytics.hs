@@ -506,7 +506,9 @@ checkWrongArithmeticAssignment _ _ = return ()
 
 prop_checkUuoc1 = verify checkUuoc "cat foo | grep bar"
 prop_checkUuoc2 = verifyNot checkUuoc "cat * | grep bar"
-prop_checkUuoc3 = verify checkUuoc "cat $var | grep bar"
+prop_checkUuoc3 = verify checkUuoc "cat \"$var\" | grep bar"
+prop_checkUuoc3b = verifyNot checkUuoc "cat $var | grep bar"
+prop_checkUuoc3c = verifyNot checkUuoc "cat \"${!var}\" | grep bar"
 prop_checkUuoc4 = verifyNot checkUuoc "cat $var"
 prop_checkUuoc5 = verifyNot checkUuoc "cat \"$@\""
 prop_checkUuoc6 = verifyNot checkUuoc "cat -n | grep bar"
@@ -659,7 +661,7 @@ prop_checkForInQuoted7 = verify checkForInQuoted "for f in ls, grep, mv; do true
 prop_checkForInQuoted8 = verify checkForInQuoted "for f in 'ls', 'grep', 'mv'; do true; done"
 prop_checkForInQuoted9 = verifyNot checkForInQuoted "for f in 'ls,' 'grep,' 'mv'; do true; done"
 checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [word@(T_DoubleQuoted id list)]] _)
-    | any (\x -> willSplit x && not (mayBecomeMultipleArgs x)) list
+    | any willSplit list && not (mayBecomeMultipleArgs word)
             || maybe False wouldHaveBeenGlob (getLiteralString word) =
         err id 2066 "Since you double quoted this, it will not word split, and the loop will only run once."
 checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [T_SingleQuoted id _]] _) =
