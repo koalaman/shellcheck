@@ -3,6 +3,8 @@
 - `disable=all` now conveniently disables all warnings
 - `external-sources=true` directive can be added to .shellcheckrc to make
   shellcheck behave as if `-x` was specified.
+- Optional `check-extra-masked-returns` for pointing out commands with
+  suppressed exit codes (SC2312).
 - SC2286-SC2288: Warn when command name ends in a symbol like `/.)'"`
 - SC2289: Warn when command name contains tabs or linefeeds
 - SC2291: Warn about repeated unquoted spaces between words in echo
