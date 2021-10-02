@@ -83,6 +83,8 @@ data Parameters = Parameters {
     hasInheritErrexit  :: Bool,
     -- Whether this script has 'set -e' anywhere.
     hasSetE            :: Bool,
+    -- Whether this script has 'set -o pipefail' anywhere.
+    hasPipefail        :: Bool,
     -- A linear (bad) analysis of data flow
     variableFlow       :: [StackData],
     -- A map from Id to parent Token
@@ -204,6 +206,12 @@ makeParameters spec =
                 Dash -> True
                 Sh   -> True
                 Ksh  -> False,
+        hasPipefail =
+            case shellType params of
+                Bash -> containsPipefail root
+                Dash -> True
+                Sh   -> True
+                Ksh  -> containsPipefail root,
         shellTypeSpecified = isJust (asShellType spec) || isJust (asFallbackShell spec),
         parentMap = getParentTree root,
         variableFlow = getVariableFlow params root,
@@ -225,6 +233,16 @@ containsSetE root = isNothing $ doAnalysis (guard . not . isSetE) root
                         "e" `elem` map snd (getAllFlags t))
             _ -> False
     re = mkRegex "[[:space:]]-[^-]*e"
+
+containsPipefail root = isNothing $ doAnalysis (guard . not . isPipefail) root
+  where
+    isPipefail t =
+        case t of
+            T_SimpleCommand {}  ->
+                t `isUnqualifiedCommand` "set" &&
+                    ("pipefail" `elem` oversimplify t ||
+                        "o" `elem` map snd (getAllFlags t))
+            _ -> False
 
 containsShopt shopt root =
         isNothing $ doAnalysis (guard . not . isShoptLastPipe) root

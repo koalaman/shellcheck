@@ -138,3 +138,5 @@ shellForExecutable name =
         _ -> Nothing
 
 flagsForRead = "sreu:n:N:i:p:a:t:"
+
+declaringCommands = ["local", "declare", "export", "readonly", "typeset", "let"]
