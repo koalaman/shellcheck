@@ -1005,6 +1005,14 @@ readAnnotationWithoutPrefix sandboxed = do
         key <- many1 (letter <|> char '-')
         char '=' <|> fail "Expected '=' after directive key"
         annotations <- case key of
+            "color" -> do
+             color <- many1 $ noneOf " \n"
+             option <- parseColorOption color
+             return options {
+                 formatterOptions = (formatterOptions options) {
+                     foColorOption = option
+                 }
+             }
             "disable" -> readElement `sepBy` char ','
               where
                 readElement = readRange <|> readAll
