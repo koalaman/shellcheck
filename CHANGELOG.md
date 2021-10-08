@@ -5,6 +5,7 @@
   shellcheck behave as if `-x` was specified.
 - Optional `check-extra-masked-returns` for pointing out commands with
   suppressed exit codes (SC2312).
+- Optional `require-double-brackets` for recommending \[\[ ]] (SC2292).
 - SC2286-SC2288: Warn when command name ends in a symbol like `/.)'"`
 - SC2289: Warn when command name contains tabs or linefeeds
 - SC2291: Warn about repeated unquoted spaces between words in echo
