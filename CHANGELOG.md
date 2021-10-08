@@ -17,6 +17,7 @@
 - SC2304-SC2306: Warn about unquoted globs in expr arguments
 - SC2307: Warn about insufficient number of arguments to expr
 - SC2308: Suggest other approaches for non-standard expr extensions
+- SC2313: Warn about `read` with unquoted, array indexed variable
 
 ### Fixed
 - SC2102 about repetitions in ranges no longer triggers on [[ -v arr[xx] ]]

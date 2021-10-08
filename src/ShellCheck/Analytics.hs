@@ -2689,12 +2689,13 @@ prop_checkCharRangeGlob1 = verify checkCharRangeGlob "ls *[:digit:].jpg"
 prop_checkCharRangeGlob2 = verifyNot checkCharRangeGlob "ls *[[:digit:]].jpg"
 prop_checkCharRangeGlob3 = verify checkCharRangeGlob "ls [10-15]"
 prop_checkCharRangeGlob4 = verifyNot checkCharRangeGlob "ls [a-zA-Z]"
-prop_checkCharRangeGlob5 = verifyNot checkCharRangeGlob "tr -d [a-zA-Z]" -- tr has 2060
+prop_checkCharRangeGlob5 = verifyNot checkCharRangeGlob "tr -d [aa]" -- tr has 2060
 prop_checkCharRangeGlob6 = verifyNot checkCharRangeGlob "[[ $x == [!!]* ]]"
 prop_checkCharRangeGlob7 = verifyNot checkCharRangeGlob "[[ -v arr[keykey] ]]"
 prop_checkCharRangeGlob8 = verifyNot checkCharRangeGlob "[[ arr[keykey] -gt 1 ]]"
+prop_checkCharRangeGlob9 = verifyNot checkCharRangeGlob "read arr[keykey]" -- tr has 2313
 checkCharRangeGlob p t@(T_Glob id str) |
-  isCharClass str && not (isParamTo (parentMap p) "tr" t) && not (isDereferenced t) =
+  isCharClass str && not isIgnoredCommand && not (isDereferenced t) =
     if ":" `isPrefixOf` contents
         && ":" `isSuffixOf` contents
         && contents /= ":"
@@ -2711,6 +2712,10 @@ checkCharRangeGlob p t@(T_Glob id str) |
             '!':rest -> rest
             '^':rest -> rest
             x -> x
+
+    isIgnoredCommand = fromMaybe False $ do
+        cmd <- getClosestCommand (parentMap p) t
+        return $ isCommandMatch cmd (`elem` ["tr", "read"])
 
     -- Check if this is a dereferencing context like [[ -v array[operandhere] ]]
     isDereferenced = fromMaybe False . msum . map isDereferencingOp . getPath (parentMap p)

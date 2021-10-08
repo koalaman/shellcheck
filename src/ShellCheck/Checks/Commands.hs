@@ -790,6 +790,7 @@ prop_checkReadExpansions5 = verify checkReadExpansions "read \"$var\""
 prop_checkReadExpansions6 = verify checkReadExpansions "read -a $var"
 prop_checkReadExpansions7 = verifyNot checkReadExpansions "read $1"
 prop_checkReadExpansions8 = verifyNot checkReadExpansions "read ${var?}"
+prop_checkReadExpansions9 = verify checkReadExpansions "read arr[val]"
 checkReadExpansions = CommandCheck (Exactly "read") check
   where
     options = getGnuOpts flagsForRead
@@ -797,12 +798,25 @@ checkReadExpansions = CommandCheck (Exactly "read") check
         opts <- options $ arguments cmd
         return [y | (x,(_, y)) <- opts, null x || x == "a"]
 
-    check cmd = mapM_ warning $ getVars cmd
-    warning t = sequence_ $ do
+    check cmd = do
+        mapM_ dollarWarning $ getVars cmd
+        mapM_ arrayWarning $ arguments cmd
+
+    dollarWarning t = sequence_ $ do
         name <- getSingleUnmodifiedBracedString t
         guard $ isVariableName name   -- e.g. not $1
         return . warn (getId t) 2229 $
             "This does not read '" ++ name ++ "'. Remove $/${} for that, or use ${var?} to quiet."
+
+    arrayWarning word =
+        when (any isUnquotedBracket $ getWordParts word) $
+            warn (getId word) 2313 $
+                "Quote array indices to avoid them expanding as globs."
+
+    isUnquotedBracket t =
+        case t of
+            T_Glob _ ('[':_) -> True
+            _ -> False
 
 -- Return the single variable expansion that makes up this word, if any.
 -- e.g. $foo -> $foo, "$foo"'' -> $foo , "hello $name" -> Nothing
