@@ -29,6 +29,7 @@
 - SC2181 now only triggers on single condition tests like `[ $? = 0 ]`.
 - Quote warnings are now emitted for declaration utilities in sh
 - Leading `_` can now be used to suppress warnings about unused variables
+- TTY output now includes warning level in text as well as color
 
 ### Removed
 - SC1004: Literal backslash+linefeed in '' was found to be usually correct

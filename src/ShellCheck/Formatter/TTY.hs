@@ -174,7 +174,7 @@ showFixedString color comments lineNum fileLines =
 cuteIndent :: PositionedComment -> String
 cuteIndent comment =
     replicate (fromIntegral $ colNo comment - 1) ' ' ++
-        makeArrow ++ " " ++ code (codeNo comment) ++ ": " ++ messageText comment
+        makeArrow ++ " " ++ code (codeNo comment) ++ " (" ++ severityText comment ++ "): " ++ messageText comment
   where
     arrow n = '^' : replicate (fromIntegral $ n-2) '-' ++ "^"
     makeArrow =
