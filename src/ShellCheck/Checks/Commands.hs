@@ -959,15 +959,24 @@ prop_checkWhileGetoptsCase2 = verify checkWhileGetoptsCase "while getopts 'a:' x
 prop_checkWhileGetoptsCase3 = verifyNot checkWhileGetoptsCase "while getopts 'a:b' x; do case $x in a) foo;; b) bar;; *) :;esac; done"
 prop_checkWhileGetoptsCase4 = verifyNot checkWhileGetoptsCase "while getopts 'a:123' x; do case $x in a) foo;; [0-9]) bar;; esac; done"
 prop_checkWhileGetoptsCase5 = verifyNot checkWhileGetoptsCase "while getopts 'a:' x; do case $x in a) foo;; \\?) bar;; *) baz;; esac; done"
+prop_checkWhileGetoptsCase6 = verifyNot checkWhileGetoptsCase "while getopts 'a:b' x; do case $y in a) foo;; esac; done"
+prop_checkWhileGetoptsCase7 = verifyNot checkWhileGetoptsCase "while getopts 'a:b' x; do case x$x in xa) foo;; xb) foo;; esac; done"
 checkWhileGetoptsCase = CommandCheck (Exactly "getopts") f
   where
     f :: Token -> Analysis
-    f t@(T_SimpleCommand _ _ (cmd:arg1:_))  = do
+    f t@(T_SimpleCommand _ _ (cmd:arg1:name:_))  = do
         path <- getPathM t
         sequence_ $ do
             options <- getLiteralString arg1
+            getoptsVar <- getLiteralString name
             (T_WhileExpression _ _ body) <- findFirst whileLoop path
-            caseCmd <- mapMaybe findCase body !!! 0
+            caseCmd@(T_CaseExpression _ var _) <- mapMaybe findCase body !!! 0
+
+            -- Make sure getopts name and case variable matches
+            [T_DollarBraced _ _ bracedWord] <- return $ getWordParts var
+            [T_Literal _ caseVar] <- return $ getWordParts bracedWord
+            guard $ caseVar == getoptsVar
+
             return $ check (getId arg1) (map (:[]) $ filter (/= ':') options) caseCmd
     f _ = return ()
 
