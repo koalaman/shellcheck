@@ -1005,6 +1005,23 @@ isUnmodifiedParameterExpansion t =
             in getBracedReference str == str
         _ -> False
 
+isTrueAssignmentSource c =
+    case c of
+        DataString SourceChecked -> False
+        DataString SourceDeclaration -> False
+        DataArray SourceChecked -> False
+        DataArray SourceDeclaration -> False
+        _ -> True
+
+modifiesVariable params token name =
+    or $ map check flow
+  where
+    flow = getVariableFlow params token
+    check t =
+        case t of
+            Assignment (_, _, n, source) -> isTrueAssignmentSource source && n == name
+            _ -> False
+
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

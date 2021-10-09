@@ -961,11 +961,13 @@ prop_checkWhileGetoptsCase4 = verifyNot checkWhileGetoptsCase "while getopts 'a:
 prop_checkWhileGetoptsCase5 = verifyNot checkWhileGetoptsCase "while getopts 'a:' x; do case $x in a) foo;; \\?) bar;; *) baz;; esac; done"
 prop_checkWhileGetoptsCase6 = verifyNot checkWhileGetoptsCase "while getopts 'a:b' x; do case $y in a) foo;; esac; done"
 prop_checkWhileGetoptsCase7 = verifyNot checkWhileGetoptsCase "while getopts 'a:b' x; do case x$x in xa) foo;; xb) foo;; esac; done"
+prop_checkWhileGetoptsCase8 = verifyNot checkWhileGetoptsCase "while getopts 'a:b' x; do x=a; case $x in a) foo;; esac; done"
 checkWhileGetoptsCase = CommandCheck (Exactly "getopts") f
   where
     f :: Token -> Analysis
     f t@(T_SimpleCommand _ _ (cmd:arg1:name:_))  = do
         path <- getPathM t
+        params <- ask
         sequence_ $ do
             options <- getLiteralString arg1
             getoptsVar <- getLiteralString name
@@ -976,6 +978,9 @@ checkWhileGetoptsCase = CommandCheck (Exactly "getopts") f
             [T_DollarBraced _ _ bracedWord] <- return $ getWordParts var
             [T_Literal _ caseVar] <- return $ getWordParts bracedWord
             guard $ caseVar == getoptsVar
+
+            -- Make sure the variable isn't modified
+            guard . not $ modifiesVariable params (T_BraceGroup (Id 0) body) getoptsVar
 
             return $ check (getId arg1) (map (:[]) $ filter (/= ':') options) caseCmd
     f _ = return ()

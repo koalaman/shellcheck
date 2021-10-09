@@ -1957,17 +1957,9 @@ subshellAssignmentCheck params t =
 
 findSubshelled [] _ _ = return ()
 findSubshelled (Assignment x@(_, _, str, data_):rest) scopes@((reason,scope):restscope) deadVars =
-    if isTrueAssignment data_
+    if isTrueAssignmentSource data_
     then findSubshelled rest ((reason, x:scope):restscope) $ Map.insert str Alive deadVars
     else findSubshelled rest scopes deadVars
-  where
-    isTrueAssignment c =
-        case c of
-            DataString SourceChecked -> False
-            DataString SourceDeclaration -> False
-            DataArray SourceChecked -> False
-            DataArray SourceDeclaration -> False
-            _ -> True
 
 findSubshelled (Reference (_, readToken, str):rest) scopes deadVars = do
     unless (shouldIgnore str) $ case Map.findWithDefault Alive str deadVars of
