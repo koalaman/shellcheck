@@ -571,14 +571,12 @@ isClosingFileOp op =
 -- Consider 'export/declare -x' a reference, since it makes the var available
 getReferencedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal _ x:_):rest)) =
     case x of
+        "declare" -> forDeclare
+        "typeset" -> forDeclare
+
         "export" -> if "f" `elem` flags
             then []
             else concatMap getReference rest
-        "declare" -> if
-                any (`elem` flags) ["x", "p"] &&
-                    (not $ any (`elem` flags) ["f", "F"])
-            then concatMap getReference rest
-            else []
         "local" -> if "x" `elem` flags
             then concatMap getReference rest
             else []
@@ -589,6 +587,13 @@ getReferencedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Litera
         "alias" -> [(base, token, name) | token <- rest, name <- getVariablesFromLiteralToken token]
         _ -> []
   where
+    forDeclare =
+            if
+                any (`elem` flags) ["x", "p"] &&
+                    (not $ any (`elem` flags) ["f", "F"])
+            then concatMap getReference rest
+            else []
+
     getReference t@(T_Assignment _ _ name _ value) = [(t, t, name)]
     getReference t@(T_NormalWord _ [T_Literal _ name]) | not ("-" `isPrefixOf` name) = [(t, t, name)]
     getReference _ = []
@@ -628,8 +633,8 @@ getModifiedVariableCommand base@(T_SimpleCommand id cmdPrefix (T_NormalWord _ (T
         "export" ->
             if "f" `elem` flags then [] else concatMap getModifierParamString rest
 
-        "declare" -> if any (`elem` flags) ["F", "f", "p"] then [] else declaredVars
-        "typeset" -> declaredVars
+        "declare" -> forDeclare
+        "typeset" -> forDeclare
 
         "local" -> concatMap getModifierParamString rest
         "readonly" ->
@@ -660,6 +665,8 @@ getModifiedVariableCommand base@(T_SimpleCommand id cmdPrefix (T_NormalWord _ (T
     stripEqualsFrom (T_NormalWord id1 [T_DoubleQuoted id2 [T_Literal id3 s]]) =
         T_NormalWord id1 [T_DoubleQuoted id2 [T_Literal id3 (stripEquals s)]]
     stripEqualsFrom t = t
+
+    forDeclare = if any (`elem` flags) ["F", "f", "p"] then [] else declaredVars
 
     declaredVars = concatMap (getModifierParam defaultType) rest
       where
