@@ -335,16 +335,43 @@ locales where encoding is unspecified (such as the `C` locale).
 Windows users seeing `commitBuffer: invalid argument (invalid character)`
 should set their terminal to use UTF-8 with `chcp 65001`.
 
-# AUTHORS
+# KNOWN INCOMPATIBILITIES
 
-ShellCheck is developed and maintained by Vidar Holen, with assistance from a
-long list of wonderful contributors.
+(If nothing in this section makes sense, you are unlikely to be affected by it)
+
+To avoid confusing and misguided suggestions, ShellCheck requires function
+bodies to be either `{ brace groups; }` or `( subshells )`, and function names
+containing `[]*=!` are only recognized after a `function` keyword.
+
+The following unconventional function definitions are identical in Bash,
+but ShellCheck only recognizes the latter.
+
+    [x!=y] () [[ $1 ]]
+    function [x!=y] () { [[ $1 ]]; }
+
+Shells without the `function` keyword do not allow these characters in function
+names to begin with.  Function names containing `{}` are not supported at all.
+
+Further, if ShellCheck sees `[x!=y]` it will assume this is an invalid
+comparison. To invoke the above function, quote the command as in `'[x!=y]'`,
+or to retain the same globbing behavior, use `command [x!=y]`.
+
+ShellCheck imposes additional restrictions on the `[` command to help diagnose
+common invalid uses. While `[ $x= 1 ]` is defined in POSIX, ShellCheck will
+assume it was intended as the much more likely comparison `[ "$x" = 1 ]` and
+fail accordingly. For unconventional or dynamic uses of the `[` command, use
+`test` or `\[` instead.
 
 # REPORTING BUGS
 
 Bugs and issues can be reported on GitHub:
 
 https://github.com/koalaman/shellcheck/issues
+
+# AUTHORS
+
+ShellCheck is developed and maintained by Vidar Holen, with assistance from a
+long list of wonderful contributors.
 
 # COPYRIGHT
 
