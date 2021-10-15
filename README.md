@@ -358,6 +358,7 @@ echo 'Don't forget to restart!'   # Singlequote closed by apostrophe
 echo 'Don\'t try this at home'    # Attempting to escape ' in ''
 echo 'Path is $PATH'              # Variables in single quotes
 trap "echo Took ${SECONDS}s" 0    # Prematurely expanded trap
+unset var[i]                      # Array index treated as glob
 ```
 
 ### Conditionals
@@ -376,6 +377,7 @@ ShellCheck can recognize many types of incorrect test statements.
 [ grep -q foo file ]              # Command without $(..)
 [[ "$$file" == *.jpg ]]           # Comparisons that can't succeed
 (( 1 -lt 2 ))                     # Using test operators in ((..))
+[ x ] & [ y ] | [ z ]             # Accidental backgrounding and piping
 ```
 
 ### Frequently misused commands
@@ -447,6 +449,8 @@ echo "Hello $name"                # Unassigned lowercase variables
 cmd | read bar; echo $bar         # Assignments in subshells
 cat foo | cp bar                  # Piping to commands that don't read
 printf '%s: %s\n' foo             # Mismatches in printf argument count
+eval "${array[@]}"                # Lost word boundaries in array eval
+for i in "${x[@]}"; do ${x[$i]}   # Using array value as key
 ```
 
 ### Robustness
@@ -471,6 +475,7 @@ ShellCheck will warn when using features not supported by the shebang. For examp
 echo {1..$n}                     # Works in ksh, but not bash/dash/sh
 echo {1..10}                     # Works in ksh and bash, but not dash/sh
 echo -n 42                       # Works in ksh, bash and dash, undefined in sh
+expr match str regex             # Unportable alias for `expr str : regex`
 trap 'exit 42' sigint            # Unportable signal spec
 cmd &> file                      # Unportable redirection operator
 read foo < /dev/tcp/host/22      # Unportable intercepted files
@@ -491,10 +496,15 @@ rm “file”                         # Unicode quotes
 echo "Hello world"                # Carriage return / DOS line endings
 echo hello \                      # Trailing spaces after \
 var=42 echo $var                  # Expansion of inlined environment
-#!/bin/bash -x -e                 # Common shebang errors
+!# bin/bash -x -e                 # Common shebang errors
 echo $((n/180*100))               # Unnecessary loss of precision
 ls *[:digit:].txt                 # Bad character class globs
 sed 's/foo/bar/' file > file      # Redirecting to input
+var2=$var2                        # Variable assigned to itself
+[ x$var = xval ]                  # Antiquated x-comparisons
+ls() { ls -l "$@"; }              # Infinitely recursive wrapper
+alias ls='ls -l'; ls foo          # Alias used before it takes effect
+for x; do for x; do               # Nested loop uses same variable
 while getopts "a" f; do case $f in "b") # Unhandled getopts flags
 ```
 
