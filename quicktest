@@ -3,8 +3,17 @@
 # This allows running tests without compiling, which can be faster.
 # 'cabal test' remains the source of truth.
 
+path=$(find . -type f -path './dist*/Paths_ShellCheck.hs' | sort | head -n 1)
+if [ -z "$path" ]
+then
+    echo >&2 "Unable to find Paths_ShellCheck.hs. Please 'cabal build' once."
+      exit 1
+fi
+path="${path%/*}"
+
+
 (
-var=$(echo 'main' | ghci test/shellcheck.hs 2>&1 | tee /dev/stderr)
+var=$(echo 'main' | ghci -isrc -i"$path" test/shellcheck.hs 2>&1 | tee /dev/stderr)
 if [[ $var == *ExitSuccess* ]]
 then
   exit 0
