@@ -180,7 +180,7 @@ prop_checkBashisms95 = verify checkBashisms "#!/bin/sh\necho $_"
 prop_checkBashisms96 = verifyNot checkBashisms "#!/bin/dash\necho $_"
 prop_checkBashisms97 = verify checkBashisms "#!/bin/sh\necho ${var,}"
 prop_checkBashisms98 = verify checkBashisms "#!/bin/sh\necho ${var^^}"
-prop_checkBashisms99 = verifyNot checkBashisms "#!/bin/dash\necho [^f]oo"
+prop_checkBashisms99 = verify checkBashisms "#!/bin/dash\necho [^f]oo"
 checkBashisms = ForShell [Sh, Dash] $ \t -> do
     params <- ask
     kludge params t
@@ -235,7 +235,7 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
         where
             file = onlyLiteralString word
             isNetworked = any (`isPrefixOf` file) ["/dev/tcp", "/dev/udp"]
-    bashism (T_Glob id str) | not isDash && "[^" `isInfixOf` str =
+    bashism (T_Glob id str) | "[^" `isInfixOf` str =
             warnMsg id 3026 "^ in place of ! in glob bracket expressions is"
 
     bashism t@(TA_Variable id str _) | isBashVariable str =
