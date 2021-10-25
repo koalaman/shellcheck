@@ -199,6 +199,7 @@ nodeChecks = [
     ,checkComparisonWithLeadingX
     ,checkCommandWithTrailingSymbol
     ,checkUnquotedParameterExpansionPattern
+    ,checkBatsTestDoesNotUseNegation
     ]
 
 optionalChecks = map fst optionalTreeChecks
@@ -4847,6 +4848,24 @@ checkExtraMaskedReturns params t = runNodeAnalysis findMaskingNodes params t
 
     hasParent pred t = any (uncurry pred) (parentChildPairs t)
 
+prop_checkBatsTestDoesNotUseNegation1 = verifyNot checkBatsTestDoesNotUseNegation "#!/usr/bin/env bats\n@test \"name\"{ ! true; false; }"
+prop_checkBatsTestDoesNotUseNegation2 = verify checkBatsTestDoesNotUseNegation "#!/usr/bin/env bats\n@test \"name\"{ ! true; }" -- using ! on last command in test is okay
+prop_checkBatsTestDoesNotUseNegation3 = verify checkBatsTestDoesNotUseNegation "#!/usr/bin/env bats\n@test \"name\"{ run ! true }"
+checkBatsTestDoesNotUseNegation params t =
+    case t of
+        T_BatsTest _ _ (T_BraceGroup _ commands) -> mapM_ check (dropLast commands)
+            T_Banged id (T_Pipeline _ _ [T_Redirecting _ _ (T_Condition idCondition _ _)]) -> 
+                                err id 2293  
+                                "bats: ! <command> will never fail the test. Fold the `!` into the conditional!"
+            T_Banged id cmd -> errWithFix id 2293 
+                                "bats: ! <command> will never fail the test."
+                                (fixWith [replaceStart id params 0 "run "])
+            _ -> return ()
+    dropLast t =
+        case t of
+            [_] -> []
+            x:rest -> x : dropLast rest
+            _ -> []
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
