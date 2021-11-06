@@ -4853,19 +4853,30 @@ prop_checkBatsTestDoesNotUseNegation2 = verify checkBatsTestDoesNotUseNegation "
 prop_checkBatsTestDoesNotUseNegation3 = verify checkBatsTestDoesNotUseNegation "#!/usr/bin/env bats\n@test \"name\"{ run ! true }"
 checkBatsTestDoesNotUseNegation params t =
     case t of
-        T_BatsTest _ _ (T_BraceGroup _ commands) -> mapM_ check (dropLast commands)
-            T_Banged id (T_Pipeline _ _ [T_Redirecting _ _ (T_Condition idCondition _ _)]) -> 
-                                err id 2293  
-                                "bats: ! <command> will never fail the test. Fold the `!` into the conditional!"
-            T_Banged id cmd -> errWithFix id 2293 
-                                "bats: ! <command> will never fail the test."
-                                (fixWith [replaceStart id params 0 "run "])
-            _ -> return ()
-    dropLast t =
+        T_BatsTest _ _ (T_BraceGroup _ commands) -> mapM_ (check commands) commands
+        _ -> return ()
+  where
+    check commands t =
         case t of
-            [_] -> []
-            x:rest -> x : dropLast rest
-            _ -> []
+            T_Banged id (T_Pipeline _ _ [T_Redirecting _ _ (T_Condition idCondition _ _)]) -> 
+                                if t `isLastOf` commands
+                                then style id 2315 "In bats, ! will not fail the test if it is not the last command anymore. Fold the `!` into the conditional!"
+                                else err id 2315
+                                        "In bats, ! does not cause a test failure. Fold the `!` into the conditional!"
+                                    
+            T_Banged id cmd -> if t `isLastOf` commands
+                                then styleWithFix id 2314
+                                                "In bats, ! will not fail the test if it is not the last command anymore. Use `run ! ` (on bats >= 1.5.0) instead."
+                                                (fixWith [replaceStart id params 0 "run "])
+                                else errWithFix id 2314
+                                                "In bats, ! does not cause a test failure. Use 'run ! ' (on bats >= 1.5.0) instead."
+                                                (fixWith [replaceStart id params 0 "run "])
+            _ -> return ()
+    isLastOf t commands = 
+        case commands of
+            [x] -> x == t
+            x:rest -> isLastOf t rest
+            [] -> False
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
