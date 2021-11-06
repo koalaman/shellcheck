@@ -4782,6 +4782,8 @@ prop_checkExtraMaskedReturns31 = verifyNotTree checkExtraMaskedReturns "false < 
 prop_checkExtraMaskedReturns32 = verifyNotTree checkExtraMaskedReturns "false < <(basename \"${BASH_SOURCE[0]}\")"
 prop_checkExtraMaskedReturns33 = verifyNotTree checkExtraMaskedReturns "{ false || true; } | true"
 prop_checkExtraMaskedReturns34 = verifyNotTree checkExtraMaskedReturns "{ false || :; } | true"
+prop_checkExtraMaskedReturns35 = verifyTree checkExtraMaskedReturns "f() { local -r x=$(false); }"
+
 checkExtraMaskedReturns params t = runNodeAnalysis findMaskingNodes params t
   where
     findMaskingNodes _ (T_Arithmetic _ list) = findMaskedNodesInList [list]
@@ -4828,8 +4830,13 @@ checkExtraMaskedReturns params t = runNodeAnalysis findMaskingNodes params t
     isCheckedElsewhere t = hasParent isDeclaringCommand t
       where
         isDeclaringCommand t _ = fromMaybe False $ do
-            basename <- getCommandBasename t
-            return $ basename `elem` declaringCommands
+            cmd <- getCommand t
+            basename <- getCommandBasename cmd
+            return $
+                case basename of
+                    -- local -r x=$(false) is intentionally ignored for SC2155
+                    "local" | "r" `elem` (map snd $ getAllFlags cmd) -> False
+                    _ -> basename `elem` declaringCommands
 
     isHarmlessCommand t = fromMaybe False $ do
         basename <- getCommandBasename t
