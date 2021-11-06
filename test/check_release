@@ -56,19 +56,19 @@ cat << EOF
 Manual Checklist
 
 $((i++)). Make sure none of the automated checks above failed
-$((i++)). Make sure Travis build currently passes: https://travis-ci.org/koalaman/shellcheck
+$((i++)). Make sure GitHub Build currently passes: https://github.com/koalaman/shellcheck/actions
 $((i++)). Make sure SnapCraft build currently works: https://build.snapcraft.io/user/koalaman
 $((i++)). Run test/distrotest to ensure that most distros can build OOTB.
 $((i++)). Format and read over the manual for bad formatting and outdated info.
-$((i++)). Make sure the Hackage package builds, so that all files are 
+$((i++)). Make sure the Hackage package builds.
 
 Release Steps
 
 $((j++)). \`cabal sdist\` to generate a Hackage package
 $((j++)). \`git push --follow-tags\` to push commit
-$((j++)). Wait for Travis to build
+$((j++)). Wait for GitHub Actions to build.
 $((j++)). Verify release:
-  a. Check that the new versions are uploaded: https://shellcheck.storage.googleapis.com/index.html
+  a. Check that the new versions are uploaded: https://github.com/koalaman/shellcheck/tags
   b. Check that the docker images have version tags: https://hub.docker.com/u/koalaman
 $((j++)). If no disaster, upload to Hackage: http://hackage.haskell.org/upload
 $((j++)). Push a new commit that updates CHANGELOG.md
