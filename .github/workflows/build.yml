@@ -19,22 +19,22 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Package Source
-        run: |
-          ./setgitversion
-          mkdir source
-          cabal sdist
-          mv dist-newstyle/sdist/*.tar.gz source/source.tar.gz
-
       - name: Deduce tags
         run: |
-          exec > source/tags
-          echo "latest"
+          mkdir source
+          echo "latest" > source/tags
           if tag=$(git describe --exact-match --tags)
           then
-            echo "stable"
-            echo "$tag"
+            echo "stable" >> source/tags
+            echo "$tag" >> source/tags
           fi
+          cat source/tags
+
+      - name: Package Source
+        run: |
+          grep "stable" source/tags || ./setgitversion
+          cabal sdist
+          mv dist-newstyle/sdist/*.tar.gz source/source.tar.gz
 
       - name: Upload artifact
         uses: actions/upload-artifact@v2
