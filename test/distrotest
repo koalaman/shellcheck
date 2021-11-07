@@ -64,13 +64,13 @@ ubuntu:latest         apt-get update && apt-get install -y cabal-install
 haskell:latest        true
 opensuse/leap:latest  zypper install -y cabal-install ghc
 fedora:latest         dnf install -y cabal-install ghc-template-haskell-devel findutils
-archlinux/base:latest pacman -S -y --noconfirm cabal-install ghc-static base-devel
+archlinux:latest      pacman -S -y --noconfirm cabal-install ghc-static base-devel
 
-# Other versions we want to support
-ubuntu:18.04          apt-get update && apt-get install -y cabal-install
+# Ubuntu LTS
+ubuntu:20.04          apt-get update && apt-get install -y cabal-install
 
-# Misc Haskell including current and latest Stack build
-ubuntu:18.04          set -e; apt-get update && apt-get install -y curl && curl -sSL https://get.haskellstack.org/ | sh -s - -f && cd /mnt && exec test/stacktest
+# Stack on Ubuntu LTS
+ubuntu:20.04          set -e; apt-get update && apt-get install -y curl && curl -sSL https://get.haskellstack.org/ | sh -s - -f && cd /mnt && exec test/stacktest
 EOF
 
 exit "$final"

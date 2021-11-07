@@ -18,10 +18,11 @@ command -v stack ||
 stack setup        || die "Failed to setup with default resolver"
 stack build --test || die "Failed to build/test with default resolver"
 
+# Nice to haves, but not necessary
 for resolver in "${resolvers[@]}"
 do
-  stack --resolver="$resolver" setup        || die "Failed to setup $resolver"
-  stack --resolver="$resolver" build --test || die "Failed build/test with $resolver!"
+  stack --resolver="$resolver" setup        || die "Failed to setup $resolver. This probably doesn't matter."
+  stack --resolver="$resolver" build --test || die "Failed build/test with $resolver! This probably doesn't matter."
 done
 
 echo "Success"
