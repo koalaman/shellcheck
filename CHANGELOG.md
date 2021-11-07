@@ -1,4 +1,4 @@
-## Git (0.8.0)
+## v0.8.0 - 2021-11-06
 ### Added
 - `disable=all` now conveniently disables all warnings
 - `external-sources=true` directive can be added to .shellcheckrc to make
