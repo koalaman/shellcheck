@@ -511,13 +511,11 @@ getModifiedVariables t =
         T_SimpleCommand {} ->
             getModifiedVariableCommand t
 
-        TA_Unary _ "++|" v@(TA_Variable _ name _)  ->
-            [(t, v, name, DataString $ SourceFrom [v])]
-        TA_Unary _ "|++" v@(TA_Variable _ name _)  ->
-            [(t, v, name, DataString $ SourceFrom [v])]
+        TA_Unary _ op v@(TA_Variable _ name _) | "--" `isInfixOf` op || "++" `isInfixOf` op ->
+            [(t, v, name, DataString SourceInteger)]
         TA_Assignment _ op (TA_Variable _ name _) rhs -> do
             guard $ op `elem` ["=", "*=", "/=", "%=", "+=", "-=", "<<=", ">>=", "&=", "^=", "|="]
-            return (t, t, name, DataString $ SourceFrom [rhs])
+            return (t, t, name, DataString SourceInteger)
 
         T_BatsTest {} -> [
             (t, t, "lines", DataArray SourceExternal),

@@ -2049,6 +2049,8 @@ prop_checkSpacefulness43= verifyNotTree checkSpacefulness "$foo=42"
 prop_checkSpacefulness44= verifyTree checkSpacefulness "#!/bin/sh\nexport var=$value"
 prop_checkSpacefulness45= verifyNotTree checkSpacefulness "wait -zzx -p foo; echo $foo"
 prop_checkSpacefulness46= verifyNotTree checkSpacefulness "x=0; (( x += 1 )); echo $x"
+prop_checkSpacefulness47= verifyNotTree checkSpacefulness "x=0; (( x-- )); echo $x"
+prop_checkSpacefulness48= verifyNotTree checkSpacefulness "x=0; (( ++x )); echo $x"
 
 data SpaceStatus = SpaceSome | SpaceNone | SpaceEmpty deriving (Eq)
 instance Semigroup SpaceStatus where
@@ -2139,7 +2141,6 @@ checkSpacefulness' onFind params t =
       where
         emit x = tell [x]
 
-    writeF _ (TA_Assignment {}) name _ = setSpaces name SpaceNone >> return []
     writeF _ _ name (DataString SourceExternal) = setSpaces name SpaceSome >> return []
     writeF _ _ name (DataString SourceInteger) = setSpaces name SpaceNone >> return []
 
