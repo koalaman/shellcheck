@@ -2297,7 +2297,7 @@ checkFunctionsUsedExternally params t =
                 let args = skipOver t argv
                 let argStrings = map (\x -> (fromMaybe "" $ getLiteralString x, x)) args
                 let candidates = getPotentialCommands name argStrings
-                mapM_ (checkArg name) candidates
+                mapM_ (checkArg name (getId t)) candidates
             _ -> return ()
     checkCommand _ _ = return ()
 
@@ -2323,14 +2323,19 @@ checkFunctionsUsedExternally params t =
 
     functionsAndAliases = Map.union (functions t) (aliases t)
 
-    checkArg cmd (_, arg) = sequence_ $ do
+    patternContext id =
+        case posLine . fst <$> Map.lookup id (tokenPositions params) of
+          Just l -> " on line " <> show l <> "."
+          _      -> "."
+
+    checkArg cmd cmdId (_, arg) = sequence_ $ do
         literalArg <- getUnquotedLiteral arg  -- only consider unquoted literals
         definitionId <- Map.lookup literalArg functionsAndAliases
         return $ do
             warn (getId arg) 2033
-              "Shell functions can't be passed to external commands."
+              "Shell functions can't be passed to external commands. Use separate script or sh -c."
             info definitionId 2032 $
-              "Use own script or sh -c '..' to run this from " ++ cmd ++ "."
+              "This function can't be invoked via " ++ cmd ++ patternContext cmdId
 
 prop_checkUnused0 = verifyNotTree checkUnusedAssignments "var=foo; echo $var"
 prop_checkUnused1 = verifyTree checkUnusedAssignments "var=foo; echo $bar"
