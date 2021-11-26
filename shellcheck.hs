@@ -74,7 +74,8 @@ data Options = Options {
     externalSources  :: Bool,
     sourcePaths      :: [FilePath],
     formatterOptions :: FormatterOptions,
-    minSeverity      :: Severity
+    minSeverity      :: Severity,
+    exitZero         :: Bool
 }
 
 defaultOptions = Options {
@@ -84,7 +85,8 @@ defaultOptions = Options {
     formatterOptions = newFormatterOptions {
         foColorOption = ColorAuto
     },
-    minSeverity = StyleC
+    minSeverity = StyleC,
+    exitZero = False
 }
 
 usageHeader = "Usage: shellcheck [OPTIONS...] FILES..."
@@ -105,6 +107,8 @@ options = [
         (NoArg $ Flag "list-optional" "true") "List checks disabled by default",
     Option "" ["norc"]
         (NoArg $ Flag "norc" "true") "Don't look for .shellcheckrc files",
+    Option "" ["exit-zero"]
+        (NoArg $ Flag "exit-zero" "true") "Exit with status code 0 even if there are errors.",
     Option "o" ["enable"]
         (ReqArg (Flag "enable") "check1,check2..")
         "List of optional checks to enable (or 'all')",
@@ -188,8 +192,15 @@ main = do
         process flags files
     exitWith $ statusToCode status
 
-statusToCode status =
-    case status of
+statusToCode status flags =
+    if getOption flags "exit-zero"
+        then case status of
+                     NoProblems       -> ExitSuccess
+                     SomeProblems     -> ExitSuccess
+                     SyntaxFailure    -> ExitFailure 3
+                     SupportFailure   -> ExitFailure 4
+                     RuntimeException -> ExitFailure 2
+    else case status of
         NoProblems       -> ExitSuccess
         SomeProblems     -> ExitFailure 1
         SyntaxFailure    -> ExitFailure 3
@@ -311,6 +322,11 @@ parseOption flag options =
         Flag "list-optional" _ -> do
             liftIO printOptional
             throwError NoProblems
+
+        Flag "exit-zero" _ -> do
+            return options {
+                exitZero = True
+            }
 
         Flag "help" _ -> do
             liftIO $ putStrLn getUsageInfo
