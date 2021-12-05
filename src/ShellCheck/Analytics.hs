@@ -4868,7 +4868,7 @@ checkExtraMaskedReturns params t = runNodeAnalysis findMaskingNodes params t
 prop_checkBatsTestDoesNotUseNegation1 = verify checkBatsTestDoesNotUseNegation "#!/usr/bin/env/bats\n@test \"name\" { ! true;  false; }"
 prop_checkBatsTestDoesNotUseNegation2 = verify checkBatsTestDoesNotUseNegation "#!/usr/bin/env/bats\n@test \"name\" { ! [[ -e test ]]; false; }"
 prop_checkBatsTestDoesNotUseNegation3 = verify checkBatsTestDoesNotUseNegation "#!/usr/bin/env/bats\n@test \"name\" { ! [ -e test ]; false; }"
--- acceptable formats: 
+-- acceptable formats:
 --     using run
 prop_checkBatsTestDoesNotUseNegation4 = verifyNot checkBatsTestDoesNotUseNegation "#!/usr/bin/env/bats\n@test \"name\" { run ! true; }"
 --     using || false
@@ -4886,21 +4886,18 @@ checkBatsTestDoesNotUseNegation params t =
   where
     check commands t =
         case t of
-            T_Banged id (T_Pipeline _ _ [T_Redirecting _ _ (T_Condition idCondition _ _)]) -> 
+            T_Banged id (T_Pipeline _ _ [T_Redirecting _ _ (T_Condition idCondition _ _)]) ->
                                 if t `isLastOf` commands
                                 then style id 2315 "In Bats, ! will not fail the test if it is not the last command anymore. Fold the `!` into the conditional!"
-                                else err id 2315
-                                        "In Bats, ! does not cause a test failure. Fold the `!` into the conditional!"
-                                    
+                                else err   id 2315 "In Bats, ! does not cause a test failure. Fold the `!` into the conditional!"
+
             T_Banged id cmd -> if t `isLastOf` commands
-                                then styleWithFix id 2314
-                                                "In Bats, ! will not fail the test if it is not the last command anymore. Use `run ! ` (on Bats >= 1.5.0) instead."
+                                then styleWithFix id 2314 "In Bats, ! will not fail the test if it is not the last command anymore. Use `run ! ` (on Bats >= 1.5.0) instead."
                                                 (fixWith [replaceStart id params 0 "run "])
-                                else errWithFix id 2314
-                                                "In Bats, ! does not cause a test failure. Use 'run ! ' (on Bats >= 1.5.0) instead."
+                                else errWithFix   id 2314 "In Bats, ! does not cause a test failure. Use 'run ! ' (on Bats >= 1.5.0) instead."
                                                 (fixWith [replaceStart id params 0 "run "])
             _ -> return ()
-    isLastOf t commands = 
+    isLastOf t commands =
         case commands of
             [x] -> x == t
             x:rest -> isLastOf t rest
