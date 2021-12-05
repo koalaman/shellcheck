@@ -199,6 +199,7 @@ nodeChecks = [
     ,checkComparisonWithLeadingX
     ,checkCommandWithTrailingSymbol
     ,checkUnquotedParameterExpansionPattern
+    ,checkBatsTestDoesNotUseNegation
     ]
 
 optionalChecks = map fst optionalTreeChecks
@@ -4862,6 +4863,45 @@ checkExtraMaskedReturns params t = runNodeAnalysis findMaskingNodes params t
 
     hasParent pred t = any (uncurry pred) (parentChildPairs t)
 
+
+-- hard error on negated command that is not last
+prop_checkBatsTestDoesNotUseNegation1 = verify checkBatsTestDoesNotUseNegation "#!/usr/bin/env/bats\n@test \"name\" { ! true;  false; }"
+prop_checkBatsTestDoesNotUseNegation2 = verify checkBatsTestDoesNotUseNegation "#!/usr/bin/env/bats\n@test \"name\" { ! [[ -e test ]]; false; }"
+prop_checkBatsTestDoesNotUseNegation3 = verify checkBatsTestDoesNotUseNegation "#!/usr/bin/env/bats\n@test \"name\" { ! [ -e test ]; false; }"
+-- acceptable formats:
+--     using run
+prop_checkBatsTestDoesNotUseNegation4 = verifyNot checkBatsTestDoesNotUseNegation "#!/usr/bin/env/bats\n@test \"name\" { run ! true; }"
+--     using || false
+prop_checkBatsTestDoesNotUseNegation5 = verifyNot checkBatsTestDoesNotUseNegation "#!/usr/bin/env/bats\n@test \"name\" { ! [[ -e test ]] || false; }"
+prop_checkBatsTestDoesNotUseNegation6 = verifyNot checkBatsTestDoesNotUseNegation "#!/usr/bin/env/bats\n@test \"name\" { ! [ -e test ] || false; }"
+-- only style warning when last command
+prop_checkBatsTestDoesNotUseNegation7 = verifyCodes checkBatsTestDoesNotUseNegation [2314] "#!/usr/bin/env/bats\n@test \"name\" { ! true; }"
+prop_checkBatsTestDoesNotUseNegation8 = verifyCodes checkBatsTestDoesNotUseNegation [2315] "#!/usr/bin/env/bats\n@test \"name\" { ! [[ -e test ]]; }"
+prop_checkBatsTestDoesNotUseNegation9 = verifyCodes checkBatsTestDoesNotUseNegation [2315] "#!/usr/bin/env/bats\n@test \"name\" { ! [ -e test ]; }"
+
+checkBatsTestDoesNotUseNegation params t =
+    case t of
+        T_BatsTest _ _ (T_BraceGroup _ commands) -> mapM_ (check commands) commands
+        _ -> return ()
+  where
+    check commands t =
+        case t of
+            T_Banged id (T_Pipeline _ _ [T_Redirecting _ _ (T_Condition idCondition _ _)]) ->
+                                if t `isLastOf` commands
+                                then style id 2315 "In Bats, ! will not fail the test if it is not the last command anymore. Fold the `!` into the conditional!"
+                                else err   id 2315 "In Bats, ! does not cause a test failure. Fold the `!` into the conditional!"
+
+            T_Banged id cmd -> if t `isLastOf` commands
+                                then styleWithFix id 2314 "In Bats, ! will not fail the test if it is not the last command anymore. Use `run ! ` (on Bats >= 1.5.0) instead."
+                                                (fixWith [replaceStart id params 0 "run "])
+                                else errWithFix   id 2314 "In Bats, ! does not cause a test failure. Use 'run ! ' (on Bats >= 1.5.0) instead."
+                                                (fixWith [replaceStart id params 0 "run "])
+            _ -> return ()
+    isLastOf t commands =
+        case commands of
+            [x] -> x == t
+            x:rest -> isLastOf t rest
+            [] -> False
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
