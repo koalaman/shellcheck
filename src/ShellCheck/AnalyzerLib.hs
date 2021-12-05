@@ -351,7 +351,7 @@ isQuoteFreeNode strict shell tree t =
             T_SelectIn {}                   -> return (not strict)
             _                               -> Nothing
 
-    -- Check whether this assigment is self-quoting due to being a recognized
+    -- Check whether this assignment is self-quoting due to being a recognized
     -- assignment passed to a Declaration Utility. This will soon be required
     -- by POSIX: https://austingroupbugs.net/view.php?id=351
     assignmentIsQuoting t = shellParsesParamsAsAssignments || not (isAssignmentParamToCommand t)

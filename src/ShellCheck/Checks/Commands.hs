@@ -735,7 +735,7 @@ getPrintfFormats = getFormats
         --            \____ _____/\___ ____/   \____ ____/\_________ _________/ \______ /
         --                 V          V             V               V               V
         --               flags    field width  precision   format character        rest
-        -- field width and precision can be specified with a '*' instead of a digit,
+        -- field width and precision can be specified with an '*' instead of a digit,
         -- in which case printf will accept one more argument for each '*' used
 
 
