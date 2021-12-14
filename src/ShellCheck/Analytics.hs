@@ -545,6 +545,10 @@ prop_checkPipePitfalls15 = verifyNot checkPipePitfalls "foo | grep bar | wc -cmw
 prop_checkPipePitfalls16 = verifyNot checkPipePitfalls "foo | grep -r bar | wc -l"
 prop_checkPipePitfalls17 = verifyNot checkPipePitfalls "foo | grep -l bar | wc -l"
 prop_checkPipePitfalls18 = verifyNot checkPipePitfalls "foo | grep -L bar | wc -l"
+prop_checkPipePitfalls19 = verifyNot checkPipePitfalls "foo | grep -A2 bar | wc -l"
+prop_checkPipePitfalls20 = verifyNot checkPipePitfalls "foo | grep -B999 bar | wc -l"
+prop_checkPipePitfalls21 = verifyNot checkPipePitfalls "foo | grep --after-context 999 bar | wc -l"
+prop_checkPipePitfalls22 = verifyNot checkPipePitfalls "foo | grep -B 1 --after-context 999 bar | wc -l"
 checkPipePitfalls _ (T_Pipeline id _ commands) = do
     for ["find", "xargs"] $
         \(find:xargs:_) ->
@@ -566,10 +570,10 @@ checkPipePitfalls _ (T_Pipeline id _ commands) = do
             let flagsGrep = maybe [] (map snd . getAllFlags) $ getCommand grep
                 flagsWc = maybe [] (map snd . getAllFlags) $ getCommand wc
             in
-                unless (any (`elem` ["l", "files-with-matches", "L", "files-without-matches", "o", "only-matching", "r", "R", "recursive"]) flagsGrep
+                unless (any (`elem` ["l", "files-with-matches", "L", "files-without-matches", "o", "only-matching", "r", "R", "recursive", "A", "after-context", "B", "before-context"]) flagsGrep
                         || any (`elem` ["m", "chars", "w", "words", "c", "bytes", "L", "max-line-length"]) flagsWc
                         || null flagsWc) $
-                    style (getId grep) 2126 "Consider using grep -c instead of grep|wc -l."
+                    style (getId grep) 2126 "Consider using 'grep -c' instead of 'grep|wc -l'."
 
     didLs <- fmap or . sequence $ [
         for' ["ls", "grep"] $
