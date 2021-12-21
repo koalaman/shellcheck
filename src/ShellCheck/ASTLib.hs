@@ -369,6 +369,21 @@ getGlobOrLiteralString = getLiteralStringExt f
     f (T_Glob _ str) = return str
     f _ = Nothing
 
+
+prop_getLiteralString1 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\x01") == Just "\1"
+prop_getLiteralString2 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\xyz") == Just "\\xyz"
+prop_getLiteralString3 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\x1") == Just "\x1"
+prop_getLiteralString4 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\x1y") == Just "\x1y"
+prop_getLiteralString5 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\xy") == Just "\\xy"
+prop_getLiteralString6 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\x") == Just "\\x"
+prop_getLiteralString7 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\1x") == Just "\1x"
+prop_getLiteralString8 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\12x") == Just "\o12x"
+prop_getLiteralString9 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\123x") == Just "\o123x"
+prop_getLiteralString10 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\1234") == Just "\o123\&4"
+prop_getLiteralString11 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\1") == Just "\1"
+prop_getLiteralString12 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\12") == Just "\o12"
+prop_getLiteralString13 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\123") == Just "\o123"
+
 -- Maybe get the literal value of a token, using a custom function
 -- to map unrecognized Tokens into strings.
 getLiteralStringExt :: Monad m => (Token -> m String) -> Token -> m String
@@ -401,14 +416,15 @@ getLiteralStringExt more = g
             '\\' -> '\\' : rest
             'x' ->
                 case cs of
-                    (x:y:more) ->
-                        if isHexDigit x && isHexDigit y
-                        then chr (16*(digitToInt x) + (digitToInt y)) : rest
-                        else '\\':c:rest
+                    (x:y:more) | isHexDigit x && isHexDigit y ->
+                        chr (16*(digitToInt x) + (digitToInt y)) : decodeEscapes more
+                    (x:more) | isHexDigit x ->
+                        chr (digitToInt x) : decodeEscapes more
+                    more -> '\\' : 'x' : decodeEscapes more
             _ | isOctDigit c ->
-                let digits = take 3 $ takeWhile isOctDigit (c:cs)
-                    num = parseOct digits
-                in (if num < 256 then chr num else '?') : rest
+                let (digits, more) = spanMax isOctDigit 3 (c:cs)
+                    num = (parseOct digits) `mod` 256
+                in (chr num) : decodeEscapes more
             _ -> '\\' : c : rest
       where
         rest = decodeEscapes cs
@@ -416,6 +432,11 @@ getLiteralStringExt more = g
           where
             f n "" = n
             f n (c:rest) = f (n * 8 + digitToInt c) rest
+        spanMax f n list =
+            let (first, second) = span f list
+                (prefix, suffix) = splitAt n first
+            in
+                (prefix, suffix ++ second)
     decodeEscapes (c:cs) = c : decodeEscapes cs
     decodeEscapes [] = []
 
