@@ -66,6 +66,7 @@ treeChecks = [
     ,checkUseBeforeDefinition
     ,checkAliasUsedInSameParsingUnit
     ,checkArrayValueUsedAsIndex
+    ,checkFunctionRedeclaration
     ]
 
 runAnalytics :: AnalysisSpec -> [TokenComment]
@@ -4902,6 +4903,15 @@ checkBatsTestDoesNotUseNegation params t =
             [x] -> x == t
             x:rest -> isLastOf t rest
             [] -> False
+
+prop_checkFunctionRedeclaration1 = verifyTree checkFunctionRedeclaration "f () { true; }; f () { true; }"
+prop_checkFunctionRedeclaration2 = verifyNotTree checkFunctionRedeclaration "f () { true; }; g () { true; }"
+
+checkFunctionRedeclaration params t = execWriter $ mapM (\ts -> warn (snd $ ts !! 1) 2216 "Function has been defined twice") $ 
+    filter (\c -> length c > 1) $ groupBy isSameFunc $ sort funcs
+  where
+    funcs = analyse findFunctions t
+    isSameFunc x y = fst x == fst y
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
