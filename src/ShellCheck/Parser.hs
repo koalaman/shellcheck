@@ -556,7 +556,7 @@ readConditionContents single =
         notFollowedBy2 (try (spacing >> string "]"))
         x <- readNormalWord
         pos <- getPosition
-        when (endedWith "]" x && notArrayIndex x) $ do
+        when (notArrayIndex x && endedWith "]" x && not (x `containsLiteral` "[")) $ do
             parseProblemAt pos ErrorC 1020 $
                 "You need a space before the " ++ (if single then "]" else "]]") ++ "."
             fail "Missing space before ]"
@@ -572,6 +572,7 @@ readConditionContents single =
             endedWith _ _ = False
             notArrayIndex (T_NormalWord id s@(_:T_Literal _ t:_)) = t /= "["
             notArrayIndex _ = True
+            containsLiteral x s = s `isInfixOf` onlyLiteralString x
 
     readCondAndOp = readAndOrOp TC_And "&&" False <|> readAndOrOp TC_And "-a" True
 
@@ -941,6 +942,9 @@ prop_readCondition23 = isOk readCondition "[[ -v arr[$var] ]]"
 prop_readCondition25 = isOk readCondition "[[ lex.yy.c -ot program.l ]]"
 prop_readCondition26 = isOk readScript "[[ foo ]]\\\n && bar"
 prop_readCondition27 = not $ isOk readConditionCommand "[[ x ]] foo"
+prop_readCondition28 = isOk readCondition "[[ x = [\"$1\"] ]]"
+prop_readCondition29 = isOk readCondition "[[ x = [*] ]]"
+
 readCondition = called "test expression" $ do
     opos <- getPosition
     start <- startSpan
