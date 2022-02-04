@@ -98,7 +98,7 @@ commandChecks = [
     ,checkUnquotedEchoSpaces
     ,checkEvalArray
     ]
-    ++ map checkArgComparison declaringCommands
+    ++ map checkArgComparison ("alias" : declaringCommands)
     ++ map checkMaskedReturns declaringCommands
 
 
@@ -1253,6 +1253,7 @@ prop_checkArgComparison3 = verifyNot (checkArgComparison "declare") "declare a=b
 prop_checkArgComparison4 = verify (checkArgComparison "export") "export a +=b"
 prop_checkArgComparison7 = verifyNot (checkArgComparison "declare") "declare -a +i foo"
 prop_checkArgComparison8 = verify (checkArgComparison "let") "let x = 0"
+prop_checkArgComparison9 = verify (checkArgComparison "alias") "alias x =0"
 -- This mirrors checkSecondArgIsComparison but for arguments to local/readonly/declare/export
 checkArgComparison cmd = CommandCheck (Exactly cmd) wordsWithEqual
   where
