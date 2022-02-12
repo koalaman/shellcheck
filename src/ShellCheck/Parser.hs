@@ -3463,9 +3463,9 @@ notesForContext list = zipWith ($) [first, second] $ filter isName list
 
 -- Go over all T_UnparsedIndex and reparse them as either arithmetic or text
 -- depending on declare -A statements.
-reparseIndices root =
-   analyze blank blank f root
+reparseIndices root = process root
   where
+    process = analyze blank blank f
     associative = getAssociativeArrays root
     isAssociative s = s `elem` associative
     f (T_Assignment id mode name indices value) = do
@@ -3490,8 +3490,9 @@ reparseIndices root =
 
     fixAssignmentIndex name word =
         case word of
-            T_UnparsedIndex id pos src ->
-                parsed name pos src
+            T_UnparsedIndex id pos src -> do
+                idx <- parsed name pos src
+                process idx -- Recursively parse for cases like x[y[z=1]]=1
             _ -> return word
 
     parsed name pos src =

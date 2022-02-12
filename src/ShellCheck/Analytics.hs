@@ -2394,6 +2394,7 @@ prop_checkUnused47= verifyNotTree checkUnusedAssignments "a=1; alias hello='echo
 prop_checkUnused48= verifyNotTree checkUnusedAssignments "_a=1"
 prop_checkUnused49= verifyNotTree checkUnusedAssignments "declare -A array; key=a; [[ -v array[$key] ]]"
 prop_checkUnused50= verifyNotTree checkUnusedAssignments "foofunc() { :; }; typeset -fx foofunc"
+prop_checkUnused51= verifyTree checkUnusedAssignments "x[y[z=1]]=1; echo ${x[@]}"
 
 checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
