@@ -2703,7 +2703,7 @@ checkCharRangeGlob p t@(T_Glob id str) |
         && contents /= ":"
     then warn id 2101 "Named class needs outer [], e.g. [[:digit:]]."
     else
-        when ('[' `notElem` contents && hasDupes) $
+        when ('[' `notElem` contents && ':' `notElem` contents && hasDupes) $
             info id 2102 "Ranges can only match single chars (mentioned due to duplicates)."
   where
     isCharClass str = "[" `isPrefixOf` str && "]" `isSuffixOf` str
