@@ -100,6 +100,7 @@ commandChecks = [
     ]
     ++ map checkArgComparison ("alias" : declaringCommands)
     ++ map checkMaskedReturns declaringCommands
+    ++ map checkMultipleDeclaring declaringCommands
 
 
 optionalChecks = map fst optionalCommandChecks
@@ -940,6 +941,21 @@ checkLocalScope = CommandCheck (Exactly "local") $ \t ->
         path <- getPathM t
         unless (any isFunctionLike path) $
             err (getId $ getCommandTokenOrThis t) 2168 "'local' is only valid in functions."
+
+prop_checkMultipleDeclaring1 = verify (checkMultipleDeclaring "local") "q() { local readonly var=1; }"
+prop_checkMultipleDeclaring2 = verifyNot (checkMultipleDeclaring "local") "q() { local var=1; }"
+prop_checkMultipleDeclaring3 = verify (checkMultipleDeclaring "readonly") "readonly local foo=5"
+prop_checkMultipleDeclaring4 = verify (checkMultipleDeclaring "export") "export readonly foo=5"
+prop_checkMultipleDeclaring5 = verifyNot (checkMultipleDeclaring "local") "f() { local -r foo=5; }"
+prop_checkMultipleDeclaring6 = verifyNot (checkMultipleDeclaring "declare") "declare -rx foo=5"
+checkMultipleDeclaring cmd = CommandCheck (Exactly cmd) (mapM_ check . arguments)
+  where
+    check t = sequence_ $ do
+        lit <- getLiteralString t
+        guard $ lit `elem` declaringCommands
+        return $ err (getId $ getCommandTokenOrThis t) 2316 $
+                 "This applies " ++ cmd ++ " to the variable named " ++ lit ++
+                 ", which is probably not what you want. Use a separate command or the appropriate `declare` options instead."
 
 prop_checkDeprecatedTempfile1 = verify checkDeprecatedTempfile "var=$(tempfile)"
 prop_checkDeprecatedTempfile2 = verifyNot checkDeprecatedTempfile "tempfile=$(mktemp)"
