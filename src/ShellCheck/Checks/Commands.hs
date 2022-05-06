@@ -948,10 +948,11 @@ prop_checkMultipleDeclaring3 = verify (checkMultipleDeclaring "readonly") "reado
 prop_checkMultipleDeclaring4 = verify (checkMultipleDeclaring "export") "export readonly foo=5"
 prop_checkMultipleDeclaring5 = verifyNot (checkMultipleDeclaring "local") "f() { local -r foo=5; }"
 prop_checkMultipleDeclaring6 = verifyNot (checkMultipleDeclaring "declare") "declare -rx foo=5"
+prop_checkMultipleDeclaring7 = verifyNot (checkMultipleDeclaring "readonly") "readonly 'local' foo=5"
 checkMultipleDeclaring cmd = CommandCheck (Exactly cmd) (mapM_ check . arguments)
   where
     check t = sequence_ $ do
-        lit <- getLiteralString t
+        lit <- getUnquotedLiteral t
         guard $ lit `elem` declaringCommands
         return $ err (getId $ getCommandTokenOrThis t) 2316 $
                  "This applies " ++ cmd ++ " to the variable named " ++ lit ++
