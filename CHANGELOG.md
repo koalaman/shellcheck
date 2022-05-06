@@ -1,5 +1,6 @@
 ## Git
 ### Added
+- SC2316: Warn about 'local readonly foo' and similar (thanks, patrickxia!)
 
 ### Fixed
 
