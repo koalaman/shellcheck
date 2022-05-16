@@ -15,7 +15,7 @@ jobs:
           sudo apt-get install cabal-install
 
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
@@ -37,7 +37,7 @@ jobs:
           mv dist-newstyle/sdist/*.tar.gz source/source.tar.gz
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: source
           path: source/
@@ -51,10 +51,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Download artifacts
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
 
       - name: Build source
         run: |
@@ -63,7 +63,7 @@ jobs:
           ( cd bin && ../build/run_builder ../source/source.tar.gz ../build/${{matrix.build}} )
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: bin
           path: bin/
@@ -74,10 +74,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Download artifacts
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
 
       - name: Work around GitHub permissions bug
         run: chmod +x bin/*/shellcheck*
@@ -92,7 +92,7 @@ jobs:
           rm -rf */ README* LICENSE*
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: deploy
           path: deploy/
@@ -104,10 +104,10 @@ jobs:
     environment: Deploy
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Download artifacts
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
 
       - name: Upload to GitHub
         env:
