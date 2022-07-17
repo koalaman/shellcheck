@@ -675,6 +675,7 @@ checkPrintfVar = CommandCheck (Exactly "printf") (f . arguments) where
             let formats = getPrintfFormats string
             let formatCount = length formats
             let argCount = length more
+            let pluraliseIfMany word n = if n > 1 then word ++ "s" else word
 
             return $ if
                 | argCount == 0 && formatCount == 0 ->
@@ -690,7 +691,8 @@ checkPrintfVar = CommandCheck (Exactly "printf") (f . arguments) where
                     return () -- Great: a suitable number of arguments
                 | otherwise ->
                     warn (getId format) 2183 $
-                        "This format string has " ++ show formatCount ++ " variables, but is passed " ++ show argCount ++ " arguments."
+                        "This format string has " ++ show formatCount ++ " " ++ (pluraliseIfMany "variable" formatCount) ++
+                        ", but is passed " ++ show argCount ++ " arguments."
 
         unless ('%' `elem` concat (oversimplify format) || isLiteral format) $
           info (getId format) 2059
