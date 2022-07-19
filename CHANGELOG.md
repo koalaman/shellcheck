@@ -4,6 +4,7 @@
 - SC2317: Warn about unreachable commands
 
 ### Fixed
+- SC2086: Now uses DFA to make more accurate predictions about values
 
 ### Changed
 - ShellCheck now has a Data Flow Analysis engine to make smarter decisions
