@@ -202,6 +202,7 @@ nodeChecks = [
     ,checkCommandWithTrailingSymbol
     ,checkUnquotedParameterExpansionPattern
     ,checkBatsTestDoesNotUseNegation
+    ,checkCommandIsUnreachable
     ]
 
 optionalChecks = map fst optionalTreeChecks
@@ -4129,13 +4130,6 @@ checkAliasUsedInSameParsingUnit params root =
     checkUnit :: [Token] -> Writer [TokenComment] ()
     checkUnit unit = evalStateT (mapM_ (doAnalysis findCommands) unit) (Map.empty)
 
-    isSourced t =
-        let
-            f (T_SourceCommand {}) = True
-            f _ = False
-        in
-            any f $ getPath (parentMap params) t
-
     findCommands :: Token -> StateT (Map.Map String Token) (Writer [TokenComment]) ()
     findCommands t = case t of
             T_SimpleCommand _ _ (cmd:args) ->
@@ -4146,7 +4140,7 @@ checkAliasUsedInSameParsingUnit params root =
                         cmd <- gets (Map.lookup name)
                         case cmd of
                             Just alias ->
-                                unless (isSourced t || shouldIgnoreCode params 2262 alias) $ do
+                                unless (isSourced params t || shouldIgnoreCode params 2262 alias) $ do
                                     warn (getId alias) 2262 "This alias can't be defined and used in the same parsing unit. Use a function instead."
                                     info (getId t) 2263 "Since they're in the same parsing unit, this command will not refer to the previously mentioned alias."
                             _ -> return ()
@@ -4156,6 +4150,14 @@ checkAliasUsedInSameParsingUnit params root =
         let (name, value) = break (== '=') $ getLiteralStringDef "-" arg
         when (isVariableName name && not (null value)) $
             modify (Map.insertWith (\new old -> old) name arg)
+
+isSourced params t =
+    let
+        f (T_SourceCommand {}) = True
+        f _ = False
+    in
+        any f $ getPath (parentMap params) t
+
 
 -- Like groupBy, but compares pairs of adjacent elements, rather than against the first of the span
 prop_groupByLink1 = groupByLink (\a b -> a+1 == b) [1,2,3,2,3,7,8,9] == [[1,2,3], [2,3], [7,8,9]]
@@ -4909,6 +4911,20 @@ checkBatsTestDoesNotUseNegation params t =
             [x] -> x == t
             x:rest -> isLastOf t rest
             [] -> False
+
+
+prop_checkCommandIsUnreachable1 = verify checkCommandIsUnreachable "foo; bar; exit; baz"
+prop_checkCommandIsUnreachable2 = verify checkCommandIsUnreachable "die() { exit; }; foo; bar; die; baz"
+prop_checkCommandIsUnreachable3 = verifyNot checkCommandIsUnreachable "foo; bar || exit; baz"
+checkCommandIsUnreachable params t =
+    case t of
+        T_Pipeline {} -> sequence_ $ do
+            state <- CF.getIncomingState (cfgAnalysis params) id
+            guard . not $ CF.stateIsReachable state
+            guard . not $ isSourced params t
+            return $ info id 2317 "Command appears to be unreachable. Check usage (or ignore if invoked indirectly)."
+        _ -> return ()
+  where id = getId t
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
