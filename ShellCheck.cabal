@@ -53,6 +53,7 @@ library
       deepseq >= 1.4.0.0,
       Diff >= 0.2.0,
       directory >= 1.2.3.0,
+      fgl,
       mtl >= 2.2.1,
       filepath,
       parsec,
@@ -66,11 +67,15 @@ library
       ShellCheck.Analytics
       ShellCheck.Analyzer
       ShellCheck.AnalyzerLib
+      ShellCheck.CFG
+      ShellCheck.CFGAnalysis
       ShellCheck.Checker
       ShellCheck.Checks.Commands
+      ShellCheck.Checks.ControlFlow
       ShellCheck.Checks.Custom
       ShellCheck.Checks.ShellSupport
       ShellCheck.Data
+      ShellCheck.Debug
       ShellCheck.Fixer
       ShellCheck.Formatter.Format
       ShellCheck.Formatter.CheckStyle
@@ -82,6 +87,7 @@ library
       ShellCheck.Formatter.Quiet
       ShellCheck.Interface
       ShellCheck.Parser
+      ShellCheck.Prelude
       ShellCheck.Regex
     other-modules:
       Paths_ShellCheck
@@ -100,6 +106,7 @@ executable shellcheck
       deepseq >= 1.4.0.0,
       Diff >= 0.2.0,
       directory >= 1.2.3.0,
+      fgl,
       mtl >= 2.2.1,
       filepath,
       parsec >= 3.0,
@@ -120,6 +127,7 @@ test-suite test-shellcheck
       deepseq >= 1.4.0.0,
       Diff >= 0.2.0,
       directory >= 1.2.3.0,
+      fgl,
       mtl >= 2.2.1,
       filepath,
       parsec,

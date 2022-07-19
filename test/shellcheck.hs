@@ -5,8 +5,11 @@ import System.Exit
 import qualified ShellCheck.Analytics
 import qualified ShellCheck.AnalyzerLib
 import qualified ShellCheck.ASTLib
+import qualified ShellCheck.CFG
+import qualified ShellCheck.CFGAnalysis
 import qualified ShellCheck.Checker
 import qualified ShellCheck.Checks.Commands
+import qualified ShellCheck.Checks.ControlFlow
 import qualified ShellCheck.Checks.Custom
 import qualified ShellCheck.Checks.ShellSupport
 import qualified ShellCheck.Fixer
@@ -19,8 +22,11 @@ main = do
         ShellCheck.Analytics.runTests
         ,ShellCheck.AnalyzerLib.runTests
         ,ShellCheck.ASTLib.runTests
+        ,ShellCheck.CFG.runTests
+        ,ShellCheck.CFGAnalysis.runTests
         ,ShellCheck.Checker.runTests
         ,ShellCheck.Checks.Commands.runTests
+        ,ShellCheck.Checks.ControlFlow.runTests
         ,ShellCheck.Checks.Custom.runTests
         ,ShellCheck.Checks.ShellSupport.runTests
         ,ShellCheck.Fixer.runTests

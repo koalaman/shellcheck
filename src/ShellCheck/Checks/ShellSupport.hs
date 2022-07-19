@@ -25,6 +25,7 @@ import ShellCheck.AST
 import ShellCheck.ASTLib
 import ShellCheck.AnalyzerLib
 import ShellCheck.Interface
+import ShellCheck.Prelude
 import ShellCheck.Regex
 
 import Control.Monad

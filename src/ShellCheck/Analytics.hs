@@ -24,8 +24,10 @@ module ShellCheck.Analytics (runAnalytics, optionalChecks, ShellCheck.Analytics.
 import ShellCheck.AST
 import ShellCheck.ASTLib
 import ShellCheck.AnalyzerLib hiding (producesComments)
+import qualified ShellCheck.CFGAnalysis as CF
 import ShellCheck.Data
 import ShellCheck.Parser
+import ShellCheck.Prelude
 import ShellCheck.Interface
 import ShellCheck.Regex
 

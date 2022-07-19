@@ -30,6 +30,7 @@ import ShellCheck.AnalyzerLib
 import ShellCheck.Data
 import ShellCheck.Interface
 import ShellCheck.Parser
+import ShellCheck.Prelude
 import ShellCheck.Regex
 
 import Control.Monad

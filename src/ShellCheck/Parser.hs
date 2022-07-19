@@ -27,6 +27,7 @@ import ShellCheck.AST
 import ShellCheck.ASTLib hiding (runTests)
 import ShellCheck.Data
 import ShellCheck.Interface
+import ShellCheck.Prelude
 
 import Control.Applicative ((<*), (*>))
 import Control.Monad
@@ -210,7 +211,7 @@ getNextIdSpanningTokenList list =
 -- Get the span covered by an id
 getSpanForId :: Monad m => Id -> SCParser m (SourcePos, SourcePos)
 getSpanForId id =
-    Map.findWithDefault (error "Internal error: no position for id. Please report!") id <$>
+    Map.findWithDefault (error $ pleaseReport "no parser span for id") id <$>
         getMap
 
 -- Create a new id with the same span as an existing one
@@ -1918,7 +1919,7 @@ readPendingHereDocs = do
                         -- The end token is just a prefix
                         skipLine
                     | hasTrailer ->
-                        error "ShellCheck bug, please report (here doc trailer)."
+                        error $ pleaseReport "unexpected heredoc trailer"
 
                     -- The following cases assume no trailing text:
                     | dashed == Undashed && (not $ null leadingSpace) -> do

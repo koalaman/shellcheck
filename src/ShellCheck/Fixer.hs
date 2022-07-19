@@ -22,6 +22,7 @@
 module ShellCheck.Fixer (applyFix, removeTabStops, mapPositions, Ranged(..), runTests) where
 
 import ShellCheck.Interface
+import ShellCheck.Prelude
 import Control.Monad.State
 import Data.Array
 import Data.List
@@ -228,7 +229,7 @@ applyReplacement2 rep string = do
 
     let (l1, l2) = tmap posLine originalPos in
         when (l1 /= 1 || l2 /= 1) $
-            error "ShellCheck internal error, please report: bad cross-line fix"
+            error $ pleaseReport "bad cross-line fix"
 
     let replacer = repString rep
     let shift = (length replacer) - (oldEnd - oldStart)

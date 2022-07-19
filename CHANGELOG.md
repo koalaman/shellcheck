@@ -5,6 +5,10 @@
 ### Fixed
 
 ### Changed
+- ShellCheck now has a Data Flow Analysis engine to make smarter decisions
+  based on control flow rather than just syntax. Existing checks will
+  gradually start using it, which may cause them to trigger differently
+  (but more accurately).
 
 
 ## v0.8.0 - 2021-11-06
