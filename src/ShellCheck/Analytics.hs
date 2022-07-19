@@ -867,7 +867,7 @@ prop_checkShorthandIf5 = verifyNot checkShorthandIf "foo && rm || printf b"
 prop_checkShorthandIf6 = verifyNot checkShorthandIf "if foo && bar || baz; then true; fi"
 prop_checkShorthandIf7 = verifyNot checkShorthandIf "while foo && bar || baz; do true; done"
 prop_checkShorthandIf8 = verify checkShorthandIf "if true; then foo && bar || baz; fi"
-checkShorthandIf params x@(T_AndIf id _ (T_OrIf _ _ (T_Pipeline _ _ t)))
+checkShorthandIf params x@(T_OrIf _ (T_AndIf id _ _) (T_Pipeline _ _ t))
         | not (isOk t || inCondition) =
     info id 2015 "Note that A && B || C is not if-then-else. C may run when A is true."
   where

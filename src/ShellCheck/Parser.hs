@@ -2286,7 +2286,7 @@ readAndOr = do
         parseProblemAt apos ErrorC 1123 "ShellCheck directives are only valid in front of complete compound commands, like 'if', not e.g. individual 'elif' branches."
 
     andOr <- withAnnotations annotations $
-        chainr1 readPipeline $ do
+        chainl1 readPipeline $ do
             op <- g_AND_IF <|> g_OR_IF
             readLineBreak
             return $ case op of T_AND_IF id -> T_AndIf id
