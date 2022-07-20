@@ -63,7 +63,7 @@ debian:testing        apt-get update && apt-get install -y cabal-install
 ubuntu:latest         apt-get update && apt-get install -y cabal-install
 haskell:latest        true
 opensuse/leap:latest  zypper install -y cabal-install ghc
-fedora:latest         dnf install -y cabal-install ghc-template-haskell-devel findutils
+fedora:latest         dnf install -y cabal-install ghc-template-haskell-devel findutils libstdc++-static gcc-c++
 archlinux:latest      pacman -S -y --noconfirm cabal-install ghc-static base-devel
 
 # Ubuntu LTS
