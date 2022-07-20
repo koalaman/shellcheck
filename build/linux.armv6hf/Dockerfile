@@ -52,6 +52,7 @@ RUN pirun apt-get install -y ghc cabal-install
 ENV CABALOPTS "--ghc-options;-split-sections -optc-Os -optc-Wl,--gc-sections;--gcc-options;-Os -Wl,--gc-sections -ffunction-sections -fdata-sections"
 RUN pirun cabal update
 RUN IFS=";" && pirun cabal install --dependencies-only $CABALOPTS ShellCheck
+RUN IFS=';' && pirun cabal install $CABALOPTS --lib fgl
 
 # Copy the build script
 WORKDIR /pi/scratch
