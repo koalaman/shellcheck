@@ -1,5 +1,4 @@
-# DIGEST:sha256:fa32af4677e2860a1c5950bc8c360f309e2a87e2ddfed27b642fddf7a6093b76
-FROM liushuyu/osxcross:latest
+FROM liushuyu/osxcross@sha256:fa32af4677e2860a1c5950bc8c360f309e2a87e2ddfed27b642fddf7a6093b76
 
 ENV TARGET x86_64-apple-darwin18
 ENV TARGETNAME darwin.x86_64
