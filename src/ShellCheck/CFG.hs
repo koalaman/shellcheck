@@ -32,6 +32,7 @@ module ShellCheck.CFG (
     CFGraph,
     CFGParameters (..),
     IdTagged (..),
+    Scope (..),
     buildGraph
     , ShellCheck.CFG.runTests -- STRIP
     )
@@ -105,7 +106,8 @@ data CFEdge =
 
 -- Actions we track
 data CFEffect =
-    CFModifyProps String [CFVariableProp]
+    CFSetProps Scope String (S.Set CFVariableProp)
+    | CFUnsetProps Scope String (S.Set CFVariableProp)
     | CFReadVariable String
     | CFWriteVariable String CFValue
     | CFWriteGlobal String CFValue
@@ -143,7 +145,7 @@ data CFValue =
 data CFStringPart =
     -- A known literal string value, like 'foo'
     CFStringLiteral String
-    -- The contents of a variable, like $foo
+    -- The contents of a variable, like $foo (may not be a string)
     | CFStringVariable String
     -- An value that is unknown but an integer
     | CFStringInteger
@@ -152,7 +154,7 @@ data CFStringPart =
   deriving (Eq, Ord, Show, Generic, NFData)
 
 -- The properties of a variable
-data CFVariableProp = CFVPExport | CFVPArray
+data CFVariableProp = CFVPExport | CFVPArray | CFVPAssociative | CFVPInteger
   deriving (Eq, Ord, Show, Generic, NFData)
 
 -- Options when generating CFG
@@ -961,71 +963,92 @@ handleCommand cmd vars args literalCmd = do
 
     handleDeclare (cmd:args) = do
         isFunc <- asks cfIsFunction
-        let (evaluated, effects) = mconcat $ map (toEffects isFunc) args
+        -- This is a bit of a kludge: we don't have great support for things like
+        -- 'declare -i x=$x' so do one round with declare x=$x, followed by declare -i x
+        let (evaluated, assignments, added, removed) = mconcat $ map (toEffects isFunc) args
         before <- sequentially $ evaluated
-        effect <- newNodeRange $ CFApplyEffects effects
+        assignments <- newNodeRange $ CFApplyEffects assignments
+        addedProps <- if null added then newStructuralNode else newNodeRange $ CFApplyEffects added
+        removedProps <- if null removed then newStructuralNode else newNodeRange $ CFApplyEffects removed
         result <- newNodeRange $ CFSetExitCode (getId cmd)
-        linkRanges [before, effect, result]
+        linkRanges [before, assignments, addedProps, removedProps, result]
       where
         opts = map fst $ getGenericOpts args
-        array = "a" `elem` opts || "A" `elem` opts
+        array = "a" `elem` opts || associative
+        associative = "A" `elem` opts
         integer = "i" `elem` opts
         func = "f" `elem` opts || "F" `elem` opts
         global = "g" `elem` opts
+        export = "x" `elem` opts
         writer isFunc =
             case () of
                 _ | global -> CFWriteGlobal
                 _ | isFunc -> CFWriteLocal
                 _ -> CFWriteVariable
 
-        toEffects :: Bool -> Token -> ([Token], [IdTagged CFEffect])
+        scope isFunc =
+            case () of
+                _ | global -> GlobalScope
+                _ | isFunc -> LocalScope
+                _ -> DefaultScope
+
+        addedProps = S.fromList $ concat $ [
+            [ CFVPArray | array ],
+            [ CFVPInteger | integer ],
+            [ CFVPExport | export ],
+            [ CFVPAssociative | associative ]
+          ]
+
+        removedProps = S.fromList $ concat $ [
+            -- Array property can't be unset
+            [ CFVPInteger | 'i' `elem` unsetOptions ],
+            [ CFVPExport | 'e' `elem` unsetOptions ]
+          ]
+
         toEffects isFunc (T_Assignment id mode var idx t) =
             let
                 pre = idx ++ [t]
-                isArray = array || (not $ null idx)
-                asArray = [ IdTagged id $ (writer isFunc) var CFValueArray ]
-                asString = [ IdTagged id $ (writer isFunc) var $
-                    if integer
-                    then CFValueInteger -- TODO: Also handle integer variable property
-                    else CFValueComputed (getId t) $ [ CFStringVariable var | mode == Append ] ++ tokenToParts t
-                  ]
+                val = [ IdTagged id $ (writer isFunc) var $ CFValueComputed (getId t) $ [ CFStringVariable var | mode == Append ] ++ tokenToParts t ]
+                added = [ IdTagged id $ CFSetProps (scope isFunc) var addedProps | not $ S.null addedProps ]
+                removed = [ IdTagged id $ CFUnsetProps (scope isFunc) var addedProps | not $ S.null removedProps ]
             in
-                (pre, if isArray then asArray else asString )
+                (pre, val, added, removed)
 
         toEffects isFunc t =
             let
+                id = getId t
                 pre = [t]
                 literal = fromJust $ getLiteralStringExt (const $ Just "\0") t
                 isKnown = '\0' `notElem` literal
                 match = fmap head $ variableAssignRegex `matchRegex` literal
                 name = fromMaybe literal match
 
-                typer def =
-                    if array
-                    then CFValueArray
-                    else
-                        if integer
-                        then CFValueInteger
-                        else def
+                asLiteral =
+                    IdTagged id $ (writer isFunc) name $
+                        CFValueComputed (getId t) [ CFStringLiteral $ drop 1 $ dropWhile (/= '=') $ literal ]
+                asUnknown =
+                    IdTagged id $ (writer isFunc) name $
+                        CFValueString
 
-                asLiteral = [
-                    IdTagged (getId t) $ (writer isFunc) name $
-                        typer $ CFValueComputed (getId t) [ CFStringLiteral $ drop 1 $ dropWhile (/= '=') $ literal ]
-                    ]
-                asUnknown = [
-                    IdTagged (getId t) $ (writer isFunc) name $
-                        typer $ CFValueString
-                    ]
-                asBlank = [
-                    IdTagged (getId t) $ (writer isFunc) name $
-                        typer $ CFValueComputed (getId t) []
-                    ]
+                added = [ IdTagged id $ CFSetProps (scope isFunc) name addedProps ]
+                removed = [ IdTagged id $ CFUnsetProps (scope isFunc) name removedProps ]
+
             in
                 case () of
-                    _ | not (isVariableName name) -> (pre, [])
-                    _ | isJust match && isKnown -> (pre, asLiteral)
-                    _ | isJust match -> (pre, asUnknown)
-                    _ -> (pre, asBlank)
+                    _ | not (isVariableName name) -> (pre, [], [], [])
+                    _ | isJust match && isKnown -> (pre, [asLiteral], added, removed)
+                    _ | isJust match -> (pre, [asUnknown], added, removed)
+                    -- e.g. declare -i x
+                    _ -> (pre, [], added, removed)
+
+        -- find "ia" from `define +i +a`
+        unsetOptions :: String
+        unsetOptions =
+            let
+                strings = mapMaybe getLiteralString args
+                plusses = filter ("+" `isPrefixOf`) strings
+            in
+                concatMap (drop 1) plusses
 
     handlePrintf (cmd:args) =
         newNodeRange $ CFApplyEffects $ maybeToList findVar
@@ -1103,6 +1126,7 @@ handleCommand cmd vars args literalCmd = do
 none = newStructuralNode
 
 data Scope = DefaultScope | GlobalScope | LocalScope | PrefixScope
+  deriving (Eq, Ord, Show, Generic, NFData)
 
 buildAssignment scope t = do
     op <- case t of

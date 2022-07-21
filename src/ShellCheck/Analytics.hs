@@ -24,6 +24,7 @@ module ShellCheck.Analytics (runAnalytics, optionalChecks, ShellCheck.Analytics.
 import ShellCheck.AST
 import ShellCheck.ASTLib
 import ShellCheck.AnalyzerLib hiding (producesComments)
+import ShellCheck.CFG
 import qualified ShellCheck.CFGAnalysis as CF
 import ShellCheck.Data
 import ShellCheck.Parser
@@ -46,6 +47,7 @@ import Data.Ord
 import Data.Semigroup
 import Debug.Trace -- STRIP
 import qualified Data.Map.Strict as Map
+import qualified Data.Set as S
 import Test.QuickCheck.All (forAllProperties)
 import Test.QuickCheck.Test (quickCheckWithResult, stdArgs, maxSuccess)
 
@@ -2076,6 +2078,14 @@ prop_checkSpacefulnessCfg53= verifyNot checkSpacefulnessCfg "s=1; f() { local s=
 prop_checkSpacefulnessCfg54= verifyNot checkSpacefulnessCfg "s='a b'; f() { s=1; }; f; echo $s"
 prop_checkSpacefulnessCfg55= verify checkSpacefulnessCfg "s='a b'; x && f() { s=1; }; f; echo $s"
 prop_checkSpacefulnessCfg56= verifyNot checkSpacefulnessCfg "s=1; cat <(s='a b'); echo $s"
+prop_checkSpacefulnessCfg57= verifyNot checkSpacefulnessCfg "declare -i s=0; s=$(f); echo $s"
+prop_checkSpacefulnessCfg58= verify checkSpacefulnessCfg "f() { declare -i s; }; f; s=$(var); echo $s"
+prop_checkSpacefulnessCfg59= verifyNot checkSpacefulnessCfg "f() { declare -gi s; }; f; s=$(var); echo $s"
+prop_checkSpacefulnessCfg60= verify checkSpacefulnessCfg "declare -i s; declare +i s; s=$(foo); echo $s"
+prop_checkSpacefulnessCfg61= verify checkSpacefulnessCfg "declare -x X; y=foo$X; echo $y;"
+prop_checkSpacefulnessCfg62= verifyNot checkSpacefulnessCfg "f() { declare -x X; y=foo$X; echo $y; }"
+prop_checkSpacefulnessCfg63= verify checkSpacefulnessCfg "f && declare -i s; s='x + y'; echo $s"
+prop_checkSpacefulnessCfg64= verifyNot checkSpacefulnessCfg "declare -i s; s='x + y'; x=$s; echo $x"
 
 checkSpacefulnessCfg = checkSpacefulnessCfg' True
 checkVerboseSpacefulnessCfg = checkSpacefulnessCfg' False
@@ -2110,7 +2120,11 @@ checkSpacefulnessCfg' dirtyPass params token@(T_DollarBraced id _ list) =
     isClean = fromMaybe False $ do
         state <- CF.getIncomingState (cfgAnalysis params) id
         value <- Map.lookup name $ CF.variablesInScope state
-        return $ CF.spaceStatus value == CF.SpaceStatusClean
+        return $ isCleanState value
+
+    isCleanState state =
+        (all (S.member CFVPInteger) $ CF.variableProperties state)
+        || CF.spaceStatus (CF.variableValue state) == CF.SpaceStatusClean
 
     isDefaultAssignment parents token =
         let modifier = getBracedModifier $ bracedString token in

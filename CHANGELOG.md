@@ -5,6 +5,7 @@
 
 ### Fixed
 - SC2086: Now uses DFA to make more accurate predictions about values
+- SC2086: No longer warns about values declared as integer with declare -i
 
 ### Changed
 - ShellCheck now has a Data Flow Analysis engine to make smarter decisions
