@@ -39,7 +39,7 @@ import Data.Char
 import Data.Functor.Identity
 import Data.List
 import Data.Maybe
-import qualified Data.Map.Strict as Map
+import qualified Data.Map.Strict as M
 import Test.QuickCheck.All (forAllProperties)
 import Test.QuickCheck.Test (quickCheckWithResult, stdArgs, maxSuccess)
 
@@ -114,7 +114,7 @@ optionalCommandChecks = [
         cdNegative = "command -v javac"
     }, checkWhich)
     ]
-optionalCheckMap = Map.fromList $ map (\(desc, check) -> (cdName desc, check)) optionalCommandChecks
+optionalCheckMap = M.fromList $ map (\(desc, check) -> (cdName desc, check)) optionalCommandChecks
 
 prop_verifyOptionalExamples = all check optionalCommandChecks
   where
@@ -163,27 +163,27 @@ prop_checkGenericOptsT1 = checkGetOpts "-x -- -y" ["x"] ["-y"] $ return . getGen
 prop_checkGenericOptsT2 = checkGetOpts "-xy --" ["x", "y"] [] $ return . getGenericOpts
 
 
-buildCommandMap :: [CommandCheck] -> Map.Map CommandName (Token -> Analysis)
-buildCommandMap = foldl' addCheck Map.empty
+buildCommandMap :: [CommandCheck] -> M.Map CommandName (Token -> Analysis)
+buildCommandMap = foldl' addCheck M.empty
   where
     addCheck map (CommandCheck name function) =
-        Map.insertWith composeAnalyzers name function map
+        M.insertWith composeAnalyzers name function map
 
 
-checkCommand :: Map.Map CommandName (Token -> Analysis) -> Token -> Analysis
+checkCommand :: M.Map CommandName (Token -> Analysis) -> Token -> Analysis
 checkCommand map t@(T_SimpleCommand id cmdPrefix (cmd:rest)) = sequence_ $ do
     name <- getLiteralString cmd
     return $
         if '/' `elem` name
         then
-            Map.findWithDefault nullCheck (Basename $ basename name) map t
+            M.findWithDefault nullCheck (Basename $ basename name) map t
         else if name == "builtin" && not (null rest) then
             let t' = T_SimpleCommand id cmdPrefix rest
                 selectedBuiltin = fromMaybe "" $ getLiteralString . head $ rest
-            in Map.findWithDefault nullCheck (Exactly selectedBuiltin) map t'
+            in M.findWithDefault nullCheck (Exactly selectedBuiltin) map t'
         else do
-            Map.findWithDefault nullCheck (Exactly name) map t
-            Map.findWithDefault nullCheck (Basename name) map t
+            M.findWithDefault nullCheck (Exactly name) map t
+            M.findWithDefault nullCheck (Basename name) map t
 
   where
     basename = reverse . takeWhile (/= '/') . reverse
@@ -205,7 +205,7 @@ checker spec params = getChecker $ commandChecks ++ optionals
     optionals =
         if "all" `elem` keys
         then map snd optionalCommandChecks
-        else mapMaybe (\x -> Map.lookup x optionalCheckMap) keys
+        else mapMaybe (\x -> M.lookup x optionalCheckMap) keys
 
 prop_checkTr1 = verify checkTr "tr [a-f] [A-F]"
 prop_checkTr2 = verify checkTr "tr 'a-z' 'A-Z'"
@@ -1005,20 +1005,20 @@ checkWhileGetoptsCase = CommandCheck (Exactly "getopts") f
 
     check :: Id -> [String] -> Token -> Analysis
     check optId opts (T_CaseExpression id _ list) = do
-            unless (Nothing `Map.member` handledMap) $ do
-                mapM_ (warnUnhandled optId id) $ catMaybes $ Map.keys notHandled
+            unless (Nothing `M.member` handledMap) $ do
+                mapM_ (warnUnhandled optId id) $ catMaybes $ M.keys notHandled
 
-                unless (any (`Map.member` handledMap) [Just "*",Just "?"]) $
+                unless (any (`M.member` handledMap) [Just "*",Just "?"]) $
                     warn id 2220 "Invalid flags are not handled. Add a *) case."
 
-            mapM_ warnRedundant $ Map.toList notRequested
+            mapM_ warnRedundant $ M.toList notRequested
 
         where
-            handledMap = Map.fromList (concatMap getHandledStrings list)
-            requestedMap = Map.fromList $ map (\x -> (Just x, ())) opts
+            handledMap = M.fromList (concatMap getHandledStrings list)
+            requestedMap = M.fromList $ map (\x -> (Just x, ())) opts
 
-            notHandled = Map.difference requestedMap handledMap
-            notRequested = Map.difference handledMap requestedMap
+            notHandled = M.difference requestedMap handledMap
+            notRequested = M.difference handledMap requestedMap
 
     warnUnhandled optId caseId str =
         warn caseId 2213 $ "getopts specified -" ++ (e4m str) ++ ", but it's not handled by this 'case'."
@@ -1372,10 +1372,10 @@ checkUnquotedEchoSpaces = CommandCheck (Basename "echo") check
         m <- asks tokenPositions
         redir <- getClosestCommandM t
         sequence_ $ do
-            let positions = mapMaybe (\c -> Map.lookup (getId c) m) args
+            let positions = mapMaybe (\c -> M.lookup (getId c) m) args
             let pairs = zip positions (drop 1 positions)
             (T_Redirecting _ redirTokens _) <- redir
-            let redirPositions = mapMaybe (\c -> fst <$> Map.lookup (getId c) m) redirTokens
+            let redirPositions = mapMaybe (\c -> fst <$> M.lookup (getId c) m) redirTokens
             guard $ any (hasSpacesBetween redirPositions) pairs
             return $ info (getId t) 2291 "Quote repeated spaces to avoid them collapsing into one."
 
