@@ -1460,7 +1460,8 @@ prop_checkArithmeticDeref7 = verifyNot checkArithmeticDeref "(( 10#$n ))"
 prop_checkArithmeticDeref8 = verifyNot checkArithmeticDeref "let i=$i+1"
 prop_checkArithmeticDeref9 = verifyNot checkArithmeticDeref "(( a[foo] ))"
 prop_checkArithmeticDeref10= verifyNot checkArithmeticDeref "(( a[\\$foo] ))"
-prop_checkArithmeticDeref11= verifyNot checkArithmeticDeref "a[$foo]=wee"
+prop_checkArithmeticDeref11= verify checkArithmeticDeref "a[$foo]=wee"
+prop_checkArithmeticDeref11b= verifyNot checkArithmeticDeref "declare -A a; a[$foo]=wee"
 prop_checkArithmeticDeref12= verify checkArithmeticDeref "for ((i=0; $i < 3; i)); do true; done"
 prop_checkArithmeticDeref13= verifyNot checkArithmeticDeref "(( $$ ))"
 prop_checkArithmeticDeref14= verifyNot checkArithmeticDeref "(( $! ))"
@@ -1477,6 +1478,7 @@ checkArithmeticDeref params t@(TA_Expansion _ [T_DollarBraced id _ l]) =
             T_Arithmetic {} -> return normalWarning
             T_DollarArithmetic {} -> return normalWarning
             T_ForArithmetic {} -> return normalWarning
+            T_Assignment {} -> return normalWarning
             T_SimpleCommand {} -> return noWarning
             _ -> Nothing
 
