@@ -27,6 +27,8 @@ module ShellCheck.Checks.Commands (checker, optionalChecks, ShellCheck.Checks.Co
 import ShellCheck.AST
 import ShellCheck.ASTLib
 import ShellCheck.AnalyzerLib
+import ShellCheck.CFG
+import qualified ShellCheck.CFGAnalysis as CF
 import ShellCheck.Data
 import ShellCheck.Interface
 import ShellCheck.Parser
@@ -37,11 +39,15 @@ import Control.Monad
 import Control.Monad.RWS
 import Data.Char
 import Data.Functor.Identity
+import qualified Data.Graph.Inductive.Graph as G
 import Data.List
 import Data.Maybe
 import qualified Data.Map.Strict as M
+import qualified Data.Set as S
 import Test.QuickCheck.All (forAllProperties)
 import Test.QuickCheck.Test (quickCheckWithResult, stdArgs, maxSuccess)
+
+import Debug.Trace -- STRIP
 
 data CommandName = Exactly String | Basename String
     deriving (Eq, Ord)
@@ -102,6 +108,7 @@ commandChecks = [
     ++ map checkArgComparison ("alias" : declaringCommands)
     ++ map checkMaskedReturns declaringCommands
     ++ map checkMultipleDeclaring declaringCommands
+    ++ map checkBackreferencingDeclaration declaringCommands
 
 
 optionalChecks = map fst optionalCommandChecks
@@ -1403,6 +1410,52 @@ checkEvalArray = CommandCheck (Exactly "eval") (mapM_ check . concatMap getWordP
             -- Match ${arr[@]@Q} and ${@@Q} and such
             T_DollarBraced _ _ l -> 'Q' `elem` getBracedModifier (concat $ oversimplify l)
             _ -> False
+
+
+prop_checkBackreferencingDeclaration1 = verify (checkBackreferencingDeclaration "declare") "declare x=1 y=foo$x"
+prop_checkBackreferencingDeclaration2 = verify (checkBackreferencingDeclaration "readonly") "readonly x=1 y=$((1+x))"
+prop_checkBackreferencingDeclaration3 = verify (checkBackreferencingDeclaration "local") "local x=1 y=$(echo $x)"
+prop_checkBackreferencingDeclaration4 = verify (checkBackreferencingDeclaration "local") "local x=1 y[$x]=z"
+prop_checkBackreferencingDeclaration5 = verify (checkBackreferencingDeclaration "declare") "declare x=var $x=1"
+prop_checkBackreferencingDeclaration6 = verify (checkBackreferencingDeclaration "declare") "declare x=var $x=1"
+prop_checkBackreferencingDeclaration7 = verify (checkBackreferencingDeclaration "declare") "declare x=var $k=$x"
+checkBackreferencingDeclaration cmd = CommandCheck (Exactly cmd) check
+  where
+    check t = foldM_ perArg M.empty $ arguments t
+
+    perArg leftArgs t =
+        case t of
+            T_Assignment id _ name idx t -> do
+                warnIfBackreferencing leftArgs $ t:idx
+                return $ M.insert name id leftArgs
+            t -> do
+                warnIfBackreferencing leftArgs [t]
+                return leftArgs
+
+    warnIfBackreferencing backrefs l = do
+        references <- findReferences l
+        let reused = M.intersection backrefs references
+        mapM msg $ M.toList reused
+
+    msg (name, id) = warn id 2318 $ "This assignment is used again in this '" ++ cmd ++ "', but won't have taken effect. Use two '" ++ cmd ++ "'s."
+
+    findReferences list = do
+        cfga <- asks cfgAnalysis
+        let graph = CF.graph cfga
+        let nodesMap = CF.tokenToNodes cfga
+        let nodes = S.unions $ map (\id -> M.findWithDefault S.empty id nodesMap) $ map getId $ list
+        let labels = mapMaybe (G.lab graph) $ S.toList nodes
+        let references = M.fromList $ concatMap refFromLabel labels
+        return references
+
+    refFromLabel lab =
+        case lab of
+            CFApplyEffects effects -> mapMaybe refFromEffect effects
+            _ -> []
+    refFromEffect e =
+        case e of
+            IdTagged id (CFReadVariable name) -> return (name, id)
+            _ -> Nothing
 
 
 return []
