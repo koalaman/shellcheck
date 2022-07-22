@@ -97,7 +97,8 @@ logInfo log = do
 -- The result of the data flow analysis
 data CFGAnalysis = CFGAnalysis {
     graph :: CFGraph,
-    tokenToNode :: M.Map Id (Node, Node),
+    tokenToRange :: M.Map Id (Node, Node),
+    tokenToNodes :: M.Map Id (S.Set Node),
     nodeToData :: M.Map Node (ProgramState, ProgramState)
 } deriving (Show, Generic, NFData)
 
@@ -111,13 +112,13 @@ data ProgramState = ProgramState {
 -- Conveniently get the state before a token id
 getIncomingState :: CFGAnalysis -> Id -> Maybe ProgramState
 getIncomingState analysis id = do
-    (start,end) <- M.lookup id $ tokenToNode analysis
+    (start,end) <- M.lookup id $ tokenToRange analysis
     fst <$> M.lookup start (nodeToData analysis)
 
 -- Conveniently get the state after a token id
 getOutgoingState :: CFGAnalysis -> Id -> Maybe ProgramState
 getOutgoingState analysis id = do
-    (start,end) <- M.lookup id $ tokenToNode analysis
+    (start,end) <- M.lookup id $ tokenToRange analysis
     snd <$> M.lookup end (nodeToData analysis)
 
 getDataForNode analysis node = M.lookup node $ nodeToData analysis
@@ -1216,7 +1217,7 @@ analyzeControlFlow :: CFGParameters -> Token -> CFGAnalysis
 analyzeControlFlow params t =
     let
         cfg = buildGraph params t
-        (entry, exit) = M.findWithDefault (error $ pleaseReport "Missing root") (getId t) (cfIdToNode cfg)
+        (entry, exit) = M.findWithDefault (error $ pleaseReport "Missing root") (getId t) (cfIdToRange cfg)
     in
         runST $ f cfg entry exit
   where
@@ -1250,7 +1251,8 @@ analyzeControlFlow params t =
 
         return $ nodeToData `deepseq` CFGAnalysis {
             graph = cfGraph cfg,
-            tokenToNode = cfIdToNode cfg,
+            tokenToRange = cfIdToRange cfg,
+            tokenToNodes = cfIdToNodes cfg,
             nodeToData = nodeToData
         }
 

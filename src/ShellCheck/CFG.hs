@@ -168,8 +168,10 @@ data CFGParameters = CFGParameters {
 data CFGResult = CFGResult {
     -- The graph itself
     cfGraph :: CFGraph,
-    -- Map from Id to start/end node
-    cfIdToNode :: M.Map Id (Node, Node)
+    -- Map from Id to nominal start&end node (i.e. assuming normal execution without exits)
+    cfIdToRange :: M.Map Id (Node, Node),
+    -- A set of all nodes belonging to an Id, recursively
+    cfIdToNodes :: M.Map Id (S.Set Node)
 }
   deriving (Show)
 
@@ -177,21 +179,24 @@ buildGraph :: CFGParameters -> Token -> CFGResult
 buildGraph params root =
     let
         (nextNode, base) = execRWS (buildRoot root) (newCFContext params) 0
-        (nodes, edges, mapping) =
+        (nodes, edges, mapping, association) =
 --            renumberTopologically $
                 removeUnnecessaryStructuralNodes
                     base
     in
         CFGResult {
             cfGraph = mkGraph nodes edges,
-            cfIdToNode = M.fromList mapping
+            cfIdToRange = M.fromList mapping,
+            cfIdToNodes = M.fromListWith S.union $ map (\(id, n) -> (id, S.singleton n)) association
         }
 
-remapGraph remap (nodes, edges, mapping) =
+remapGraph :: M.Map Node Node -> CFW -> CFW
+remapGraph remap (nodes, edges, mapping, assoc) =
     (
         map (remapNode remap) nodes,
         map (remapEdge remap) edges,
-        map (\(id, (a,b)) -> (id, (remapHelper remap a, remapHelper remap b))) mapping
+        map (\(id, (a,b)) -> (id, (remapHelper remap a, remapHelper remap b))) mapping,
+        map (\(id, n) -> (id, remapHelper remap n)) assoc
     )
 
 prop_testRenumbering =
@@ -200,17 +205,20 @@ prop_testRenumbering =
         before = (
             [(1,s), (3,s), (4, s), (8,s)],
             [(1,3,CFEFlow), (3,4, CFEFlow), (4,8,CFEFlow)],
-            [(Id 0, (3,4))]
+            [(Id 0, (3,4))],
+            [(Id 1, 3), (Id 2, 4)]
             )
         after = (
             [(0,s), (1,s), (2,s), (3,s)],
             [(0,1,CFEFlow), (1,2, CFEFlow), (2,3,CFEFlow)],
-            [(Id 0, (1,2))]
+            [(Id 0, (1,2))],
+            [(Id 1, 1), (Id 2, 2)]
             )
     in after == renumberGraph before
 
 -- Renumber the graph for prettiness, so there are no gaps in node numbers
-renumberGraph g@(nodes, edges, mapping) =
+renumberGraph :: CFW -> CFW
+renumberGraph g@(nodes, edges, mapping, assoc) =
     let renumbering = M.fromList (flip zip [0..] $ sort $ map fst nodes)
     in remapGraph renumbering g
 
@@ -220,17 +228,19 @@ prop_testRenumberTopologically =
         before = (
             [(4,s), (2,s), (3, s)],
             [(4,2,CFEFlow), (2,3, CFEFlow)],
-            [(Id 0, (4,2))]
+            [(Id 0, (4,2))],
+            []
             )
         after = (
             [(0,s), (1,s), (2,s)],
             [(0,1,CFEFlow), (1,2, CFEFlow)],
-            [(Id 0, (0,1))]
+            [(Id 0, (0,1))],
+            []
             )
     in after == renumberTopologically before
 
 -- Renumber the graph in topological order
-renumberTopologically g@(nodes, edges, mapping) =
+renumberTopologically g@(nodes, edges, mapping, assoc) =
     let renumbering = M.fromList (flip zip [0..] $ topsort (mkGraph nodes edges :: CFGraph))
     in remapGraph renumbering g
 
@@ -240,12 +250,14 @@ prop_testRemoveStructural =
         before = (
             [(1,s), (2,s), (3, s), (4,s)],
             [(1,2,CFEFlow), (2,3, CFEFlow), (3,4,CFEFlow)],
-            [(Id 0, (2,3))]
+            [(Id 0, (2,3))],
+            [(Id 0, 3)]
             )
         after = (
             [(1,s), (2,s), (4,s)],
             [(1,2,CFEFlow), (2,4,CFEFlow)],
-            [(Id 0, (2,2))]
+            [(Id 0, (2,2))],
+            [(Id 0, 2)]
             )
     in after == removeUnnecessaryStructuralNodes before
 
@@ -255,12 +267,13 @@ prop_testRemoveStructural =
 -- Note in particular that we can't remove a structural node x in
 -- foo -> x -> bar , because then the pre/post-condition for tokens
 -- previously pointing to x would be wrong.
-removeUnnecessaryStructuralNodes (nodes, edges, mapping) =
+removeUnnecessaryStructuralNodes (nodes, edges, mapping, association) =
     remapGraph recursiveRemapping
         (
             filter (\(n, _) -> n `M.notMember` recursiveRemapping) nodes,
             filter (`S.notMember` edgesToCollapse) edges,
-            mapping
+            mapping,
+            association
         )
   where
     regularEdges = filter isRegularEdge edges
@@ -305,8 +318,6 @@ remapNode m (node, label) =
     newLabel = case label of
         CFApplyEffects effects -> CFApplyEffects (map (remapEffect m) effects)
         CFExecuteSubshell s a b -> CFExecuteSubshell s (remapHelper m a) (remapHelper m b)
---        CFSubShellStart reason node -> CFSubShellStart reason (remapHelper m node)
-
         _ -> label
 
 remapEffect map old@(IdTagged id effect) =
@@ -325,6 +336,7 @@ data CFContext = CFContext {
     cfIsCondition :: Bool,
     cfIsFunction :: Bool,
     cfLoopStack :: [(Node, Node)],
+    cfTokenStack :: [Id],
     cfExitTarget :: Maybe Node,
     cfReturnTarget :: Maybe Node,
     cfParameters :: CFGParameters
@@ -333,19 +345,22 @@ newCFContext params = CFContext {
     cfIsCondition = False,
     cfIsFunction = False,
     cfLoopStack = [],
+    cfTokenStack = [],
     cfExitTarget = Nothing,
     cfReturnTarget = Nothing,
     cfParameters = params
 }
 
 -- The monad we generate a graph in
-type CFM a = RWS CFContext ([LNode CFNode], [LEdge CFEdge], [(Id, (Node, Node))]) Int a
+type CFM a = RWS CFContext CFW Int a
+type CFW = ([LNode CFNode], [LEdge CFEdge], [(Id, (Node, Node))], [(Id, Node)])
 
 newNode :: CFNode -> CFM Node
 newNode label = do
     n <- get
+    stack <- asks cfTokenStack
     put (n+1)
-    tell ([(n, label)], [], [])
+    tell ([(n, label)], [], [], map (\c -> (c, n)) stack)
     return n
 
 newNodeRange :: CFNode -> CFM Range
@@ -367,16 +382,19 @@ withFunctionScope p = do
     body <- local (\c -> c { cfReturnTarget = Just end, cfIsFunction = True }) p
     linkRanges [body, nodeToRange end]
 
+-- Anything that happens recursively in f will be attributed to this id
+under :: Id -> CFM a -> CFM a
+under id f = local (\c -> c { cfTokenStack = id:(cfTokenStack c) }) f
 
 nodeToRange :: Node -> Range
 nodeToRange n = Range n n
 
 link :: Node -> Node -> CFEdge -> CFM ()
 link from to label = do
-    tell ([], [(from, to, label)], [])
+    tell ([], [(from, to, label)], [], [])
 
 registerNode :: Id -> Range -> CFM ()
-registerNode id (Range start end) = tell ([], [], [(id, (start, end))])
+registerNode id (Range start end) = tell ([], [], [(id, (start, end))], [])
 
 linkRange :: Range -> Range -> CFM Range
 linkRange = linkRangeAs CFEFlow
@@ -412,7 +430,7 @@ asCondition = withContext (\c -> c { cfIsCondition = True })
 newStructuralNode = newNodeRange CFStructuralNode
 
 buildRoot :: Token -> CFM Range
-buildRoot t = do
+buildRoot t = under (getId t) $ do
     entry <- newNodeRange $ CFEntryPoint "MAIN"
     impliedExit <- newNode CFImpliedExit
     end <- newNode CFStructuralNode
@@ -426,7 +444,7 @@ applySingle e = CFApplyEffects [e]
 -- Build the CFG.
 build :: Token -> CFM Range
 build t = do
-    range <- build' t
+    range <- under (getId t) $ build' t
     registerNode (getId t) range
     return range
   where

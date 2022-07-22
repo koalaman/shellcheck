@@ -202,7 +202,7 @@ stringToDetailedCfgViz scriptString = cfgToGraphVizWith nodeLabel graph
     idToToken = M.fromList $ execWriter $ doAnalysis (\c -> tell [(getId c, c)]) ast
 
     idToNode :: M.Map Id (Node, Node)
-    idToNode = cfIdToNode cfgResult
+    idToNode = cfIdToRange cfgResult
 
     nodeToStartIds :: M.Map Node (S.Set Id)
     nodeToStartIds =
