@@ -135,6 +135,8 @@ prop_checkBashisms49 = verify checkBashisms "#!/bin/dash\necho $MACHTYPE"
 prop_checkBashisms50 = verify checkBashisms "#!/bin/sh\ncmd >& file"
 prop_checkBashisms51 = verifyNot checkBashisms "#!/bin/sh\ncmd 2>&1"
 prop_checkBashisms52 = verifyNot checkBashisms "#!/bin/sh\ncmd >&2"
+prop_checkBashisms52b = verifyNot checkBashisms "#!/bin/sh\ncmd >& $var"
+prop_checkBashisms52c = verify checkBashisms "#!/bin/sh\ncmd >& $dir/$var"
 prop_checkBashisms53 = verifyNot checkBashisms "#!/bin/sh\nprintf -- -f\n"
 prop_checkBashisms54 = verify checkBashisms "#!/bin/sh\nfoo+=bar"
 prop_checkBashisms55 = verify checkBashisms "#!/bin/sh\necho ${@%foo}"
@@ -225,7 +227,8 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
             warnMsg id 3018 $ filter (/= '|') op ++ " is"
     bashism (TA_Binary id "**" _ _) = warnMsg id 3019 "exponentials are"
     bashism (T_FdRedirect id "&" (T_IoFile _ (T_Greater _) _)) = warnMsg id 3020 "&> is"
-    bashism (T_FdRedirect id "" (T_IoFile _ (T_GREATAND _) _)) = warnMsg id 3021 ">& is"
+    bashism (T_FdRedirect id "" (T_IoFile _ (T_GREATAND _) file)) =
+        unless (all isDigit $ onlyLiteralString file) $ warnMsg id 3021 ">& filename (as opposed to >& fd) is"
     bashism (T_FdRedirect id ('{':_) _) = warnMsg id 3022 "named file descriptors are"
     bashism (T_FdRedirect id num _)
         | all isDigit num && length num > 1 = warnMsg id 3023 "FDs outside 0-9 are"
