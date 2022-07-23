@@ -706,8 +706,8 @@ checkPrintfVar = CommandCheck (Exactly "printf") (f . arguments) where
                     return () -- Great: a suitable number of arguments
                 | otherwise ->
                     warn (getId format) 2183 $
-                        "This format string has " ++ show formatCount ++ " " ++ (pluraliseIfMany "variable" formatCount) ++
-                        ", but is passed " ++ show argCount ++ " arguments."
+                        "This format string has " ++ show formatCount ++ " " ++ pluraliseIfMany "variable" formatCount ++
+                        ", but is passed " ++ show argCount ++ pluraliseIfMany " argument" argCount ++ "."
 
         unless ('%' `elem` concat (oversimplify format) || isLiteral format) $
           info (getId format) 2059
