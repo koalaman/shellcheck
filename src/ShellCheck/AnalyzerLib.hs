@@ -89,6 +89,8 @@ data Parameters = Parameters {
     hasPipefail        :: Bool,
     -- A linear (bad) analysis of data flow
     variableFlow       :: [StackData],
+    -- A map from Id to Token
+    idMap              :: Map.Map Id Token,
     -- A map from Id to parent Token
     parentMap          :: Map.Map Id Token,
     -- The shell type, such as Bash or Ksh
@@ -218,6 +220,7 @@ makeParameters spec = params
                 Sh   -> True
                 Ksh  -> containsPipefail root,
         shellTypeSpecified = isJust (asShellType spec) || isJust (asFallbackShell spec),
+        idMap = getTokenMap root,
         parentMap = getParentTree root,
         variableFlow = getVariableFlow params root,
         tokenPositions = asTokenPositions spec,

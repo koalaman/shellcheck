@@ -3,6 +3,7 @@
 - SC2316: Warn about 'local readonly foo' and similar (thanks, patrickxia!)
 - SC2317: Warn about unreachable commands
 - SC2318: Warn about backreferences in 'declare x=1 y=$x'
+- SC2319/SC2320: Warn when $? refers to echo/printf/[ ]/[[ ]]/test
 
 ### Fixed
 - SC2086: Now uses DFA to make more accurate predictions about values

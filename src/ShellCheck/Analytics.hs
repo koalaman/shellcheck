@@ -205,6 +205,7 @@ nodeChecks = [
     ,checkBatsTestDoesNotUseNegation
     ,checkCommandIsUnreachable
     ,checkSpacefulnessCfg
+    ,checkOverwrittenExitCode
     ]
 
 optionalChecks = map fst optionalTreeChecks
@@ -4875,6 +4876,42 @@ checkCommandIsUnreachable params t =
             return $ info id 2317 "Command appears to be unreachable. Check usage (or ignore if invoked indirectly)."
         _ -> return ()
   where id = getId t
+
+
+prop_checkOverwrittenExitCode1 = verify checkOverwrittenExitCode "x; [ $? -eq 1 ] || [ $? -eq 2 ]"
+prop_checkOverwrittenExitCode2 = verifyNot checkOverwrittenExitCode "x; [ $? -eq 1 ]"
+prop_checkOverwrittenExitCode3 = verify checkOverwrittenExitCode "x; echo \"Exit is $?\"; [ $? -eq 0 ]"
+prop_checkOverwrittenExitCode4 = verifyNot checkOverwrittenExitCode "x; [ $? -eq 0 ]"
+checkOverwrittenExitCode params t =
+    case t of
+        T_DollarBraced id _ val | getLiteralString val == Just "?" -> check id
+        _ -> return ()
+  where
+    check id = sequence_ $ do
+        state <- CF.getIncomingState (cfgAnalysis params) id
+        let exitCodeIds = CF.exitCodes state
+        guard . not $ S.null exitCodeIds
+
+        let idToToken = idMap params
+        exitCodeTokens <- sequence $ map (\k -> Map.lookup k idToToken) $ S.toList exitCodeIds
+        return $ do
+            when (all isCondition exitCodeTokens) $
+                warn id 2319 "This $? refers to a condition, not a command. Assign to a variable to avoid it being overwritten."
+            when (all isPrinting exitCodeTokens) $
+                warn id 2320 "This $? refers to echo/printf, not a previous command. Assign to variable to avoid it being overwritten."
+
+    isCondition t =
+        case t of
+            T_Condition {} -> True
+            T_SimpleCommand {} -> getCommandName t == Just "test"
+            _ -> False
+
+    isPrinting t =
+        case getCommandBasename t of
+            Just "echo" -> True
+            Just "printf" -> True
+            _ -> False
+
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

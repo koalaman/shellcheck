@@ -804,6 +804,7 @@ fulfillsDependency ctx entry dep =
         -- it won't be found by the normal check.
         DepIsRecursive node val | node == entry -> return True
         DepIsRecursive node val -> return $ val == any (\f -> entryPoint f == node) (cStack ctx)
+        DepExitCodes val -> (== val) <$> peekStack (\s k -> sExitCodes s) S.empty ctx ()
   --      _ -> error $ "Unknown dep " ++ show dep
   where
     peek scope = peekStack getVariableWithScope $ if scope == GlobalScope then (unknownVariableState, GlobalScope) else (unsetVariableState, LocalScope)
