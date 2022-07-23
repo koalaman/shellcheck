@@ -104,10 +104,28 @@ data CFGAnalysis = CFGAnalysis {
 
 -- The program state we expose externally
 data ProgramState = ProgramState {
---    internalState :: InternalState, -- For debugging
+    -- internalState :: InternalState, -- For debugging
     variablesInScope :: M.Map String VariableState,
+    exitCodes :: S.Set Id,
     stateIsReachable :: Bool
 } deriving (Show, Eq, Generic, NFData)
+
+internalToExternal :: InternalState -> ProgramState
+internalToExternal s =
+    ProgramState {
+        -- Censor the literal value to avoid introducing dependencies on it. It's just for debugging.
+        variablesInScope = M.map censor flatVars,
+        -- internalState = s, -- For debugging
+        exitCodes = fromMaybe S.empty $ sExitCodes s,
+        stateIsReachable = fromMaybe True $ sIsReachable s
+    }
+  where
+    censor s = s {
+        variableValue = (variableValue s) {
+            literalValue = Nothing
+        }
+    }
+    flatVars = M.unionsWith (\_ last -> last) $ map mapStorage [sGlobalValues s, sLocalValues s, sPrefixValues s]
 
 -- Conveniently get the state before a token id
 getIncomingState :: CFGAnalysis -> Id -> Maybe ProgramState
@@ -130,6 +148,7 @@ data InternalState = InternalState {
     sLocalValues :: VersionedMap String VariableState,
     sPrefixValues :: VersionedMap String VariableState,
     sFunctionTargets :: VersionedMap String FunctionValue,
+    sExitCodes :: Maybe (S.Set Id),
     sIsReachable :: Maybe Bool
 } deriving (Show, Generic, NFData)
 
@@ -139,6 +158,7 @@ newInternalState = InternalState {
     sLocalValues = vmEmpty,
     sPrefixValues = vmEmpty,
     sFunctionTargets = vmEmpty,
+    sExitCodes = Nothing,
     sIsReachable = Nothing
 }
 
@@ -196,31 +216,25 @@ removeProperties props state = state {
     variableProperties = S.map (\s -> S.difference s props) $ variableProperties state
 }
 
-internalToExternal :: InternalState -> ProgramState
-internalToExternal s =
-    ProgramState {
-        -- Censor the literal value to avoid introducing dependencies on it. It's just for debugging.
-        variablesInScope = M.map censor flatVars,
-        -- internalState = s, -- For debugging
-        stateIsReachable = fromMaybe True $ sIsReachable s
-    }
-  where
-    censor s = s {
-        variableValue = (variableValue s) {
-            literalValue = Nothing
-        }
-    }
-    flatVars = M.unionsWith (\_ last -> last) $ map mapStorage [sGlobalValues s, sLocalValues s, sPrefixValues s]
+setExitCode id = setExitCodes (S.singleton id)
+setExitCodes set state = modified state {
+    sExitCodes = Just $ set
+}
 
 -- Dependencies on values, e.g. "if there is a global variable named 'foo' without spaces"
 -- This is used to see if the DFA of a function would result in the same state, so anything
 -- that affects DFA must be tracked.
 data StateDependency =
+    -- Complete variable state
     DepState Scope String VariableState
+    -- Only variable properties (we need properties but not values for x=1)
     | DepProperties Scope String VariableProperties
+    -- Function definition
     | DepFunction String (S.Set FunctionDefinition)
     -- Whether invoking the node would result in recursion (i.e., is the function on the stack?)
     | DepIsRecursive Node Bool
+    -- The set of commands that could have provided the exit code $?
+    | DepExitCodes (S.Set Id)
     deriving (Show, Eq, Ord, Generic, NFData)
 
 -- A function definition, or lack thereof
@@ -242,6 +256,7 @@ depsToState set = foldl insert newInternalState $ S.toList set
             -- State includes properties and more, so don't overwrite a state with properties
             DepProperties scope name props -> insertIn False scope name unknownVariableState { variableProperties = props } state
             DepIsRecursive _ _ -> state
+            DepExitCodes s -> setExitCodes s state
 
     insertIn overwrite scope name val state =
         let
@@ -400,6 +415,7 @@ patchState base diff =
                 sLocalValues = vmPatch (sLocalValues base) (sLocalValues diff),
                 sPrefixValues = vmPatch (sPrefixValues base) (sPrefixValues diff),
                 sFunctionTargets = vmPatch (sFunctionTargets base) (sFunctionTargets diff),
+                sExitCodes = sExitCodes diff `mplus` sExitCodes base,
                 sIsReachable = sIsReachable diff `mplus` sIsReachable base
             }
 
@@ -444,12 +460,14 @@ mergeState ctx a b = do
                 locals <- mergeMaps ctx mergeVariableState readVariable (sLocalValues a) (sLocalValues b)
                 prefix <- mergeMaps ctx mergeVariableState readVariable (sPrefixValues a) (sPrefixValues b)
                 funcs <- mergeMaps ctx S.union readFunction (sFunctionTargets a) (sFunctionTargets b)
+                exitCodes <- mergeMaybes ctx S.union readExitCodes (sExitCodes a) (sExitCodes b)
                 return $ InternalState {
                     sVersion = -1,
                     sGlobalValues = globals,
                     sLocalValues = locals,
                     sPrefixValues = prefix,
                     sFunctionTargets = funcs,
+                    sExitCodes = exitCodes,
                     sIsReachable = liftM2 (&&) (sIsReachable a) (sIsReachable b)
                 }
 
@@ -492,6 +510,18 @@ mergeMaps ctx merger reader a b =
             GT -> do
                 nv1 <- reader ctx k2
                 f ((k2, merger nv1 v2):l) l1 rest2
+
+-- Merge two Maybes, like mergeMaps for a single element
+mergeMaybes ctx merger reader a b =
+    case (a, b) of
+        (Nothing, Nothing) -> return Nothing
+        (Just v1, Nothing) -> single v1
+        (Nothing, Just v2) -> single v2
+        (Just v1, Just v2) -> return $ Just $ merger v1 v2
+  where
+    single val = do
+        result <- merger val <$> reader ctx
+        return $ Just result
 
 vmFromMap ctx map = return $ VersionedMap {
     mapVersion = -1,
@@ -708,6 +738,12 @@ readFunction ctx name = lookupStack get dep def ctx name
 writeFunction ctx name val = do
     modifySTRef (cOutput ctx) $ insertFunction name $ S.singleton val
 
+readExitCodes ctx = lookupStack get dep def ctx ()
+  where
+    get s () = sExitCodes s
+    def = S.empty
+    dep () v = DepExitCodes v
+
 -- Look up each state on the stack until a value is found (or the default is used),
 -- then add this value as a StateDependency.
 lookupStack' :: forall s k v.
@@ -872,13 +908,13 @@ transfer ctx label =
         CFExecuteCommand cmd -> transferCommand ctx cmd
         CFExecuteSubshell reason entry exit -> transferSubshell ctx reason entry exit
         CFApplyEffects effects -> mapM_ (\(IdTagged _ f) -> transferEffect ctx f) effects
+        CFSetExitCode id -> transferExitCode ctx id
 
         CFUnresolvedExit -> patchOutputM ctx unreachableState
         CFUnreachable -> patchOutputM ctx unreachableState
 
         -- TODO
         CFSetBackgroundPid _ -> return ()
-        CFSetExitCode _ -> return ()
         CFDropPrefixAssignments {} ->
             modifySTRef (cOutput ctx) $ \c -> modified c { sPrefixValues = vmEmpty }
 --        _ -> error $ "Unknown " ++ show label
@@ -891,8 +927,11 @@ transferSubshell ctx reason entry exit = do
     let cout = cOutput ctx
     initial <- readSTRef cout
     runCached ctx entry (f entry exit)
+    res <- readSTRef cout
     -- Clear subshell changes. TODO: track this to warn about modifications.
-    writeSTRef cout initial
+    writeSTRef cout $ initial {
+        sExitCodes = sExitCodes res
+    }
   where
     f entry exit ctx = do
         (states, frame) <- withNewStackFrame ctx entry False (flip dataflow $ entry)
@@ -947,6 +986,8 @@ transferFunctionValue ctx funcVal =
         registerFlowResult ctx entry states deps
         return (deps, res)
 
+transferExitCode ctx id = do
+    modifySTRef (cOutput ctx) $ setExitCode id
 
 -- Register/save the result of a dataflow of a function.
 -- At the end, all the different values from different flows are merged together.
@@ -1001,8 +1042,10 @@ getCache ctx node = do
 -- Transfer a single CFEffect to the output state.
 transferEffect ctx effect =
     case effect of
-        CFReadVariable name -> do
-            void $ readVariable ctx name
+        CFReadVariable name ->
+            case name of
+                "?" -> void $ readExitCodes ctx
+                _ -> void $ readVariable ctx name
         CFWriteVariable name value -> do
             val <- cfValueToVariableValue ctx value
             updateVariableValue ctx name val
@@ -1235,7 +1278,14 @@ analyzeControlFlow params t =
         -- (it's probably not actually dead, just used by a script that sources ours)
         let declaredFunctions = getFunctionTargets exitState
         let uninvoked = M.difference declaredFunctions invokedNodes
-        analyzeStragglers ctx exitState uninvoked
+
+        let stragglerInput =
+                exitState {
+                    -- We don't want `die() { exit $?; }; echo "Sourced"` to assume $? is always echo
+                    sExitCodes = Nothing
+                }
+
+        analyzeStragglers ctx stragglerInput uninvoked
 
         -- Now round up all the states from all data flows
         -- (FIXME: this excludes functions that were defined in straggling functions)

@@ -651,7 +651,10 @@ build t = do
                 pg <- wordToExactPseudoGlob c
                 return $ pg `pseudoGlobIsSuperSetof` [PGMany]
 
-        T_Condition _ _ op -> build op
+        T_Condition id _ op -> do
+            cond <- build op
+            status <- newNodeRange $ CFSetExitCode id
+            linkRange cond status
 
         T_CoProc id maybeName t -> do
             let name = fromMaybe "COPROC" maybeName
@@ -798,7 +801,8 @@ build t = do
             start <- newStructuralNode
             hasLastpipe <- reader $ cfLastpipe . cfParameters
             (leading, last) <- buildPipe hasLastpipe cmds
-            end <- newStructuralNode
+            -- Ideally we'd let this exit code be that of the last command in the pipeline but ok
+            end <- newNodeRange $ CFSetExitCode id
 
             mapM_ (linkRange start) leading
             mapM_ (\c -> linkRangeAs CFEFalseFlow c end) leading
