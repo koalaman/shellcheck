@@ -5,6 +5,8 @@
 - SC2318: Warn about backreferences in 'declare x=1 y=$x'
 - SC2319/SC2320: Warn when $? refers to echo/printf/[ ]/[[ ]]/test
 - SC2321: Suggest removing $((..)) in array[$((idx))]=val
+- SC2322: Suggest collapsing double parentheses in arithmetic contexts
+- SC2323: Suggest removing wrapping parentheses in a[(x+1)]=val
 
 ### Fixed
 - SC2086: Now uses DFA to make more accurate predictions about values

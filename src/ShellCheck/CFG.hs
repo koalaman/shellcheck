@@ -479,6 +479,7 @@ build t = do
         TA_Binary _ _ a b -> sequentially [a,b]
         TA_Expansion _ list -> sequentially list
         TA_Sequence _ list -> sequentially list
+        TA_Parentesis _ t -> build t
 
         TA_Trinary _ cond a b -> do
             condition <- build cond

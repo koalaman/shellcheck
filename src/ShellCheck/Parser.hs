@@ -821,11 +821,13 @@ readArithmeticContents =
         return $ TA_Expansion id pieces
 
     readGroup = do
+        start <- startSpan
         char '('
         s <- readSequence
         char ')'
+        id <- endSpan start
         spacing
-        return s
+        return $ TA_Parentesis id s
 
     readArithTerm = readGroup <|> readVariable <|> readExpansion
 

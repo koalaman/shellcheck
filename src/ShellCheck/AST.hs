@@ -45,6 +45,7 @@ data InnerToken t =
     | Inner_TA_Variable String [t]
     | Inner_TA_Expansion [t]
     | Inner_TA_Sequence [t]
+    | Inner_TA_Parenthesis t
     | Inner_TA_Trinary t t t
     | Inner_TA_Unary String t
     | Inner_TC_And ConditionType String t t
@@ -204,6 +205,7 @@ pattern T_Annotation id anns t = OuterToken id (Inner_T_Annotation anns t)
 pattern T_Arithmetic id c = OuterToken id (Inner_T_Arithmetic c)
 pattern T_Array id t = OuterToken id (Inner_T_Array t)
 pattern TA_Sequence id l = OuterToken id (Inner_TA_Sequence l)
+pattern TA_Parentesis id t = OuterToken id (Inner_TA_Parenthesis t)
 pattern T_Assignment id mode var indices value = OuterToken id (Inner_T_Assignment mode var indices value)
 pattern TA_Trinary id t1 t2 t3 = OuterToken id (Inner_TA_Trinary t1 t2 t3)
 pattern TA_Unary id op t1 = OuterToken id (Inner_TA_Unary op t1)
@@ -256,7 +258,7 @@ pattern T_Subshell id l = OuterToken id (Inner_T_Subshell l)
 pattern T_UntilExpression id c l = OuterToken id (Inner_T_UntilExpression c l)
 pattern T_WhileExpression id c l = OuterToken id (Inner_T_WhileExpression c l)
 
-{-# COMPLETE T_AND_IF, T_Bang, T_Case, TC_Empty, T_CLOBBER, T_DGREAT, T_DLESS, T_DLESSDASH, T_Do, T_DollarSingleQuoted, T_Done, T_DSEMI, T_Elif, T_Else, T_EOF, T_Esac, T_Fi, T_For, T_Glob, T_GREATAND, T_Greater, T_If, T_In, T_Lbrace, T_Less, T_LESSAND, T_LESSGREAT, T_Literal, T_Lparen, T_NEWLINE, T_OR_IF, T_ParamSubSpecialChar, T_Pipe, T_Rbrace, T_Rparen, T_Select, T_Semi, T_SingleQuoted, T_Then, T_UnparsedIndex, T_Until, T_While, TA_Assignment, TA_Binary, TA_Expansion, T_AndIf, T_Annotation, T_Arithmetic, T_Array, TA_Sequence, T_Assignment, TA_Trinary, TA_Unary, TA_Variable, T_Backgrounded, T_Backticked, T_Banged, T_BatsTest, T_BraceExpansion, T_BraceGroup, TC_And, T_CaseExpression, TC_Binary, TC_Group, TC_Nullary, T_Condition, T_CoProcBody, T_CoProc, TC_Or, TC_Unary, T_DollarArithmetic, T_DollarBraceCommandExpansion, T_DollarBraced, T_DollarBracket, T_DollarDoubleQuoted, T_DollarExpansion, T_DoubleQuoted, T_Extglob, T_FdRedirect, T_ForArithmetic, T_ForIn, T_Function, T_HereDoc, T_HereString, T_IfExpression, T_Include, T_IndexedElement, T_IoDuplicate, T_IoFile, T_NormalWord, T_OrIf, T_Pipeline, T_ProcSub, T_Redirecting, T_Script, T_SelectIn, T_SimpleCommand, T_SourceCommand, T_Subshell, T_UntilExpression, T_WhileExpression #-}
+{-# COMPLETE T_AND_IF, T_Bang, T_Case, TC_Empty, T_CLOBBER, T_DGREAT, T_DLESS, T_DLESSDASH, T_Do, T_DollarSingleQuoted, T_Done, T_DSEMI, T_Elif, T_Else, T_EOF, T_Esac, T_Fi, T_For, T_Glob, T_GREATAND, T_Greater, T_If, T_In, T_Lbrace, T_Less, T_LESSAND, T_LESSGREAT, T_Literal, T_Lparen, T_NEWLINE, T_OR_IF, T_ParamSubSpecialChar, T_Pipe, T_Rbrace, T_Rparen, T_Select, T_Semi, T_SingleQuoted, T_Then, T_UnparsedIndex, T_Until, T_While, TA_Assignment, TA_Binary, TA_Expansion, T_AndIf, T_Annotation, T_Arithmetic, T_Array, TA_Sequence, TA_Parentesis, T_Assignment, TA_Trinary, TA_Unary, TA_Variable, T_Backgrounded, T_Backticked, T_Banged, T_BatsTest, T_BraceExpansion, T_BraceGroup, TC_And, T_CaseExpression, TC_Binary, TC_Group, TC_Nullary, T_Condition, T_CoProcBody, T_CoProc, TC_Or, TC_Unary, T_DollarArithmetic, T_DollarBraceCommandExpansion, T_DollarBraced, T_DollarBracket, T_DollarDoubleQuoted, T_DollarExpansion, T_DoubleQuoted, T_Extglob, T_FdRedirect, T_ForArithmetic, T_ForIn, T_Function, T_HereDoc, T_HereString, T_IfExpression, T_Include, T_IndexedElement, T_IoDuplicate, T_IoFile, T_NormalWord, T_OrIf, T_Pipeline, T_ProcSub, T_Redirecting, T_Script, T_SelectIn, T_SimpleCommand, T_SourceCommand, T_Subshell, T_UntilExpression, T_WhileExpression #-}
 
 instance Eq Token where
     OuterToken _ a == OuterToken _ b = a == b
