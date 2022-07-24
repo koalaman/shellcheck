@@ -206,6 +206,7 @@ nodeChecks = [
     ,checkCommandIsUnreachable
     ,checkSpacefulnessCfg
     ,checkOverwrittenExitCode
+    ,checkUnnecessaryArithmeticExpansionIndex
     ]
 
 optionalChecks = map fst optionalTreeChecks
@@ -4911,6 +4912,23 @@ checkOverwrittenExitCode params t =
             Just "echo" -> True
             Just "printf" -> True
             _ -> False
+
+
+prop_checkUnnecessaryArithmeticExpansionIndex1 = verify checkUnnecessaryArithmeticExpansionIndex "a[$((1+1))]=n"
+prop_checkUnnecessaryArithmeticExpansionIndex2 = verifyNot checkUnnecessaryArithmeticExpansionIndex "a[1+1]=n"
+prop_checkUnnecessaryArithmeticExpansionIndex3 = verifyNot checkUnnecessaryArithmeticExpansionIndex "a[$(echo $((1+1)))]=n"
+checkUnnecessaryArithmeticExpansionIndex params t =
+    case t of
+        T_Assignment _ mode var [TA_Sequence _ [ TA_Expansion _ [expansion@(T_DollarArithmetic id _)]]] val ->
+            styleWithFix id 2321 "Array indices are already arithmetic contexts. Prefer removing the $(( and ))." $ fix id
+        _ -> return ()
+
+  where
+    fix id =
+        fixWith [
+            replaceStart id params 3 "", -- Remove "$(("
+            replaceEnd id params 2 ""    -- Remove "))"
+        ]
 
 
 return []
