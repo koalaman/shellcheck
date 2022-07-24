@@ -4919,6 +4919,7 @@ checkOverwrittenExitCode params t =
 prop_checkUnnecessaryArithmeticExpansionIndex1 = verify checkUnnecessaryArithmeticExpansionIndex "a[$((1+1))]=n"
 prop_checkUnnecessaryArithmeticExpansionIndex2 = verifyNot checkUnnecessaryArithmeticExpansionIndex "a[1+1]=n"
 prop_checkUnnecessaryArithmeticExpansionIndex3 = verifyNot checkUnnecessaryArithmeticExpansionIndex "a[$(echo $((1+1)))]=n"
+prop_checkUnnecessaryArithmeticExpansionIndex4 = verifyNot checkUnnecessaryArithmeticExpansionIndex "declare -A a; a[$((1+1))]=val"
 checkUnnecessaryArithmeticExpansionIndex params t =
     case t of
         T_Assignment _ mode var [TA_Sequence _ [ TA_Expansion _ [expansion@(T_DollarArithmetic id _)]]] val ->
