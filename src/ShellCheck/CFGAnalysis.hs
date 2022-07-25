@@ -56,6 +56,7 @@ module ShellCheck.CFGAnalysis (
     ,SpaceStatus (..)
     ,getIncomingState
     ,getOutgoingState
+    ,doesPostDominate
     ,ShellCheck.CFGAnalysis.runTests -- STRIP
     ) where
 
@@ -139,6 +140,15 @@ getOutgoingState :: CFGAnalysis -> Id -> Maybe ProgramState
 getOutgoingState analysis id = do
     (start,end) <- M.lookup id $ tokenToRange analysis
     snd <$> M.lookup end (nodeToData analysis)
+
+-- Conveniently determine whether one node postdominates another,
+-- i.e. whether 'target' always unconditionally runs after 'base'.
+doesPostDominate :: CFGAnalysis -> Id -> Id -> Bool
+doesPostDominate analysis target base = fromMaybe False $ do
+    (_, baseEnd) <- M.lookup base $ tokenToRange analysis
+    (targetStart, _) <- M.lookup target $ tokenToRange analysis
+    postDoms <- M.lookup baseEnd $ postDominators analysis
+    return $ S.member targetStart postDoms
 
 getDataForNode analysis node = M.lookup node $ nodeToData analysis
 

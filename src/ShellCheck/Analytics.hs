@@ -4884,7 +4884,11 @@ checkCommandIsUnreachable params t =
 prop_checkOverwrittenExitCode1 = verify checkOverwrittenExitCode "x; [ $? -eq 1 ] || [ $? -eq 2 ]"
 prop_checkOverwrittenExitCode2 = verifyNot checkOverwrittenExitCode "x; [ $? -eq 1 ]"
 prop_checkOverwrittenExitCode3 = verify checkOverwrittenExitCode "x; echo \"Exit is $?\"; [ $? -eq 0 ]"
-prop_checkOverwrittenExitCode4 = verifyNot checkOverwrittenExitCode "x; [ $? -eq 0 ]"
+prop_checkOverwrittenExitCode4 = verifyNot checkOverwrittenExitCode "x; [ $? -eq 0 ] && echo Success"
+prop_checkOverwrittenExitCode5 = verify checkOverwrittenExitCode "x; if [ $? -eq 0 ]; then var=$?; fi"
+prop_checkOverwrittenExitCode6 = verify checkOverwrittenExitCode "x; [ $? -gt 0 ] && fail=$?"
+prop_checkOverwrittenExitCode7 = verifyNot checkOverwrittenExitCode "[ 1 -eq 2 ]; status=$?"
+prop_checkOverwrittenExitCode8 = verifyNot checkOverwrittenExitCode "[ 1 -eq 2 ]; exit $?"
 checkOverwrittenExitCode params t =
     case t of
         T_DollarBraced id _ val | getLiteralString val == Just "?" -> check id
@@ -4898,7 +4902,7 @@ checkOverwrittenExitCode params t =
         let idToToken = idMap params
         exitCodeTokens <- sequence $ map (\k -> Map.lookup k idToToken) $ S.toList exitCodeIds
         return $ do
-            when (all isCondition exitCodeTokens) $
+            when (all isCondition exitCodeTokens && not (usedUnconditionally t exitCodeIds)) $
                 warn id 2319 "This $? refers to a condition, not a command. Assign to a variable to avoid it being overwritten."
             when (all isPrinting exitCodeTokens) $
                 warn id 2320 "This $? refers to echo/printf, not a previous command. Assign to variable to avoid it being overwritten."
@@ -4908,6 +4912,11 @@ checkOverwrittenExitCode params t =
             T_Condition {} -> True
             T_SimpleCommand {} -> getCommandName t == Just "test"
             _ -> False
+
+    -- If we don't do anything based on the condition, assume we wanted the condition itself
+    -- This helps differentiate `x; [ $? -gt 0 ] && exit $?` vs `[ cond ]; exit $?`
+    usedUnconditionally t testIds =
+        all (\c -> CF.doesPostDominate (cfgAnalysis params) (getId t) c) testIds
 
     isPrinting t =
         case getCommandBasename t of
