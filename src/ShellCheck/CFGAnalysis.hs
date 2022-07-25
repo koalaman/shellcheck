@@ -99,6 +99,7 @@ data CFGAnalysis = CFGAnalysis {
     graph :: CFGraph,
     tokenToRange :: M.Map Id (Node, Node),
     tokenToNodes :: M.Map Id (S.Set Node),
+    postDominators :: M.Map Node (S.Set Node),
     nodeToData :: M.Map Node (ProgramState, ProgramState)
 } deriving (Show, Generic, NFData)
 
@@ -1304,7 +1305,8 @@ analyzeControlFlow params t =
             graph = cfGraph cfg,
             tokenToRange = cfIdToRange cfg,
             tokenToNodes = cfIdToNodes cfg,
-            nodeToData = nodeToData
+            nodeToData = nodeToData,
+            postDominators = cfPostDominators cfg
         }
 
 
@@ -1353,6 +1355,7 @@ analyzeStragglers ctx state stragglers = do
         writeSTRef (cOutput ctx) state
         writeSTRef (cNode ctx) entry
         transferFunctionValue ctx def
+
 
 
 return []

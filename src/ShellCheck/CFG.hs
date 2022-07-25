@@ -54,6 +54,8 @@ import qualified Data.Set as S
 import Control.Monad.RWS.Lazy
 import Data.Graph.Inductive.Graph
 import Data.Graph.Inductive.Query.DFS
+import Data.Graph.Inductive.Basic
+import Data.Graph.Inductive.Query.Dominators
 import Data.Graph.Inductive.PatriciaTree as G
 import Debug.Trace -- STRIP
 
@@ -171,9 +173,11 @@ data CFGResult = CFGResult {
     -- Map from Id to nominal start&end node (i.e. assuming normal execution without exits)
     cfIdToRange :: M.Map Id (Node, Node),
     -- A set of all nodes belonging to an Id, recursively
-    cfIdToNodes :: M.Map Id (S.Set Node)
+    cfIdToNodes :: M.Map Id (S.Set Node),
+    -- A map to nodes that the given node postdominates
+    cfPostDominators :: M.Map Node (S.Set Node)
 }
-  deriving (Show)
+  deriving (Show, Generic, NFData)
 
 buildGraph :: CFGParameters -> Token -> CFGResult
 buildGraph params root =
@@ -183,12 +187,20 @@ buildGraph params root =
 --            renumberTopologically $
                 removeUnnecessaryStructuralNodes
                     base
-    in
-        CFGResult {
+
+        idToRange = M.fromList mapping
+        isRealEdge (from, to, edge) = case edge of CFEFlow -> True; _ -> False
+        onlyRealEdges = filter isRealEdge edges
+        (_, mainExit) = fromJust $ M.lookup (getId root) idToRange
+
+        result = CFGResult {
             cfGraph = mkGraph nodes edges,
-            cfIdToRange = M.fromList mapping,
-            cfIdToNodes = M.fromListWith S.union $ map (\(id, n) -> (id, S.singleton n)) association
+            cfIdToRange = idToRange,
+            cfIdToNodes = M.fromListWith S.union $ map (\(id, n) -> (id, S.singleton n)) association,
+            cfPostDominators = findPostDominators mainExit $ mkGraph nodes onlyRealEdges
         }
+    in
+        deepseq result result
 
 remapGraph :: M.Map Node Node -> CFW -> CFW
 remapGraph remap (nodes, edges, mapping, assoc) =
@@ -1189,6 +1201,68 @@ tokenToParts t =
         T_DollarBraced _ _ list | isUnmodifiedParameterExpansion t -> [ CFStringVariable (getBracedReference $ concat $ oversimplify list) ]
         -- Check if getLiteralString can handle it, if not it's unknown
         _ -> [maybe CFStringUnknown CFStringLiteral $ getLiteralString t]
+
+
+-- Change all subshell invocations to instead link directly to their contents.
+-- This is used for producing dominator trees.
+inlineSubshells :: CFGraph -> CFGraph
+inlineSubshells graph = relinkedGraph
+  where
+    subshells = ufold find [] graph
+    find (incoming, node, label, outgoing) acc =
+        case label of
+            CFExecuteSubshell _ start end -> (node, label, start, end, incoming, outgoing):acc
+            _ -> acc
+
+    relinkedGraph = foldl' relink graph subshells
+    relink graph (node, label, start, end, incoming, outgoing) =
+        let
+            -- Link CFExecuteSubshell to the CFEntryPoint
+            subshellToStart = (incoming, node, label, [(CFEFlow, start)])
+            -- Link the subshell exit to the
+            endToNexts = (endIncoming, endNode, endLabel, outgoing)
+            (endIncoming, endNode, endLabel, _) = context graph end
+        in
+            subshellToStart & (endToNexts & graph)
+
+findEntryNodes :: CFGraph -> [Node]
+findEntryNodes graph = ufold find [] graph
+  where
+    find (incoming, node, label, _) list =
+        case label of
+            CFEntryPoint {} | null incoming -> node:list
+            _ -> list
+
+findDominators main graph = asSetMap
+  where
+    inlined = inlineSubshells graph
+    entryNodes = main : findEntryNodes graph
+    asLists = concatMap (dom inlined) entryNodes
+    asSetMap = M.fromList $ map (\(node, list) -> (node, S.fromList list)) asLists
+
+findTerminalNodes :: CFGraph -> [Node]
+findTerminalNodes graph = ufold find [] graph
+  where
+    find (_, node, label, _) list =
+        case label of
+            CFUnresolvedExit -> node:list
+            CFApplyEffects effects -> f effects list
+            _ -> list
+
+    f [] list = list
+    f (IdTagged _ (CFDefineFunction _ id start end):rest) list = f rest (end:list)
+    f (_:rest) list = f rest list
+
+findPostDominators :: Node -> CFGraph -> M.Map Node (S.Set Node)
+findPostDominators mainexit graph = asSetMap
+  where
+    inlined = inlineSubshells graph
+    terminals = findTerminalNodes inlined
+    (incoming, _, label, outgoing) = context graph mainexit
+    withExitEdges = (incoming ++ map (\c -> (CFEFlow, c)) terminals, mainexit, label, outgoing) & inlined
+    reversed = grev withExitEdges
+    postDoms = dom reversed mainexit
+    asSetMap = M.fromList $ map (\(node, list) -> (node, S.fromList list)) postDoms
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
