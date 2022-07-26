@@ -21,6 +21,7 @@
 
 ## v0.8.0 - 2021-11-06
 ### Added
+- `color=` directive can be added to .shellceckrc
 - `disable=all` now conveniently disables all warnings
 - `external-sources=true` directive can be added to .shellcheckrc to make
   shellcheck behave as if `-x` was specified.

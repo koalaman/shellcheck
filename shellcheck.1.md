@@ -41,7 +41,10 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 
 :   For TTY output, enable colors *always*, *never* or *auto*. The default
     is *auto*. **--color** without an argument is equivalent to
-    **--color=always**.
+    **--color=auto**.
+
+    This option may also be enabled using `color=` in
+    `.shellcheckrc`. This flag takes precedence.
 
 **-i**\ *CODE1*[,*CODE2*...],\ **--include=***CODE1*[,*CODE2*...]
 
@@ -232,6 +235,10 @@ Here a shell brace group is used to suppress a warning on multiple lines:
 
 Valid keys are:
 
+**color**
+:   Set to `auto`, `never` or `always` in `.shellcheckrc` to automatically
+    detect, never or always use color output with the `tty` output format.
+
 **disable**
 :   Disables a comma separated list of error codes for the following command.
     The command can be a simple command like `echo foo`, or a compound command
@@ -276,6 +283,9 @@ Unless `--norc` is used, ShellCheck will look for a file `.shellcheckrc` or
 it will read `key=value` pairs from it and treat them as file-wide directives.
 
 Here is an example `.shellcheckrc`:
+
+    # Always force color output on the tty output
+    color=always
 
     # Look for 'source'd files relative to the checked script,
     # and also look for absolute paths in /mnt/chroot
