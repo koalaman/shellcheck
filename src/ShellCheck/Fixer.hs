@@ -36,7 +36,7 @@ class Ranged a where
     end     :: a -> Position
     overlap :: a -> a -> Bool
     overlap x y =
-        (yStart >= xStart && yStart < xEnd) || (yStart < xStart && yEnd > xStart)
+        xEnd > yStart && yEnd > xStart
         where
             yStart = start y
             yEnd = end y
