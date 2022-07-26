@@ -203,10 +203,9 @@ formatDoc color (DiffDoc name lf regions) =
 buildFixMap :: [Fix] -> M.Map String Fix
 buildFixMap fixes = perFile
   where
-    splitFixes = concatMap splitFixByFile fixes
+    splitFixes = splitFixByFile $ mconcat fixes
     perFile = groupByMap (posFile . repStartPos . head . fixReplacements) splitFixes
 
--- There are currently no multi-file fixes, but let's handle it anyways
 splitFixByFile :: Fix -> [Fix]
 splitFixByFile fix = map makeFix $ groupBy sameFile (fixReplacements fix)
   where
