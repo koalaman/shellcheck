@@ -87,6 +87,7 @@ instance Ranged Replacement where
 instance Monoid Fix where
     mempty = newFix
     mappend = (<>)
+    mconcat = foldl mappend mempty -- fold left to right since <> discards right on overlap
 
 instance Semigroup Fix where
     f1 <> f2 =
