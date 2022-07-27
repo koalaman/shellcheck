@@ -23,6 +23,7 @@ import ShellCheck.Fixer
 import ShellCheck.Interface
 import ShellCheck.Formatter.Format
 
+import Control.DeepSeq
 import Control.Monad
 import Data.Array
 import Data.Foldable
@@ -88,7 +89,7 @@ rankError err = (ranking, cSeverity $ pcComment err, cCode $ pcComment err)
 appendComments errRef comments max = do
     previous <- readIORef errRef
     let current = map (\x -> (rankError x, cCode $ pcComment x, cMessage $ pcComment x)) comments
-    writeIORef errRef . take max . nubBy equal . sort $ previous ++ current
+    writeIORef errRef $! force . take max . nubBy equal . sort $ previous ++ current
   where
     fst3 (x,_,_) = x
     equal x y = fst3 x == fst3 y

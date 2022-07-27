@@ -23,6 +23,7 @@ module ShellCheck.Formatter.JSON (format) where
 import ShellCheck.Interface
 import ShellCheck.Formatter.Format
 
+import Control.DeepSeq
 import Data.Aeson
 import Data.IORef
 import Data.Monoid
@@ -103,7 +104,7 @@ collectResult ref cr sys = mapM_ f groups
     comments = crComments cr
     groups = groupWith sourceFile comments
     f :: [PositionedComment] -> IO ()
-    f group = modifyIORef ref (\x -> comments ++ x)
+    f group = deepseq comments $ modifyIORef ref (\x -> comments ++ x)
 
 finish ref = do
     list <- readIORef ref
