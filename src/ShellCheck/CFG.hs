@@ -1203,6 +1203,9 @@ tokenToParts t =
         _ -> [maybe CFStringUnknown CFStringLiteral $ getLiteralString t]
 
 
+-- Like & but well defined when the node already exists
+safeUpdate ctx@(_,node,_,_) graph = ctx & (delNode node graph)
+
 -- Change all subshell invocations to instead link directly to their contents.
 -- This is used for producing dominator trees.
 inlineSubshells :: CFGraph -> CFGraph
@@ -1223,7 +1226,7 @@ inlineSubshells graph = relinkedGraph
             endToNexts = (endIncoming, endNode, endLabel, outgoing)
             (endIncoming, endNode, endLabel, _) = context graph end
         in
-            subshellToStart & (endToNexts & graph)
+            subshellToStart `safeUpdate` (endToNexts `safeUpdate` graph)
 
 findEntryNodes :: CFGraph -> [Node]
 findEntryNodes graph = ufold find [] graph
@@ -1259,7 +1262,7 @@ findPostDominators mainexit graph = asSetMap
     inlined = inlineSubshells graph
     terminals = findTerminalNodes inlined
     (incoming, _, label, outgoing) = context graph mainexit
-    withExitEdges = (incoming ++ map (\c -> (CFEFlow, c)) terminals, mainexit, label, outgoing) & inlined
+    withExitEdges = (incoming ++ map (\c -> (CFEFlow, c)) terminals, mainexit, label, outgoing) `safeUpdate` inlined
     reversed = grev withExitEdges
     postDoms = dom reversed mainexit
     asSetMap = M.fromList $ map (\(node, list) -> (node, S.fromList list)) postDoms
