@@ -992,6 +992,10 @@ prop_readAnnotation5 = isOk readAnnotation "# shellcheck disable=SC2002 # All ca
 prop_readAnnotation6 = isOk readAnnotation "# shellcheck disable=SC1234 # shellcheck foo=bar\n"
 prop_readAnnotation7 = isOk readAnnotation "# shellcheck disable=SC1000,SC2000-SC3000,SC1001\n"
 prop_readAnnotation8 = isOk readAnnotation "# shellcheck disable=all\n"
+prop_readAnnotation9 = isOk readAnnotation "# shellcheck source='foo bar' source-path=\"baz etc\"\n"
+prop_readAnnotation10 = isOk readAnnotation "# shellcheck disable='SC1234,SC2345' enable=\"foo\" shell='bash'\n"
+prop_readAnnotation11 = isOk (readAnnotationWithoutPrefix False) "external-sources='true'"
+
 readAnnotation = called "shellcheck directive" $ do
     try readAnnotationPrefix
     many1 linewhitespace
@@ -1007,12 +1011,19 @@ readAnnotationWithoutPrefix sandboxed = do
     many linewhitespace
     return $ concat values
   where
+    plainOrQuoted p = quoted p <|> p
+    quoted p = do
+        c <- oneOf "'\""
+        start <- getPosition
+        str <- many1 $ noneOf (c:"\n")
+        char c <|> fail "Missing terminating quote for directive."
+        subParse start p str
     readKey = do
         keyPos <- getPosition
         key <- many1 (letter <|> char '-')
         char '=' <|> fail "Expected '=' after directive key"
         annotations <- case key of
-            "disable" -> readElement `sepBy` char ','
+            "disable" -> plainOrQuoted $ readElement `sepBy` char ','
               where
                 readElement = readRange <|> readAll
                 readAll = do
@@ -1027,21 +1038,21 @@ readAnnotationWithoutPrefix sandboxed = do
                     int <- many1 digit
                     return $ read int
 
-            "enable" -> readName `sepBy` char ','
+            "enable" -> plainOrQuoted $ readName `sepBy` char ','
               where
                 readName = EnableComment <$> many1 (letter <|> char '-')
 
             "source" -> do
-                filename <- many1 $ noneOf " \n"
+                filename <- quoted (many1 anyChar) <|> (many1 $ noneOf " \n")
                 return [SourceOverride filename]
 
             "source-path" -> do
-                dirname <- many1 $ noneOf " \n"
+                dirname <- quoted (many1 anyChar) <|> (many1 $ noneOf " \n")
                 return [SourcePath dirname]
 
             "shell" -> do
                 pos <- getPosition
-                shell <- many1 $ noneOf " \n"
+                shell <- quoted (many1 anyChar) <|> (many1 $ noneOf " \n")
                 when (isNothing $ shellForExecutable shell) $
                     parseNoteAt pos ErrorC 1103
                         "This shell type is unknown. Use e.g. sh or bash."
@@ -1049,7 +1060,7 @@ readAnnotationWithoutPrefix sandboxed = do
 
             "external-sources" -> do
                 pos <- getPosition
-                value <- many1 letter
+                value <- plainOrQuoted $ many1 letter
                 case value of
                     "true" ->
                         if sandboxed

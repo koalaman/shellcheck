@@ -244,6 +244,9 @@ prop_canStripPrefixAndSource2 =
 prop_canSourceDynamicWhenRedirected =
     null $ checkWithIncludes [("lib", "")] "#shellcheck source=lib\n. \"$1\""
 
+prop_canRedirectWithSpaces =
+    null $ checkWithIncludes [("my file", "")] "#shellcheck source=\"my file\"\n. \"$1\""
+
 prop_recursiveAnalysis =
     [2086] == checkRecursive [("lib", "echo $1")] "source lib"
 
@@ -409,6 +412,15 @@ prop_sourcePathAddsAnnotation = result == [2086]
     f "dir/myscript" _ ["mypath"] "lib" = return "foo/lib"
     result = checkWithIncludesAndSourcePath [("foo/lib", "echo $1")] f emptyCheckSpec {
         csScript = "#!/bin/bash\n# shellcheck source-path=mypath\nsource lib",
+        csFilename = "dir/myscript",
+        csCheckSourced = True
+    }
+
+prop_sourcePathWorksWithSpaces = result == [2086]
+  where
+    f "dir/myscript" _ ["my path"] "lib" = return "foo/lib"
+    result = checkWithIncludesAndSourcePath [("foo/lib", "echo $1")] f emptyCheckSpec {
+        csScript = "#!/bin/bash\n# shellcheck source-path='my path'\nsource lib",
         csFilename = "dir/myscript",
         csCheckSourced = True
     }

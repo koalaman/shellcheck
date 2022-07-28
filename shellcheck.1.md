@@ -282,6 +282,9 @@ Here is an example `.shellcheckrc`:
     source-path=SCRIPTDIR
     source-path=/mnt/chroot
 
+    # Since 0.9.0, values can be quoted with '' or "" to allow spaces
+    source-path="My Documents/scripts"
+
     # Allow opening any 'source'd file, even if not specified as input
     external-sources=true
 

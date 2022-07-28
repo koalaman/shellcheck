@@ -17,6 +17,7 @@
   based on control flow rather than just syntax. Existing checks will
   gradually start using it, which may cause them to trigger differently
   (but more accurately).
+- Values in directives/shellcheckrc can now be quoted with '' or ""
 
 
 ## v0.8.0 - 2021-11-06
