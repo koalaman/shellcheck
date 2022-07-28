@@ -898,6 +898,10 @@ isClosingFileOp op =
         T_IoDuplicate _ (T_LESSAND  _) "-" -> True
         _                                  -> False
 
+getEnableDirectives root =
+    case root of
+        T_Annotation _ list _ -> [s | EnableComment s <- list]
+        _ -> []
 
 return []
 runTests = $quickCheckAll

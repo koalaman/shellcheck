@@ -20,9 +20,10 @@
 {-# LANGUAGE TemplateHaskell #-}
 module ShellCheck.Checker (checkScript, ShellCheck.Checker.runTests) where
 
+import ShellCheck.Analyzer
+import ShellCheck.ASTLib
 import ShellCheck.Interface
 import ShellCheck.Parser
-import ShellCheck.Analyzer
 
 import Data.Either
 import Data.Functor
@@ -85,7 +86,7 @@ checkScript sys spec = do
                     asCheckSourced = csCheckSourced spec,
                     asExecutionMode = Executed,
                     asTokenPositions = tokenPositions,
-                    asOptionalChecks = csOptionalChecks spec
+                    asOptionalChecks = getEnableDirectives root ++ csOptionalChecks spec
                 } where as = newAnalysisSpec root
         let analysisMessages =
                 maybe []

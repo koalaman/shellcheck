@@ -35,13 +35,13 @@ analyzeScript :: AnalysisSpec -> AnalysisResult
 analyzeScript spec = newAnalysisResult {
     arComments =
         filterByAnnotation spec params . nub $
-            runAnalytics spec
-            ++ runChecker params (checkers spec params)
+            runChecker params (checkers spec params)
 }
   where
     params = makeParameters spec
 
 checkers spec params = mconcat $ map ($ params) [
+    ShellCheck.Analytics.checker spec,
     ShellCheck.Checks.Commands.checker spec,
     ShellCheck.Checks.ControlFlow.checker spec,
     ShellCheck.Checks.Custom.checker,

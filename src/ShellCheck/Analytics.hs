@@ -19,7 +19,7 @@
 -}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleContexts #-}
-module ShellCheck.Analytics (runAnalytics, optionalChecks, ShellCheck.Analytics.runTests) where
+module ShellCheck.Analytics (checker, optionalChecks, ShellCheck.Analytics.runTests) where
 
 import ShellCheck.AST
 import ShellCheck.ASTLib
@@ -71,29 +71,22 @@ treeChecks = [
     ,checkArrayValueUsedAsIndex
     ]
 
-runAnalytics :: AnalysisSpec -> [TokenComment]
-runAnalytics options =
-    runList options treeChecks ++ runList options optionalChecks
+checker spec params = mkChecker spec params treeChecks
+
+mkChecker spec params checks =
+    Checker {
+        perScript = \(Root root) -> do
+            tell $ concatMap (\f -> f params root) all,
+        perToken = const $ return ()
+    }
   where
-    root = asScript options
-    optionals = getEnableDirectives root ++ asOptionalChecks options
-    optionalChecks =
-        if "all" `elem` optionals
+    all = checks ++ optionals
+    optionalKeys = asOptionalChecks spec
+    optionals =
+        if "all" `elem` optionalKeys
         then map snd optionalTreeChecks
-        else mapMaybe (\c -> Map.lookup c optionalCheckMap) optionals
+        else mapMaybe (\c -> Map.lookup c optionalCheckMap) optionalKeys
 
-runList :: AnalysisSpec -> [Parameters -> Token -> [TokenComment]]
-    -> [TokenComment]
-runList spec list = notes
-    where
-        root = asScript spec
-        params = makeParameters spec
-        notes = concatMap (\f -> f params root) list
-
-getEnableDirectives root =
-    case root of
-        T_Annotation _ list _ -> [s | EnableComment s <- list]
-        _ -> []
 
 checkList l t = concatMap (\f -> f t) l
 
@@ -318,12 +311,12 @@ producesComments f s = not . null <$> runAndGetComments f s
 
 runAndGetComments f s = do
         let pr = pScript s
-        prRoot pr
+        root <- prRoot pr
         let spec = defaultSpec pr
         let params = makeParameters spec
         return $
             filterByAnnotation spec params $
-                runList spec [f]
+                f params root
 
 -- Copied from https://wiki.haskell.org/Edit_distance
 dist :: Eq a => [a] -> [a] -> Int
