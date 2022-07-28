@@ -496,6 +496,17 @@ prop_fileCannotEnableExternalSources2 = result == [1144]
         csCheckSourced = True
     }
 
+prop_rcCanSuppressEarlyProblems1 = null result
+  where
+    result = checkWithRc "disable=1071" emptyCheckSpec {
+        csScript = "#!/bin/zsh\necho $1"
+    }
+
+prop_rcCanSuppressEarlyProblems2 = null result
+  where
+    result = checkWithRc "disable=1104" emptyCheckSpec {
+        csScript = "!/bin/bash\necho 'hello world'"
+    }
 
 return []
 runTests = $quickCheckAll
