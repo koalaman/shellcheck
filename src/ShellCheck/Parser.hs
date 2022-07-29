@@ -46,7 +46,7 @@ import Text.Parsec.Error
 import Text.Parsec.Pos
 import qualified Control.Monad.Reader as Mr
 import qualified Control.Monad.State as Ms
-import qualified Data.Map as Map
+import qualified Data.Map.Strict as Map
 
 import Test.QuickCheck.All (quickCheckAll)
 
