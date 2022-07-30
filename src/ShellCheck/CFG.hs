@@ -47,6 +47,8 @@ import ShellCheck.Regex
 import Control.DeepSeq
 import Control.Monad
 import Control.Monad.Identity
+import Data.Array.Unboxed
+import Data.Array.ST
 import Data.List hiding (map)
 import Data.Maybe
 import qualified Data.Map as M
@@ -174,10 +176,10 @@ data CFGResult = CFGResult {
     cfIdToRange :: M.Map Id (Node, Node),
     -- A set of all nodes belonging to an Id, recursively
     cfIdToNodes :: M.Map Id (S.Set Node),
-    -- A map to nodes that the given node postdominates
-    cfPostDominators :: M.Map Node (S.Set Node)
+    -- An array (from,to) saying whether 'from' postdominates 'to'
+    cfPostDominators :: Array Node [Node]
 }
-  deriving (Show, Generic, NFData)
+  deriving (Show)
 
 buildGraph :: CFGParameters -> Token -> CFGResult
 buildGraph params root =
@@ -200,7 +202,7 @@ buildGraph params root =
             cfPostDominators = findPostDominators mainExit $ mkGraph nodes onlyRealEdges
         }
     in
-        deepseq result result
+        result
 
 remapGraph :: M.Map Node Node -> CFW -> CFW
 remapGraph remap (nodes, edges, mapping, assoc) =
@@ -1256,8 +1258,8 @@ findTerminalNodes graph = ufold find [] graph
     f (IdTagged _ (CFDefineFunction _ id start end):rest) list = f rest (end:list)
     f (_:rest) list = f rest list
 
-findPostDominators :: Node -> CFGraph -> M.Map Node (S.Set Node)
-findPostDominators mainexit graph = asSetMap
+findPostDominators :: Node -> CFGraph -> Array Node [Node]
+findPostDominators mainexit graph = asArray
   where
     inlined = inlineSubshells graph
     terminals = findTerminalNodes inlined
@@ -1265,7 +1267,8 @@ findPostDominators mainexit graph = asSetMap
     withExitEdges = (incoming ++ map (\c -> (CFEFlow, c)) terminals, mainexit, label, outgoing) `safeUpdate` inlined
     reversed = grev withExitEdges
     postDoms = dom reversed mainexit
-    asSetMap = M.fromList $ map (\(node, list) -> (node, S.fromList list)) postDoms
+    (_, maxNode) = nodeRange graph
+    asArray = array (0, maxNode) postDoms
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

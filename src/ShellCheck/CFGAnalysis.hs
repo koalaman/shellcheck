@@ -69,6 +69,7 @@ import Control.Monad
 import Control.Monad.ST
 import Control.DeepSeq
 import Data.List hiding (map)
+import Data.Array.Unboxed
 import Data.STRef
 import Data.Maybe
 import qualified Data.Map as M
@@ -100,9 +101,9 @@ data CFGAnalysis = CFGAnalysis {
     graph :: CFGraph,
     tokenToRange :: M.Map Id (Node, Node),
     tokenToNodes :: M.Map Id (S.Set Node),
-    postDominators :: M.Map Node (S.Set Node),
+    postDominators :: Array Node [Node],
     nodeToData :: M.Map Node (ProgramState, ProgramState)
-} deriving (Show, Generic, NFData)
+} deriving (Show)
 
 -- The program state we expose externally
 data ProgramState = ProgramState {
@@ -147,8 +148,7 @@ doesPostDominate :: CFGAnalysis -> Id -> Id -> Bool
 doesPostDominate analysis target base = fromMaybe False $ do
     (_, baseEnd) <- M.lookup base $ tokenToRange analysis
     (targetStart, _) <- M.lookup target $ tokenToRange analysis
-    postDoms <- M.lookup baseEnd $ postDominators analysis
-    return $ S.member targetStart postDoms
+    return $ targetStart `elem` (postDominators analysis ! baseEnd)
 
 getDataForNode analysis node = M.lookup node $ nodeToData analysis
 
