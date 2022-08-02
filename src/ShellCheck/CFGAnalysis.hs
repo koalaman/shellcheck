@@ -54,29 +54,31 @@ module ShellCheck.CFGAnalysis (
     ,VariableValue (..)
     ,VariableProperties
     ,SpaceStatus (..)
+    ,NumericalStatus (..)
     ,getIncomingState
     ,getOutgoingState
     ,doesPostDominate
     ,ShellCheck.CFGAnalysis.runTests -- STRIP
     ) where
 
-import GHC.Generics (Generic)
-import ShellCheck.AST
-import ShellCheck.CFG
-import qualified ShellCheck.Data as Data
-import ShellCheck.Prelude
+import Control.DeepSeq
 import Control.Monad
 import Control.Monad.ST
-import Control.DeepSeq
-import Data.List hiding (map)
 import Data.Array.Unboxed
-import Data.STRef
-import Data.Maybe
-import qualified Data.Map as M
-import qualified Data.Set as S
+import Data.Char
 import Data.Graph.Inductive.Graph
 import Data.Graph.Inductive.Query.DFS
+import Data.List hiding (map)
+import Data.Maybe
+import Data.STRef
 import Debug.Trace -- STRIP
+import GHC.Generics (Generic)
+import qualified Data.Map as M
+import qualified Data.Set as S
+import qualified ShellCheck.Data as Data
+import ShellCheck.AST
+import ShellCheck.CFG
+import ShellCheck.Prelude
 
 import Test.QuickCheck
 
@@ -183,15 +185,19 @@ createEnvironmentState = do
     foldl' (flip ($)) newInternalState $ concat [
         addVars Data.internalVariables unknownVariableState,
         addVars Data.variablesWithoutSpaces spacelessVariableState,
-        addVars Data.specialIntegerVariables spacelessVariableState
+        addVars Data.specialIntegerVariables integerVariableState
         ]
   where
     addVars names val = map (\name -> insertGlobal name val) names
     spacelessVariableState = unknownVariableState {
         variableValue = VariableValue {
             literalValue = Nothing,
-            spaceStatus = SpaceStatusClean
+            spaceStatus = SpaceStatusClean,
+            numericalStatus = NumericalStatusUnknown
         }
+    }
+    integerVariableState = unknownVariableState {
+        variableValue = unknownIntegerValue
     }
 
 
@@ -289,7 +295,8 @@ unknownFunctionValue = S.singleton FunctionUnknown
 -- The information about the value of a single variable
 data VariableValue = VariableValue {
     literalValue :: Maybe String, -- TODO: For debugging. Remove me.
-    spaceStatus :: SpaceStatus
+    spaceStatus :: SpaceStatus,
+    numericalStatus :: NumericalStatus
 }
     deriving (Show, Eq, Ord, Generic, NFData)
 
@@ -301,6 +308,9 @@ data VariableState = VariableState {
 
 -- Whether or not the value needs quoting (has spaces/globs), or we don't know
 data SpaceStatus = SpaceStatusEmpty | SpaceStatusClean | SpaceStatusDirty deriving (Show, Eq, Ord, Generic, NFData)
+--
+-- Whether or not the value needs quoting (has spaces/globs), or we don't know
+data NumericalStatus = NumericalStatusUnknown | NumericalStatusEmpty | NumericalStatusMaybe | NumericalStatusDefinitely deriving (Show, Eq, Ord, Generic, NFData)
 
 -- The set of possible sets of properties for this variable
 type VariableProperties = S.Set (S.Set CFVariableProp)
@@ -314,12 +324,14 @@ unknownVariableState = VariableState {
 
 unknownVariableValue = VariableValue {
     literalValue = Nothing,
-    spaceStatus = SpaceStatusDirty
+    spaceStatus = SpaceStatusDirty,
+    numericalStatus = NumericalStatusUnknown
 }
 
 emptyVariableValue = unknownVariableValue {
     literalValue = Just "",
-    spaceStatus = SpaceStatusEmpty
+    spaceStatus = SpaceStatusEmpty,
+    numericalStatus = NumericalStatusEmpty
 }
 
 unsetVariableState = VariableState {
@@ -334,7 +346,8 @@ mergeVariableState a b = VariableState {
 
 mergeVariableValue a b = VariableValue {
     literalValue = if literalValue a == literalValue b then literalValue a else Nothing,
-    spaceStatus = mergeSpaceStatus (spaceStatus a) (spaceStatus b)
+    spaceStatus = mergeSpaceStatus (spaceStatus a) (spaceStatus b),
+    numericalStatus = mergeNumericalStatus (numericalStatus a) (numericalStatus b)
 }
 
 mergeSpaceStatus a b =
@@ -343,6 +356,16 @@ mergeSpaceStatus a b =
         (x, SpaceStatusEmpty) -> x
         (SpaceStatusClean, SpaceStatusClean) -> SpaceStatusClean
         _ -> SpaceStatusDirty
+
+mergeNumericalStatus a b =
+    case (a,b) of
+        (NumericalStatusDefinitely, NumericalStatusDefinitely) -> NumericalStatusDefinitely
+        (NumericalStatusDefinitely, _) -> NumericalStatusMaybe
+        (_, NumericalStatusDefinitely) -> NumericalStatusMaybe
+        (NumericalStatusMaybe, _) -> NumericalStatusMaybe
+        (_, NumericalStatusMaybe) -> NumericalStatusMaybe
+        (NumericalStatusEmpty, NumericalStatusEmpty) -> NumericalStatusEmpty
+        _ -> NumericalStatusUnknown
 
 -- A VersionedMap is a Map that keeps an additional integer version to quickly determine if it has changed.
 -- * Version -1 means it's unknown (possibly and presumably changed)
@@ -1154,7 +1177,8 @@ appendVariableValue :: VariableValue -> VariableValue -> VariableValue
 appendVariableValue a b =
     unknownVariableValue {
         literalValue = liftM2 (++) (literalValue a) (literalValue b),
-        spaceStatus = appendSpaceStatus (spaceStatus a) (spaceStatus b)
+        spaceStatus = appendSpaceStatus (spaceStatus a) (spaceStatus b),
+        numericalStatus = appendNumericalStatus (numericalStatus a) (numericalStatus b)
     }
 
 appendSpaceStatus a b =
@@ -1164,14 +1188,25 @@ appendSpaceStatus a b =
         (SpaceStatusClean, SpaceStatusClean) -> a
         _ ->SpaceStatusDirty
 
+appendNumericalStatus a b =
+    case (a,b) of
+        (NumericalStatusEmpty, x) -> x
+        (x, NumericalStatusEmpty) -> x
+        (NumericalStatusDefinitely, NumericalStatusDefinitely) -> NumericalStatusDefinitely
+        (NumericalStatusUnknown, _) -> NumericalStatusUnknown
+        (_, NumericalStatusUnknown) -> NumericalStatusUnknown
+        _ -> NumericalStatusMaybe
+
 unknownIntegerValue = unknownVariableValue {
     literalValue = Nothing,
-    spaceStatus = SpaceStatusClean
+    spaceStatus = SpaceStatusClean,
+    numericalStatus = NumericalStatusDefinitely
 }
 
 literalToVariableValue str = unknownVariableValue {
     literalValue = Just str,
-    spaceStatus = literalToSpaceStatus str
+    spaceStatus = literalToSpaceStatus str,
+    numericalStatus = literalToNumericalStatus str
 }
 
 withoutChanges ctx f = do
@@ -1190,6 +1225,15 @@ literalToSpaceStatus str =
         "" -> SpaceStatusEmpty
         _ | all (`notElem` " \t\n*?[") str -> SpaceStatusClean
         _ -> SpaceStatusDirty
+
+-- Get the NumericalStatus for a literal string, i.e. whether it's an integer
+literalToNumericalStatus str =
+    case str of
+        "" -> NumericalStatusEmpty
+        '-':rest -> if isNumeric rest then NumericalStatusDefinitely else NumericalStatusUnknown
+        rest -> if isNumeric rest then NumericalStatusDefinitely else NumericalStatusUnknown
+  where
+    isNumeric = all isDigit
 
 type StateMap = M.Map Node (InternalState, InternalState)
 

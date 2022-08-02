@@ -1167,6 +1167,10 @@ prop_checkNumberComparisons18 = verify checkNumberComparisons "[[ foo -eq 2 ]]"
 prop_checkNumberComparisons19 = verifyNot checkNumberComparisons "foo=1; [[ foo -eq 2 ]]"
 prop_checkNumberComparisons20 = verify checkNumberComparisons "[[ 2 -eq / ]]"
 prop_checkNumberComparisons21 = verify checkNumberComparisons "[[ foo -eq foo ]]"
+prop_checkNumberComparisons22 = verify checkNumberComparisons "x=10; [[ $x > $z ]]"
+prop_checkNumberComparisons23 = verify checkNumberComparisons "x=0; if [[ -n $def ]]; then x=$def; fi; while [ $x > $z ]; do lol; done"
+prop_checkNumberComparisons24 = verify checkNumberComparisons "x=$RANDOM; [ $x > $z ]"
+prop_checkNumberComparisons25 = verify checkNumberComparisons "[[ $((n++)) > $x ]]"
 
 checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
     if isNum lhs || isNum rhs
@@ -1242,9 +1246,20 @@ checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
       numChar x = isDigit x || x `elem` "+-. "
 
       isNum t =
-        case oversimplify t of
-            [v] -> all isDigit v
-            _ -> False
+        case getWordParts t of
+            [T_DollarArithmetic {}] -> True
+            [b@(T_DollarBraced id _ c)] ->
+                let
+                    str = concat $ oversimplify c
+                    var = getBracedReference str
+                in fromMaybe False $ do
+                    state <- CF.getIncomingState (cfgAnalysis params) id
+                    value <- Map.lookup var $ CF.variablesInScope state
+                    return $ CF.numericalStatus (CF.variableValue value) >= CF.NumericalStatusMaybe
+            _ ->
+                case oversimplify t of
+                    [v] -> all isDigit v
+                    _ -> False
 
       isFraction t =
         case oversimplify t of
