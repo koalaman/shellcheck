@@ -41,6 +41,7 @@ module ShellCheck.CFG (
 import GHC.Generics (Generic)
 import ShellCheck.AST
 import ShellCheck.ASTLib
+import ShellCheck.Data
 import ShellCheck.Interface
 import ShellCheck.Prelude
 import ShellCheck.Regex
@@ -936,6 +937,8 @@ handleCommand cmd vars args literalCmd = do
         Just "mapfile" -> regularExpansionWithStatus vars args $ handleMapfile args
         Just "readarray" -> regularExpansionWithStatus vars args $ handleMapfile args
 
+        Just "read" -> regularExpansionWithStatus vars args $ handleRead args
+
         Just "DEFINE_boolean" -> regularExpansionWithStatus vars args $ handleDEFINE args
         Just "DEFINE_float" ->   regularExpansionWithStatus vars args $ handleDEFINE args
         Just "DEFINE_integer" -> regularExpansionWithStatus vars args $ handleDEFINE args
@@ -1113,7 +1116,7 @@ handleCommand cmd vars args literalCmd = do
             in IdTagged id $ CFWriteVariable name CFValueArray
 
         getFromArg = do
-            flags <- getGnuOpts "d:n:O:s:u:C:c:t" args
+            flags <- getGnuOpts flagsForMapfile args
             (_, arg) <- lookup "" flags
             name <- getLiteralString arg
             return (getId arg, name)
@@ -1124,6 +1127,36 @@ handleCommand cmd vars args literalCmd = do
             name <- getLiteralString c
             guard $ isVariableName name
             return (getId c, name)
+
+    handleRead (cmd:args) = newNodeRange $ CFApplyEffects main
+      where
+        main = fromMaybe fallback $ do
+            flags <- getGnuOpts flagsForRead args
+            return $ fromMaybe (withFields flags) $ withArray flags
+
+        withArray :: [(String, (Token, Token))] -> Maybe [IdTagged CFEffect]
+        withArray flags = do
+            (_, token) <- lookup "a" flags
+            return $ fromMaybe [] $ do
+                name <- getLiteralString token
+                return [ IdTagged (getId token) $ CFWriteVariable name CFValueArray ]
+
+        withFields flags = mapMaybe getAssignment flags
+
+        getAssignment :: (String, (Token, Token)) -> Maybe (IdTagged CFEffect)
+        getAssignment f = do
+            ("", (t, _)) <- return f
+            name <- getLiteralString t
+            return $ IdTagged (getId t) $ CFWriteVariable name CFValueString
+
+        fallback =
+            let
+                names = reverse $ map fromJust $ takeWhile isJust $ map (\c -> sequence (getId c, getLiteralString c)) $ reverse args
+                namesOrDefault = if null names then [(getId cmd, "REPLY")] else names
+                hasDashA = any (== "a") $ map fst $ getGenericOpts args
+                value = if hasDashA then CFValueArray else CFValueString
+            in
+                map (\(id, name) -> IdTagged id $ CFWriteVariable name value) namesOrDefault
 
     handleDEFINE (cmd:args) =
         newNodeRange $ CFApplyEffects $ maybeToList findVar
