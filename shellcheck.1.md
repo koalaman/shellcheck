@@ -197,6 +197,10 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 :   This is a legacy version of the **json1** format. It's a raw array of
     comments, and all offsets have a tab stop of 8.
 
+**sarif**
+
+:   Static Analysis Results Interchange Format (SARIF) output.
+
 **quiet**
 
 :   Suppress all normal output. Exit with zero if no issues are found,

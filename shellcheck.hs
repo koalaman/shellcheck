@@ -29,6 +29,7 @@ import qualified ShellCheck.Formatter.Diff
 import qualified ShellCheck.Formatter.GCC
 import qualified ShellCheck.Formatter.JSON
 import qualified ShellCheck.Formatter.JSON1
+import qualified ShellCheck.Formatter.SARIF
 import qualified ShellCheck.Formatter.TTY
 import qualified ShellCheck.Formatter.Quiet
 
@@ -146,6 +147,7 @@ formats options = Map.fromList [
     ("gcc",  ShellCheck.Formatter.GCC.format),
     ("json", ShellCheck.Formatter.JSON.format),
     ("json1", ShellCheck.Formatter.JSON1.format),
+    ("sarif", ShellCheck.Formatter.SARIF.format),
     ("tty",  ShellCheck.Formatter.TTY.format options),
     ("quiet",  ShellCheck.Formatter.Quiet.format options)
     ]
@@ -576,7 +578,7 @@ printVersion = do
     putStrLn   "ShellCheck - shell script analysis tool"
     putStrLn $ "version: " ++ shellcheckVersion
     putStrLn   "license: GNU General Public License, version 3"
-    putStrLn   "website: https://www.shellcheck.net"
+    putStrLn $ "website: " ++ shellcheckWebsite
 
 printOptional = do
     mapM f list

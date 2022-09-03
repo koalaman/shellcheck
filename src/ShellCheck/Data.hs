@@ -22,7 +22,7 @@ Use:
 
 import Paths_ShellCheck (version)
 shellcheckVersion = showVersion version  -- VERSIONSTRING
-
+shellcheckWebsite = "https://www.shellcheck.net"
 
 internalVariables = [
     -- Generic
