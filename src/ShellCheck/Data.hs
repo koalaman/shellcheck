@@ -49,7 +49,7 @@ internalVariables = [
     "LINES", "MAIL", "MAILCHECK", "MAILPATH", "OPTERR", "PATH",
     "POSIXLY_CORRECT", "PROMPT_COMMAND", "PROMPT_DIRTRIM", "PS1",
     "PS2", "PS3", "PS4", "SHELL", "TIMEFORMAT", "TMOUT", "TMPDIR",
-    "auto_resume", "histchars", "COPROC",
+    "auto_resume", "histchars",
 
     -- Other
     "USER", "TZ", "TERM", "LOGNAME", "LD_LIBRARY_PATH", "LANGUAGE", "DISPLAY",
