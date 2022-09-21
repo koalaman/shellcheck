@@ -73,7 +73,7 @@ specialVariablesWithoutSpaces = "-" : specialIntegerVariables
 variablesWithoutSpaces = specialVariablesWithoutSpaces ++ [
     "BASHPID", "BASH_ARGC", "BASH_LINENO", "BASH_SUBSHELL", "EUID",
     "EPOCHREALTIME", "EPOCHSECONDS", "LINENO", "OPTIND", "PPID", "RANDOM",
-    "READLINE_ARGUMENT", "READLINE_MARK", "SECONDS",
+    "READLINE_ARGUMENT", "READLINE_MARK", "READLINE_POINT", "SECONDS",
     "SHELLOPTS", "SHLVL", "SRANDOM", "UID", "COLUMNS", "HISTFILESIZE",
     "HISTSIZE", "LINES"
 
