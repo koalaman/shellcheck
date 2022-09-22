@@ -1300,8 +1300,7 @@ dataflow ctx entry = do
         outgoing = map snd outgoingL
         isRegular = ((== CFEFlow) . fst)
 
-runRoot ctx entry exit = do
-    let env = createEnvironmentState
+runRoot ctx env entry exit = do
     writeSTRef (cInput ctx) $ env
     writeSTRef (cOutput ctx) $ env
     writeSTRef (cNode ctx) $ entry
@@ -1321,9 +1320,10 @@ analyzeControlFlow params t =
         runST $ f cfg entry exit
   where
     f cfg entry exit = do
+        let env = createEnvironmentState
         ctx <- newCtx $ cfGraph cfg
         -- Do a dataflow analysis starting on the root node
-        exitState <- runRoot ctx entry exit
+        exitState <- runRoot ctx env entry exit
 
         -- All nodes we've touched
         invocations <- readSTRef $ cInvocations ctx
@@ -1336,7 +1336,7 @@ analyzeControlFlow params t =
         let uninvoked = M.difference declaredFunctions invokedNodes
 
         let stragglerInput =
-                exitState {
+                (env `patchState` exitState) {
                     -- We don't want `die() { exit $?; }; echo "Sourced"` to assume $? is always echo
                     sExitCodes = Nothing
                 }

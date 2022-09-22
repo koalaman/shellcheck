@@ -2099,6 +2099,8 @@ prop_checkSpacefulnessCfg61 = verify checkSpacefulnessCfg "declare -x X; y=foo$X
 prop_checkSpacefulnessCfg62 = verifyNot checkSpacefulnessCfg "f() { declare -x X; y=foo$X; echo $y; }"
 prop_checkSpacefulnessCfg63 = verify checkSpacefulnessCfg "f && declare -i s; s='x + y'; echo $s"
 prop_checkSpacefulnessCfg64 = verifyNot checkSpacefulnessCfg "declare -i s; s='x + y'; x=$s; echo $x"
+prop_checkSpacefulnessCfg65 = verifyNot checkSpacefulnessCfg "f() { s=$?; echo $s; }; f"
+prop_checkSpacefulnessCfg66 = verifyNot checkSpacefulnessCfg "f() { s=$?; echo $s; }"
 
 checkSpacefulnessCfg = checkSpacefulnessCfg' True
 checkVerboseSpacefulnessCfg = checkSpacefulnessCfg' False
