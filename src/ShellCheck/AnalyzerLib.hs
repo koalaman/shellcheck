@@ -203,22 +203,22 @@ makeParameters spec = params
         hasSetE = containsSetE root,
         hasLastpipe =
             case shellType params of
-                Bash -> containsLastpipe root
+                Bash -> isOptionSet "lastpipe" root
                 Dash -> False
                 Sh   -> False
                 Ksh  -> True,
         hasInheritErrexit =
             case shellType params of
-                Bash -> containsInheritErrexit root
+                Bash -> isOptionSet "inherit_errexit" root
                 Dash -> True
                 Sh   -> True
                 Ksh  -> False,
         hasPipefail =
             case shellType params of
-                Bash -> containsPipefail root
+                Bash -> isOptionSet "pipefail" root
                 Dash -> True
                 Sh   -> True
-                Ksh  -> containsPipefail root,
+                Ksh  -> isOptionSet "pipefail" root,
         shellTypeSpecified = isJust (asShellType spec) || isJust (asFallbackShell spec),
         idMap = getTokenMap root,
         parentMap = getParentTree root,
@@ -247,13 +247,14 @@ containsSetE root = isNothing $ doAnalysis (guard . not . isSetE) root
             _ -> False
     re = mkRegex "[[:space:]]-[^-]*e"
 
-containsPipefail root = isNothing $ doAnalysis (guard . not . isPipefail) root
+
+containsSetOption opt root = isNothing $ doAnalysis (guard . not . isPipefail) root
   where
     isPipefail t =
         case t of
             T_SimpleCommand {}  ->
                 t `isUnqualifiedCommand` "set" &&
-                    ("pipefail" `elem` oversimplify t ||
+                    (opt `elem` oversimplify t ||
                         "o" `elem` map snd (getAllFlags t))
             _ -> False
 
@@ -267,12 +268,8 @@ containsShopt shopt root =
                         (shopt `elem` oversimplify t)
                 _ -> False
 
--- Does this script mention 'shopt -s inherit_errexit' anywhere?
-containsInheritErrexit = containsShopt "inherit_errexit"
-
--- Does this script mention 'shopt -s lastpipe' anywhere?
--- Also used as a hack.
-containsLastpipe = containsShopt "lastpipe"
+-- Does this script mention 'shopt -s $opt' or 'set -o $opt' anywhere?
+isOptionSet opt root = containsShopt opt root || containsSetOption opt root
 
 
 prop_determineShell0 = determineShellTest "#!/bin/sh" == Sh
