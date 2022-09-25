@@ -4687,6 +4687,7 @@ prop_checkSetESuppressed15 = verifyTree    checkSetESuppressed "set -e; f(){ :; 
 prop_checkSetESuppressed16 = verifyTree    checkSetESuppressed "set -e; f(){ :; }; until set -e; f; do :; done"
 prop_checkSetESuppressed17 = verifyNotTree checkSetESuppressed "set -e; f(){ :; }; g(){ :; }; g f"
 prop_checkSetESuppressed18 = verifyNotTree checkSetESuppressed "set -e; shopt -s inherit_errexit; f(){ :; }; x=$(f)"
+prop_checkSetESuppressed19 = verifyNotTree checkSetESuppressed "set -e; set -o posix; f(){ :; }; x=$(f)"
 checkSetESuppressed params t =
     if hasSetE params then runNodeAnalysis checkNode params t else []
   where
