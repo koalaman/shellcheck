@@ -4765,8 +4765,12 @@ prop_checkExtraMaskedReturns32 = verifyNotTree checkExtraMaskedReturns "false < 
 prop_checkExtraMaskedReturns33 = verifyNotTree checkExtraMaskedReturns "{ false || true; } | true"
 prop_checkExtraMaskedReturns34 = verifyNotTree checkExtraMaskedReturns "{ false || :; } | true"
 prop_checkExtraMaskedReturns35 = verifyTree checkExtraMaskedReturns "f() { local -r x=$(false); }"
+prop_checkExtraMaskedReturns36 = verifyNotTree checkExtraMaskedReturns "time false"
+prop_checkExtraMaskedReturns37 = verifyNotTree checkExtraMaskedReturns "time $(time false)"
+prop_checkExtraMaskedReturns38 = verifyTree checkExtraMaskedReturns "x=$(time time time false) time $(time false)"
 
-checkExtraMaskedReturns params t = runNodeAnalysis findMaskingNodes params t
+checkExtraMaskedReturns params t =
+    runNodeAnalysis findMaskingNodes params (removeTransparentCommands t)
   where
     findMaskingNodes _ (T_Arithmetic _ list) = findMaskedNodesInList [list]
     findMaskingNodes _ (T_Array _ list) = findMaskedNodesInList $ allButLastSimpleCommands list
@@ -4799,6 +4803,13 @@ checkExtraMaskedReturns params t = runNodeAnalysis findMaskingNodes params t
       where
         simpleCommands = filter containsSimpleCommand cmds
 
+    removeTransparentCommands t =
+        doTransform go t
+      where
+        go cmd@(T_SimpleCommand id assigns (_:args)) | isTransparentCommand cmd
+          = T_SimpleCommand id assigns args
+        go t = t
+
     inform t = info (getId t) 2312 ("Consider invoking this command "
         ++ "separately to avoid masking its return value (or use '|| true' "
         ++ "to ignore).")
@@ -4830,6 +4841,10 @@ checkExtraMaskedReturns params t = runNodeAnalysis findMaskingNodes params t
             ,"set"
             ,"shopt"
             ]
+
+    isTransparentCommand t = fromMaybe False $ do
+        basename <- getCommandBasename t
+        return $ basename == "time"
 
     parentChildPairs t = go $ parents params t
       where
