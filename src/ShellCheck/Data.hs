@@ -121,10 +121,10 @@ commonCommands = [
 
 nonReadingCommands = [
     "alias", "basename", "bg", "cal", "cd", "chgrp", "chmod", "chown",
-    "cp", "du", "echo", "export", "false", "fg", "fuser", "getconf",
+    "cp", "du", "echo", "export", "fg", "fuser", "getconf",
     "getopt", "getopts", "ipcrm", "ipcs", "jobs", "kill", "ln", "ls",
     "locale", "mv", "printf", "ps", "pwd", "renice", "rm", "rmdir",
-    "set", "sleep", "touch", "trap", "true", "ulimit", "unalias", "uname"
+    "set", "sleep", "touch", "trap", "ulimit", "unalias", "uname"
     ]
 
 sampleWords = [
