@@ -2112,6 +2112,7 @@ prop_readSimpleCommand11 = isOk readSimpleCommand "/\\* foo"
 prop_readSimpleCommand12 = isWarning readSimpleCommand "elsif foo"
 prop_readSimpleCommand13 = isWarning readSimpleCommand "ElseIf foo"
 prop_readSimpleCommand14 = isWarning readSimpleCommand "elseif[$i==2]"
+prop_readSimpleCommand15 = isWarning readSimpleCommand "trap 'foo\"bar' INT"
 readSimpleCommand = called "simple command" $ do
     prefix <- option [] readCmdPrefix
     skipAnnotationAndWarn
@@ -2141,9 +2142,12 @@ readSimpleCommand = called "simple command" $ do
             id2 <- getNewIdFor id1
 
             let result = makeSimpleCommand id1 id2 prefix [cmd] suffix
-            if isCommand ["source", "."] cmd
-                then readSource result
-                else return result
+            case () of
+                _ | isCommand ["source", "."] cmd -> readSource result
+                _ | isCommand ["trap"] cmd -> do
+                        syntaxCheckTrap result
+                        return result
+                _ -> return result
   where
     isCommand strings (T_NormalWord _ [T_Literal _ s]) = s `elem` strings
     isCommand _ _ = False
@@ -2162,6 +2166,17 @@ readSimpleCommand = called "simple command" $ do
                 when (cmdString `elem` ["elsif", "elseif"]) $
                     parseProblemAtId (getId cmd) ErrorC 1131 "Use 'elif' to start another branch."
             _ -> return ()
+
+    syntaxCheckTrap cmd =
+        case cmd of
+            (T_Redirecting _ _ (T_SimpleCommand _ _ (cmd:arg:_))) -> checkArg arg (getLiteralString arg)
+            _ -> return ()
+      where
+        checkArg _ Nothing = return ()
+        checkArg arg (Just ('-':_)) = return ()
+        checkArg arg (Just str) = do
+            (start,end) <- getSpanForId (getId arg)
+            subParse start (tryWithErrors (readCompoundListOrEmpty >> verifyEof) <|> return ()) str
 
     commentWarning id =
         parseProblemAtId id ErrorC 1127 "Was this intended as a comment? Use # in sh."
