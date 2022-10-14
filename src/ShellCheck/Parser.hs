@@ -2500,16 +2500,29 @@ readBraceGroup = called "brace group" $ do
     spacing
     return $ T_BraceGroup id list
 
-prop_readBatsTest = isOk readBatsTest "@test 'can parse' {\n  true\n}"
+prop_readBatsTest1 = isOk readBatsTest "@test 'can parse' {\n  true\n}"
+prop_readBatsTest2 = isOk readBatsTest "@test random text !(@*$Y&! {\n  true\n}"
+prop_readBatsTest3 = isOk readBatsTest "@test foo { bar { baz {\n  true\n}"
+prop_readBatsTest4 = isNotOk readBatsTest "@test foo \n{\n true\n}"
 readBatsTest = called "bats @test" $ do
     start <- startSpan
-    try $ string "@test"
+    try $ string "@test "
     spacing
-    name <- readNormalWord
+    name <- readBatsName
     spacing
     test <- readBraceGroup
     id <- endSpan start
     return $ T_BatsTest id name test
+  where
+    readBatsName = do
+        line <- try . lookAhead $ many1 $ noneOf "\n"
+        let name = reverse $ f $ reverse line
+        string name
+
+    -- We want everything before the last " {" in a string, so we find everything after "{ " in its reverse
+    f ('{':' ':rest) = dropWhile isSpace rest
+    f (a:rest) = f rest
+    f [] = ""
 
 prop_readWhileClause = isOk readWhileClause "while [[ -e foo ]]; do sleep 1; done"
 readWhileClause = called "while loop" $ do

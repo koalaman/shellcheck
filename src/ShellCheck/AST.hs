@@ -142,7 +142,7 @@ data InnerToken t =
     | Inner_T_CoProcBody t
     | Inner_T_Include t
     | Inner_T_SourceCommand t t
-    | Inner_T_BatsTest t t
+    | Inner_T_BatsTest String t
     deriving (Show, Eq, Functor, Foldable, Traversable)
 
 data Annotation =
