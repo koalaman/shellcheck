@@ -2566,7 +2566,7 @@ readDoGroup kwId = do
         parseProblem ErrorC 1058 "Expected 'do'."
         return "Expected 'do'"
 
-    acceptButWarn g_Semi ErrorC 1059 "No semicolons directly after 'do'."
+    acceptButWarn g_Semi ErrorC 1059 "Semicolon is not allowed directly after 'do'. You can just delete it."
     allspacing
 
     optional (do
