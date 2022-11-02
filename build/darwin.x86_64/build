@@ -5,6 +5,7 @@ set -xe
   chmod +x striptests && ./striptests
   mkdir "$TARGETNAME"
   cabal update
+  # shellcheck disable=SC2086 # Intended splitting of CABALOPTS
   ( IFS=';'; cabal build $CABALOPTS )
   find . -name shellcheck -type f -exec mv {} "$TARGETNAME/" \;
   ls -l "$TARGETNAME"
