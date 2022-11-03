@@ -1885,6 +1885,7 @@ prop_checkSpuriousExec7 = verifyNot checkSpuriousExec "exec file; echo failed; e
 prop_checkSpuriousExec8 = verifyNot checkSpuriousExec "exec {origout}>&1- >tmp.log 2>&1; bar"
 prop_checkSpuriousExec9 = verify checkSpuriousExec "for file in rc.d/*; do exec \"$file\"; done"
 prop_checkSpuriousExec10 = verifyNot checkSpuriousExec "exec file; r=$?; printf >&2 'failed\n'; return $r"
+prop_checkSpuriousExec11 = verifyNot checkSpuriousExec "exec file; :"
 checkSpuriousExec _ = doLists
   where
     doLists (T_Script _ _ cmds) = doList cmds False
@@ -1900,7 +1901,7 @@ checkSpuriousExec _ = doLists
 
     stripCleanup = reverse . dropWhile cleanup . reverse
     cleanup (T_Pipeline _ _ [cmd]) =
-        isCommandMatch cmd (`elem` ["echo", "exit", "printf", "return"])
+        isCommandMatch cmd (`elem` [":", "echo", "exit", "printf", "return"])
         || isAssignment cmd
     cleanup _ = False
 
