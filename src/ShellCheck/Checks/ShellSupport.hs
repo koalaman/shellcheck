@@ -184,6 +184,10 @@ prop_checkBashisms96 = verifyNot checkBashisms "#!/bin/dash\necho $_"
 prop_checkBashisms97 = verify checkBashisms "#!/bin/sh\necho ${var,}"
 prop_checkBashisms98 = verify checkBashisms "#!/bin/sh\necho ${var^^}"
 prop_checkBashisms99 = verify checkBashisms "#!/bin/dash\necho [^f]oo"
+prop_checkBashisms100 = verify checkBashisms "read -r"
+prop_checkBashisms101 = verify checkBashisms "read"
+prop_checkBashisms102 = verifyNot checkBashisms "read -r foo"
+prop_checkBashisms103 = verifyNot checkBashisms "read foo"
 checkBashisms = ForShell [Sh, Dash] $ \t -> do
     params <- ask
     kludge params t
@@ -283,6 +287,13 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
       where
           argString = concat $ oversimplify arg
           flagRegex = mkRegex "^-[eEsn]+$"
+
+    bashism t@(T_SimpleCommand _ _ (cmd:args))
+        | t `isCommand` "read" && length (onlyNames args) == 0 =
+            warnMsg (getId cmd) 3061 "read without a variable is"
+      where
+        notFlag arg = head (concat $ oversimplify arg) /= '-'
+        onlyNames = filter (notFlag)
 
     bashism t@(T_SimpleCommand _ _ (cmd:arg:_))
         | getLiteralString cmd == Just "exec" && "-" `isPrefixOf` concat (oversimplify arg) =
