@@ -34,6 +34,8 @@ import qualified ShellCheck.Formatter.Quiet
 
 import           Control.Exception
 import           Control.Monad
+import           Control.Monad.IO.Class
+import           Control.Monad.Trans.Class
 import           Control.Monad.Except
 import           Data.Bits
 import           Data.Char

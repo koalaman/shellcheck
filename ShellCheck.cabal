@@ -54,11 +54,12 @@ library
       Diff >= 0.2.0,
       directory >= 1.2.3.0,
       fgl,
-      mtl >= 2.2.1,
       filepath,
+      mtl >= 2.2.1,
       parsec,
-      regex-tdfa,
       QuickCheck >= 2.7.4,
+      regex-tdfa,
+      transformers,
       -- When cabal supports it, move this to setup-depends:
       process
     exposed-modules:
@@ -112,6 +113,7 @@ executable shellcheck
       parsec >= 3.0,
       QuickCheck >= 2.7.4,
       regex-tdfa,
+      transformers,
       ShellCheck
     default-language: Haskell98
     main-is: shellcheck.hs
@@ -128,11 +130,12 @@ test-suite test-shellcheck
       Diff >= 0.2.0,
       directory >= 1.2.3.0,
       fgl,
-      mtl >= 2.2.1,
       filepath,
+      mtl >= 2.2.1,
       parsec,
       QuickCheck >= 2.7.4,
       regex-tdfa,
+      transformers,
       ShellCheck
     default-language: Haskell98
     main-is: test/shellcheck.hs

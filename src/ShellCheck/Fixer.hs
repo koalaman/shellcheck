@@ -23,6 +23,7 @@ module ShellCheck.Fixer (applyFix, removeTabStops, mapPositions, Ranged(..), run
 
 import ShellCheck.Interface
 import ShellCheck.Prelude
+import Control.Monad
 import Control.Monad.State
 import Data.Array
 import Data.List

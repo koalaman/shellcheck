@@ -32,6 +32,7 @@ import ShellCheck.Regex
 
 import Control.Arrow (first)
 import Control.DeepSeq
+import Control.Monad
 import Control.Monad.Identity
 import Control.Monad.RWS
 import Control.Monad.State
