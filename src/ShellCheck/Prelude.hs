@@ -21,6 +21,9 @@
 -- Generic basic utility functions
 module ShellCheck.Prelude where
 
+import Data.Semigroup
+
+
 -- Get element 0 or a default. Like `head` but safe.
 headOrDefault _ (a:_) = a
 headOrDefault def _   = def
