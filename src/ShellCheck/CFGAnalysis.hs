@@ -1391,7 +1391,7 @@ analyzeControlFlow params t =
     getFunctionTargets :: InternalState -> M.Map Node FunctionDefinition
     getFunctionTargets state =
         let
-            declaredFuncs = S.unions $ mapStorage $ sFunctionTargets state
+            declaredFuncs = S.unions $ M.elems $ mapStorage $ sFunctionTargets state
             getFunc d =
                 case d of
                     FunctionDefinition _ entry _ -> Just (entry, d)
