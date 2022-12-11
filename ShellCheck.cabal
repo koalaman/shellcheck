@@ -45,21 +45,26 @@ library
       build-depends:
         semigroups
     build-depends:
-      aeson,
-      array,
-      base >= 4.8.0.0 && < 5,
-      bytestring,
-      containers >= 0.5,
-      deepseq >= 1.4.0.0,
-      Diff >= 0.2.0,
-      directory >= 1.2.3.0,
-      fgl,
-      filepath,
-      mtl >= 2.2.1,
-      parsec,
-      QuickCheck >= 2.7.4,
-      regex-tdfa,
-      transformers,
+      -- The lower bounds are based on GHC 7.10.3
+      -- The upper bounds are based on GHC 9.4.3
+      aeson                >= 1.4.0 && < 2.2,
+      array                >= 0.5.1 && < 0.6,
+      base                 >= 4.8.0.0 && < 5,
+      bytestring           >= 0.10.6 && < 0.12,
+      containers           >= 0.5.6 && < 0.7,
+      deepseq              >= 1.4.1 && < 1.5,
+      Diff                 >= 0.4.0 && < 0.5,
+      fgl                  >= 5.7.0 && < 5.9,
+      filepath             >= 1.4.0 && < 1.5,
+      mtl                  >= 2.2.2 && < 2.3,
+      parsec               >= 3.1.14 && < 3.2,
+      QuickCheck           >= 2.14.2 && < 2.15,
+      regex-tdfa           >= 1.2.0 && < 1.4,
+      transformers         >= 0.4.2 && < 0.6,
+
+      -- getXdgDirectory from 1.2.3.0
+      directory            >= 1.2.3 && < 1.4,
+
       -- When cabal supports it, move this to setup-depends:
       process
     exposed-modules:
@@ -101,17 +106,17 @@ executable shellcheck
     build-depends:
       aeson,
       array,
-      base >= 4 && < 5,
+      base,
       bytestring,
       containers,
-      deepseq >= 1.4.0.0,
-      Diff >= 0.2.0,
-      directory >= 1.2.3.0,
+      deepseq,
+      Diff,
+      directory,
       fgl,
-      mtl >= 2.2.1,
+      mtl,
       filepath,
-      parsec >= 3.0,
-      QuickCheck >= 2.7.4,
+      parsec,
+      QuickCheck,
       regex-tdfa,
       transformers,
       ShellCheck
@@ -123,17 +128,17 @@ test-suite test-shellcheck
     build-depends:
       aeson,
       array,
-      base >= 4 && < 5,
+      base,
       bytestring,
       containers,
-      deepseq >= 1.4.0.0,
-      Diff >= 0.2.0,
-      directory >= 1.2.3.0,
+      deepseq,
+      Diff,
+      directory,
       fgl,
       filepath,
-      mtl >= 2.2.1,
+      mtl,
       parsec,
-      QuickCheck >= 2.7.4,
+      QuickCheck,
       regex-tdfa,
       transformers,
       ShellCheck
