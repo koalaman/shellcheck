@@ -3,7 +3,7 @@
 # various resolvers. It's run via distrotest.
 
 resolvers=(
-  nightly-"$(date -d "3 days ago" +"%Y-%m-%d")"
+#  nightly-"$(date -d "3 days ago" +"%Y-%m-%d")"
 )
 
 die() { echo "$*" >&2; exit 1; }

@@ -73,7 +73,7 @@ ubuntu:18.04          apt-get update && apt-get install -y cabal-install
 ubuntu:16.04          apt-get update && apt-get install -y cabal-install
 
 # Stack on Ubuntu LTS
-ubuntu:20.04          set -e; apt-get update && apt-get install -y curl && curl -sSL https://get.haskellstack.org/ | sh -s - -f && cd /mnt && exec test/stacktest
+ubuntu:22.04          set -e; apt-get update && apt-get install -y curl && curl -sSL https://get.haskellstack.org/ | sh -s - -f && cd /mnt && exec test/stacktest
 EOF
 
 exit "$final"
