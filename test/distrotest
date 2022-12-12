@@ -25,6 +25,13 @@ exit 0
 echo "Deleting 'dist' and 'dist-newstyle'..."
 rm -rf dist dist-newstyle
 
+execs=$(find . -name shellcheck)
+
+if [ -n "$execs" ]
+then
+  die "Found unexpected executables. Remove and try again: $execs"
+fi
+
 log=$(mktemp) || die "Can't create temp file"
 date >> "$log" || die "Can't write to log"
 
