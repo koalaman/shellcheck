@@ -22,7 +22,8 @@ fi
 
 cabal install --dependencies-only --enable-tests "${flags[@]}" ||
   cabal install --dependencies-only "${flags[@]}" ||
-    die "can't install dependencies"
+    cabal install --dependencies-only --max-backjumps -1 "${flags[@]}" ||
+      die "can't install dependencies"
 cabal configure --enable-tests "${flags[@]}" ||
   die "configure failed"
 cabal build ||
