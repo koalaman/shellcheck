@@ -88,7 +88,7 @@ outputError file error = putStrLn $ concat [
 attr s v = concat [ s, "='", escape v, "' " ]
 escape = concatMap escape'
 escape' c = if isOk c then [c] else "&#" ++ show (ord c) ++ ";"
-isOk x = any ($x) [isAsciiUpper, isAsciiLower, isDigit, (`elem` " ./")]
+isOk x = any ($ x) [isAsciiUpper, isAsciiLower, isDigit, (`elem` " ./")]
 
 severity "error" = "error"
 severity "warning" = "warning"
