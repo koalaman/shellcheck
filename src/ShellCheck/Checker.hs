@@ -1,5 +1,5 @@
 {-
-    Copyright 2012-2020 Vidar Holen
+    Copyright 2012-2022 Vidar Holen
 
     This file is part of ShellCheck.
     https://www.shellcheck.net

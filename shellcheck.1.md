@@ -378,7 +378,7 @@ long list of wonderful contributors.
 
 # COPYRIGHT
 
-Copyright 2012-2021, Vidar Holen and contributors.
+Copyright 2012-2022, Vidar Holen and contributors.
 Licensed under the GNU General Public License version 3 or later,
 see https://gnu.org/licenses/gpl.html
 
