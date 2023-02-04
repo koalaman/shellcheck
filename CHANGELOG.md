@@ -1,3 +1,11 @@
+## Git
+### Added
+
+### Fixed
+
+### Changed
+
+
 ## v0.9.0 - 2022-12-12
 ### Added
 - SC2316: Warn about 'local readonly foo' and similar (thanks, patrickxia!)
