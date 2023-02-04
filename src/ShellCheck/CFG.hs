@@ -1301,7 +1301,9 @@ findPostDominators mainexit graph = asArray
     reversed = grev withExitEdges
     postDoms = dom reversed mainexit
     (_, maxNode) = nodeRange graph
-    asArray = array (0, maxNode) postDoms
+    -- Assume everything *not* reachable from 'mainexit' has every
+    -- node as postdominator.
+    asArray = listArray (0, maxNode) (replicate (maxNode+1) (nodes graph)) // postDoms
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
