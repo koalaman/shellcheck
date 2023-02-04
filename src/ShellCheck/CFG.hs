@@ -192,7 +192,7 @@ buildGraph params root =
                     base
 
         idToRange = M.fromList mapping
-        isRealEdge (from, to, edge) = case edge of CFEFlow -> True; _ -> False
+        isRealEdge (from, to, edge) = case edge of CFEFlow -> True; CFEExit -> True; _ -> False
         onlyRealEdges = filter isRealEdge edges
         (_, mainExit) = fromJust $ M.lookup (getId root) idToRange
 
@@ -1301,7 +1301,10 @@ findPostDominators mainexit graph = asArray
     reversed = grev withExitEdges
     postDoms = dom reversed mainexit
     (_, maxNode) = nodeRange graph
-    asArray = array (0, maxNode) postDoms
+    -- Holes in the array cause "Exception: (Array.!): undefined array element" while
+    -- inspecting/debugging, so fill the array first and then update.
+    initializedArray = listArray (0, maxNode) $ repeat []
+    asArray = initializedArray // postDoms
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
