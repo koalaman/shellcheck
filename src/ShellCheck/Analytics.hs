@@ -68,6 +68,7 @@ treeChecks = [
     ,checkArrayAssignmentIndices
     ,checkUseBeforeDefinition
     ,checkAliasUsedInSameParsingUnit
+    ,checkForStableKeywordsin9999CrosWorkonEbuilds
     ,checkArrayValueUsedAsIndex
     ]
 
@@ -290,6 +291,12 @@ verifyTree f s = producesComments f s == Just True
 
 verifyNotTree :: (Parameters -> Token -> [TokenComment]) -> String -> Bool
 verifyNotTree f s = producesComments f s == Just False
+
+-- Takes a regular checker function and a Parameters and returns a new
+-- checker function that acts as though portage mode had been passed
+-- in the parameters.
+withPortageParams :: (Parameters -> a) -> Parameters -> a
+withPortageParams f p = f $ p { portageFileType = Ebuild False }
 
 checkCommand str f t@(T_SimpleCommand id _ (cmd:rest))
     | t `isCommand` str = f cmd rest
@@ -778,6 +785,33 @@ checkFindExec _ cmd@(T_SimpleCommand _ _ t@(h:r)) | cmd `isCommand` "find" = do
     fromWord _ = []
 checkFindExec _ _ = return ()
 
+commandNeverProducesSpaces params t =
+    maybe False (`elem` noSpaceCommands) cmd
+    || (maybe False (`elem` spacesFromArgsCommands) cmd && noArgsHaveSpaces t)
+  where
+    cmd = getCommandNameFromExpansion t
+    noSpaceCommands =
+        if isPortageBuild params
+        then
+            [
+              "usev"
+            , "use_with"
+            , "use_enable"
+            ]
+        else
+            []
+    spacesFromArgsCommands =
+        if isPortageBuild params
+        then
+            [
+              "usex"
+            , "meson_use"
+            , "meson_feature"
+            ]
+        else
+            []
+    noArgsHaveSpaces t = all (' ' `notElem`) (words $ getArgumentsFromExpansion t)
+    words = map $ getLiteralStringDef " "
 
 prop_checkUnquotedExpansions1 = verify checkUnquotedExpansions "rm $(ls)"
 prop_checkUnquotedExpansions1a = verify checkUnquotedExpansions "rm `ls`"
@@ -790,6 +824,11 @@ prop_checkUnquotedExpansions6 = verifyNot checkUnquotedExpansions "$(cmd)"
 prop_checkUnquotedExpansions7 = verifyNot checkUnquotedExpansions "cat << foo\n$(ls)\nfoo"
 prop_checkUnquotedExpansions8 = verifyNot checkUnquotedExpansions "set -- $(seq 1 4)"
 prop_checkUnquotedExpansions9 = verifyNot checkUnquotedExpansions "echo foo `# inline comment`"
+prop_checkUnquotedExpansionsUsev = verify checkUnquotedExpansions "echo $(usev X)"
+prop_checkUnquotedExpansionsPortageUsev = verifyNot (withPortageParams checkUnquotedExpansions) "echo $(usev X)"
+prop_checkUnquotedExpansionsUsex = verify checkUnquotedExpansions "echo $(usex X)"
+prop_checkUnquotedExpansionsPortageUsex1 = verifyNot (withPortageParams checkUnquotedExpansions) "echo $(usex X \"\" Y)"
+prop_checkUnquotedExpansionsPortageUsex2 = verify (withPortageParams checkUnquotedExpansions) "echo $(usex X \"Y Z\" W)"
 prop_checkUnquotedExpansions10 = verify checkUnquotedExpansions "#!/bin/sh\nexport var=$(val)"
 prop_checkUnquotedExpansions11 = verifyNot checkUnquotedExpansions "ps -p $(pgrep foo)"
 checkUnquotedExpansions params =
@@ -801,7 +840,7 @@ checkUnquotedExpansions params =
     check _ = return ()
     tree = parentMap params
     examine t contents =
-        unless (null contents || shouldBeSplit t || isQuoteFree (shellType params) tree t || usedAsCommandName tree t) $
+        unless (null contents || shouldBeSplit t || isQuoteFree (shellType params) tree t || usedAsCommandName tree t || commandNeverProducesSpaces params t) $
             warn (getId t) 2046 "Quote this to prevent word splitting."
 
     shouldBeSplit t =
@@ -963,6 +1002,10 @@ checkArrayAsString _ (T_Assignment id _ _ _ word) =
           "Brace expansions and globs are literal in assignments. Quote it or use an array."
 checkArrayAsString _ _ = return ()
 
+allArrayVariables params =
+    shellArrayVariables ++
+    if isPortageBuild params then portageArrayVariables else []
+
 prop_checkArrayWithoutIndex1 = verifyTree checkArrayWithoutIndex "foo=(a b); echo $foo"
 prop_checkArrayWithoutIndex2 = verifyNotTree checkArrayWithoutIndex "foo='bar baz'; foo=($foo); echo ${foo[0]}"
 prop_checkArrayWithoutIndex3 = verifyTree checkArrayWithoutIndex "coproc foo while true; do echo cow; done; echo $foo"
@@ -978,6 +1021,7 @@ checkArrayWithoutIndex params _ =
     doVariableFlowAnalysis readF writeF defaultMap (variableFlow params)
   where
     defaultMap = Map.fromList $ map (\x -> (x,())) arrayVariables
+    arrayVariables = allArrayVariables params
     readF _ (T_DollarBraced id _ token) _ = do
         map <- get
         return . maybeToList $ do
@@ -1070,6 +1114,9 @@ prop_checkSingleQuotedVariables22 = verifyNot checkSingleQuotedVariables "jq '$_
 prop_checkSingleQuotedVariables23 = verifyNot checkSingleQuotedVariables "command jq '$__loc__'"
 prop_checkSingleQuotedVariables24 = verifyNot checkSingleQuotedVariables "exec jq '$__loc__'"
 prop_checkSingleQuotedVariables25 = verifyNot checkSingleQuotedVariables "exec -c -a foo jq '$__loc__'"
+prop_checkSingleQuotedVariablesCros1 = verifyNot checkSingleQuotedVariables "python_gen_any_dep 'dev-python/pyyaml[${PYTHON_USEDEP}]'"
+prop_checkSingleQuotedVariablesCros2 = verifyNot checkSingleQuotedVariables "python_gen_cond_dep 'dev-python/unittest2[${PYTHON_USEDEP}]' python2_7 pypy"
+prop_checkSingleQuotedVariablesCros3 = verifyNot checkSingleQuotedVariables "version_format_string '${PN}_source_$1_$2-$3_$4'"
 
 
 checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
@@ -1109,6 +1156,9 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
                 ,"git filter-branch"
                 ,"mumps -run %XCMD"
                 ,"mumps -run LOOP%XCMD"
+                ,"python_gen_any_dep"
+                ,"python_gen_cond_dep"
+                ,"version_format_string"
                 ]
             || "awk" `isSuffixOf` commandName
             || "perl" `isPrefixOf` commandName
@@ -2036,6 +2086,47 @@ doVariableFlowAnalysis readFunc writeFunc empty flow = evalState (
         writeFunc base token name values
     doFlow _ = return []
 
+-- Ensure that portage vars without spaces only exist when parsing portage files
+allVariablesWithoutSpaces params =
+    variablesWithoutSpaces ++
+    if isPortageBuild params then portageVariablesWithoutSpaces else []
+
+getInheritedEclasses :: Token -> [String]
+getInheritedEclasses root = execWriter $ doAnalysis findInheritedEclasses root
+  where
+    findInheritedEclasses cmd
+        | cmd `isCommand` "inherit" = tell $ catMaybes $ getLiteralString <$> (arguments cmd)
+    findInheritedEclasses _ = return ()
+
+checkForStableKeywordsin9999CrosWorkonEbuilds :: Parameters -> Token -> [TokenComment]
+checkForStableKeywordsin9999CrosWorkonEbuilds params root =
+  if isPortage9999Ebuild params && "cros-workon" `elem` getInheritedEclasses root
+  then ensureNoStableKeywords root
+  else []
+
+prop_checkEnsureNoStableKeywords1 = verifyNotTree (const ensureNoStableKeywords) "KEYWORDS=\"~*\""
+prop_checkEnsureNoStableKeywords2 = verifyNotTree (const ensureNoStableKeywords) "KEYWORDS=\"-* ~amd64\""
+prop_checkEnsureNoStableKeywords3 = verifyTree (const ensureNoStableKeywords) "KEYWORDS=\"*\""
+prop_checkEnsureNoStableKeywords4 = verifyTree (const ensureNoStableKeywords) "KEYWORDS=\"-* amd64\""
+ensureNoStableKeywords :: Token -> [TokenComment]
+ensureNoStableKeywords root =
+  execWriter $ doAnalysis warnStableKeywords root
+
+-- warnStableKeywords will emit an error if any KEYWORDS listed in the .ebuild
+-- file are marked as stable. In practice, this means that there are any
+-- KEYWORDS that do not begin with - or ~.
+warnStableKeywords :: Token -> Writer [TokenComment] ()
+warnStableKeywords (T_Assignment _ Assign "KEYWORDS" []
+                    (T_NormalWord _ [T_DoubleQuoted id [(T_Literal _ keywords)]]))
+  | any isStableKeyword (words keywords) =
+    tell [makeComment ErrorC id 5000 $
+      "All KEYWORDS in -9999.ebuild files inheriting from cros-workon must " ++
+      "be marked as unstable (~*, ~amd64, etc...), or broken (-*, -amd64, etc...)."]
+warnStableKeywords _ = return ()
+
+isStableKeyword :: String -> Bool
+isStableKeyword k = not (("~" `isPrefixOf` k) || ("-" `isPrefixOf` k))
+
 -- Don't suggest quotes if this will instead be autocorrected
 -- from $foo=bar to foo=bar. This is not pretty but ok.
 quotesMayConflictWithSC2281 params t =
@@ -2317,6 +2408,13 @@ checkFunctionsUsedExternally params t =
             info definitionId 2032 $
               "This function can't be invoked via " ++ cmd ++ patternContext cmdId
 
+allInternalVariables params =
+    genericInternalVariables ++
+    if shellType params == Ksh then kshInternalVariables else [] ++
+    if isPortageBuild params
+    then portageInternalVariables (getInheritedEclasses (rootNode params))
+    else []
+
 prop_checkUnused0 = verifyNotTree checkUnusedAssignments "var=foo; echo $var"
 prop_checkUnused1 = verifyTree checkUnusedAssignments "var=foo; echo $bar"
 prop_checkUnused2 = verifyNotTree checkUnusedAssignments "var=foo; export var;"
@@ -2366,6 +2464,26 @@ prop_checkUnused44 = verifyNotTree checkUnusedAssignments "DEFINE_string \"foo$i
 prop_checkUnused45 = verifyTree checkUnusedAssignments "readonly foo=bar"
 prop_checkUnused46 = verifyTree checkUnusedAssignments "readonly foo=(bar)"
 prop_checkUnused47 = verifyNotTree checkUnusedAssignments "a=1; alias hello='echo $a'"
+prop_checkUnused_portageVarAssign =
+    verifyNotTree (withPortageParams checkUnusedAssignments)
+                  "BROOT=2"
+prop_checkUnused_portageVarAssignNoPortageParams =
+    verifyTree checkUnusedAssignments
+               "BROOT=2"
+prop_checkUnused_portageInheritedVarAssign =
+    verifyNotTree (withPortageParams checkUnusedAssignments)
+               "inherit cargo; CARGO_INSTALL_PATH=2"
+prop_checkUnused_portageInheritedVarAssignNoPortage =
+    verifyTree checkUnusedAssignments
+               "inherit cargo; CARGO_INSTALL_PATH=2"
+prop_checkUnused_portageInheritedVarAssignNoInherit =
+    verifyTree (withPortageParams checkUnusedAssignments)
+               "CARGO_INSTALL_PATH=2"
+prop_checkUnused_portageInheritedVarAssignNoInheritOrPortage =
+    verifyTree checkUnusedAssignments
+               "CARGO_INSTALL_PATH=2"
+prop_checkUnusedTcExport = verifyNotTree checkUnusedAssignments "tc-export CC; echo $CC"
+prop_checkUnusedTcExportBuildEnv = verifyNotTree checkUnusedAssignments "tc-export_build_env CC; echo $CC $BUILD_CFLAGS $CFLAGS_FOR_BUILD"
 prop_checkUnused48 = verifyNotTree checkUnusedAssignments "_a=1"
 prop_checkUnused49 = verifyNotTree checkUnusedAssignments "declare -A array; key=a; [[ -v array[$key] ]]"
 prop_checkUnused50 = verifyNotTree checkUnusedAssignments "foofunc() { :; }; typeset -fx foofunc"
@@ -2393,6 +2511,7 @@ checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
 
     stripSuffix = takeWhile isVariableChar
     defaultMap = Map.fromList $ zip internalVariables $ repeat ()
+    internalVariables = allInternalVariables params
 
 prop_checkUnassignedReferences1 = verifyTree checkUnassignedReferences "echo $foo"
 prop_checkUnassignedReferences2 = verifyNotTree checkUnassignedReferences "foo=hello; echo $foo"
@@ -2443,6 +2562,24 @@ prop_checkUnassignedReferences_minusNBraced  = verifyNotTree checkUnassignedRefe
 prop_checkUnassignedReferences_minusZBraced  = verifyNotTree checkUnassignedReferences "if [ -z \"${x}\" ]; then echo \"\"; fi"
 prop_checkUnassignedReferences_minusNDefault = verifyNotTree checkUnassignedReferences "if [ -n \"${x:-}\" ]; then echo $x; fi"
 prop_checkUnassignedReferences_minusZDefault = verifyNotTree checkUnassignedReferences "if [ -z \"${x:-}\" ]; then echo \"\"; fi"
+prop_checkUnassignedReference_portageVarReference =
+    verifyNotTree (withPortageParams (checkUnassignedReferences' True))
+                  "echo $BROOT"
+prop_checkUnassignedReference_portageVarReferenceNoPortage =
+    verifyTree (checkUnassignedReferences' True)
+               "echo $BROOT"
+prop_checkUnassignedReference_portageInheritedVarReference =
+    verifyNotTree (withPortageParams (checkUnassignedReferences' True))
+                  "inherit cargo; echo $CARGO_INSTALL_PATH"
+prop_checkUnassignedReference_portageInheritedVarReferenceNoPortage =
+    verifyTree (checkUnassignedReferences' True)
+               "inherit cargo; echo $CARGO_INSTALL_PATH"
+prop_checkUnassignedReference_portageInheritedVarReferenceNoInherit =
+    verifyTree (withPortageParams (checkUnassignedReferences' True))
+               "echo $CARGO_INSTALL_PATH"
+prop_checkUnassignedReference_portageInheritedVarReferenceNoInheritOrPortage =
+    verifyTree (checkUnassignedReferences' True)
+               "echo $CARGO_INSTALL_PATH"
 prop_checkUnassignedReferences50 = verifyNotTree checkUnassignedReferences "echo ${foo:+bar}"
 prop_checkUnassignedReferences51 = verifyNotTree checkUnassignedReferences "echo ${foo:+$foo}"
 prop_checkUnassignedReferences52 = verifyNotTree checkUnassignedReferences "wait -p pid; echo $pid"
@@ -2452,6 +2589,7 @@ checkUnassignedReferences' includeGlobals params t = warnings
   where
     (readMap, writeMap) = execState (mapM tally $ variableFlow params) (Map.empty, Map.empty)
     defaultAssigned = Map.fromList $ map (\a -> (a, ())) $ filter (not . null) internalVariables
+    internalVariables = allInternalVariables params
 
     tally (Assignment (_, _, name, _))  =
         modify (\(read, written) -> (read, Map.insert name () written))
@@ -3199,6 +3337,7 @@ checkUncheckedCdPushdPopd params root =
           [_, str] -> str `matches` regex
           _ -> False
     regex = mkRegex "^/*((\\.|\\.\\.)/+)*(\\.|\\.\\.)?$"
+    exit = if isPortageBuild params then "die" else "exit"
 
 prop_checkLoopVariableReassignment1 = verify checkLoopVariableReassignment "for i in *; do for i in *.bar; do true; done; done"
 prop_checkLoopVariableReassignment2 = verify checkLoopVariableReassignment "for i in *; do for((i=0; i<3; i++)); do true; done; done"
@@ -3509,6 +3648,18 @@ prop_checkSplittingInArrays5 = verifyNot checkSplittingInArrays "a=( $! $$ $# )"
 prop_checkSplittingInArrays6 = verifyNot checkSplittingInArrays "a=( ${#arr[@]} )"
 prop_checkSplittingInArrays7 = verifyNot checkSplittingInArrays "a=( foo{1,2} )"
 prop_checkSplittingInArrays8 = verifyNot checkSplittingInArrays "a=( * )"
+prop_checkSplittingInArraysUseWith1 = verify checkSplittingInArrays "a=( $(use_with b) )"
+prop_checkSplittingInArraysUseWith2 = verifyNot (withPortageParams checkSplittingInArrays) "a=( $(use_with b) )"
+prop_checkSplittingInArraysUseEnable1 = verify checkSplittingInArrays "a=( `use_enable b` )"
+prop_checkSplittingInArraysUseEnable2 = verifyNot (withPortageParams checkSplittingInArrays) "a=( `use_enable b` )"
+prop_checkSplittingInArraysMesonUse1 = verify checkSplittingInArrays "a=( `meson_use b` )"
+prop_checkSplittingInArraysMesonUse2 = verifyNot (withPortageParams checkSplittingInArrays) "a=( `meson_use b` )"
+prop_checkSplittingInArraysMesonFeature1 = verify checkSplittingInArrays "a=( `meson_feature b` )"
+prop_checkSplittingInArraysMesonFeature2 = verifyNot (withPortageParams checkSplittingInArrays) "a=( `meson_feature b` )"
+prop_checkSplittingInArraysUsex1 = verify checkSplittingInArrays "a=( $(usex X Y Z) )"
+prop_checkSplittingInArraysUsex2 = verify (withPortageParams checkSplittingInArrays) "a=( `usex X \"Y Z\" W` )"
+prop_checkSplittingInArraysUsex3 = verify (withPortageParams checkSplittingInArrays) "a=( `usex X \"${VAR}\" W` )"
+prop_checkSPlittingInArraysUsex4 = verifyNot (withPortageParams checkSplittingInArrays) "a=( `usex X Y Z` )"
 checkSplittingInArrays params t =
     case t of
         T_Array _ elements -> mapM_ check elements
@@ -3518,9 +3669,9 @@ checkSplittingInArrays params t =
         T_NormalWord _ parts -> mapM_ checkPart parts
         _ -> return ()
     checkPart part = case part of
-        T_DollarExpansion id _ -> forCommand id
-        T_DollarBraceCommandExpansion id _ -> forCommand id
-        T_Backticked id _ -> forCommand id
+        T_DollarExpansion id str -> forCommand id part
+        T_DollarBraceCommandExpansion id str -> forCommand id part
+        T_Backticked id _ -> forCommand id part
         T_DollarBraced id _ str |
             not (isCountingReference part)
             && not (isQuotedAlternativeReference part)
@@ -3531,7 +3682,8 @@ checkSplittingInArrays params t =
                 else "Quote to prevent word splitting/globbing, or split robustly with mapfile or read -a."
         _ -> return ()
 
-    forCommand id =
+    forCommand id t =
+        unless (commandNeverProducesSpaces params t) $
         warn id 2207 $
             if shellType params == Ksh
             then "Prefer read -A or while read to split command output (or quote to avoid splitting)."
