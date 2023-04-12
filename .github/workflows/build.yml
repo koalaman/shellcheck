@@ -47,7 +47,7 @@ jobs:
     needs: package_source
     strategy:
       matrix:
-        build: [linux.x86_64, linux.aarch64, linux.armv6hf, darwin.x86_64, windows.x86_64]
+        build: [linux.x86_64, linux.aarch64, linux.armv6hf, darwin.x86_64, darwin.aarch64, windows.x86_64]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
