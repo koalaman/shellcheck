@@ -227,6 +227,7 @@ Alternatively, you can download pre-compiled binaries for the latest release her
 * [Linux, armv6hf](https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.linux.armv6hf.tar.xz), i.e. Raspberry Pi (statically linked)
 * [Linux, aarch64](https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.linux.aarch64.tar.xz) aka ARM64 (statically linked)
 * [macOS, x86_64](https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.darwin.x86_64.tar.xz)
+* [macOS, aarch64](https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.darwin.aarch64.tar.xz)
 * [Windows, x86](https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.zip)
 
 or see the [GitHub Releases](https://github.com/koalaman/shellcheck/releases) for other releases
@@ -548,4 +549,3 @@ Happy ShellChecking!
 
 * The wiki has [long form descriptions](https://github.com/koalaman/shellcheck/wiki/Checks) for each warning, e.g. [SC2221](https://github.com/koalaman/shellcheck/wiki/SC2221).
 * ShellCheck does not attempt to enforce any kind of formatting or indenting style, so also check out [shfmt](https://github.com/mvdan/sh)!
-
