@@ -232,7 +232,8 @@ Alternatively, you can download pre-compiled binaries for the latest release her
 or see the [GitHub Releases](https://github.com/koalaman/shellcheck/releases) for other releases
 (including the [latest](https://github.com/koalaman/shellcheck/releases/tag/latest) meta-release for daily git builds).
 
-You can also find pre-compiled binaries repackaged in `.tar.gz` format in the [VS Code ShellCheck Binaries](https://github.com/vscode-shellcheck/shellcheck-binaries/releases) repository. It also includes a pre-compiled binary for **Apple M1** processors.
+There are currently no official binaries for Apple Silicon, but third party builds are available via
+[ShellCheck for Visual Studio Code](https://github.com/vscode-shellcheck/shellcheck-binaries/releases).
 
 Distro packages already come with a `man` page. If you are building from source, it can be installed with:
 
