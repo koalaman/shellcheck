@@ -3,28 +3,10 @@
 # binaries previously built and deployed to GitHub.
 
 function multi_arch_docker::install_docker_buildx() {
-  # Install up-to-date version of docker, with buildx support.
-  local -r docker_apt_repo='https://download.docker.com/linux/ubuntu'
-  curl -fsSL "${docker_apt_repo}/gpg" | sudo apt-key add -
-  local -r os="$(lsb_release -cs)"
-  sudo add-apt-repository "deb [arch=amd64] $docker_apt_repo $os stable"
-  sudo apt-get update
-  sudo apt-get -y -o Dpkg::Options::="--force-confnew" install docker-ce
-
-  # Enable docker daemon experimental support (for 'pull --platform').
-  local -r config='/etc/docker/daemon.json'
-  if [[ -e "$config" ]]; then
-    sudo sed -i -e 's/{/{ "experimental": true, /' "$config"
-  else
-    echo '{ "experimental": true }' | sudo tee "$config"
-  fi
-  sudo systemctl restart docker
-
   # Install QEMU multi-architecture support for docker buildx.
   docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
 
   # Instantiate docker buildx builder with multi-architecture support.
-  export DOCKER_CLI_EXPERIMENTAL=enabled
   docker buildx create --name mybuilder
   docker buildx use mybuilder
   # Start up buildx and verify that all is OK.
