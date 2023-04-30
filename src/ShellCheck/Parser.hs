@@ -3360,6 +3360,7 @@ readScriptFile sourced = do
         "awk",
         "csh",
         "expect",
+        "fish",
         "perl",
         "python",
         "ruby",
