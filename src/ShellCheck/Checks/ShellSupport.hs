@@ -188,6 +188,7 @@ prop_checkBashisms100 = verify checkBashisms "read -r"
 prop_checkBashisms101 = verify checkBashisms "read"
 prop_checkBashisms102 = verifyNot checkBashisms "read -r foo"
 prop_checkBashisms103 = verifyNot checkBashisms "read foo"
+prop_checkBashisms104 = verifyNot checkBashisms "read ''"
 checkBashisms = ForShell [Sh, Dash] $ \t -> do
     params <- ask
     kludge params t
@@ -288,13 +289,6 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
           argString = concat $ oversimplify arg
           flagRegex = mkRegex "^-[eEsn]+$"
 
-    bashism t@(T_SimpleCommand _ _ (cmd:args))
-        | t `isCommand` "read" && length (onlyNames args) == 0 =
-            warnMsg (getId cmd) 3061 "read without a variable is"
-      where
-        notFlag arg = head (concat $ oversimplify arg) /= '-'
-        onlyNames = filter (notFlag)
-
     bashism t@(T_SimpleCommand _ _ (cmd:arg:_))
         | getLiteralString cmd == Just "exec" && "-" `isPrefixOf` concat (oversimplify arg) =
             warnMsg (getId arg) 3038 "exec flags are"
@@ -390,6 +384,9 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
                 let literal = onlyLiteralString format
                 guard $ "%q" `isInfixOf` literal
                 return $ warnMsg (getId format) 3050 "printf %q is"
+
+            when (name == "read" && all isFlag rest) $
+                warnMsg (getId cmd) 3061 "read without a variable is"
       where
         unsupportedCommands = [
             "let", "caller", "builtin", "complete", "compgen", "declare", "dirs", "disown",
