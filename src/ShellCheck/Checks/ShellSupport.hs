@@ -184,6 +184,11 @@ prop_checkBashisms96 = verifyNot checkBashisms "#!/bin/dash\necho $_"
 prop_checkBashisms97 = verify checkBashisms "#!/bin/sh\necho ${var,}"
 prop_checkBashisms98 = verify checkBashisms "#!/bin/sh\necho ${var^^}"
 prop_checkBashisms99 = verify checkBashisms "#!/bin/dash\necho [^f]oo"
+prop_checkBashisms100 = verify checkBashisms "read -r"
+prop_checkBashisms101 = verify checkBashisms "read"
+prop_checkBashisms102 = verifyNot checkBashisms "read -r foo"
+prop_checkBashisms103 = verifyNot checkBashisms "read foo"
+prop_checkBashisms104 = verifyNot checkBashisms "read ''"
 checkBashisms = ForShell [Sh, Dash] $ \t -> do
     params <- ask
     kludge params t
@@ -379,6 +384,9 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
                 let literal = onlyLiteralString format
                 guard $ "%q" `isInfixOf` literal
                 return $ warnMsg (getId format) 3050 "printf %q is"
+
+            when (name == "read" && all isFlag rest) $
+                warnMsg (getId cmd) 3061 "read without a variable is"
       where
         unsupportedCommands = [
             "let", "caller", "builtin", "complete", "compgen", "declare", "dirs", "disown",
