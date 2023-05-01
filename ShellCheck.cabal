@@ -46,7 +46,7 @@ library
         semigroups
     build-depends:
       -- The lower bounds are based on GHC 7.10.3
-      -- The upper bounds are based on GHC 9.4.3
+      -- The upper bounds are based on GHC 9.6.1
       aeson                >= 1.4.0 && < 2.2,
       array                >= 0.5.1 && < 0.6,
       base                 >= 4.8.0.0 && < 5,
@@ -54,13 +54,13 @@ library
       containers           >= 0.5.6 && < 0.7,
       deepseq              >= 1.4.1 && < 1.5,
       Diff                 >= 0.4.0 && < 0.5,
-      fgl                  >= 5.7.0 && < 5.8.1.0,
+      fgl                  (>= 5.7.0 && < 5.8.1.0) || (>= 5.8.1.1 && < 5.9),
       filepath             >= 1.4.0 && < 1.5,
-      mtl                  >= 2.2.2 && < 2.3,
+      mtl                  >= 2.2.2 && < 2.4,
       parsec               >= 3.1.14 && < 3.2,
       QuickCheck           >= 2.14.2 && < 2.15,
       regex-tdfa           >= 1.2.0 && < 1.4,
-      transformers         >= 0.4.2 && < 0.6,
+      transformers         >= 0.4.2 && < 0.7,
 
       -- getXdgDirectory from 1.2.3.0
       directory            >= 1.2.3 && < 1.4,
