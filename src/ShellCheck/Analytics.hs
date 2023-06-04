@@ -2134,7 +2134,8 @@ checkSpacefulnessCfg' dirtyPass params token@(T_DollarBraced id _ list) =
                     addDoubleQuotesAround params token
 
   where
-    name = getBracedReference $ concat $ oversimplify list
+    bracedString = concat $ oversimplify list
+    name = getBracedReference bracedString
     parents = parentMap params
     needsQuoting =
               not (isArrayExpansion token) -- There's another warning for this
@@ -2153,13 +2154,9 @@ checkSpacefulnessCfg' dirtyPass params token@(T_DollarBraced id _ list) =
         || CF.spaceStatus (CF.variableValue state) == CF.SpaceStatusClean
 
     isDefaultAssignment parents token =
-        let modifier = getBracedModifier $ bracedString token in
+        let modifier = getBracedModifier bracedString in
             any (`isPrefixOf` modifier) ["=", ":="]
             && isParamTo parents ":" token
-
-    -- Given a T_DollarBraced, return a simplified version of the string contents.
-    bracedString (T_DollarBraced _ _ l) = concat $ oversimplify l
-    bracedString _ = error $ pleaseReport "bracedString on non-variable"
 
 checkSpacefulnessCfg' _ _ _ = return ()
 
