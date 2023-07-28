@@ -562,7 +562,7 @@ checkPipePitfalls _ (T_Pipeline id _ commands) = do
                 hasParameter "print0",
                 hasParameter "printf"
               ]) $ warn (getId find) 2038
-                      "Use -print0/-0 or -exec + to allow for non-alphanumeric filenames."
+                      "Use 'find .. -print0 | xargs -0 ..' or 'find .. -exec .. +' to allow non-alphanumeric filenames."
 
     for ["ps", "grep"] $
         \(ps:grep:_) ->
