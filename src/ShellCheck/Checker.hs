@@ -508,5 +508,14 @@ prop_rcCanSuppressEarlyProblems2 = null result
         csScript = "!/bin/bash\necho 'hello world'"
     }
 
+prop_sourceWithHereDocWorks = null result
+  where
+    result = checkWithIncludes [("bar", "true\n")] "source bar << eof\nlol\neof"
+
+prop_hereDocsAreParsedWithoutTrailingLinefeed = 1044 `elem` result
+  where
+    result = check "cat << eof"
+
+
 return []
 runTests = $quickCheckAll

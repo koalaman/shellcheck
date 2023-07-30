@@ -1,8 +1,9 @@
 ## Git
 ### Added
-- SC2324: Warn when x+=1 appends instead of increments.
+- SC2324: Warn when x+=1 appends instead of increments
 
 ### Fixed
+- source statements with here docs now work correctly
 
 ### Changed
 

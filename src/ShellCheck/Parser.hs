@@ -2283,8 +2283,13 @@ readSource t@(T_Redirecting _ _ (T_SimpleCommand cmdId _ (cmd:file':rest'))) = d
 
     subRead name script =
         withContext (ContextSource name) $
-            inSeparateContext $
-                subParse (initialPos name) (readScriptFile True) script
+            inSeparateContext $ do
+                oldState <- getState
+                setState $ oldState { pendingHereDocs = [] }
+                result <- subParse (initialPos name) (readScriptFile True) script
+                newState <- getState
+                setState $ newState { pendingHereDocs = pendingHereDocs oldState }
+                return result
 readSource t = return t
 
 
@@ -3322,6 +3327,7 @@ readScriptFile sourced = do
               then do
                     commands <- readCompoundListOrEmpty
                     id <- endSpan start
+                    readPendingHereDocs
                     verifyEof
                     let script = T_Annotation annotationId annotations $
                                     T_Script id shebang commands
