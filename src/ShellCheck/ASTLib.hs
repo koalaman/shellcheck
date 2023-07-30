@@ -886,6 +886,15 @@ isUnmodifiedParameterExpansion t =
             in getBracedReference str == str
         _ -> False
 
+-- Return the referenced variable if (and only if) it's an unmodified parameter expansion.
+getUnmodifiedParameterExpansion t =
+    case t of
+        T_DollarBraced _ _ list -> do
+            let str = concat $ oversimplify list
+            guard $ getBracedReference str == str
+            return str
+        _ -> Nothing
+
 --- A list of the element and all its parents up to the root node.
 getPath tree t = t :
     case Map.lookup (getId t) tree of

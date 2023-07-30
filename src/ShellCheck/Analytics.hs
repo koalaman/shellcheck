@@ -201,6 +201,7 @@ nodeChecks = [
     ,checkOverwrittenExitCode
     ,checkUnnecessaryArithmeticExpansionIndex
     ,checkUnnecessaryParens
+    ,checkPlusEqualsNumber
     ]
 
 optionalChecks = map fst optionalTreeChecks
@@ -5005,6 +5006,43 @@ checkUnnecessaryParens params t =
             replaceStart id params 1 "", -- Remove "("
             replaceEnd id params 1 ""    -- Remove ")"
         ]
+
+
+prop_checkPlusEqualsNumber1 = verify checkPlusEqualsNumber "x+=1"
+prop_checkPlusEqualsNumber2 = verify checkPlusEqualsNumber "x+=42"
+prop_checkPlusEqualsNumber3 = verifyNot checkPlusEqualsNumber "(( x += 1 ))"
+prop_checkPlusEqualsNumber4 = verifyNot checkPlusEqualsNumber "declare -i x=0; x+=1"
+prop_checkPlusEqualsNumber5 = verifyNot checkPlusEqualsNumber "x+='1'"
+prop_checkPlusEqualsNumber6 = verifyNot checkPlusEqualsNumber "n=foo; x+=n"
+prop_checkPlusEqualsNumber7 = verify checkPlusEqualsNumber "n=4; x+=n"
+prop_checkPlusEqualsNumber8 = verify checkPlusEqualsNumber "n=4; x+=$n"
+prop_checkPlusEqualsNumber9 = verifyNot checkPlusEqualsNumber "declare -ia var; var[x]+=1"
+checkPlusEqualsNumber params t =
+    case t of
+        T_Assignment id Append var _ word -> sequence_ $ do
+            state <- CF.getIncomingState (cfgAnalysis params) id
+            guard $ isNumber state word
+            guard . not $ fromMaybe False $ CF.variableMayBeDeclaredInteger state var
+            return $ warn id 2324 "var+=1 will append, not increment. Use (( var += 1 )), declare -i var, or quote number to silence."
+        _ -> return ()
+
+  where
+    isNumber state word =
+        let
+            unquotedLiteral = getUnquotedLiteral word
+            isEmpty = unquotedLiteral == Just ""
+            isUnquotedNumber = not isEmpty && fromMaybe False (all isDigit <$> unquotedLiteral)
+            isNumericalVariableName = fromMaybe False $ do
+                str <- unquotedLiteral
+                CF.variableMayBeAssignedInteger state str
+            isNumericalVariableExpansion =
+                case word of
+                    T_NormalWord _ [part] -> fromMaybe False $ do
+                        str <- getUnmodifiedParameterExpansion part
+                        CF.variableMayBeAssignedInteger state str
+                    _ -> False
+        in
+            isUnquotedNumber || isNumericalVariableName || isNumericalVariableExpansion
 
 
 return []

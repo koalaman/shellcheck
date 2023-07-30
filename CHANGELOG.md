@@ -1,5 +1,6 @@
 ## Git
 ### Added
+- SC2324: Warn when x+=1 appends instead of increments.
 
 ### Fixed
 
