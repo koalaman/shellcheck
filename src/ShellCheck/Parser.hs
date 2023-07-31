@@ -2296,14 +2296,18 @@ readSource t = return t
 prop_readPipeline = isOk readPipeline "! cat /etc/issue | grep -i ubuntu"
 prop_readPipeline2 = isWarning readPipeline "!cat /etc/issue | grep -i ubuntu"
 prop_readPipeline3 = isOk readPipeline "for f; do :; done|cat"
+prop_readPipeline4 = isOk readPipeline "! ! true"
+prop_readPipeline5 = isOk readPipeline "true | ! true"
 readPipeline = do
     unexpecting "keyword/token" readKeyword
-    do
-        (T_Bang id) <- g_Bang
-        pipe <- readPipeSequence
-        return $ T_Banged id pipe
-      <|>
-        readPipeSequence
+    readBanged readPipeSequence
+
+readBanged parser = do
+    pos <- getPosition
+    (T_Bang id) <- g_Bang
+    next <- readBanged parser
+    return $ T_Banged id next
+ <|> parser
 
 prop_readAndOr = isOk readAndOr "grep -i lol foo || exit 1"
 prop_readAndOr1 = isOk readAndOr "# shellcheck disable=1\nfoo"
@@ -2359,7 +2363,7 @@ readTerm = do
 
 readPipeSequence = do
     start <- startSpan
-    (cmds, pipes) <- sepBy1WithSeparators readCommand
+    (cmds, pipes) <- sepBy1WithSeparators (readBanged readCommand)
                         (readPipe `thenSkip` (spacing >> readLineBreak))
     id <- endSpan start
     spacing
@@ -2389,6 +2393,10 @@ readCommand = choice [
     ]
 
 readCmdName = do
+    -- If the command name is `!` then
+    optional . lookAhead . try $ do
+        char '!'
+        whitespace
     -- Ignore alias suppression
     optional . try $ do
         char '\\'

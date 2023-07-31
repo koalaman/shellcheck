@@ -60,6 +60,8 @@ checks = [
     ,checkBraceExpansionVars
     ,checkMultiDimensionalArrays
     ,checkPS1Assignments
+    ,checkMultipleBangs
+    ,checkBangAfterPipe
     ]
 
 testChecker (ForShell _ t) =
@@ -565,6 +567,30 @@ checkPS1Assignments = ForShell [Bash] f
     enclosedRegex = mkRegex "\\\\\\[.*\\\\\\]" -- FIXME: shouldn't be eager
     escapeRegex = mkRegex "\\\\x1[Bb]|\\\\e|\x1B|\\\\033"
 
+
+prop_checkMultipleBangs1 = verify checkMultipleBangs "! ! true"
+prop_checkMultipleBangs2 = verifyNot checkMultipleBangs "! true"
+checkMultipleBangs = ForShell [Dash, Sh] f
+  where
+    f token = case token of
+        T_Banged id (T_Banged _ _) ->
+            err id 2325 "Multiple ! in front of pipelines are a bash/ksh extension. Use only 0 or 1."
+        _ -> return ()
+
+
+prop_checkBangAfterPipe1 = verify checkBangAfterPipe "true | ! true"
+prop_checkBangAfterPipe2 = verifyNot checkBangAfterPipe "true | ( ! true )"
+prop_checkBangAfterPipe3 = verifyNot checkBangAfterPipe "! ! true | true"
+checkBangAfterPipe = ForShell [Dash, Sh, Bash] f
+  where
+    f token = case token of
+        T_Pipeline _ _ cmds -> mapM_ check cmds
+        _ -> return ()
+
+    check token = case token of
+        T_Banged id _ ->
+            err id 2326 "! is not allowed in the middle of pipelines. Use command group as in cmd | { ! cmd; } if necessary."
+        _ -> return ()
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
