@@ -97,6 +97,7 @@ library
       ShellCheck.Regex
     other-modules:
       Paths_ShellCheck
+      ShellCheck.PortageVariables
       ShellCheck.PortageAutoInternalVariables
     default-language: Haskell98
 
