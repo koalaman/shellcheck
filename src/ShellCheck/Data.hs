@@ -25,7 +25,7 @@ Use:
 import Paths_ShellCheck (version)
 shellcheckVersion = showVersion version  -- VERSIONSTRING
 
-
+genericInternalVariables :: [String]
 genericInternalVariables = [
     -- Generic
     "", "_", "rest", "REST",
@@ -153,7 +153,7 @@ eclassVarsFromMap :: EclassMap -> String -> [String]
 eclassVarsFromMap gMap eclass =
     Data.Map.findWithDefault []
                              eclass
-                             gMap
+                             (Data.Map.map (map decodeLenient) gMap)
 
 portageInternalVariables :: [String] -> EclassMap -> [String]
 portageInternalVariables inheritedEclasses gMap =

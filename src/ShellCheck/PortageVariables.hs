@@ -1,3 +1,7 @@
+{-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections #-}
 
 module ShellCheck.PortageVariables
     ( RepoName
@@ -9,25 +13,37 @@ module ShellCheck.PortageVariables
     , Eclass(..)
     , portageVariables
     , scanRepos
+    , decodeLenient
     ) where
 
 import Control.Applicative
+import Control.Exception (bracket)
 import Control.Monad
-import Control.Monad.Trans.Class
+import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe
-import Data.Map (Map)
+import Data.Attoparsec.ByteString
+import qualified Data.Attoparsec.ByteString as A
+import Data.Attoparsec.ByteString.Char8 hiding (takeWhile)
+import Data.ByteString (ByteString)
+import qualified Data.ByteString as B
+import Data.Char (ord)
 import qualified Data.Map as M
+import Data.Maybe (fromJust)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
+import qualified Data.Text.Encoding.Error as T
 import System.Directory (listDirectory)
 import System.Exit (ExitCode(..))
 import System.FilePath
+import System.IO (hClose)
 import System.Process
-import Text.Parsec hiding ((<|>))
-import Text.Parsec.String
 
-type RepoName = String
-type RepoPath = FilePath
+import Prelude hiding (takeWhile)
+
+type RepoName = ByteString
+type RepoPath = ByteString
 type EclassName = String
-type EclassVar = String
+type EclassVar = ByteString
 
 -- | This is used for looking up what eclass variables are inherited,
 --   keyed by the name of the eclass.
@@ -57,7 +73,7 @@ scanRepos = do
     let cmd = "/usr/bin/portageq"
     let args = ["repos_config", "/"]
     out <- runOrDie cmd args
-    case parse reposParser "scanRepos" out of
+    case parseOnly reposParser out of
         Left pe -> fail $ show pe
         Right nps -> do
             forM nps $ \(n,p) -> Repository n p <$> getEclasses p
@@ -67,27 +83,29 @@ scanRepos = do
 reposParser :: Parser [(RepoName, RepoPath)]
 reposParser =
     choice
-        [ [] <$ eof
+        [ [] <$ endOfInput
         , repoName >>= repoBlock
         ]
   where
     -- Get the name of the repo at the top of the block
     repoName :: Parser RepoName
-    repoName
-        =  char '['
-        *> manyTill anyChar (try (char ']'))
-        <* endOfLine
+    repoName = do
+        _ <- char '['
+        n <- takeWhile (/= fromIntegral (ord ']'))
+        _ <- char ']'
+        _ <- endOfLine
+        pure n
 
     -- Parse the block for location field
     repoBlock :: RepoName -> Parser [(RepoName, RepoPath)]
     repoBlock n = choice
-        [ try $ do
-            l <- string "location = " *> takeLine
+        [ do
+            l <- "location = " *> takeLine
             -- Found the location, skip the rest of the block
             skipMany miscLine *> endOfBlock
             insert (n,l)
           -- Did not find the location, keep trying
-        , try $ miscLine *> repoBlock n
+        , miscLine *> repoBlock n
           -- Reached the end of the block, no location field
         , endOfBlock *> ignore
         ]
@@ -95,9 +113,9 @@ reposParser =
     miscLine :: Parser ()
     miscLine = skipNonEmptyLine
 
-    -- A block ends with an eol or eof
+    -- A block either ends with an empty line or eof
     endOfBlock :: Parser ()
-    endOfBlock = void endOfLine <|> eof
+    endOfBlock = endOfLine <|> endOfInput
 
     -- cons the repo and continue parsing
     insert :: (RepoName, RepoPath) -> Parser [(RepoName, RepoPath)]
@@ -114,7 +132,7 @@ reposParser =
 --   repo.
 getEclasses :: RepoPath -> IO [Eclass]
 getEclasses repoLoc = fmap (maybe [] id) $ runMaybeT $ do
-    let eclassDir = repoLoc </> "eclass"
+    let eclassDir = (decodeLenient repoLoc) </> "eclass"
 
     -- Silently fail if the repo doesn't have an eclass dir
     fs <- MaybeT $ Just <$> listDirectory eclassDir <|> pure Nothing
@@ -131,40 +149,57 @@ getEclasses repoLoc = fmap (maybe [] id) $ runMaybeT $ do
 eclassParser :: Parser [EclassVar]
 eclassParser = choice
         [ -- cons the EclassVar to the list and continue
-          try $ liftA2 (:) eclassVar eclassParser
+          liftA2 (:) eclassVar eclassParser
           -- or skip the line and continue
         , skipLine *> eclassParser
           -- or end the list on eof
-        , [] <$ eof
+        , [] <$ endOfInput
         ]
   where
     -- Scans for @ECLASS_VARIABLE comments rather than parsing the raw bash
     eclassVar :: Parser EclassVar
-    eclassVar = string "# @ECLASS_VARIABLE: " *> takeLine
+    eclassVar = "# @ECLASS_VARIABLE: " *> takeLine
 
-takeLine :: Parser String
-takeLine = manyTill anyChar (try endOfLine)
+takeLine :: Parser ByteString
+takeLine = A.takeWhile (not . isEndOfLine) <* endOfLine
 
 -- | Fails if next char is 'endOfLine'
 skipNonEmptyLine :: Parser ()
-skipNonEmptyLine = notFollowedBy endOfLine *> skipLine
+skipNonEmptyLine = A.satisfy (not . isEndOfLine) *> skipLine
 
 skipLine :: Parser ()
-skipLine = void takeLine
+skipLine = A.skipWhile (not . isEndOfLine) <* endOfLine
+
+parseFromFile :: Parser a -> FilePath -> IO (Either String a)
+parseFromFile p = fmap (parseOnly p) . B.readFile
 
 -- | Run the command and return the full stdout string (stdin is ignored).
 --
 --   If the command exits with a non-zero exit code, this will throw an
 --   error including the captured contents of stdout and stderr.
-runOrDie :: FilePath -> [String] -> IO String
-runOrDie cmd args = do
-    (ec, o, e) <- readProcessWithExitCode cmd args ""
+runOrDie :: FilePath -> [String] -> IO ByteString
+runOrDie cmd args = bracket acquire release $ \(_,o,e,p) -> do
+    ot <- B.hGetContents (fromJust o)
+    et <- B.hGetContents (fromJust e)
+    ec <- waitForProcess p
     case ec of
-        ExitSuccess -> pure o
+        ExitSuccess -> pure ot
         ExitFailure i -> fail $ unlines $ map unwords
             $   [ [ show cmd ]
                     ++ map show args
                     ++ [ "failed with exit code", show i]
-                , [ "stdout:" ], [ o ]
-                , [ "stderr:" ], [ e ]
+                , [ "stdout:" ], [ decodeLenient ot ]
+                , [ "stderr:" ], [ decodeLenient et ]
                 ]
+  where
+    acquire = createProcess (proc cmd args)
+        { std_in = NoStream
+        , std_out = CreatePipe
+        , std_err = CreatePipe
+        }
+    release (i,o,e,p) = do
+        _ <- waitForProcess p
+        forM_ [i,o,e] $ mapM_ hClose
+
+decodeLenient :: ByteString -> String
+decodeLenient = T.unpack . T.decodeUtf8With T.lenientDecode
