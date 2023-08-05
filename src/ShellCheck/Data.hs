@@ -3,7 +3,6 @@ module ShellCheck.Data where
 import qualified Data.Map
 import ShellCheck.Interface
 import ShellCheck.PortageVariables
-import ShellCheck.PortageAutoInternalVariables
 import Data.Version (showVersion)
 
 
