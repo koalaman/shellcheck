@@ -2412,7 +2412,10 @@ allInternalVariables params =
     genericInternalVariables ++
     if shellType params == Ksh then kshInternalVariables else [] ++
     if isPortageBuild params
-    then portageInternalVariables (getInheritedEclasses (rootNode params))
+    then
+        let eclasses = getInheritedEclasses $ rootNode params
+            gMap = gentooData params
+        in portageInternalVariables eclasses gMap
     else []
 
 prop_checkUnused0 = verifyNotTree checkUnusedAssignments "var=foo; echo $var"

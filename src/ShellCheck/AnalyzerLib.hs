@@ -27,6 +27,7 @@ import qualified ShellCheck.CFGAnalysis as CF
 import ShellCheck.Data
 import ShellCheck.Interface
 import ShellCheck.Parser
+import ShellCheck.PortageVariables
 import ShellCheck.Prelude
 import ShellCheck.Regex
 
@@ -104,6 +105,8 @@ data Parameters = Parameters {
     tokenPositions     :: Map.Map Id (Position, Position),
     -- detailed type of any Portage related file
     portageFileType    :: PortageFileType,
+    -- Gentoo-specific data
+    gentooData         :: EclassMap,
     -- Result from Control Flow Graph analysis (including data flow analysis)
     cfgAnalysis :: CF.CFGAnalysis
     } deriving (Show)
@@ -243,6 +246,7 @@ makeParameters spec = params
         variableFlow = getVariableFlow params root,
         tokenPositions = asTokenPositions spec,
         portageFileType = asPortageFileType spec,
+        gentooData = asGentooData spec,
         cfgAnalysis = CF.analyzeControlFlow cfParams root
     }
     cfParams = CF.CFGParameters {

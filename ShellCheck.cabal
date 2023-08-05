@@ -93,11 +93,11 @@ library
       ShellCheck.Formatter.Quiet
       ShellCheck.Interface
       ShellCheck.Parser
+      ShellCheck.PortageVariables
       ShellCheck.Prelude
       ShellCheck.Regex
     other-modules:
       Paths_ShellCheck
-      ShellCheck.PortageVariables
       ShellCheck.PortageAutoInternalVariables
     default-language: Haskell98
 

@@ -2,7 +2,9 @@
 module ShellCheck.PortageVariables
     ( RepoName
     , RepoPath
+    , EclassName
     , EclassVar
+    , EclassMap
     , Repository(..)
     , Eclass(..)
     , portageVariables
@@ -18,13 +20,18 @@ import qualified Data.Map as M
 import System.Directory (listDirectory)
 import System.Exit (ExitCode(..))
 import System.FilePath
-import System.Process -- (readProcessWithExitCode)
+import System.Process
 import Text.Parsec hiding ((<|>))
 import Text.Parsec.String
 
 type RepoName = String
 type RepoPath = FilePath
+type EclassName = String
 type EclassVar = String
+
+-- | This is used for looking up what eclass variables are inherited,
+--   keyed by the name of the eclass.
+type EclassMap = M.Map EclassName [EclassVar]
 
 data Repository = Repository
     { repositoryName :: RepoName
@@ -33,11 +40,12 @@ data Repository = Repository
     } deriving (Show, Eq, Ord)
 
 data Eclass = Eclass
-    { eclassName :: String
+    { eclassName :: EclassName
     , eclassVars :: [EclassVar]
     } deriving (Show, Eq, Ord)
 
-portageVariables :: [Repository] -> Map String [EclassVar]
+-- | Map from eclass names to a list of eclass variables
+portageVariables :: [Repository] -> EclassMap
 portageVariables = foldMap $ foldMap go . repositoryEclasses
   where
     go e = M.singleton (eclassName e) (eclassVars e)
@@ -91,9 +99,11 @@ reposParser =
     endOfBlock :: Parser ()
     endOfBlock = void endOfLine <|> eof
 
+    -- cons the repo and continue parsing
     insert :: (RepoName, RepoPath) -> Parser [(RepoName, RepoPath)]
     insert r = (r:) <$> reposParser
 
+    -- skip the repo and continue parsing
     ignore :: Parser [(RepoName, RepoPath)]
     ignore = reposParser
 
@@ -116,6 +126,8 @@ getEclasses repoLoc = fmap (maybe [] id) $ runMaybeT $ do
             Left pe -> lift $ fail $ show pe
             Right vs -> pure $ Eclass n vs
 
+-- | Scan a @.eclass@ file for any @@@ECLASS_VARIABLE:@ comments, generating
+--   a list of eclass variables.
 eclassParser :: Parser [EclassVar]
 eclassParser = choice
         [ -- cons the EclassVar to the list and continue

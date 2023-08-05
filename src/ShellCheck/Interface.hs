@@ -21,11 +21,11 @@
 module ShellCheck.Interface
     (
     SystemInterface(..)
-    , CheckSpec(csFilename, csScript, csCheckSourced, csIncludedWarnings, csExcludedWarnings, csShellTypeOverride, csMinSeverity, csIgnoreRC, csOptionalChecks)
+    , CheckSpec(csFilename, csScript, csCheckSourced, csIncludedWarnings, csExcludedWarnings, csShellTypeOverride, csMinSeverity, csIgnoreRC, csOptionalChecks, csGentooData)
     , CheckResult(crFilename, crComments)
     , ParseSpec(psFilename, psScript, psCheckSourced, psIgnoreRC, psShellTypeOverride)
     , ParseResult(prComments, prTokenPositions, prRoot)
-    , AnalysisSpec(asScript, asShellType, asFallbackShell, asExecutionMode, asCheckSourced, asTokenPositions, asOptionalChecks, asPortageFileType)
+    , AnalysisSpec(asScript, asShellType, asFallbackShell, asExecutionMode, asCheckSourced, asTokenPositions, asOptionalChecks, asPortageFileType, asGentooData)
     , AnalysisResult(arComments)
     , FormatterOptions(foColorOption, foWikiLinkCount)
     , Shell(Ksh, Sh, Bash, Dash)
@@ -63,6 +63,7 @@ module ShellCheck.Interface
     ) where
 
 import ShellCheck.AST
+import ShellCheck.PortageVariables (EclassMap)
 
 import Control.DeepSeq
 import Control.Monad.Identity
@@ -101,7 +102,8 @@ data CheckSpec = CheckSpec {
     csIncludedWarnings :: Maybe [Integer],
     csShellTypeOverride :: Maybe Shell,
     csMinSeverity :: Severity,
-    csOptionalChecks :: [String]
+    csOptionalChecks :: [String],
+    csGentooData :: EclassMap
 } deriving (Show, Eq)
 
 data CheckResult = CheckResult {
@@ -125,7 +127,8 @@ emptyCheckSpec = CheckSpec {
     csIncludedWarnings = Nothing,
     csShellTypeOverride = Nothing,
     csMinSeverity = StyleC,
-    csOptionalChecks = []
+    csOptionalChecks = [],
+    csGentooData = Map.empty
 }
 
 newParseSpec :: ParseSpec
@@ -182,7 +185,8 @@ data AnalysisSpec = AnalysisSpec {
     asCheckSourced :: Bool,
     asOptionalChecks :: [String],
     asTokenPositions :: Map.Map Id (Position, Position),
-    asPortageFileType :: PortageFileType
+    asPortageFileType :: PortageFileType,
+    asGentooData :: EclassMap
 }
 
 newAnalysisSpec token = AnalysisSpec {
@@ -193,7 +197,8 @@ newAnalysisSpec token = AnalysisSpec {
     asCheckSourced = False,
     asOptionalChecks = [],
     asTokenPositions = Map.empty,
-    asPortageFileType = NonPortageRelated
+    asPortageFileType = NonPortageRelated,
+    asGentooData = Map.empty
 }
 
 newtype AnalysisResult = AnalysisResult {

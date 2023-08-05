@@ -2,6 +2,7 @@ module ShellCheck.Data where
 
 import qualified Data.Map
 import ShellCheck.Interface
+import ShellCheck.PortageVariables
 import ShellCheck.PortageAutoInternalVariables
 import Data.Version (showVersion)
 
@@ -149,14 +150,15 @@ portageManualInternalVariables = [
     "LINGUAS"
   ]
 
-eclassVarsFromMap :: String -> [String]
-eclassVarsFromMap eclass =
+eclassVarsFromMap :: EclassMap -> String -> [String]
+eclassVarsFromMap gMap eclass =
     Data.Map.findWithDefault []
                              eclass
-                             portageAutoInternalVariables
+                             gMap
 
-portageInternalVariables inheritedEclasses =
-    portageManualInternalVariables ++ concatMap eclassVarsFromMap
+portageInternalVariables :: [String] -> EclassMap -> [String]
+portageInternalVariables inheritedEclasses gMap =
+    portageManualInternalVariables ++ concatMap (eclassVarsFromMap gMap)
                                                 inheritedEclasses
 
 specialIntegerVariables = [

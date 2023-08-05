@@ -89,7 +89,8 @@ checkScript sys spec = do
                     asExecutionMode = Executed,
                     asTokenPositions = tokenPositions,
                     asOptionalChecks = getEnableDirectives root ++ csOptionalChecks spec,
-                    asPortageFileType = getPortageFileType $ csFilename spec
+                    asPortageFileType = getPortageFileType $ csFilename spec,
+                    asGentooData = csGentooData spec
                 } where as = newAnalysisSpec root
         let analysisMessages =
                 maybe []
