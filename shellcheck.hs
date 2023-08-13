@@ -396,7 +396,7 @@ ioInterface options files = do
     inputs <- mapM normalize files
     cache <- newIORef emptyCache
     configCache <- newIORef ("", Nothing)
-    return SystemInterface {
+    return (newSystemInterface :: SystemInterface IO) {
         siReadFile = get cache inputs,
         siFindSource = findSourceFile inputs (sourcePaths options),
         siGetConfig = getConfig configCache

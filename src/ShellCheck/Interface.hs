@@ -39,11 +39,12 @@ module ShellCheck.Interface
     , ColorOption(ColorAuto, ColorAlways, ColorNever)
     , TokenComment(tcId, tcComment, tcFix)
     , emptyCheckResult
-    , newParseResult
-    , newAnalysisSpec
     , newAnalysisResult
+    , newAnalysisSpec
     , newFormatterOptions
+    , newParseResult
     , newPosition
+    , newSystemInterface
     , newTokenComment
     , mockedSystemInterface
     , mockRcFile
@@ -134,6 +135,14 @@ newParseSpec = ParseSpec {
     psIgnoreRC = False,
     psShellTypeOverride = Nothing
 }
+
+newSystemInterface :: Monad m => SystemInterface m
+newSystemInterface =
+    SystemInterface {
+        siReadFile = \_ _ -> return $ Left "Not implemented",
+        siFindSource = \_ _ _ name -> return name,
+        siGetConfig = \_ -> return Nothing
+    }
 
 -- Parser input and output
 data ParseSpec = ParseSpec {
@@ -311,7 +320,7 @@ data ColorOption =
 
 -- For testing
 mockedSystemInterface :: [(String, String)] -> SystemInterface Identity
-mockedSystemInterface files = SystemInterface {
+mockedSystemInterface files = (newSystemInterface :: SystemInterface Identity) {
     siReadFile = rf,
     siFindSource = fs,
     siGetConfig = const $ return Nothing
