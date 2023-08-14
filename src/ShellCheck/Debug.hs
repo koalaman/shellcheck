@@ -117,7 +117,8 @@ dummySystemInterface = mockedSystemInterface [
 cfgParams :: CFGParameters
 cfgParams = CFGParameters {
     cfLastpipe = False,
-    cfPipefail = False
+    cfPipefail = False,
+    cfAdditionalInitialVariables = []
 }
 
 -- An example script to play with

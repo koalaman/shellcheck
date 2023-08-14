@@ -87,7 +87,9 @@ data SystemInterface m = SystemInterface {
     --   find the sourced file
     siFindSource :: String -> Maybe Bool -> [String] -> String -> m FilePath,
     -- | Get the configuration file (name, contents) for a filename
-    siGetConfig :: String -> m (Maybe (FilePath, String))
+    siGetConfig :: String -> m (Maybe (FilePath, String)),
+    -- | Look up Portage Eclass variables
+    siGetPortageVariables :: m (Map.Map String [String])
 }
 
 -- ShellCheck input and output
@@ -141,7 +143,8 @@ newSystemInterface =
     SystemInterface {
         siReadFile = \_ _ -> return $ Left "Not implemented",
         siFindSource = \_ _ _ name -> return name,
-        siGetConfig = \_ -> return Nothing
+        siGetConfig = \_ -> return Nothing,
+        siGetPortageVariables = return Map.empty
     }
 
 -- Parser input and output

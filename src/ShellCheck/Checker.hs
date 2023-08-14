@@ -88,11 +88,12 @@ checkScript sys spec = do
                     asTokenPositions = tokenPositions,
                     asOptionalChecks = getEnableDirectives root ++ csOptionalChecks spec
                 } where as = newAnalysisSpec root
-        let analysisMessages =
-                maybe []
-                    (arComments . analyzeScript . analysisSpec)
-                        $ prRoot result
+        let getAnalysisMessages =
+                case prRoot result of
+                    Just root -> arComments <$> (analyzeScript sys $ analysisSpec root)
+                    Nothing -> return []
         let translator = tokenToPosition tokenPositions
+        analysisMessages <- getAnalysisMessages
         return . nub . sortMessages . filter shouldInclude $
             (parseMessages ++ map translator analysisMessages)
 

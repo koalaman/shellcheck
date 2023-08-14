@@ -31,14 +31,14 @@ import qualified ShellCheck.Checks.ShellSupport
 
 
 -- TODO: Clean up the cruft this is layered on
-analyzeScript :: AnalysisSpec -> AnalysisResult
-analyzeScript spec = newAnalysisResult {
-    arComments =
-        filterByAnnotation spec params . nub $
-            runChecker params (checkers spec params)
-}
-  where
-    params = makeParameters spec
+analyzeScript :: Monad m => SystemInterface m -> AnalysisSpec -> m AnalysisResult
+analyzeScript sys spec = do
+    params <- makeParameters sys spec
+    return $ newAnalysisResult {
+            arComments =
+                filterByAnnotation spec params . nub $
+                    runChecker params (checkers spec params)
+        }
 
 checkers spec params = mconcat $ map ($ params) [
     ShellCheck.Analytics.checker spec,

@@ -167,7 +167,9 @@ data CFGParameters = CFGParameters {
     -- Whether the last element in a pipeline runs in the current shell
     cfLastpipe :: Bool,
     -- Whether all elements in a pipeline count towards the exit status
-    cfPipefail :: Bool
+    cfPipefail :: Bool,
+    -- Additional variables to consider defined
+    cfAdditionalInitialVariables :: [String]
 }
 
 data CFGResult = CFGResult {

@@ -314,7 +314,7 @@ runAndGetComments f s = do
         let pr = pScript s
         root <- prRoot pr
         let spec = defaultSpec pr
-        let params = makeParameters spec
+        let params = runIdentity $ makeParameters (mockedSystemInterface []) spec
         return $
             filterByAnnotation spec params $
                 f params root
@@ -2451,7 +2451,7 @@ checkUnassignedReferences = checkUnassignedReferences' False
 checkUnassignedReferences' includeGlobals params t = warnings
   where
     (readMap, writeMap) = execState (mapM tally $ variableFlow params) (Map.empty, Map.empty)
-    defaultAssigned = Map.fromList $ map (\a -> (a, ())) $ filter (not . null) internalVariables
+    defaultAssigned = Map.fromList $ map (\a -> (a, ())) $ filter (not . null) (internalVariables ++ additionalKnownVariables params)
 
     tally (Assignment (_, _, name, _))  =
         modify (\(read, written) -> (read, Map.insert name () written))

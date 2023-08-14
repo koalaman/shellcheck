@@ -197,12 +197,13 @@ unreachableState = modified newInternalState {
 }
 
 -- The default state we assume we get from the environment
-createEnvironmentState :: InternalState
-createEnvironmentState = do
+createEnvironmentState :: CFGParameters -> InternalState
+createEnvironmentState params = do
     foldl' (flip ($)) newInternalState $ concat [
         addVars Data.internalVariables unknownVariableState,
         addVars Data.variablesWithoutSpaces spacelessVariableState,
-        addVars Data.specialIntegerVariables integerVariableState
+        addVars Data.specialIntegerVariables integerVariableState,
+        addVars (cfAdditionalInitialVariables params) unknownVariableState
         ]
   where
     addVars names val = map (\name -> insertGlobal name val) names
@@ -1344,7 +1345,7 @@ analyzeControlFlow params t =
         runST $ f cfg entry exit
   where
     f cfg entry exit = do
-        let env = createEnvironmentState
+        let env = createEnvironmentState params
         ctx <- newCtx $ cfGraph cfg
         -- Do a dataflow analysis starting on the root node
         exitState <- runRoot ctx env entry exit

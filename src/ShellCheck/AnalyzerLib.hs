@@ -103,7 +103,9 @@ data Parameters = Parameters {
     -- map from token id to start and end position
     tokenPositions     :: Map.Map Id (Position, Position),
     -- Result from Control Flow Graph analysis (including data flow analysis)
-    cfgAnalysis :: CF.CFGAnalysis
+    cfgAnalysis :: CF.CFGAnalysis,
+    -- A set of additional variables known to be set (TODO: make this more general?)
+    additionalKnownVariables :: [String]
     } deriving (Show)
 
 -- TODO: Cache results of common AST ops here
@@ -152,7 +154,7 @@ producesComments c s = do
         let pr = pScript s
         prRoot pr
         let spec = defaultSpec pr
-        let params = makeParameters spec
+        let params = runIdentity $ makeParameters (mockedSystemInterface []) spec
         return . not . null $ filterByAnnotation spec params $ runChecker params c
 
 makeComment :: Severity -> Id -> Code -> String -> TokenComment
@@ -196,41 +198,54 @@ makeCommentWithFix severity id code str fix =
         }
     in force withFix
 
-makeParameters spec = params
+makeParameters :: Monad m => SystemInterface m -> AnalysisSpec -> m Parameters
+makeParameters sys spec = do
+    extraVars <-
+        case shell of
+            Bash -> do -- TODO: EBuild type
+                vars <- siGetPortageVariables sys
+                return $ Map.findWithDefault [] "foo" vars -- TODO: Determine what to look up in map
+            _ -> return []
+    return $ makeParams extraVars
   where
-    params = Parameters {
-        rootNode = root,
-        shellType = fromMaybe (determineShell (asFallbackShell spec) root) $ asShellType spec,
-        hasSetE = containsSetE root,
-        hasLastpipe =
-            case shellType params of
-                Bash -> isOptionSet "lastpipe" root
-                Dash -> False
-                Sh   -> False
-                Ksh  -> True,
-        hasInheritErrexit =
-            case shellType params of
-                Bash -> isOptionSet "inherit_errexit" root
-                Dash -> True
-                Sh   -> True
-                Ksh  -> False,
-        hasPipefail =
-            case shellType params of
-                Bash -> isOptionSet "pipefail" root
-                Dash -> True
-                Sh   -> True
-                Ksh  -> isOptionSet "pipefail" root,
-        shellTypeSpecified = isJust (asShellType spec) || isJust (asFallbackShell spec),
-        idMap = getTokenMap root,
-        parentMap = getParentTree root,
-        variableFlow = getVariableFlow params root,
-        tokenPositions = asTokenPositions spec,
-        cfgAnalysis = CF.analyzeControlFlow cfParams root
-    }
-    cfParams = CF.CFGParameters {
-        CF.cfLastpipe = hasLastpipe params,
-        CF.cfPipefail = hasPipefail params
-    }
+    shell = fromMaybe (determineShell (asFallbackShell spec) root) $ asShellType spec
+    makeParams extraVars = params
+      where
+        params = Parameters {
+            rootNode = root,
+            shellType = shell,
+            hasSetE = containsSetE root,
+            hasLastpipe =
+                case shellType params of
+                    Bash -> isOptionSet "lastpipe" root
+                    Dash -> False
+                    Sh   -> False
+                    Ksh  -> True,
+            hasInheritErrexit =
+                case shellType params of
+                    Bash -> isOptionSet "inherit_errexit" root
+                    Dash -> True
+                    Sh   -> True
+                    Ksh  -> False,
+            hasPipefail =
+                case shellType params of
+                    Bash -> isOptionSet "pipefail" root
+                    Dash -> True
+                    Sh   -> True
+                    Ksh  -> isOptionSet "pipefail" root,
+            shellTypeSpecified = isJust (asShellType spec) || isJust (asFallbackShell spec),
+            idMap = getTokenMap root,
+            parentMap = getParentTree root,
+            variableFlow = getVariableFlow params root,
+            tokenPositions = asTokenPositions spec,
+            cfgAnalysis = CF.analyzeControlFlow cfParams root,
+            additionalKnownVariables = extraVars
+        }
+        cfParams = CF.CFGParameters {
+            CF.cfLastpipe = hasLastpipe params,
+            CF.cfPipefail = hasPipefail params,
+            CF.cfAdditionalInitialVariables = additionalKnownVariables params
+        }
     root = asScript spec
 
 

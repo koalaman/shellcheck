@@ -396,10 +396,12 @@ ioInterface options files = do
     inputs <- mapM normalize files
     cache <- newIORef emptyCache
     configCache <- newIORef ("", Nothing)
+    portageVars <- newIORef Nothing
     return (newSystemInterface :: SystemInterface IO) {
         siReadFile = get cache inputs,
         siFindSource = findSourceFile inputs (sourcePaths options),
-        siGetConfig = getConfig configCache
+        siGetConfig = getConfig configCache,
+        siGetPortageVariables = getOrLoadPortage portageVars
     }
   where
     emptyCache :: Map.Map FilePath String
@@ -522,6 +524,18 @@ ioInterface options files = do
             case (splitDirectories str) of
                 ("SCRIPTDIR":rest) -> joinPath (scriptdir:rest)
                 _ -> str
+
+    getOrLoadPortage cache = do
+        x <- readIORef cache
+        case x of
+            Just m -> do
+                hPutStrLn stderr "Reusing previous Portage variables"
+                return m
+            Nothing -> do
+                hPutStrLn stderr "Computing Portage variables"
+                vars <- return $ Map.fromList [("foo", ["bar", "baz"])]  -- TODO: Actually read the variables
+                writeIORef cache $ Just vars
+                return vars
 
 inputFile file = do
     (handle, shouldCache) <-
