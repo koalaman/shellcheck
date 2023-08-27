@@ -36,8 +36,6 @@ import Numeric (showHex)
 
 import Test.QuickCheck
 
-arguments (T_SimpleCommand _ _ (cmd:args)) = args
-
 -- Is this a type of loop?
 isLoop t = case t of
         T_WhileExpression {} -> True
@@ -559,10 +557,28 @@ getCommandNameFromExpansion t =
     extract (T_Pipeline _ _ [cmd]) = getCommandName cmd
     extract _ = Nothing
 
+-- If a command substitution is a single command, get its argument Tokens.
+-- Return an empty list if there are no arguments or the token is not a command substitution.
+-- $(date +%s) = ["+%s"]
+getArgumentsFromExpansion :: Token -> [Token]
+getArgumentsFromExpansion t =
+    case t of
+        T_DollarExpansion _ [c] -> extract c
+        T_Backticked _ [c] -> extract c
+        T_DollarBraceCommandExpansion _ [c] -> extract c
+        _ -> []
+  where
+    extract (T_Pipeline _ _ [cmd]) = arguments cmd
+    extract _ = []
+
 -- Get the basename of a token representing a command
 getCommandBasename = fmap basename . getCommandName
 
 basename = reverse . takeWhile (/= '/') . reverse
+
+-- Get the arguments to a command
+arguments (T_SimpleCommand _ _ (cmd:args)) = args
+arguments t = maybe [] arguments (getCommand t)
 
 isAssignment t =
     case t of
@@ -885,6 +901,15 @@ isUnmodifiedParameterExpansion t =
             let str = concat $ oversimplify list
             in getBracedReference str == str
         _ -> False
+
+-- Return the referenced variable if (and only if) it's an unmodified parameter expansion.
+getUnmodifiedParameterExpansion t =
+    case t of
+        T_DollarBraced _ _ list -> do
+            let str = concat $ oversimplify list
+            guard $ getBracedReference str == str
+            return str
+        _ -> Nothing
 
 --- A list of the element and all its parents up to the root node.
 getPath tree t = t :

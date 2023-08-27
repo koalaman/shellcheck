@@ -59,6 +59,8 @@ module ShellCheck.CFGAnalysis (
     ,getIncomingState
     ,getOutgoingState
     ,doesPostDominate
+    ,variableMayBeDeclaredInteger
+    ,variableMayBeAssignedInteger
     ,ShellCheck.CFGAnalysis.runTests -- STRIP
     ) where
 
@@ -153,6 +155,20 @@ doesPostDominate analysis target base = fromMaybe False $ do
     (targetStart, _) <- M.lookup target $ tokenToRange analysis
     return $ targetStart `elem` (postDominators analysis ! baseEnd)
 
+-- See if any execution path results in the variable containing a state
+variableMayHaveState :: ProgramState -> String -> CFVariableProp -> Maybe Bool
+variableMayHaveState state var property = do
+    value <- M.lookup var $ variablesInScope state
+    return $ any (S.member property) $ variableProperties value
+
+-- See if any execution path declares the variable an integer (declare -i).
+variableMayBeDeclaredInteger state var = variableMayHaveState state var CFVPInteger
+
+-- See if any execution path suggests the variable may contain an integer value
+variableMayBeAssignedInteger state var = do
+    value <- M.lookup var $ variablesInScope state
+    return $ (numericalStatus $ variableValue value) >= NumericalStatusMaybe
+
 getDataForNode analysis node = M.lookup node $ nodeToData analysis
 
 -- The current state of data flow at a point in the program, potentially as a diff
@@ -184,7 +200,7 @@ unreachableState = modified newInternalState {
 createEnvironmentState :: InternalState
 createEnvironmentState = do
     foldl' (flip ($)) newInternalState $ concat [
-        addVars Data.internalVariables unknownVariableState,
+        addVars Data.genericInternalVariables unknownVariableState,
         addVars Data.variablesWithoutSpaces spacelessVariableState,
         addVars Data.specialIntegerVariables integerVariableState
         ]
