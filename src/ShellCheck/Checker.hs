@@ -25,6 +25,7 @@ import ShellCheck.ASTLib
 import ShellCheck.Interface
 import ShellCheck.Parser
 
+import Data.Char
 import Data.Either
 import Data.Functor
 import Data.List
@@ -54,9 +55,9 @@ shellFromFilename filename = listToMaybe candidates
     shellExtensions = [(".ksh", Ksh)
                       ,(".bash", Bash)
                       ,(".bats", Bash)
-                      ,(".dash", Dash)
                       ,(".ebuild", Bash)
-                      ,(".eclass", Bash)]
+                      ,(".eclass", Bash)
+                      ,(".dash", Dash)]
                       -- The `.sh` is too generic to determine the shell:
                       -- We fallback to Bash in this case and emit SC2148 if there is no shebang
     candidates =
@@ -86,11 +87,10 @@ checkScript sys spec = do
                     asShellType = csShellTypeOverride spec,
                     asFallbackShell = shellFromFilename $ csFilename spec,
                     asCheckSourced = csCheckSourced spec,
+                    asIsPortage = isPortage $ csFilename spec,
                     asExecutionMode = Executed,
                     asTokenPositions = tokenPositions,
-                    asOptionalChecks = getEnableDirectives root ++ csOptionalChecks spec,
-                    asPortageFileType = getPortageFileType $ csFilename spec,
-                    asGentooData = csGentooData spec
+                    asOptionalChecks = getEnableDirectives root ++ csOptionalChecks spec
                 } where as = newAnalysisSpec root
         let getAnalysisMessages =
                 case prRoot result of
@@ -100,6 +100,10 @@ checkScript sys spec = do
         analysisMessages <- getAnalysisMessages
         return . nub . sortMessages . filter shouldInclude $
             (parseMessages ++ map translator analysisMessages)
+
+    isPortage filename =
+        let f = map toLower filename in
+            ".ebuild" `isSuffixOf` f || ".eclass" `isSuffixOf` f
 
     shouldInclude pc =
             severity <= csMinSeverity spec &&

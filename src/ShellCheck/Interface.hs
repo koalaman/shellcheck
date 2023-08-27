@@ -21,11 +21,11 @@
 module ShellCheck.Interface
     (
     SystemInterface(..)
-    , CheckSpec(csFilename, csScript, csCheckSourced, csIncludedWarnings, csExcludedWarnings, csShellTypeOverride, csMinSeverity, csIgnoreRC, csOptionalChecks, csGentooData)
+    , CheckSpec(csFilename, csScript, csCheckSourced, csIncludedWarnings, csExcludedWarnings, csShellTypeOverride, csMinSeverity, csIgnoreRC, csOptionalChecks)
     , CheckResult(crFilename, crComments)
     , ParseSpec(psFilename, psScript, psCheckSourced, psIgnoreRC, psShellTypeOverride)
     , ParseResult(prComments, prTokenPositions, prRoot)
-    , AnalysisSpec(asScript, asShellType, asFallbackShell, asExecutionMode, asCheckSourced, asTokenPositions, asOptionalChecks, asPortageFileType, asGentooData)
+    , AnalysisSpec(..)
     , AnalysisResult(arComments)
     , FormatterOptions(foColorOption, foWikiLinkCount)
     , Shell(Ksh, Sh, Bash, Dash)
@@ -59,12 +59,9 @@ module ShellCheck.Interface
     , newReplacement
     , CheckDescription(cdName, cdDescription, cdPositive, cdNegative)
     , newCheckDescription
-    , PortageFileType(NonPortageRelated, Ebuild, is9999Ebuild, Eclass)
-    , getPortageFileType
     ) where
 
 import ShellCheck.AST
-import ShellCheck.PortageVariables (EclassMap)
 
 import Control.DeepSeq
 import Control.Monad.Identity
@@ -105,8 +102,7 @@ data CheckSpec = CheckSpec {
     csIncludedWarnings :: Maybe [Integer],
     csShellTypeOverride :: Maybe Shell,
     csMinSeverity :: Severity,
-    csOptionalChecks :: [String],
-    csGentooData :: EclassMap
+    csOptionalChecks :: [String]
 } deriving (Show, Eq)
 
 data CheckResult = CheckResult {
@@ -130,8 +126,7 @@ emptyCheckSpec = CheckSpec {
     csIncludedWarnings = Nothing,
     csShellTypeOverride = Nothing,
     csMinSeverity = StyleC,
-    csOptionalChecks = [],
-    csGentooData = Map.empty
+    csOptionalChecks = []
 }
 
 newParseSpec :: ParseSpec
@@ -174,20 +169,6 @@ newParseResult = ParseResult {
     prRoot = Nothing
 }
 
-data PortageFileType = NonPortageRelated
-                       | Ebuild { is9999Ebuild :: Bool }
-                       | Eclass deriving (Show, Eq)
-
-getPortageFileType :: String -> PortageFileType
-getPortageFileType filename
-    | ".ebuild" `isSuffixOf` filename = ebuildType
-    | ".eclass" `isSuffixOf` filename = Eclass
-    | otherwise                       = NonPortageRelated
-  where
-    ebuildType = Ebuild {
-      is9999Ebuild = "-9999.ebuild" `isSuffixOf` filename
-    }
-
 -- Analyzer input and output
 data AnalysisSpec = AnalysisSpec {
     asScript :: Token,
@@ -195,10 +176,9 @@ data AnalysisSpec = AnalysisSpec {
     asFallbackShell :: Maybe Shell,
     asExecutionMode :: ExecutionMode,
     asCheckSourced :: Bool,
+    asIsPortage :: Bool,
     asOptionalChecks :: [String],
-    asTokenPositions :: Map.Map Id (Position, Position),
-    asPortageFileType :: PortageFileType,
-    asGentooData :: EclassMap
+    asTokenPositions :: Map.Map Id (Position, Position)
 }
 
 newAnalysisSpec token = AnalysisSpec {
@@ -207,10 +187,9 @@ newAnalysisSpec token = AnalysisSpec {
     asFallbackShell = Nothing,
     asExecutionMode = Executed,
     asCheckSourced = False,
+    asIsPortage = False,
     asOptionalChecks = [],
-    asTokenPositions = Map.empty,
-    asPortageFileType = NonPortageRelated,
-    asGentooData = Map.empty
+    asTokenPositions = Map.empty
 }
 
 newtype AnalysisResult = AnalysisResult {

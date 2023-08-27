@@ -241,22 +241,10 @@ runFormatter sys format options files = do
         either (reportFailure filename) check input
       where
         check contents = do
-
-            -- If this is a Gentoo ebuild file, scan for eclasses on the system
-            gentooData <- case getPortageFileType filename of
-                NonPortageRelated -> pure Map.empty
-                _ -> catch (portageVariables <$> scanRepos) $ \e -> do
-                    let warnMsg = "Error when scanning for Gentoo repos: "
-                    let err = show (e :: IOException)
-                    hPutStr stderr ("Warning: " ++ warnMsg ++ err)
-                    pure Map.empty
-
             let checkspec = (checkSpec options) {
                 csFilename = filename,
-                csScript = contents,
-                csGentooData = gentooData
+                csScript = contents
             }
-
             result <- checkScript sys checkspec
             onResult format result sys
             return $
@@ -542,13 +530,16 @@ ioInterface options files = do
         x <- readIORef cache
         case x of
             Just m -> do
-                hPutStrLn stderr "Reusing previous Portage variables"
                 return m
             Nothing -> do
-                hPutStrLn stderr "Computing Portage variables"
-                vars <- return $ Map.fromList [("foo", ["bar", "baz"])]  -- TODO: Actually read the variables
+                vars <- readPortageVariables `catch` handler
                 writeIORef cache $ Just vars
                 return vars
+      where
+        handler :: IOException -> IO (Map.Map String [String])
+        handler e = do
+            hPutStrLn stderr $ "Error finding portage repos, eclass definitions will be ignored: " ++ show e
+            return $ Map.empty
 
 inputFile file = do
     (handle, shouldCache) <-

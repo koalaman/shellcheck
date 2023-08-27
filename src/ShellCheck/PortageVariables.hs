@@ -3,18 +3,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
 
-module ShellCheck.PortageVariables
-    ( RepoName
-    , RepoPath
-    , EclassName
-    , EclassVar
-    , EclassMap
-    , Repository(..)
-    , Eclass(..)
-    , portageVariables
-    , scanRepos
-    , decodeLenient
-    ) where
+module ShellCheck.PortageVariables (
+    readPortageVariables
+  ) where
 
 import Control.Applicative
 import Control.Exception (bracket)
@@ -60,6 +51,9 @@ data Eclass = Eclass
     , eclassVars :: [EclassVar]
     } deriving (Show, Eq, Ord)
 
+readPortageVariables :: IO (M.Map String [String])
+readPortageVariables = M.map (map decodeLenient) <$> portageVariables <$> scanRepos
+
 -- | Map from eclass names to a list of eclass variables
 portageVariables :: [Repository] -> EclassMap
 portageVariables = foldMap $ foldMap go . repositoryEclasses
@@ -70,7 +64,7 @@ portageVariables = foldMap $ foldMap go . repositoryEclasses
 --   one for eclasses and ultimately eclass metadata.
 scanRepos :: IO [Repository]
 scanRepos = do
-    let cmd = "/usr/bin/portageq"
+    let cmd = "portageq"
     let args = ["repos_config", "/"]
     out <- runOrDie cmd args
     case parseOnly reposParser out of
