@@ -27,6 +27,7 @@ import qualified ShellCheck.CFGAnalysis as CF
 import ShellCheck.Data
 import ShellCheck.Interface
 import ShellCheck.Parser
+import ShellCheck.PortageVariables
 import ShellCheck.Prelude
 import ShellCheck.Regex
 
@@ -102,11 +103,21 @@ data Parameters = Parameters {
     rootNode           :: Token,
     -- map from token id to start and end position
     tokenPositions     :: Map.Map Id (Position, Position),
+    -- detailed type of any Portage related file
+    portageFileType    :: PortageFileType,
+    -- Gentoo-specific data
+    gentooData         :: EclassMap,
     -- Result from Control Flow Graph analysis (including data flow analysis)
     cfgAnalysis :: CF.CFGAnalysis,
     -- A set of additional variables known to be set (TODO: make this more general?)
     additionalKnownVariables :: [String]
     } deriving (Show)
+
+isPortageBuild :: Parameters -> Bool
+isPortageBuild params = portageFileType params /= NonPortageRelated
+
+isPortage9999Ebuild :: Parameters -> Bool
+isPortage9999Ebuild params = portageFileType params == Ebuild { is9999Ebuild = True }
 
 -- TODO: Cache results of common AST ops here
 data Cache = Cache {}
@@ -147,6 +158,15 @@ pScript s =
         psScript = s
     }
   in runIdentity $ parseScript (mockedSystemInterface []) pSpec
+
+-- For testing. Tries to construct Parameters from a test script allowing for
+-- alterations to the AnalysisSpec.
+makeTestParams :: String -> (AnalysisSpec -> AnalysisSpec) -> Maybe Parameters
+makeTestParams s specModifier = do
+        let pr = pScript s
+        prRoot pr
+        let spec = specModifier $ defaultSpec pr
+        return $ makeParameters spec
 
 -- For testing. If parsed, returns whether there are any comments
 producesComments :: Checker -> String -> Maybe Bool
@@ -597,6 +617,15 @@ getReferencedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Litera
                 head:_ -> map (\x -> (base, head, x)) $ getVariablesFromLiteralToken head
                 _ -> []
         "alias" -> [(base, token, name) | token <- rest, name <- getVariablesFromLiteralToken token]
+
+        -- tc-export makes a list of toolchain variables available, similar to export.
+        -- Usage tc-export CC CXX
+        "tc-export" -> concatMap getReference rest
+
+        -- tc-export_build_env exports the listed variables plus a bunch of BUILD_XX variables.
+        -- Usage tc-export_build_env BUILD_CC
+        "tc-export_build_env" -> concatMap getReference rest  ++ concatMap buildVarReferences portageBuildFlagVariables
+
         _ -> []
   where
     forDeclare =
@@ -610,6 +639,7 @@ getReferencedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Litera
     getReference t@(T_NormalWord _ [T_Literal _ name]) | not ("-" `isPrefixOf` name) = [(t, t, name)]
     getReference _ = []
     flags = map snd $ getAllFlags base
+    buildVarReferences var = [(base, base, "BUILD_" ++ var), (base, base, var ++ "_FOR_BUILD")]
 
 getReferencedVariableCommand _ = []
 
@@ -667,6 +697,13 @@ getModifiedVariableCommand base@(T_SimpleCommand id cmdPrefix (T_NormalWord _ (T
         "DEFINE_float" -> maybeToList $ getFlagVariable rest
         "DEFINE_integer" -> maybeToList $ getFlagVariable rest
         "DEFINE_string" -> maybeToList $ getFlagVariable rest
+
+        -- tc-export creates all the variables passed to it
+        "tc-export" -> concatMap getModifierParamString rest
+
+        -- tc-export_build_env creates all the variables passed to it
+        -- plus several BUILD_ and _FOR_BUILD variables.
+        "tc-export_build_env" -> concatMap getModifierParamString rest ++ getBuildEnvTokens
 
         _ -> []
   where
@@ -757,6 +794,10 @@ getModifiedVariableCommand base@(T_SimpleCommand id cmdPrefix (T_NormalWord _ (T
         name <- getLiteralString n
         return (base, n, "FLAGS_" ++ name, DataString $ SourceExternal)
     getFlagVariable _ = Nothing
+
+    getBuildEnvTokens = concatMap buildVarTokens portageBuildFlagVariables
+    buildVarTokens var = [(base, base, "BUILD_" ++ var, DataString $ SourceExternal),
+                         (base, base, var ++ "_FOR_BUILD", DataString $ SourceExternal)]
 
 getModifiedVariableCommand _ = []
 

@@ -21,6 +21,7 @@ import qualified ShellCheck.Analyzer
 import           ShellCheck.Checker
 import           ShellCheck.Data
 import           ShellCheck.Interface
+import           ShellCheck.PortageVariables
 import           ShellCheck.Regex
 
 import qualified ShellCheck.Formatter.CheckStyle
@@ -240,10 +241,22 @@ runFormatter sys format options files = do
         either (reportFailure filename) check input
       where
         check contents = do
+
+            -- If this is a Gentoo ebuild file, scan for eclasses on the system
+            gentooData <- case getPortageFileType filename of
+                NonPortageRelated -> pure Map.empty
+                _ -> catch (portageVariables <$> scanRepos) $ \e -> do
+                    let warnMsg = "Error when scanning for Gentoo repos: "
+                    let err = show (e :: IOException)
+                    hPutStr stderr ("Warning: " ++ warnMsg ++ err)
+                    pure Map.empty
+
             let checkspec = (checkSpec options) {
                 csFilename = filename,
-                csScript = contents
+                csScript = contents,
+                csGentooData = gentooData
             }
+
             result <- checkScript sys checkspec
             onResult format result sys
             return $

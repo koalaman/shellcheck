@@ -200,7 +200,7 @@ unreachableState = modified newInternalState {
 createEnvironmentState :: CFGParameters -> InternalState
 createEnvironmentState params = do
     foldl' (flip ($)) newInternalState $ concat [
-        addVars Data.internalVariables unknownVariableState,
+        addVars Data.genericInternalVariables unknownVariableState,
         addVars Data.variablesWithoutSpaces spacelessVariableState,
         addVars Data.specialIntegerVariables integerVariableState,
         addVars (cfAdditionalInitialVariables params) unknownVariableState
