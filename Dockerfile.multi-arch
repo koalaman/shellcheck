@@ -23,4 +23,8 @@ FROM scratch
 LABEL maintainer="Vidar Holen <vidar@vidarholen.net>"
 WORKDIR /mnt
 COPY --from=alpine /bin/shellcheck /bin/
+
+# Drop root privileges.
+USER 65535:65535
+
 ENTRYPOINT ["/bin/shellcheck"]
