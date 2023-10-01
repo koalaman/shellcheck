@@ -19,6 +19,7 @@
 -}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ViewPatterns #-}
 module ShellCheck.Checks.ShellSupport (checker , ShellCheck.Checks.ShellSupport.runTests) where
 
 import ShellCheck.AST
@@ -91,6 +92,9 @@ prop_checkBashisms3 = verify checkBashisms "echo $((i++))"
 prop_checkBashisms4 = verify checkBashisms "rm !(*.hs)"
 prop_checkBashisms5 = verify checkBashisms "source file"
 prop_checkBashisms6 = verify checkBashisms "[ \"$a\" == 42 ]"
+prop_checkBashisms6b = verify checkBashisms "test \"$a\" == 42"
+prop_checkBashisms6c = verify checkBashisms "[ foo =~ bar ]"
+prop_checkBashisms6d = verify checkBashisms "test foo =~ bar"
 prop_checkBashisms7 = verify checkBashisms "echo ${var[1]}"
 prop_checkBashisms8 = verify checkBashisms "echo ${!var[@]}"
 prop_checkBashisms9 = verify checkBashisms "echo ${!var*}"
@@ -106,6 +110,7 @@ prop_checkBashisms18 = verify checkBashisms "foo &> /dev/null"
 prop_checkBashisms19 = verify checkBashisms "foo > file*.txt"
 prop_checkBashisms20 = verify checkBashisms "read -ra foo"
 prop_checkBashisms21 = verify checkBashisms "[ -a foo ]"
+prop_checkBashisms21b = verify checkBashisms "test -a foo"
 prop_checkBashisms22 = verifyNot checkBashisms "[ foo -a bar ]"
 prop_checkBashisms23 = verify checkBashisms "trap mything ERR INT"
 prop_checkBashisms24 = verifyNot checkBashisms "trap mything INT TERM"
@@ -203,6 +208,7 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
         if isDash
         then err  id code $ "In dash, " ++ s ++ " not supported."
         else warn id code $ "In POSIX sh, " ++ s ++ " undefined."
+    asStr = getLiteralString
 
     bashism (T_ProcSub id _ _) = warnMsg id 3001 "process substitution is"
     bashism (T_Extglob id _ _) = warnMsg id 3002 "extglob is"
@@ -218,16 +224,30 @@ checkBashisms = ForShell [Sh, Dash] $ \t -> do
     bashism (TC_Binary id SingleBracket op _ _)
         | op `elem` [ "<", ">", "\\<", "\\>", "<=", ">=", "\\<=", "\\>="] =
             unless isDash $ warnMsg id 3012 $ "lexicographical " ++ op ++ " is"
+    bashism (T_SimpleCommand id _ [asStr -> Just "test", lhs, asStr -> Just op, rhs])
+        | op `elem` [ "<", ">", "\\<", "\\>", "<=", ">=", "\\<=", "\\>="] =
+            unless isDash $ warnMsg id 3012 $ "lexicographical " ++ op ++ " is"
     bashism (TC_Binary id SingleBracket op _ _)
+        | op `elem` [ "-ot", "-nt", "-ef" ] =
+            unless isDash $ warnMsg id 3013 $ op ++ " is"
+    bashism (T_SimpleCommand id _ [asStr -> Just "test", lhs, asStr -> Just op, rhs])
         | op `elem` [ "-ot", "-nt", "-ef" ] =
             unless isDash $ warnMsg id 3013 $ op ++ " is"
     bashism (TC_Binary id SingleBracket "==" _ _) =
             warnMsg id 3014 "== in place of = is"
+    bashism (T_SimpleCommand id _ [asStr -> Just "test", lhs, asStr -> Just "==", rhs]) =
+            warnMsg id 3014 "== in place of = is"
     bashism (TC_Binary id SingleBracket "=~" _ _) =
+            warnMsg id 3015 "=~ regex matching is"
+    bashism (T_SimpleCommand id _ [asStr -> Just "test", lhs, asStr -> Just "=~", rhs]) =
             warnMsg id 3015 "=~ regex matching is"
     bashism (TC_Unary id SingleBracket "-v" _) =
             warnMsg id 3016 "unary -v (in place of [ -n \"${var+x}\" ]) is"
+    bashism (T_SimpleCommand id _ [asStr -> Just "test", asStr -> Just "-v", _]) =
+            warnMsg id 3016 "unary -v (in place of [ -n \"${var+x}\" ]) is"
     bashism (TC_Unary id _ "-a" _) =
+            warnMsg id 3017 "unary -a in place of -e is"
+    bashism (T_SimpleCommand id _ [asStr -> Just "test", asStr -> Just "-a", _]) =
             warnMsg id 3017 "unary -a in place of -e is"
     bashism (TA_Unary id op _)
         | op `elem` [ "|++", "|--", "++|", "--|"] =
