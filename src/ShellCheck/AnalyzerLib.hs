@@ -604,6 +604,17 @@ getReferencedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Litera
                 head:_ -> map (\x -> (base, head, x)) $ getVariablesFromLiteralToken head
                 _ -> []
         "alias" -> [(base, token, name) | token <- rest, name <- getVariablesFromLiteralToken token]
+
+        -- tc-export makes a list of toolchain variables available, similar to export.
+        -- Usage tc-export CC CXX
+        "tc-export" -> concatMap getReference rest
+
+        -- tc-export_build_env exports the listed variables plus a bunch of BUILD_XX variables.
+        -- Usage tc-export_build_env BUILD_CC
+        "tc-export_build_env" ->
+            concatMap getReference rest
+                ++ [ (base, base, v) | v <- portageBuildEnvVariables ]
+
         _ -> []
   where
     forDeclare =
@@ -674,6 +685,16 @@ getModifiedVariableCommand base@(T_SimpleCommand id cmdPrefix (T_NormalWord _ (T
         "DEFINE_float" -> maybeToList $ getFlagVariable rest
         "DEFINE_integer" -> maybeToList $ getFlagVariable rest
         "DEFINE_string" -> maybeToList $ getFlagVariable rest
+
+        "tc-export" -> concatMap getModifierParamString rest
+
+        -- tc-export_build_env exports the listed variables plus a bunch of BUILD_XX variables.
+        -- Usage tc-export_build_env BUILD_CC
+        "tc-export_build_env" ->
+            concatMap getModifierParamString rest
+                ++ [ (base, base, var, DataString $ SourceExternal) |
+                        var <- ["BUILD_" ++ x, x ++ "_FOR_BUILD" ],
+                        x <- portageBuildEnvVariables ]
 
         _ -> []
   where

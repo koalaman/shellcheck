@@ -544,32 +544,17 @@ getCommandNameAndToken direct t = fromMaybe (Nothing, t) $ do
                     return t
                 _ -> fail ""
 
--- If a command substitution is a single command, get its name.
---  $(date +%s) = Just "date"
-getCommandNameFromExpansion :: Token -> Maybe String
-getCommandNameFromExpansion t =
+-- If a command substitution is a single SimpleCommand, return it.
+getSimpleCommandFromExpansion :: Token -> Maybe Token
+getSimpleCommandFromExpansion t =
     case t of
         T_DollarExpansion _ [c] -> extract c
         T_Backticked _ [c] -> extract c
         T_DollarBraceCommandExpansion _ [c] -> extract c
         _ -> Nothing
   where
-    extract (T_Pipeline _ _ [cmd]) = getCommandName cmd
+    extract (T_Pipeline _ _ [c]) = getCommand c
     extract _ = Nothing
-
--- If a command substitution is a single command, get its argument Tokens.
--- Return an empty list if there are no arguments or the token is not a command substitution.
--- $(date +%s) = ["+%s"]
-getArgumentsFromExpansion :: Token -> [Token]
-getArgumentsFromExpansion t =
-    case t of
-        T_DollarExpansion _ [c] -> extract c
-        T_Backticked _ [c] -> extract c
-        T_DollarBraceCommandExpansion _ [c] -> extract c
-        _ -> []
-  where
-    extract (T_Pipeline _ _ [cmd]) = arguments cmd
-    extract _ = []
 
 -- Get the basename of a token representing a command
 getCommandBasename = fmap basename . getCommandName
@@ -927,6 +912,21 @@ getEnableDirectives root =
     case root of
         T_Annotation _ list _ -> [s | EnableComment s <- list]
         _ -> []
+
+
+commandExpansionShouldBeSplit t = do
+    cmd <- getSimpleCommandFromExpansion t
+    name <- getCommandName cmd
+    case () of
+        -- Should probably be split
+        _ | name `elem` ["seq", "pgrep"] -> return True
+        -- Portage macros that return a single word or nothing
+        _ | name `elem` ["usev", "use_with", "use_enable"] -> return True
+        -- Portage macros that are fine as long as the arguments have no spaces
+        _ | name `elem` ["usex", "meson_use", "meson_feature"] -> do
+            return . not $ any (' ' `elem`) $ map (getLiteralStringDef " ") $ arguments cmd
+        _ -> Nothing
+
 
 return []
 runTests = $quickCheckAll

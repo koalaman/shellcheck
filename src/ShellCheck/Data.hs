@@ -62,7 +62,91 @@ internalVariables = [
     , "FLAGS_ARGC", "FLAGS_ARGV", "FLAGS_ERROR", "FLAGS_FALSE", "FLAGS_HELP",
     "FLAGS_PARENT", "FLAGS_RESERVED", "FLAGS_TRUE", "FLAGS_VERSION",
     "flags_error", "flags_return"
+  ] ++ portageManualInternalVariables
+
+
+portageManualInternalVariables = [
+    -- toolchain settings
+    "CFLAGS", "CXXFLAGS", "CPPFLAGS", "LDFLAGS", "FFLAGS", "FCFLAGS",
+    "CBUILD", "CHOST", "MAKEOPTS",
+    -- TODO: Delete these if we can handle `tc-export CC` implicit export.
+    "CC", "CPP", "CXX",
+
+    -- portage internals
+    "EBUILD_PHASE", "EBUILD_SH_ARGS", "EMERGE_FROM", "FILESDIR",
+    "MERGE_TYPE", "PM_EBUILD_HOOK_DIR", "PORTAGE_ACTUAL_DISTDIR",
+    "PORTAGE_ARCHLIST", "PORTAGE_BASHRC", "PORTAGE_BINPKG_FILE",
+    "PORTAGE_BINPKG_TAR_OPTS", "PORTAGE_BINPKG_TMPFILE", "PORTAGE_BIN_PATH",
+    "PORTAGE_BUILDDIR", "PORTAGE_BUILD_GROUP", "PORTAGE_BUILD_USER",
+    "PORTAGE_BUNZIP2_COMMAND", "PORTAGE_BZIP2_COMMAND", "PORTAGE_COLORMAP",
+    "PORTAGE_CONFIGROOT", "PORTAGE_DEBUG", "PORTAGE_DEPCACHEDIR",
+    "PORTAGE_EBUILD_EXIT_FILE", "PORTAGE_ECLASS_LOCATIONS", "PORTAGE_GID",
+    "PORTAGE_GRPNAME", "PORTAGE_INST_GID", "PORTAGE_INST_UID",
+    "PORTAGE_INTERNAL_CALLER", "PORTAGE_IPC_DAEMON", "PORTAGE_IUSE",
+    "PORTAGE_LOG_FILE", "PORTAGE_MUTABLE_FILTERED_VARS",
+    "PORTAGE_OVERRIDE_EPREFIX", "PORTAGE_PYM_PATH", "PORTAGE_PYTHON",
+    "PORTAGE_PYTHONPATH", "PORTAGE_READONLY_METADATA", "PORTAGE_READONLY_VARS",
+    "PORTAGE_REPO_NAME", "PORTAGE_REPOSITORIES", "PORTAGE_RESTRICT",
+    "PORTAGE_SAVED_READONLY_VARS", "PORTAGE_SIGPIPE_STATUS", "PORTAGE_TMPDIR",
+    "PORTAGE_UPDATE_ENV", "PORTAGE_USERNAME", "PORTAGE_VERBOSE",
+    "PORTAGE_WORKDIR_MODE", "PORTAGE_XATTR_EXCLUDE", "REPLACING_VERSIONS",
+    "REPLACED_BY_VERSION", "__PORTAGE_HELPER", "__PORTAGE_TEST_HARDLINK_LOCKS",
+
+    -- generic ebuilds
+    "A", "ARCH", "BDEPEND", "BOARD_USE", "BROOT", "CATEGORY", "D",
+    "DEFINED_PHASES", "DEPEND", "DESCRIPTION", "DISTDIR", "DOCS", "EAPI",
+    "ECLASS", "ED", "EPREFIX", "EROOT", "ESYSROOT", "EXTRA_ECONF",
+    "EXTRA_EINSTALL", "EXTRA_MAKE", "FEATURES", "FILESDIR", "HOME", "HOMEPAGE",
+    "HTML_DOCS", "INHERITED", "IUSE", "KEYWORDS", "LICENSE", "P", "PATCHES",
+    "PDEPEND", "PF", "PKG_INSTALL_MASK", "PKGUSE", "PN", "PR", "PROPERTIES",
+    "PROVIDES_EXCLUDE", "PV", "PVR", "QA_AM_MAINTAINER_MODE",
+    "QA_CONFIGURE_OPTIONS", "QA_DESKTOP_FILE", "QA_DT_NEEDED", "QA_EXECSTACK",
+    "QA_FLAGS_IGNORED", "QA_MULTILIB_PATHS", "QA_PREBUILT", "QA_PRESTRIPPED",
+    "QA_SONAME", "QA_SONAME_NO_SYMLINK", "QA_TEXTRELS", "QA_WX_LOAD", "RDEPEND",
+    "REPOSITORY", "REQUIRED_USE", "REQUIRES_EXCLUDE", "RESTRICT", "ROOT", "S",
+    "SLOT", "SRC_TEST", "SRC_URI", "STRIP_MASK", "SUBSLOT", "SYSROOT", "T",
+    "WORKDIR",
+
+    -- autotest.eclass declared incorrectly
+    "AUTOTEST_CLIENT_TESTS", "AUTOTEST_CLIENT_SITE_TESTS",
+    "AUTOTEST_SERVER_TESTS", "AUTOTEST_SERVER_SITE_TESTS", "AUTOTEST_CONFIG",
+    "AUTOTEST_DEPS", "AUTOTEST_PROFILERS", "AUTOTEST_CONFIG_LIST",
+    "AUTOTEST_DEPS_LIST", "AUTOTEST_PROFILERS_LIST",
+
+    -- cros-board.eclass declared incorrectly
+    "CROS_BOARDS",
+
+    -- Undeclared cros-kernel2 vars
+    "AFDO_PROFILE_VERSION",
+
+    -- haskell-cabal.eclass declared incorrectly
+    "CABAL_FEATURES",
+
+    -- Undeclared haskell-cabal.eclass vars
+    "CABAL_CORE_LIB_GHC_PV",
+
+    -- Undeclared readme.gentoo.eclass vars
+    "DOC_CONTENTS",
+
+    -- Backwards compatibility perl-module.eclass vars
+    "MODULE_AUTHOR", "MODULE_VERSION",
+
+    -- Undeclared perl-module.eclass vars
+    "mydoc",
+
+    -- python-utils-r1.eclass declared incorrectly
+    "RESTRICT_PYTHON_ABIS", "PYTHON_MODNAME",
+
+    -- ABI variables
+    "ABI", "DEFAULT_ABI",
+
+    -- AFDO variables
+    "AFDO_LOCATION",
+
+    -- Linguas
+    "LINGUAS"
   ]
+
 
 specialIntegerVariables = [
     "$", "?", "!", "#"
@@ -90,7 +174,9 @@ unbracedVariables = specialVariables ++ [
 arrayVariables = [
     "BASH_ALIASES", "BASH_ARGC", "BASH_ARGV", "BASH_CMDS", "BASH_LINENO",
     "BASH_REMATCH", "BASH_SOURCE", "BASH_VERSINFO", "COMP_WORDS", "COPROC",
-    "DIRSTACK", "FUNCNAME", "GROUPS", "MAPFILE", "PIPESTATUS", "COMPREPLY"
+    "DIRSTACK", "FUNCNAME", "GROUPS", "MAPFILE", "PIPESTATUS", "COMPREPLY",
+    -- For Portage
+    "PATCHES"
   ]
 
 commonCommands = [
@@ -148,6 +234,11 @@ unaryTestOps = [
     "!", "-a", "-b", "-c", "-d", "-e", "-f", "-g", "-h", "-L", "-k", "-p",
     "-r", "-s", "-S", "-t", "-u", "-w", "-x", "-O", "-G", "-N", "-z", "-n",
     "-o", "-v", "-R"
+  ]
+
+-- Variables inspected by Portage tc-export_build_env
+portageBuildEnvVariables = [
+    "CFLAGS", "CXXFLAGS", "CPPFLAGS", "LDFLAGS"
   ]
 
 shellForExecutable :: String -> Maybe Shell

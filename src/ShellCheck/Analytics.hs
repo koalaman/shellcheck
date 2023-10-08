@@ -792,6 +792,11 @@ prop_checkUnquotedExpansions8 = verifyNot checkUnquotedExpansions "set -- $(seq 
 prop_checkUnquotedExpansions9 = verifyNot checkUnquotedExpansions "echo foo `# inline comment`"
 prop_checkUnquotedExpansions10 = verify checkUnquotedExpansions "#!/bin/sh\nexport var=$(val)"
 prop_checkUnquotedExpansions11 = verifyNot checkUnquotedExpansions "ps -p $(pgrep foo)"
+prop_checkUnquotedExpansions12 = verify checkUnquotedExpansions "#!/bin/sh\nexport var=$(val)"
+prop_checkUnquotedExpansions13 = verifyNot checkUnquotedExpansions "echo $(usev X)"
+prop_checkUnquotedExpansions14 = verifyNot checkUnquotedExpansions "echo $(usex X \"\" Y)"
+prop_checkUnquotedExpansions15 = verify checkUnquotedExpansions "echo $(usex X \"Y Z\" W)"
+
 checkUnquotedExpansions params =
     check
   where
@@ -801,11 +806,8 @@ checkUnquotedExpansions params =
     check _ = return ()
     tree = parentMap params
     examine t contents =
-        unless (null contents || shouldBeSplit t || isQuoteFree (shellType params) tree t || usedAsCommandName tree t) $
+        unless (null contents || commandExpansionShouldBeSplit t == Just True || isQuoteFree (shellType params) tree t || usedAsCommandName tree t) $
             warn (getId t) 2046 "Quote this to prevent word splitting."
-
-    shouldBeSplit t =
-        getCommandNameFromExpansion t `elem` [Just "seq", Just "pgrep"]
 
 
 prop_checkRedirectToSame = verify checkRedirectToSame "cat foo > foo"
@@ -1037,9 +1039,6 @@ checkStderrRedirect params redir@(T_Redirecting _ [
 
 checkStderrRedirect _ _ = return ()
 
-lt x = trace ("Tracing " ++ show x) x -- STRIP
-ltt t = trace ("Tracing " ++ show t)  -- STRIP
-
 
 prop_checkSingleQuotedVariables  = verify checkSingleQuotedVariables "echo '$foo'"
 prop_checkSingleQuotedVariables2 = verify checkSingleQuotedVariables "echo 'lol$1.jpg'"
@@ -1070,6 +1069,10 @@ prop_checkSingleQuotedVariables22 = verifyNot checkSingleQuotedVariables "jq '$_
 prop_checkSingleQuotedVariables23 = verifyNot checkSingleQuotedVariables "command jq '$__loc__'"
 prop_checkSingleQuotedVariables24 = verifyNot checkSingleQuotedVariables "exec jq '$__loc__'"
 prop_checkSingleQuotedVariables25 = verifyNot checkSingleQuotedVariables "exec -c -a foo jq '$__loc__'"
+prop_checkSingleQuotedVariablesCros1 = verifyNot checkSingleQuotedVariables "python_gen_any_dep 'dev-python/pyyaml[${PYTHON_USEDEP}]'"
+prop_checkSingleQuotedVariablesCros2 = verifyNot checkSingleQuotedVariables "python_gen_cond_dep 'dev-python/unittest2[${PYTHON_USEDEP}]' python2_7 pypy"
+prop_checkSingleQuotedVariablesCros3 = verifyNot checkSingleQuotedVariables "version_format_string '${PN}_source_$1_$2-$3_$4'"
+
 
 
 checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
@@ -1109,6 +1112,9 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
                 ,"git filter-branch"
                 ,"mumps -run %XCMD"
                 ,"mumps -run LOOP%XCMD"
+                ,"python_gen_any_dep"
+                ,"python_gen_cond_dep"
+                ,"version_format_string"
                 ]
             || "awk" `isSuffixOf` commandName
             || "perl" `isPrefixOf` commandName
@@ -3509,6 +3515,7 @@ prop_checkSplittingInArrays5 = verifyNot checkSplittingInArrays "a=( $! $$ $# )"
 prop_checkSplittingInArrays6 = verifyNot checkSplittingInArrays "a=( ${#arr[@]} )"
 prop_checkSplittingInArrays7 = verifyNot checkSplittingInArrays "a=( foo{1,2} )"
 prop_checkSplittingInArrays8 = verifyNot checkSplittingInArrays "a=( * )"
+prop_checkSplittingInArrays9 = verifyNot checkSplittingInArrays "a=( $(use_enable foo) )"
 checkSplittingInArrays params t =
     case t of
         T_Array _ elements -> mapM_ check elements
@@ -3518,6 +3525,7 @@ checkSplittingInArrays params t =
         T_NormalWord _ parts -> mapM_ checkPart parts
         _ -> return ()
     checkPart part = case part of
+        _ | commandExpansionShouldBeSplit part == Just True -> return ()
         T_DollarExpansion id _ -> forCommand id
         T_DollarBraceCommandExpansion id _ -> forCommand id
         T_Backticked id _ -> forCommand id
