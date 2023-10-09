@@ -103,6 +103,11 @@ jobs:
     runs-on: ubuntu-latest
     environment: Deploy
     steps:
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install hub
+
       - name: Checkout repository
         uses: actions/checkout@v3
 
