@@ -66,11 +66,7 @@ library
       directory            >= 1.2.3 && < 1.4,
 
       -- When cabal supports it, move this to setup-depends:
-      process,
-
-      -- support for scanning Gentoo eclasses
-      attoparsec,
-      text
+      process
     exposed-modules:
       ShellCheck.AST
       ShellCheck.ASTLib
