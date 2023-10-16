@@ -3320,7 +3320,7 @@ checkReturnAgainstZero params token =
 
     isFirstCommandInFunction = fromMaybe False $ do
         let path = getPath (parentMap params) token
-        func <- listToMaybe $ filter isFunction path
+        func <- find isFunction path
         cmd <- getClosestCommand (parentMap params) token
         return $ getId cmd == getId (getFirstCommandInFunction func)
 
