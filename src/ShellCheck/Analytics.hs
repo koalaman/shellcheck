@@ -4378,9 +4378,8 @@ checkEqualsInCommand params originalToken =
         return $ isVariableName str
 
     isLeadingNumberVar s =
-        let lead = takeWhile (/= '=') s
-        in not (null lead) && isDigit (head lead)
-            && all isVariableChar lead && not (all isDigit lead)
+        case takeWhile (/= '=') s of
+            lead@(x:_) -> isDigit x && all isVariableChar lead && not (all isDigit lead)
 
     msg cmd leading (T_Literal litId s) = do
         -- There are many different cases, and the order of the branches matter.
