@@ -1058,7 +1058,7 @@ handleCommand cmd vars args literalCmd = do
             let
                 id = getId t
                 pre = [t]
-                literal = fromJust $ getLiteralStringExt (const $ Just "\0") t
+                literal = getLiteralStringDef "\0" t
                 isKnown = '\0' `notElem` literal
                 match = fmap head $ variableAssignRegex `matchRegex` literal
                 name = fromMaybe literal match
