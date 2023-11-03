@@ -4380,6 +4380,7 @@ checkEqualsInCommand params originalToken =
     isLeadingNumberVar s =
         case takeWhile (/= '=') s of
             lead@(x:_) -> isDigit x && all isVariableChar lead && not (all isDigit lead)
+            [] -> False
 
     msg cmd leading (T_Literal litId s) = do
         -- There are many different cases, and the order of the branches matter.
