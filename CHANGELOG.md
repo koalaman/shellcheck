@@ -3,6 +3,12 @@
 - SC2324: Warn when x+=1 appends instead of increments
 - SC2325: Warn about multiple `!`s in dash/sh.
 - SC2326: Warn about `foo | ! bar` in bash/dash/sh.
+- SC3012: Warn about lexicographic-compare bashism in test like in [ ]
+- SC3013: Warn bashism `test _ -op/-nt/-ef _` like in [ ]
+- SC3014: Warn bashism `test _ == _` like in [ ]
+- SC3015: Warn bashism `test _ =~ _` like in [ ]
+- SC3016: Warn bashism `test -v _` like in [ ]
+- SC3017: Warn bashism `test -a _` like in [ ]
 
 ### Fixed
 - source statements with here docs now work correctly
