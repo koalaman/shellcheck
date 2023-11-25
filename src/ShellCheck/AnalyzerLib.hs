@@ -284,8 +284,8 @@ prop_determineShell7 = determineShellTest "#! /bin/ash" == Dash
 prop_determineShell8 = determineShellTest' (Just Ksh) "#!/bin/sh" == Sh
 prop_determineShell9 = determineShellTest "#!/bin/env -S dash -x" == Dash
 prop_determineShell10 = determineShellTest "#!/bin/env --split-string= dash -x" == Dash
-prop_determineShell11 = determineShellTest "#!/bin/busybox sh" == Dash -- busybox sh is a specific shell, not posix sh
-prop_determineShell12 = determineShellTest "#!/bin/busybox ash" == Dash
+prop_determineShell11 = determineShellTest "#!/bin/busybox sh" == BusyboxSh -- busybox sh is a specific shell, not posix sh
+prop_determineShell12 = determineShellTest "#!/bin/busybox ash" == BusyboxSh
 
 determineShellTest = determineShellTest' Nothing
 determineShellTest' fallbackShell = determineShell fallbackShell . fromJust . prRoot . pScript

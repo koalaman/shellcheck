@@ -28,7 +28,7 @@ module ShellCheck.Interface
     , AnalysisSpec(asScript, asShellType, asFallbackShell, asExecutionMode, asCheckSourced, asTokenPositions, asOptionalChecks)
     , AnalysisResult(arComments)
     , FormatterOptions(foColorOption, foWikiLinkCount)
-    , Shell(Ksh, Sh, Bash, Dash)
+    , Shell(Ksh, Sh, Bash, Dash, BusyboxSh)
     , ExecutionMode(Executed, Sourced)
     , ErrorMessage
     , Code
@@ -221,7 +221,7 @@ newCheckDescription = CheckDescription {
     }
 
 -- Supporting data types
-data Shell = Ksh | Sh | Bash | Dash deriving (Show, Eq)
+data Shell = Ksh | Sh | Bash | Dash | BusyboxSh deriving (Show, Eq)
 data ExecutionMode = Executed | Sourced deriving (Show, Eq)
 
 type ErrorMessage = String
@@ -335,4 +335,3 @@ mockedSystemInterface files = (newSystemInterface :: SystemInterface Identity) {
 mockRcFile rcfile mock = mock {
     siGetConfig = const . return $ Just (".shellcheckrc", rcfile)
 }
-

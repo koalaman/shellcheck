@@ -758,8 +758,8 @@ prop_executableFromShebang6 = executableFromShebang "/usr/bin/env --split-string
 prop_executableFromShebang7 = executableFromShebang "/usr/bin/env --split-string bash -x" == "bash"
 prop_executableFromShebang8 = executableFromShebang "/usr/bin/env --split-string foo=bar bash -x" == "bash"
 prop_executableFromShebang9 = executableFromShebang "/usr/bin/env foo=bar dash" == "dash"
-prop_executableFromShebang10 = executableFromShebang "/bin/busybox sh" == "ash"
-prop_executableFromShebang11 = executableFromShebang "/bin/busybox ash" == "ash"
+prop_executableFromShebang10 = executableFromShebang "/bin/busybox sh" == "busybox sh"
+prop_executableFromShebang11 = executableFromShebang "/bin/busybox ash" == "busybox ash"
 
 -- Get the shell executable from a string like '/usr/bin/env bash'
 executableFromShebang :: String -> String
@@ -776,7 +776,8 @@ executableFromShebang = shellFor
             [x] -> basename x
             (first:second:args) | basename first == "busybox" ->
                 case basename second of
-                   "sh" -> "ash" -- busybox sh is ash
+                   "sh" -> "busybox sh"
+                   "ash" -> "busybox ash"
                    x -> x
             (first:args) | basename first == "env" ->
                 fromEnvArgs args
