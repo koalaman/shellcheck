@@ -202,6 +202,15 @@ prop_checkBashisms107 = verifyNot checkBashisms "#!/bin/busybox sh\nx=x\n[ \"$x\
 prop_checkBashisms108 = verifyNot checkBashisms "#!/bin/busybox sh\necho magic &> /dev/null"
 prop_checkBashisms109 = verifyNot checkBashisms "#!/bin/busybox sh\ntrap stop EXIT SIGTERM"
 prop_checkBashisms110 = verifyNot checkBashisms "#!/bin/busybox sh\nsource /dev/null"
+prop_checkBashisms111 = verify checkBashisms "#!/bin/dash\nx='test'\n${x:0:3}" -- SC3057
+prop_checkBashisms112 = verifyNot checkBashisms "#!/bin/busybox sh\nx='test'\n${x:0:3}" -- SC3057
+prop_checkBashisms113 = verify checkBashisms "#!/bin/dash\nx='test'\n${x/st/xt}" -- SC3060
+prop_checkBashisms114 = verifyNot checkBashisms "#!/bin/busybox sh\nx='test'\n${x/st/xt}" -- SC3060
+prop_checkBashisms115 = verify checkBashisms "#!/bin/busybox sh\nx='test'\n${!x}" -- SC3053
+prop_checkBashisms116 = verify checkBashisms "#!/bin/busybox sh\nx='test'\n${x[1]}" -- SC3054
+prop_checkBashisms117 = verify checkBashisms "#!/bin/busybox sh\nx='test'\n${!x[@]}" -- SC3055
+prop_checkBashisms118 = verify checkBashisms "#!/bin/busybox sh\nxyz=1\n${!x*}" -- SC3056
+prop_checkBashisms119 = verify checkBashisms "#!/bin/busybox sh\nx='test'\n${x^^[t]}" -- SC3059
 checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
     params <- ask
     kludge params t
@@ -282,7 +291,8 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
         warnMsg id 3028 $ str ++ " is"
 
     bashism t@(T_DollarBraced id _ token) = do
-        mapM_ check expansion
+        unless isBusyboxSh $ mapM_ check simpleExpansions
+        mapM_ check advancedExpansions
         when (isBashVariable var) $
             warnMsg id 3028 $ var ++ " is"
       where
@@ -452,14 +462,16 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
     bashism _ = return ()
 
     varChars="_0-9a-zA-Z"
-    expansion = let re = mkRegex in [
+    advancedExpansions = let re = mkRegex in [
         (re $ "^![" ++ varChars ++ "]", 3053, "indirect expansion is"),
         (re $ "^[" ++ varChars ++ "]+\\[.*\\]$", 3054, "array references are"),
         (re $ "^![" ++ varChars ++ "]+\\[[*@]]$", 3055, "array key expansion is"),
         (re $ "^![" ++ varChars ++ "]+[*@]$", 3056, "name matching prefixes are"),
+        (re $ "^[" ++ varChars ++ "*@]+(\\[.*\\])?[,^]", 3059, "case modification is")
+        ]
+    simpleExpansions = let re = mkRegex in [
         (re $ "^[" ++ varChars ++ "*@]+:[^-=?+]", 3057, "string indexing is"),
         (re $ "^([*@][%#]|#[@*])", 3058, "string operations on $@/$* are"),
-        (re $ "^[" ++ varChars ++ "*@]+(\\[.*\\])?[,^]", 3059, "case modification is"),
         (re $ "^[" ++ varChars ++ "*@]+(\\[.*\\])?/", 3060, "string replacement is")
         ]
     bashVars = [
