@@ -200,6 +200,7 @@ prop_checkBashisms105 = verifyNot checkBashisms "#!/bin/busybox sh\nset -o pipef
 prop_checkBashisms106 = verifyNot checkBashisms "#!/bin/busybox sh\nx=x\n[[ \"$x\" = \"$x\" ]]"
 prop_checkBashisms107 = verifyNot checkBashisms "#!/bin/busybox sh\nx=x\n[ \"$x\" == \"$x\" ]"
 prop_checkBashisms108 = verifyNot checkBashisms "#!/bin/busybox sh\necho magic &> /dev/null"
+prop_checkBashisms109 = verifyNot checkBashisms "#!/bin/busybox sh\ntrap stop EXIT SIGTERM"
 checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
     params <- ask
     kludge params t
@@ -399,7 +400,7 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
                         return $ do
                             when (upper `elem` ["ERR", "DEBUG", "RETURN"]) $
                                 warnMsg (getId token) 3047 $ "trapping " ++ str ++ " is"
-                            when ("SIG" `isPrefixOf` upper) $
+                            when (not isBusyboxSh && "SIG" `isPrefixOf` upper) $
                                 warnMsg (getId token) 3048
                                     "prefixing signal names with 'SIG' is"
                             when (not isDash && upper /= str) $
