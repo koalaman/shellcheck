@@ -201,6 +201,7 @@ prop_checkBashisms106 = verifyNot checkBashisms "#!/bin/busybox sh\nx=x\n[[ \"$x
 prop_checkBashisms107 = verifyNot checkBashisms "#!/bin/busybox sh\nx=x\n[ \"$x\" == \"$x\" ]"
 prop_checkBashisms108 = verifyNot checkBashisms "#!/bin/busybox sh\necho magic &> /dev/null"
 prop_checkBashisms109 = verifyNot checkBashisms "#!/bin/busybox sh\ntrap stop EXIT SIGTERM"
+prop_checkBashisms110 = verifyNot checkBashisms "#!/bin/busybox sh\nsource /dev/null"
 checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
     params <- ask
     kludge params t
@@ -391,7 +392,8 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
                     (\x -> (not . null . snd $ x) && snd x `notElem` allowed) flags
                 return . warnMsg (getId word) 3045 $ name ++ " -" ++ flag ++ " is"
 
-            when (name == "source") $ warnMsg id 3046 "'source' in place of '.' is"
+            when (name == "source" && not isBusyboxSh) $
+                warnMsg id 3046 "'source' in place of '.' is"
             when (name == "trap") $
                 let
                     check token = sequence_ $ do
@@ -440,7 +442,9 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
             ("wait", Just [])
             ]
     bashism t@(T_SourceCommand id src _)
-        | getCommandName src == Just "source" = warnMsg id 3051 "'source' in place of '.' is"
+      | getCommandName src == Just "source" =
+          unless isBusyboxSh $
+            warnMsg id 3051 "'source' in place of '.' is"
     bashism (TA_Expansion _ (T_Literal id str : _))
         | str `matches` radix = warnMsg id 3052 "arithmetic base conversion is"
       where
