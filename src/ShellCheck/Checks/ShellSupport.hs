@@ -198,6 +198,7 @@ prop_checkBashisms103 = verifyNot checkBashisms "read foo"
 prop_checkBashisms104 = verifyNot checkBashisms "read ''"
 prop_checkBashisms105 = verifyNot checkBashisms "#!/bin/busybox sh\nset -o pipefail"
 prop_checkBashisms106 = verifyNot checkBashisms "#!/bin/busybox sh\nx=x\n[[ \"$x\" = \"$x\" ]]"
+prop_checkBashisms107 = verifyNot checkBashisms "#!/bin/busybox sh\nx=x\n[ \"$x\" == \"$x\" ]"
 checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
     params <- ask
     kludge params t
@@ -238,9 +239,9 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
         | op `elem` [ "-ot", "-nt", "-ef" ] =
             unless isDash $ warnMsg id 3013 $ op ++ " is"
     bashism (TC_Binary id SingleBracket "==" _ _) =
-            warnMsg id 3014 "== in place of = is"
+        unless isBusyboxSh $ warnMsg id 3014 "== in place of = is"
     bashism (T_SimpleCommand id _ [asStr -> Just "test", lhs, asStr -> Just "==", rhs]) =
-            warnMsg id 3014 "== in place of = is"
+        unless isBusyboxSh $ warnMsg id 3014 "== in place of = is"
     bashism (TC_Binary id SingleBracket "=~" _ _) =
             warnMsg id 3015 "=~ regex matching is"
     bashism (T_SimpleCommand id _ [asStr -> Just "test", lhs, asStr -> Just "=~", rhs]) =
