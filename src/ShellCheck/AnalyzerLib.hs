@@ -206,18 +206,21 @@ makeParameters spec = params
             case shellType params of
                 Bash -> isOptionSet "lastpipe" root
                 Dash -> False
+                BusyboxSh -> False
                 Sh   -> False
                 Ksh  -> True,
         hasInheritErrexit =
             case shellType params of
                 Bash -> isOptionSet "inherit_errexit" root
                 Dash -> True
+                BusyboxSh -> True
                 Sh   -> True
                 Ksh  -> False,
         hasPipefail =
             case shellType params of
                 Bash -> isOptionSet "pipefail" root
                 Dash -> True
+                BusyboxSh -> isOptionSet "pipefail" root
                 Sh   -> True
                 Ksh  -> isOptionSet "pipefail" root,
         shellTypeSpecified = isJust (asShellType spec) || isJust (asFallbackShell spec),
@@ -899,6 +902,7 @@ isBashLike params =
         Bash -> True
         Ksh -> True
         Dash -> False
+        BusyboxSh -> False
         Sh -> False
 
 isTrueAssignmentSource c =

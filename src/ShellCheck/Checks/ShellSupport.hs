@@ -76,7 +76,7 @@ verifyNot c s = producesComments (testChecker c) s == Just False
 prop_checkForDecimals1 = verify checkForDecimals "((3.14*c))"
 prop_checkForDecimals2 = verify checkForDecimals "foo[1.2]=bar"
 prop_checkForDecimals3 = verifyNot checkForDecimals "declare -A foo; foo[1.2]=bar"
-checkForDecimals = ForShell [Sh, Dash, Bash] f
+checkForDecimals = ForShell [Sh, Dash, BusyboxSh, Bash] f
   where
     f t@(TA_Expansion id _) = sequence_ $ do
         str <- getLiteralString t
@@ -196,14 +196,16 @@ prop_checkBashisms101 = verify checkBashisms "read"
 prop_checkBashisms102 = verifyNot checkBashisms "read -r foo"
 prop_checkBashisms103 = verifyNot checkBashisms "read foo"
 prop_checkBashisms104 = verifyNot checkBashisms "read ''"
-checkBashisms = ForShell [Sh, Dash] $ \t -> do
+prop_checkBashisms105 = verifyNot checkBashisms "#!/bin/busybox sh\nset -o pipefail"
+checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
     params <- ask
     kludge params t
  where
   -- This code was copy-pasted from Analytics where params was a variable
   kludge params = bashism
    where
-    isDash = shellType params == Dash
+    isBusyboxSh = shellType params == BusyboxSh
+    isDash = shellType params == Dash || isBusyboxSh
     warnMsg id code s =
         if isDash
         then err  id code $ "In dash, " ++ s ++ " not supported."
@@ -590,7 +592,7 @@ checkPS1Assignments = ForShell [Bash] f
 
 prop_checkMultipleBangs1 = verify checkMultipleBangs "! ! true"
 prop_checkMultipleBangs2 = verifyNot checkMultipleBangs "! true"
-checkMultipleBangs = ForShell [Dash, Sh] f
+checkMultipleBangs = ForShell [Dash, BusyboxSh, Sh] f
   where
     f token = case token of
         T_Banged id (T_Banged _ _) ->
@@ -601,7 +603,7 @@ checkMultipleBangs = ForShell [Dash, Sh] f
 prop_checkBangAfterPipe1 = verify checkBangAfterPipe "true | ! true"
 prop_checkBangAfterPipe2 = verifyNot checkBangAfterPipe "true | ( ! true )"
 prop_checkBangAfterPipe3 = verifyNot checkBangAfterPipe "! ! true | true"
-checkBangAfterPipe = ForShell [Dash, Sh, Bash] f
+checkBangAfterPipe = ForShell [Dash, BusyboxSh, Sh, Bash] f
   where
     f token = case token of
         T_Pipeline _ _ cmds -> mapM_ check cmds

@@ -930,7 +930,7 @@ prop_checkTimedCommand2 = verify checkTimedCommand "#!/bin/dash\ntime ( foo; bar
 prop_checkTimedCommand3 = verifyNot checkTimedCommand "#!/bin/sh\ntime sleep 1"
 checkTimedCommand = CommandCheck (Exactly "time") f where
     f (T_SimpleCommand _ _ (c:args@(_:_))) =
-        whenShell [Sh, Dash] $ do
+        whenShell [Sh, Dash, BusyboxSh] $ do
             let cmd = last args -- "time" is parsed with a command as argument
             when (isPiped cmd) $
                 warn (getId c) 2176 "'time' is undefined for pipelines. time single stage or bash -c instead."
@@ -954,7 +954,7 @@ checkTimedCommand = CommandCheck (Exactly "time") f where
 prop_checkLocalScope1 = verify checkLocalScope "local foo=3"
 prop_checkLocalScope2 = verifyNot checkLocalScope "f() { local foo=3; }"
 checkLocalScope = CommandCheck (Exactly "local") $ \t ->
-    whenShell [Bash, Dash] $ do -- Ksh allows it, Sh doesn't support local
+    whenShell [Bash, Dash, BusyboxSh] $ do -- Ksh allows it, Sh doesn't support local
         path <- getPathM t
         unless (any isFunctionLike path) $
             err (getId $ getCommandTokenOrThis t) 2168 "'local' is only valid in functions."
