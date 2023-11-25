@@ -199,6 +199,7 @@ prop_checkBashisms104 = verifyNot checkBashisms "read ''"
 prop_checkBashisms105 = verifyNot checkBashisms "#!/bin/busybox sh\nset -o pipefail"
 prop_checkBashisms106 = verifyNot checkBashisms "#!/bin/busybox sh\nx=x\n[[ \"$x\" = \"$x\" ]]"
 prop_checkBashisms107 = verifyNot checkBashisms "#!/bin/busybox sh\nx=x\n[ \"$x\" == \"$x\" ]"
+prop_checkBashisms108 = verifyNot checkBashisms "#!/bin/busybox sh\necho magic &> /dev/null"
 checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
     params <- ask
     kludge params t
@@ -258,7 +259,8 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
         | op `elem` [ "|++", "|--", "++|", "--|"] =
             warnMsg id 3018 $ filter (/= '|') op ++ " is"
     bashism (TA_Binary id "**" _ _) = warnMsg id 3019 "exponentials are"
-    bashism (T_FdRedirect id "&" (T_IoFile _ (T_Greater _) _)) = warnMsg id 3020 "&> is"
+    bashism (T_FdRedirect id "&" (T_IoFile _ (T_Greater _) _)) =
+        unless isBusyboxSh $ warnMsg id 3020 "&> is"
     bashism (T_FdRedirect id "" (T_IoFile _ (T_GREATAND _) file)) =
         unless (all isDigit $ onlyLiteralString file) $ warnMsg id 3021 ">& filename (as opposed to >& fd) is"
     bashism (T_FdRedirect id ('{':_) _) = warnMsg id 3022 "named file descriptors are"
