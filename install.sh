@@ -88,9 +88,6 @@ is_command() {
 echoerr() {
   echo "$@" 1>&2
 }
-# log_prefix() {
-#   echo "$0"
-# }
 _logp=6
 log_set_priority() {
   _logp="$1"
@@ -168,7 +165,7 @@ uname_arch_check() {
 untar() {
   tarball=$1
   case "${tarball}" in
-    *.tar.gz | *.tgz | *.tar.xz) tar --no-same-owner -xzf "${tarball}" ;;
+    *.tar.gz | *.tgz) tar --no-same-owner -xzf "${tarball}" ;;
     *.tar) tar --no-same-owner -xf "${tarball}" ;;
     *.zip) unzip "${tarball}" ;;
     *)
