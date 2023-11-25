@@ -197,6 +197,7 @@ prop_checkBashisms102 = verifyNot checkBashisms "read -r foo"
 prop_checkBashisms103 = verifyNot checkBashisms "read foo"
 prop_checkBashisms104 = verifyNot checkBashisms "read ''"
 prop_checkBashisms105 = verifyNot checkBashisms "#!/bin/busybox sh\nset -o pipefail"
+prop_checkBashisms106 = verifyNot checkBashisms "#!/bin/busybox sh\nx=x\n[[ \"$x\" = \"$x\" ]]"
 checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
     params <- ask
     kludge params t
@@ -221,7 +222,8 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
     bashism (T_DollarBracket id _) = warnMsg id 3007 "$[..] in place of $((..)) is"
     bashism (T_SelectIn id _ _ _) = warnMsg id 3008 "select loops are"
     bashism (T_BraceExpansion id _) = warnMsg id 3009 "brace expansion is"
-    bashism (T_Condition id DoubleBracket _) = warnMsg id 3010 "[[ ]] is"
+    bashism (T_Condition id DoubleBracket _) =
+        unless isBusyboxSh $ warnMsg id 3010 "[[ ]] is"
     bashism (T_HereString id _) = warnMsg id 3011 "here-strings are"
     bashism (TC_Binary id SingleBracket op _ _)
         | op `elem` [ "<", ">", "\\<", "\\>", "<=", ">=", "\\<=", "\\>="] =
