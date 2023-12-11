@@ -211,6 +211,8 @@ prop_checkBashisms116 = verify checkBashisms "#!/bin/busybox sh\nx='test'\n${x[1
 prop_checkBashisms117 = verify checkBashisms "#!/bin/busybox sh\nx='test'\n${!x[@]}" -- SC3055
 prop_checkBashisms118 = verify checkBashisms "#!/bin/busybox sh\nxyz=1\n${!x*}" -- SC3056
 prop_checkBashisms119 = verify checkBashisms "#!/bin/busybox sh\nx='test'\n${x^^[t]}" -- SC3059
+prop_checkBashisms120 = verify checkBashisms "#!/bin/sh\n[ x == y ]"
+prop_checkBashisms121 = verifyNot checkBashisms "#!/bin/sh\n# shellcheck shell=busybox\n[ x == y ]"
 checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
     params <- ask
     kludge params t
