@@ -23,8 +23,8 @@ import ShellCheck.Interface
 import ShellCheck.Formatter.Format
 
 import Data.List
-import GHC.Exts
 import System.IO
+import qualified Data.List.NonEmpty as NE
 
 format :: IO Formatter
 format = return Formatter {
@@ -39,13 +39,13 @@ outputError file error = hPutStrLn stderr $ file ++ ": " ++ error
 outputAll cr sys = mapM_ f groups
   where
     comments = crComments cr
-    groups = groupWith sourceFile comments
-    f :: [PositionedComment] -> IO ()
+    groups = NE.groupWith sourceFile comments
+    f :: NE.NonEmpty PositionedComment -> IO ()
     f group = do
-        let filename = sourceFile (head group)
+        let filename = sourceFile (NE.head group)
         result <- siReadFile sys (Just True) filename
         let contents = either (const "") id result
-        outputResult filename contents group
+        outputResult filename contents (NE.toList group)
 
 outputResult filename contents warnings = do
     let comments = makeNonVirtual warnings contents
