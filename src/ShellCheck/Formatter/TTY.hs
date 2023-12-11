@@ -31,9 +31,9 @@ import Data.Ord
 import Data.IORef
 import Data.List
 import Data.Maybe
-import GHC.Exts
 import System.IO
 import System.Info
+import qualified Data.List.NonEmpty as NE
 
 wikiLink = "https://www.shellcheck.net/wiki/"
 
@@ -117,19 +117,19 @@ outputResult options ref result sys = do
     color <- getColorFunc $ foColorOption options
     let comments = crComments result
     appendComments ref comments (fromIntegral $ foWikiLinkCount options)
-    let fileGroups = groupWith sourceFile comments
+    let fileGroups = NE.groupWith sourceFile comments
     mapM_ (outputForFile color sys) fileGroups
 
 outputForFile color sys comments = do
-    let fileName = sourceFile (head comments)
+    let fileName = sourceFile (NE.head comments)
     result <- siReadFile sys (Just True) fileName
     let contents = either (const "") id result
     let fileLinesList = lines contents
     let lineCount = length fileLinesList
     let fileLines = listArray (1, lineCount) fileLinesList
-    let groups = groupWith lineNo comments
+    let groups = NE.groupWith lineNo comments
     forM_ groups $ \commentsForLine -> do
-        let lineNum = fromIntegral $ lineNo (head commentsForLine)
+        let lineNum = fromIntegral $ lineNo (NE.head commentsForLine)
         let line = if lineNum < 1 || lineNum > lineCount
                         then ""
                         else fileLines ! fromIntegral lineNum
@@ -139,7 +139,7 @@ outputForFile color sys comments = do
         putStrLn (color "source" line)
         forM_ commentsForLine $ \c -> putStrLn $ color (severityText c) $ cuteIndent c
         putStrLn ""
-        showFixedString color commentsForLine (fromIntegral lineNum) fileLines
+        showFixedString color (toList commentsForLine) (fromIntegral lineNum) fileLines
 
 -- Pick out only the lines necessary to show a fix in action
 sliceFile :: Fix -> Array Int String -> (Fix, Array Int String)
