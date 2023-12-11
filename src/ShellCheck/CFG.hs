@@ -887,7 +887,9 @@ build t = do
         T_Less _ -> none
         T_ParamSubSpecialChar _ _ -> none
 
-        x -> error ("Unimplemented: " ++ show x)
+        x -> do
+            error ("Unimplemented: " ++ show x) -- STRIP
+            none
 
 --  Still in `where` clause
     forInHelper id name words body = do
