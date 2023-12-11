@@ -20,3 +20,4 @@ cabal.config
 /parts/
 /prime/
 *.snap
+/dist-newstyle/
