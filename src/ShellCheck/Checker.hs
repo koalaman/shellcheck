@@ -516,6 +516,9 @@ prop_hereDocsAreParsedWithoutTrailingLinefeed = 1044 `elem` result
   where
     result = check "cat << eof"
 
+prop_hereDocsWillHaveParsedIndices = null result
+  where
+    result = check "#!/bin/bash\nmy_array=(a b)\ncat <<EOF >> ./test\n $(( 1 + my_array[1] ))\nEOF"
 
 return []
 runTests = $quickCheckAll

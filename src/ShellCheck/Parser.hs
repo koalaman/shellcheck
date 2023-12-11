@@ -3339,7 +3339,8 @@ readScriptFile sourced = do
                     verifyEof
                     let script = T_Annotation annotationId annotations $
                                     T_Script id shebang commands
-                    reparseIndices script
+                    userstate <- getState
+                    reparseIndices $ reattachHereDocs script (hereDocMap userstate)
                 else do
                     many anyChar
                     id <- endSpan start
@@ -3487,8 +3488,7 @@ parseShell env name contents = do
             return newParseResult {
                 prComments = map toPositionedComment $ nub $ parseNotes userstate ++ parseProblems state,
                 prTokenPositions = Map.map startEndPosToPos (positionMap userstate),
-                prRoot = Just $
-                    reattachHereDocs script (hereDocMap userstate)
+                prRoot = Just script
             }
         Left err -> do
             let context = contextStack state
