@@ -9,6 +9,7 @@
 - SC3015: Warn bashism `test _ =~ _` like in [ ]
 - SC3016: Warn bashism `test -v _` like in [ ]
 - SC3017: Warn bashism `test -a _` like in [ ]
+- Added support for busybox sh
 
 ### Fixed
 - source statements with here docs now work correctly

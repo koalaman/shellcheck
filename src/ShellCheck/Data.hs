@@ -156,6 +156,9 @@ shellForExecutable name =
         "sh"    -> return Sh
         "bash"  -> return Bash
         "bats"  -> return Bash
+        "busybox"  -> return BusyboxSh -- Used for directives and --shell=busybox
+        "busybox sh"  -> return BusyboxSh
+        "busybox ash"  -> return BusyboxSh
         "dash"  -> return Dash
         "ash"   -> return Dash -- There's also a warning for this.
         "ksh"   -> return Ksh

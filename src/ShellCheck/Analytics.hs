@@ -646,10 +646,10 @@ prop_checkShebang9 = verifyNotTree checkShebang "# shellcheck shell=sh\ntrue"
 prop_checkShebang10 = verifyNotTree checkShebang "#!foo\n# shellcheck shell=sh ignore=SC2239\ntrue"
 prop_checkShebang11 = verifyTree checkShebang "#!/bin/sh/\ntrue"
 prop_checkShebang12 = verifyTree checkShebang "#!/bin/sh/ -xe\ntrue"
-prop_checkShebang13 = verifyTree checkShebang "#!/bin/busybox sh"
+prop_checkShebang13 = verifyNotTree checkShebang "#!/bin/busybox sh"
 prop_checkShebang14 = verifyNotTree checkShebang "#!/bin/busybox sh\n# shellcheck shell=sh\n"
 prop_checkShebang15 = verifyNotTree checkShebang "#!/bin/busybox sh\n# shellcheck shell=dash\n"
-prop_checkShebang16 = verifyTree checkShebang "#!/bin/busybox ash"
+prop_checkShebang16 = verifyNotTree checkShebang "#!/bin/busybox ash"
 prop_checkShebang17 = verifyNotTree checkShebang "#!/bin/busybox ash\n# shellcheck shell=dash\n"
 prop_checkShebang18 = verifyNotTree checkShebang "#!/bin/busybox ash\n# shellcheck shell=sh\n"
 checkShebang params (T_Annotation _ list t) =
@@ -1204,6 +1204,7 @@ checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
             case shellType params of
                 Sh -> return ()  -- These are unsupported and will be caught by bashism checks.
                 Dash -> err id 2073 $ "Escape \\" ++ op ++ " to prevent it redirecting."
+                BusyboxSh -> err id 2073 $ "Escape \\" ++ op ++ " to prevent it redirecting."
                 _ -> err id 2073 $ "Escape \\" ++ op ++ " to prevent it redirecting (or switch to [[ .. ]])."
 
     when (op `elem` arithmeticBinaryTestOps) $ do
@@ -2782,6 +2783,7 @@ checkFunctionDeclarations params
             when (hasKeyword && hasParens) $
                 err id 2111 "ksh does not allow 'function' keyword and '()' at the same time."
         Dash -> forSh
+        BusyboxSh -> forSh
         Sh   -> forSh
 
     where
@@ -4044,7 +4046,8 @@ prop_checkModifiedArithmeticInRedirection3 = verifyNot checkModifiedArithmeticIn
 prop_checkModifiedArithmeticInRedirection4 = verify checkModifiedArithmeticInRedirection "cat <<< $((i++))"
 prop_checkModifiedArithmeticInRedirection5 = verify checkModifiedArithmeticInRedirection "cat << foo\n$((i++))\nfoo\n"
 prop_checkModifiedArithmeticInRedirection6 = verifyNot checkModifiedArithmeticInRedirection "#!/bin/dash\nls > $((i=i+1))"
-checkModifiedArithmeticInRedirection params t = unless (shellType params == Dash) $
+prop_checkModifiedArithmeticInRedirection7 = verifyNot checkModifiedArithmeticInRedirection "#!/bin/busybox sh\ncat << foo\n$((i++))\nfoo\n"
+checkModifiedArithmeticInRedirection params t = unless (shellType params == Dash || shellType params == BusyboxSh) $
     case t of
         T_Redirecting _ redirs (T_SimpleCommand _ _ (_:_)) -> mapM_ checkRedirs redirs
         _ -> return ()
@@ -4356,6 +4359,7 @@ checkEqualsInCommand params originalToken =
             Bash -> errWithFix id 2277 "Use BASH_ARGV0 to assign to $0 in bash (or use [ ] to compare)." bashfix
             Ksh -> err id 2278 "$0 can't be assigned in Ksh (but it does reflect the current function)."
             Dash -> err id 2279 "$0 can't be assigned in Dash. This becomes a command name."
+            BusyboxSh -> err id 2279 "$0 can't be assigned in Busybox Ash. This becomes a command name."
             _ -> err id 2280 "$0 can't be assigned this way, and there is no portable alternative."
     leadingNumberMsg id =
         err id 2282 "Variable names can't start with numbers, so this is interpreted as a command."
