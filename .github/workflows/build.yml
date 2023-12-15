@@ -37,7 +37,7 @@ jobs:
           mv dist-newstyle/sdist/*.tar.gz source/source.tar.gz
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: source
           path: source/
@@ -63,7 +63,7 @@ jobs:
           ( cd bin && ../build/run_builder ../source/source.tar.gz ../build/${{matrix.build}} )
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: bin
           path: bin/
@@ -92,7 +92,7 @@ jobs:
           rm -rf */ README* LICENSE*
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: deploy
           path: deploy/
