@@ -341,9 +341,9 @@ isQuoteFreeNode strict shell tree t =
     -- Is this node self-quoting in itself?
     isQuoteFreeElement t =
         case t of
-            T_Assignment {} -> assignmentIsQuoting t
-            T_FdRedirect {} -> True
-            _               -> False
+            T_Assignment id _ _ _ _ -> assignmentIsQuoting id
+            T_FdRedirect {}         -> True
+            _                       -> False
 
     -- Are any subnodes inherently self-quoting?
     isQuoteFreeContext t =
@@ -353,7 +353,7 @@ isQuoteFreeNode strict shell tree t =
             TC_Binary _ DoubleBracket _ _ _ -> return True
             TA_Sequence {}                  -> return True
             T_Arithmetic {}                 -> return True
-            T_Assignment {}                 -> return $ assignmentIsQuoting t
+            T_Assignment id _ _ _ _         -> return $ assignmentIsQuoting id
             T_Redirecting {}                -> return False
             T_DoubleQuoted _ _              -> return True
             T_DollarDoubleQuoted _ _        -> return True
@@ -368,11 +368,11 @@ isQuoteFreeNode strict shell tree t =
     -- Check whether this assignment is self-quoting due to being a recognized
     -- assignment passed to a Declaration Utility. This will soon be required
     -- by POSIX: https://austingroupbugs.net/view.php?id=351
-    assignmentIsQuoting t = shellParsesParamsAsAssignments || not (isAssignmentParamToCommand t)
+    assignmentIsQuoting id = shellParsesParamsAsAssignments || not (isAssignmentParamToCommand id)
     shellParsesParamsAsAssignments = shell /= Sh
 
     -- Is this assignment a parameter to a command like export/typeset/etc?
-    isAssignmentParamToCommand (T_Assignment id _ _ _ _) =
+    isAssignmentParamToCommand id =
         case Map.lookup id tree of
             Just (T_SimpleCommand _ _ (_:args)) -> id `elem` (map getId args)
             _ -> False
