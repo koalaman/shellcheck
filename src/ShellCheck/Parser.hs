@@ -160,7 +160,7 @@ data Context =
     deriving (Show)
 
 data HereDocContext =
-        HereDocPending Token [Context] -- on linefeed, read this T_HereDoc
+        HereDocPending Id Dashed Quoted String [Context] -- on linefeed, read this T_HereDoc
     deriving (Show)
 
 data UserState = UserState {
@@ -238,12 +238,12 @@ addToHereDocMap id list = do
         hereDocMap = Map.insert id list map
     }
 
-addPendingHereDoc t = do
+addPendingHereDoc id d q str = do
     state <- getState
     context <- getCurrentContexts
     let docs = pendingHereDocs state
     putState $ state {
-        pendingHereDocs = HereDocPending t context : docs
+        pendingHereDocs = HereDocPending id d q str context : docs
     }
 
 popPendingHereDocs = do
@@ -1835,7 +1835,7 @@ readHereDoc = called "here document" $ do
 
     -- add empty tokens for now, read the rest in readPendingHereDocs
     let doc = T_HereDoc hid dashed quoted endToken []
-    addPendingHereDoc doc
+    addPendingHereDoc hid dashed quoted endToken
     return doc
   where
     unquote :: String -> (Quoted, String)
@@ -1856,7 +1856,7 @@ readPendingHereDocs = do
     docs <- popPendingHereDocs
     mapM_ readDoc docs
   where
-    readDoc (HereDocPending (T_HereDoc id dashed quoted endToken _) ctx) =
+    readDoc (HereDocPending id dashed quoted endToken ctx) =
       swapContext ctx $
       do
         docStartPos <- getPosition
