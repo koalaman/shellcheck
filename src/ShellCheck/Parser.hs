@@ -46,6 +46,7 @@ import Text.Parsec.Error
 import Text.Parsec.Pos
 import qualified Control.Monad.Reader as Mr
 import qualified Control.Monad.State as Ms
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Map.Strict as Map
 
 import Test.QuickCheck.All (quickCheckAll)
@@ -2904,8 +2905,8 @@ readLetSuffix = many1 (readIoRedirect <|> try readLetExpression <|> readCmdWord)
     kludgeAwayQuotes :: String -> SourcePos -> (String, SourcePos)
     kludgeAwayQuotes s p =
         case s of
-            first:rest@(_:_) ->
-                let (last:backwards) = reverse rest
+            first:second:rest ->
+                let (last NE.:| backwards) = NE.reverse (second NE.:| rest)
                     middle = reverse backwards
                 in
                     if first `elem` "'\"" && first == last
