@@ -299,7 +299,6 @@ depsToState set = foldl insert newInternalState $ S.toList set
                     PrefixScope -> (sPrefixValues, insertPrefix)
                     LocalScope -> (sLocalValues, insertLocal)
                     GlobalScope -> (sGlobalValues, insertGlobal)
-                    DefaultScope -> error $ pleaseReport "Unresolved scope in dependency"
 
             alreadyExists = isJust $ vmLookup name $ mapToCheck state
         in
@@ -1120,34 +1119,34 @@ transferEffect ctx effect =
 
         CFSetProps scope name props ->
             case scope of
-                DefaultScope -> do
+                Nothing -> do
                     state <- readVariable ctx name
                     writeVariable ctx name $ addProperties props state
-                GlobalScope -> do
+                Just GlobalScope -> do
                     state <- readGlobal ctx name
                     writeGlobal ctx name $ addProperties props state
-                LocalScope -> do
+                Just LocalScope -> do
                     out <- readSTRef (cOutput ctx)
                     state <- readLocal ctx name
                     writeLocal ctx name $ addProperties props state
-                PrefixScope -> do
+                Just PrefixScope -> do
                     -- Prefix values become local
                     state <- readLocal ctx name
                     writeLocal ctx name $ addProperties props state
 
         CFUnsetProps scope name props ->
             case scope of
-                DefaultScope -> do
+                Nothing -> do
                     state <- readVariable ctx name
                     writeVariable ctx name $ removeProperties props state
-                GlobalScope -> do
+                Just GlobalScope -> do
                     state <- readGlobal ctx name
                     writeGlobal ctx name $ removeProperties props state
-                LocalScope -> do
+                Just LocalScope -> do
                     out <- readSTRef (cOutput ctx)
                     state <- readLocal ctx name
                     writeLocal ctx name $ removeProperties props state
-                PrefixScope -> do
+                Just PrefixScope -> do
                     -- Prefix values become local
                     state <- readLocal ctx name
                     writeLocal ctx name $ removeProperties props state

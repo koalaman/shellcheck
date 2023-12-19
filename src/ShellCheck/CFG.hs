@@ -112,8 +112,8 @@ data CFEdge =
 
 -- Actions we track
 data CFEffect =
-    CFSetProps Scope String (S.Set CFVariableProp)
-    | CFUnsetProps Scope String (S.Set CFVariableProp)
+    CFSetProps (Maybe Scope) String (S.Set CFVariableProp)
+    | CFUnsetProps (Maybe Scope) String (S.Set CFVariableProp)
     | CFReadVariable String
     | CFWriteVariable String CFValue
     | CFWriteGlobal String CFValue
@@ -579,7 +579,7 @@ build t = do
 
         T_Array _ list -> sequentially list
 
-        T_Assignment {} -> buildAssignment DefaultScope t
+        T_Assignment {} -> buildAssignment Nothing t
 
         T_Backgrounded id body -> do
             start <- newStructuralNode
@@ -1031,9 +1031,9 @@ handleCommand cmd vars args literalCmd = do
 
         scope isFunc =
             case () of
-                _ | global -> GlobalScope
-                _ | isFunc -> LocalScope
-                _ -> DefaultScope
+                _ | global -> Just GlobalScope
+                _ | isFunc -> Just LocalScope
+                _ -> Nothing
 
         addedProps = S.fromList $ concat $ [
             [ CFVPArray | array ],
@@ -1178,7 +1178,7 @@ handleCommand cmd vars args literalCmd = do
 
     regularExpansion vars args p = do
             args <- sequentially args
-            assignments <- mapM (buildAssignment PrefixScope) vars
+            assignments <- mapM (buildAssignment (Just PrefixScope)) vars
             exe <- p
             dropAssignments <-
                 if null vars
@@ -1198,7 +1198,7 @@ handleCommand cmd vars args literalCmd = do
 
 none = newStructuralNode
 
-data Scope = DefaultScope | GlobalScope | LocalScope | PrefixScope
+data Scope = GlobalScope | LocalScope | PrefixScope
   deriving (Eq, Ord, Show, Generic, NFData)
 
 buildAssignment scope t = do
@@ -1212,10 +1212,10 @@ buildAssignment scope t = do
                 let valueType = if null indices then f id value else CFValueArray
                 let scoper =
                                 case scope of
-                                    PrefixScope -> CFWritePrefix
-                                    LocalScope -> CFWriteLocal
-                                    GlobalScope -> CFWriteGlobal
-                                    DefaultScope -> CFWriteVariable
+                                    Just PrefixScope -> CFWritePrefix
+                                    Just LocalScope -> CFWriteLocal
+                                    Just GlobalScope -> CFWriteGlobal
+                                    Nothing -> CFWriteVariable
                 write <- newNodeRange $ applySingle $ IdTagged id $ scoper var valueType
                 linkRanges [expand, index, read, write]
               where
