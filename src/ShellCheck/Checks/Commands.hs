@@ -186,7 +186,7 @@ checkCommand map t@(T_SimpleCommand id cmdPrefix (cmd:rest)) = sequence_ $ do
             M.findWithDefault nullCheck (Basename $ basename name) map t
         else if name == "builtin" && not (null rest) then
             let t' = T_SimpleCommand id cmdPrefix rest
-                selectedBuiltin = fromMaybe "" $ getLiteralString . head $ rest
+                selectedBuiltin = onlyLiteralString $ head rest
             in M.findWithDefault nullCheck (Exactly selectedBuiltin) map t'
         else do
             M.findWithDefault nullCheck (Exactly name) map t
@@ -299,7 +299,7 @@ checkExpr = CommandCheck (Basename "expr") f where
                     "'expr' expects 3+ arguments but sees 1. Make sure each operator/operand is a separate argument, and escape <>&|."
 
             [first, second] |
-                (fromMaybe "" $ getLiteralString first) /= "length"
+                onlyLiteralString first /= "length"
                   && not (willSplit first || willSplit second) -> do
                     checkOp first
                     warn (getId t) 2307

@@ -1443,14 +1443,14 @@ prop_checkConstantNullary5 = verify checkConstantNullary "[[ true ]]"
 prop_checkConstantNullary6 = verify checkConstantNullary "[ 1 ]"
 prop_checkConstantNullary7 = verify checkConstantNullary "[ false ]"
 checkConstantNullary _ (TC_Nullary _ _ t) | isConstant t =
-    case fromMaybe "" $ getLiteralString t of
+    case onlyLiteralString t of
         "false" -> err (getId t) 2158 "[ false ] is true. Remove the brackets."
         "0" -> err (getId t) 2159 "[ 0 ] is true. Use 'false' instead."
         "true" -> style (getId t) 2160 "Instead of '[ true ]', just use 'true'."
         "1" -> style (getId t) 2161 "Instead of '[ 1 ]', use 'true'."
         _ -> err (getId t) 2078 "This expression is constant. Did you forget a $ somewhere?"
   where
-    string = fromMaybe "" $ getLiteralString t
+    string = onlyLiteralString t
 
 checkConstantNullary _ _ = return ()
 
@@ -2276,7 +2276,7 @@ checkFunctionsUsedExternally params t =
             (Just str, t) -> do
                 let name = basename str
                 let args = skipOver t argv
-                let argStrings = map (\x -> (fromMaybe "" $ getLiteralString x, x)) args
+                let argStrings = map (\x -> (onlyLiteralString x, x)) args
                 let candidates = getPotentialCommands name argStrings
                 mapM_ (checkArg name (getId t)) candidates
             _ -> return ()
