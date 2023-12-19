@@ -1006,7 +1006,7 @@ checkWhileGetoptsCase = CommandCheck (Exactly "getopts") f
             options <- getLiteralString arg1
             getoptsVar <- getLiteralString name
             (T_WhileExpression _ _ body) <- findFirst whileLoop path
-            caseCmd@(T_CaseExpression _ var _) <- mapMaybe findCase body !!! 0
+            T_CaseExpression id var list <- mapMaybe findCase body !!! 0
 
             -- Make sure getopts name and case variable matches
             [T_DollarBraced _ _ bracedWord] <- return $ getWordParts var
@@ -1016,11 +1016,11 @@ checkWhileGetoptsCase = CommandCheck (Exactly "getopts") f
             -- Make sure the variable isn't modified
             guard . not $ modifiesVariable params (T_BraceGroup (Id 0) body) getoptsVar
 
-            return $ check (getId arg1) (map (:[]) $ filter (/= ':') options) caseCmd
+            return $ check (getId arg1) (map (:[]) $ filter (/= ':') options) id list
     f _ = return ()
 
-    check :: Id -> [String] -> Token -> Analysis
-    check optId opts (T_CaseExpression id _ list) = do
+    check :: Id -> [String] -> Id -> [(CaseType, [Token], [Token])] -> Analysis
+    check optId opts id list = do
             unless (Nothing `M.member` handledMap) $ do
                 mapM_ (warnUnhandled optId id) $ catMaybes $ M.keys notHandled
 
