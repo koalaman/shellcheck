@@ -3507,13 +3507,11 @@ parseShell env name contents = do
     -- A final pass for ignoring parse errors after failed parsing
     isIgnored stack note = any (contextItemDisablesCode False (codeForParseNote note)) stack
 
-notesForContext list = zipWith ($) [first, second] $ filter isName list
+notesForContext list = zipWith ($) [first, second] [(pos, str) | ContextName pos str <- list]
   where
-    isName (ContextName _ _) = True
-    isName _ = False
-    first (ContextName pos str) = ParseNote pos pos ErrorC 1073 $
+    first (pos, str) = ParseNote pos pos ErrorC 1073 $
         "Couldn't parse this " ++ str ++ ". Fix to allow more checks."
-    second (ContextName pos str) = ParseNote pos pos InfoC 1009 $
+    second (pos, str) = ParseNote pos pos InfoC 1009 $
         "The mentioned syntax error was in this " ++ str ++ "."
 
 -- Go over all T_UnparsedIndex and reparse them as either arithmetic or text
