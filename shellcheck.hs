@@ -252,9 +252,9 @@ runFormatter sys format options files = do
                 else SomeProblems
 
 parseEnum name value list =
-    case filter ((== value) . fst) list of
-        [(name, value)] -> return value
-        [] -> do
+    case lookup value list of
+        Just value -> return value
+        Nothing -> do
             printErr $ "Unknown value for --" ++ name ++ ". " ++
                        "Valid options are: " ++ (intercalate ", " $ map fst list)
             throwError SupportFailure
