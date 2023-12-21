@@ -2825,13 +2825,11 @@ checkUnpassedInFunctions params root =
     execWriter $ mapM_ warnForGroup referenceGroups
   where
     functionMap :: Map.Map String Token
-    functionMap = Map.fromList $
-        map (\t@(T_Function _ _ _ name _) -> (name,t)) functions
-    functions = execWriter $ doAnalysis (tell . maybeToList . findFunction) root
+    functionMap = Map.fromList $ execWriter $ doAnalysis (tell . maybeToList . findFunction) root
 
     findFunction t@(T_Function id _ _ name body)
         | any (isPositionalReference t) flow && not (any isPositionalAssignment flow)
-        = return t
+        = return (name,t)
         where flow = getVariableFlow params body
     findFunction _ = Nothing
 
