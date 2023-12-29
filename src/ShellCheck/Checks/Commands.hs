@@ -20,6 +20,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE PatternGuards #-}
 
 -- This module contains checks that examine specific commands by name.
 module ShellCheck.Checks.Commands (checker, optionalChecks, ShellCheck.Checks.Commands.runTests) where
@@ -181,16 +182,15 @@ checkCommand :: M.Map CommandName (Token -> Analysis) -> Token -> Analysis
 checkCommand map t@(T_SimpleCommand id cmdPrefix (cmd:rest)) = sequence_ $ do
     name <- getLiteralString cmd
     return $
-        if '/' `elem` name
-        then
-            M.findWithDefault nullCheck (Basename $ basename name) map t
-        else if name == "builtin" && not (null rest) then
-            let t' = T_SimpleCommand id cmdPrefix rest
-                selectedBuiltin = onlyLiteralString $ head rest
-            in M.findWithDefault nullCheck (Exactly selectedBuiltin) map t'
-        else do
-            M.findWithDefault nullCheck (Exactly name) map t
-            M.findWithDefault nullCheck (Basename name) map t
+        if | '/' `elem` name ->
+               M.findWithDefault nullCheck (Basename $ basename name) map t
+           | name == "builtin", (h:_) <- rest ->
+               let t' = T_SimpleCommand id cmdPrefix rest
+                   selectedBuiltin = onlyLiteralString h
+               in M.findWithDefault nullCheck (Exactly selectedBuiltin) map t'
+           | otherwise -> do
+               M.findWithDefault nullCheck (Exactly name) map t
+               M.findWithDefault nullCheck (Basename name) map t
 
   where
     basename = reverse . takeWhile (/= '/') . reverse
