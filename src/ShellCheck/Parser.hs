@@ -1195,7 +1195,7 @@ readDollarBracedPart = readSingleQuoted <|> readDoubleQuoted <|>
 
 readDollarBracedLiteral = do
     start <- startSpan
-    vars <- (readBraceEscaped <|> (anyChar >>= \x -> return [x])) `reluctantlyTill1` bracedQuotable
+    vars <- (readBraceEscaped <|> ((\x -> [x]) <$> anyChar)) `reluctantlyTill1` bracedQuotable
     id <- endSpan start
     return $ T_Literal id $ concat vars
 
@@ -1557,7 +1557,7 @@ readGenericLiteral endChars = do
     return $ concat strings
 
 readGenericLiteral1 endExp = do
-    strings <- (readGenericEscaped <|> (anyChar >>= \x -> return [x])) `reluctantlyTill1` endExp
+    strings <- (readGenericEscaped <|> ((\x -> [x]) <$> anyChar)) `reluctantlyTill1` endExp
     return $ concat strings
 
 readGenericEscaped = do
@@ -2371,7 +2371,7 @@ readPipeSequence = do
     return $ T_Pipeline id pipes cmds
   where
     sepBy1WithSeparators p s = do
-        let elems = p >>= \x -> return ([x], [])
+        let elems = (\x -> ([x], [])) <$> p
         let seps = do
             separator <- s
             return $ \(a,b) (c,d) -> (a++c, b ++ d ++ [separator])

@@ -997,7 +997,7 @@ handleCommand cmd vars args literalCmd = do
         (names, flags) = partition (null . fst) pairs
         flagNames = map fst flags
         literalNames :: [(Token, String)] -- Literal names to unset, e.g. [(myfuncToken, "myfunc")]
-        literalNames = mapMaybe (\(_, t) -> getLiteralString t >>= (return . (,) t)) names
+        literalNames = mapMaybe (\(_, t) -> (,) t <$> getLiteralString t) names
         -- Apply a constructor like CFUndefineVariable to each literalName, and tag with its id
         unsetWith c = newNodeRange $ CFApplyEffects $ map (\(token, name) -> IdTagged (getId token) $ c name) literalNames
 
