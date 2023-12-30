@@ -4936,7 +4936,7 @@ checkOverwrittenExitCode params t =
         guard . not $ S.null exitCodeIds
 
         let idToToken = idMap params
-        exitCodeTokens <- sequence $ map (\k -> Map.lookup k idToToken) $ S.toList exitCodeIds
+        exitCodeTokens <- traverse (\k -> Map.lookup k idToToken) $ S.toList exitCodeIds
         return $ do
             when (all isCondition exitCodeTokens && not (usedUnconditionally t exitCodeIds)) $
                 warn id 2319 "This $? refers to a condition, not a command. Assign to a variable to avoid it being overwritten."
