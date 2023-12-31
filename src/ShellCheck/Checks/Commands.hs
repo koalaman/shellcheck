@@ -43,6 +43,7 @@ import Data.Functor.Identity
 import qualified Data.Graph.Inductive.Graph as G
 import Data.List
 import Data.Maybe
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
 import Test.QuickCheck.All (forAllProperties)
@@ -1005,7 +1006,7 @@ checkWhileGetoptsCase = CommandCheck (Exactly "getopts") f
         sequence_ $ do
             options <- getLiteralString arg1
             getoptsVar <- getLiteralString name
-            (T_WhileExpression _ _ body) <- findFirst whileLoop path
+            (T_WhileExpression _ _ body) <- findFirst whileLoop (NE.toList path)
             T_CaseExpression id var list <- mapMaybe findCase body !!! 0
 
             -- Make sure getopts name and case variable matches

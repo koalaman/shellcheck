@@ -46,6 +46,7 @@ import Data.Maybe
 import Data.Ord
 import Data.Semigroup
 import Debug.Trace -- STRIP
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as S
 import Test.QuickCheck.All (forAllProperties)
@@ -846,14 +847,14 @@ checkRedirectToSame params s@(T_Pipeline _ _ list) =
     getRedirs _ = []
     special x = "/dev/" `isPrefixOf` concat (oversimplify x)
     isInput t =
-        case drop 1 $ getPath (parentMap params) t of
+        case NE.tail $ getPath (parentMap params) t of
             T_IoFile _ op _:_ ->
                 case op of
                     T_Less _  -> True
                     _ -> False
             _ -> False
     isOutput t =
-        case drop 1 $ getPath (parentMap params) t of
+        case NE.tail $ getPath (parentMap params) t of
             T_IoFile _ op _:_ ->
                 case op of
                     T_Greater _  -> True
@@ -887,7 +888,7 @@ checkShorthandIf params x@(T_OrIf _ (T_AndIf id _ _) (T_Pipeline _ _ t))
         name <- getCommandBasename t
         return $ name `elem` ["echo", "exit", "return", "printf"])
     isOk _ = False
-    inCondition = isCondition $ getPath (parentMap params) x
+    inCondition = isCondition $ NE.toList $ getPath (parentMap params) x
 checkShorthandIf _ _ = return ()
 
 
@@ -1087,7 +1088,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
         return $ if name == "find" then getFindCommand cmd else if name == "git" then getGitCommand cmd else if name == "mumps" then getMumpsCommand cmd else name
 
     isProbablyOk =
-            any isOkAssignment (take 3 $ getPath parents t)
+            any isOkAssignment (NE.take 3 $ getPath parents t)
             || commandName `elem` [
                 "trap"
                 ,"sh"
@@ -1495,7 +1496,7 @@ checkArithmeticDeref params t@(TA_Expansion _ [T_DollarBraced id _ l]) =
   where
     isException [] = True
     isException s@(h:_) = any (`elem` "/.:#%?*@$-!+=^,") s || isDigit h
-    getWarning = fromMaybe noWarning . msum . map warningFor $ parents params t
+    getWarning = fromMaybe noWarning . msum . NE.map warningFor $ parents params t
     warningFor t =
         case t of
             T_Arithmetic {} -> return normalWarning
@@ -1823,7 +1824,7 @@ checkInexplicablyUnquoted params (T_NormalWord id tokens) = mapM_ check (tails t
             T_Literal id s
                 | not (quotesSingleThing a && quotesSingleThing b
                     || s `elem` ["=", ":", "/"]
-                    || isSpecial (getPath (parentMap params) trapped)
+                    || isSpecial (NE.toList $ getPath (parentMap params) trapped)
                 ) ->
                     warnAboutLiteral id
             _ -> return ()
@@ -2041,7 +2042,7 @@ doVariableFlowAnalysis readFunc writeFunc empty flow = evalState (
 -- from $foo=bar to foo=bar. This is not pretty but ok.
 quotesMayConflictWithSC2281 params t =
     case getPath (parentMap params) t of
-        _ : T_NormalWord parentId (me:T_Literal _ ('=':_):_) : T_SimpleCommand _ _ (cmd:_) : _ ->
+        _ NE.:| T_NormalWord parentId (me:T_Literal _ ('=':_):_) : T_SimpleCommand _ _ (cmd:_) : _ ->
             (getId t) == (getId me) && (parentId == getId cmd)
         _ -> False
 
@@ -2652,7 +2653,7 @@ checkPrefixAssignmentReference params t@(T_DollarBraced id _ value) =
     check path
   where
     name = getBracedReference $ concat $ oversimplify value
-    path = getPath (parentMap params) t
+    path = NE.toList $ getPath (parentMap params) t
     idPath = map getId path
 
     check [] = return ()
@@ -2701,7 +2702,7 @@ checkCharRangeGlob p t@(T_Glob id str) |
         return $ isCommandMatch cmd (`elem` ["tr", "read"])
 
     -- Check if this is a dereferencing context like [[ -v array[operandhere] ]]
-    isDereferenced = fromMaybe False . msum . map isDereferencingOp . getPath (parentMap p)
+    isDereferenced = fromMaybe False . msum . NE.map isDereferencingOp . getPath (parentMap p)
     isDereferencingOp t =
         case t of
             TC_Binary _ DoubleBracket str _ _ -> return $ isDereferencingBinaryOp str
@@ -2764,7 +2765,7 @@ checkLoopKeywordScope params t |
         _ -> return ()
   where
     name = getCommandName t
-    path = let p = getPath (parentMap params) t in filter relevant p
+    path = let p = getPath (parentMap params) t in NE.filter relevant p
     subshellType t = case leadType params t of
         NoneScope -> Nothing
         SubshellScope str -> return str
@@ -3188,7 +3189,7 @@ checkUncheckedCdPushdPopd params root =
         | name `elem` ["cd", "pushd", "popd"]
             && not (isSafeDir t)
             && not (name `elem` ["pushd", "popd"] && ("n" `elem` map snd (getAllFlags t)))
-            && not (isCondition $ getPath (parentMap params) t) =
+            && not (isCondition $ NE.toList $ getPath (parentMap params) t) =
                 warnWithFix (getId t) 2164
                     ("Use '" ++ name ++ " ... || exit' or '" ++ name ++ " ... || return' in case " ++ name ++ " fails.")
                     (fixWith [replaceEnd (getId t) params 0 " || exit"])
@@ -3217,7 +3218,7 @@ checkLoopVariableReassignment params token =
         return $ do
             warn (getId token) 2165 "This nested loop overrides the index variable of its parent."
             warn (getId next)  2167 "This parent loop has its index variable overridden."
-    path = drop 1 $ getPath (parentMap params) token
+    path = NE.tail $ getPath (parentMap params) token
     loopVariable :: Token -> Maybe String
     loopVariable t =
         case t of
@@ -3290,17 +3291,17 @@ checkReturnAgainstZero params token =
     -- We don't want to warn about composite expressions like
     -- [[ $? -eq 0 || $? -eq 4 ]] since these can be annoying to rewrite.
     isOnlyTestInCommand t =
-        case getPath (parentMap params) t of
-            _:(T_Condition {}):_ -> True
-            _:(T_Arithmetic {}):_ -> True
-            _:(TA_Sequence _ [_]):(T_Arithmetic {}):_ -> True
+        case NE.tail $ getPath (parentMap params) t of
+            (T_Condition {}):_ -> True
+            (T_Arithmetic {}):_ -> True
+            (TA_Sequence _ [_]):(T_Arithmetic {}):_ -> True
 
             -- Some negations and groupings are also fine
-            _:next@(TC_Unary _ _ "!" _):_ -> isOnlyTestInCommand next
-            _:next@(TA_Unary _ "!" _):_ -> isOnlyTestInCommand next
-            _:next@(TC_Group {}):_ -> isOnlyTestInCommand next
-            _:next@(TA_Sequence _ [_]):_ -> isOnlyTestInCommand next
-            _:next@(TA_Parentesis _ _):_ -> isOnlyTestInCommand next
+            next@(TC_Unary _ _ "!" _):_ -> isOnlyTestInCommand next
+            next@(TA_Unary _ "!" _):_ -> isOnlyTestInCommand next
+            next@(TC_Group {}):_ -> isOnlyTestInCommand next
+            next@(TA_Sequence _ [_]):_ -> isOnlyTestInCommand next
+            next@(TA_Parentesis _ _):_ -> isOnlyTestInCommand next
             _ -> False
 
     -- TODO: Do better $? tracking and filter on whether
@@ -3365,7 +3366,7 @@ checkRedirectedNowhere params token =
         _ -> return ()
   where
     isInExpansion t =
-        case drop 1 $ getPath (parentMap params) t of
+        case NE.tail $ getPath (parentMap params) t of
             T_DollarExpansion _ [_] : _ -> True
             T_Backticked _ [_] : _ -> True
             t@T_Annotation {} : _ -> isInExpansion t
@@ -3839,7 +3840,7 @@ checkSubshelledTests params t =
 
     isFunctionBody path =
         case path of
-            (_:f:_) -> isFunction f
+            (_ NE.:| f:_) -> isFunction f
             _ -> False
 
     isTestStructure t =
@@ -3866,7 +3867,7 @@ checkSubshelledTests params t =
     -- This technically also triggers for `if true; then ( test ); fi`
     -- but it's still a valid suggestion.
     isCompoundCondition chain =
-        case dropWhile skippable (drop 1 chain) of
+        case dropWhile skippable (NE.tail chain) of
             T_IfExpression {}    : _ -> True
             T_WhileExpression {} : _ -> True
             T_UntilExpression {} : _ -> True
@@ -4005,7 +4006,7 @@ checkUselessBang params t = when (hasSetE params) $ mapM_ check (getNonReturning
   where
     check t =
         case t of
-            T_Banged id cmd | not $ isCondition (getPath (parentMap params) t) ->
+            T_Banged id cmd | not $ isCondition (NE.toList $ getPath (parentMap params) t) ->
                 addComment $ makeCommentWithFix InfoC id 2251
                         "This ! is not on a condition and skips errexit. Use `&& exit 1` instead, or make sure $? is checked."
                         (fixWith [replaceStart id params 1 "", replaceEnd (getId cmd) params 0 " && exit 1"])
@@ -4029,7 +4030,7 @@ checkUselessBang params t = when (hasSetE params) $ mapM_ check (getNonReturning
 
     isFunctionBody t =
         case getPath (parentMap params) t of
-            _:T_Function {}:_-> True
+            _ NE.:| T_Function {}:_-> True
             _ -> False
 
     dropLast t =
@@ -4627,7 +4628,7 @@ checkArrayValueUsedAsIndex params _ =
             -- Is this one of the 'for' arrays?
             (loopWord, _) <- find ((==arrayName) . snd) arrays
             -- Are we still in this loop?
-            guard $ getId loop `elem` map getId (getPath parents t)
+            guard $ getId loop `elem` NE.map getId (getPath parents t)
             return [
                 makeComment WarningC (getId loopWord) 2302 "This loops over values. To loop over keys, use \"${!array[@]}\".",
                 makeComment WarningC (getId arrayRef) 2303 $ (e4m name) ++ " is an array value, not a key. Use directly or loop over keys instead."
@@ -4709,7 +4710,7 @@ checkSetESuppressed params t =
         literalArg <- getUnquotedLiteral cmd
         Map.lookup literalArg functions_
 
-    checkCmd cmd = go $ getPath (parentMap params) cmd
+    checkCmd cmd = go $ NE.toList $ getPath (parentMap params) cmd
       where
         go (child:parent:rest) = do
             case parent of
@@ -4855,7 +4856,7 @@ checkExtraMaskedReturns params t =
         basename <- getCommandBasename t
         return $ basename == "time"
 
-    parentChildPairs t = go $ parents params t
+    parentChildPairs t = go $ NE.toList $ parents params t
       where
         go (child:parent:rest) = (parent, child):go (parent:rest)
         go _ = []

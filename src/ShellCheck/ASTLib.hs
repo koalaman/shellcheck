@@ -31,6 +31,7 @@ import Data.Functor
 import Data.Functor.Identity
 import Data.List
 import Data.Maybe
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as Map
 import Numeric (showHex)
 
@@ -897,9 +898,7 @@ getUnmodifiedParameterExpansion t =
         _ -> Nothing
 
 --- A list of the element and all its parents up to the root node.
-getPath tree t = t : unfoldr go t
-  where
-    go s = (\x -> (x,x)) <$> Map.lookup (getId s) tree
+getPath tree = NE.unfoldr $ \t -> (t, Map.lookup (getId t) tree)
 
 isClosingFileOp op =
     case op of

@@ -41,6 +41,7 @@ import Data.Char
 import Data.List
 import Data.Maybe
 import Data.Semigroup
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as Map
 
 import Test.QuickCheck.All (forAllProperties)
@@ -336,7 +337,7 @@ isQuoteFree = isQuoteFreeNode False
 
 isQuoteFreeNode strict shell tree t =
     isQuoteFreeElement t ||
-        (fromMaybe False $ msum $ map isQuoteFreeContext $ drop 1 $ getPath tree t)
+        (fromMaybe False $ msum $ map isQuoteFreeContext $ NE.tail $ getPath tree t)
   where
     -- Is this node self-quoting in itself?
     isQuoteFreeElement t =
@@ -398,7 +399,7 @@ isParamTo tree cmd =
 -- Get the parent command (T_Redirecting) of a Token, if any.
 getClosestCommand :: Map.Map Id Token -> Token -> Maybe Token
 getClosestCommand tree t =
-    findFirst findCommand $ getPath tree t
+    findFirst findCommand $ NE.toList $ getPath tree t
   where
     findCommand t =
         case t of
@@ -412,7 +413,7 @@ getClosestCommandM t = do
     return $ getClosestCommand (parentMap params) t
 
 -- Is the token used as a command name (the first word in a T_SimpleCommand)?
-usedAsCommandName tree token = go (getId token) (tail $ getPath tree token)
+usedAsCommandName tree token = go (getId token) (NE.tail $ getPath tree token)
   where
     go currentId (T_NormalWord id [word]:rest)
         | currentId == getId word = go id rest
@@ -429,7 +430,7 @@ getPathM t = do
     return $ getPath (parentMap params) t
 
 isParentOf tree parent child =
-    elem (getId parent) . map getId $ getPath tree child
+    elem (getId parent) . NE.map getId $ getPath tree child
 
 parents params = getPath (parentMap params)
 
@@ -813,7 +814,7 @@ getReferencedVariables parents t =
             return (context, token, getBracedReference str)
 
     isArithmeticAssignment t = case getPath parents t of
-        this: TA_Assignment _ "=" lhs _ :_ -> lhs == t
+        this NE.:| TA_Assignment _ "=" lhs _ :_ -> lhs == t
         _                                  -> False
 
 isDereferencingBinaryOp = (`elem` ["-eq", "-ne", "-lt", "-le", "-gt", "-ge"])
