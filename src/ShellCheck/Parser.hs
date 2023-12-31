@@ -3456,9 +3456,8 @@ makeErrorFor parsecError =
       pos = errorPos parsecError
 
 getStringFromParsec errors =
-        case map f errors of
-            r -> unwords (take 1 $ catMaybes $ reverse r)  ++
-                " Fix any mentioned problems and try again."
+        headOrDefault "" (mapMaybe f $ reverse errors)  ++
+            " Fix any mentioned problems and try again."
     where
         f err =
             case err of
