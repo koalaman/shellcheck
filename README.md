@@ -77,7 +77,7 @@ You can see ShellCheck suggestions directly in a variety of editors.
 
 * Sublime, through [SublimeLinter](https://github.com/SublimeLinter/SublimeLinter-shellcheck).
 
-* Atom, through [Linter](https://github.com/AtomLinter/linter-shellcheck).
+* Pulsar Edit (former Atom), through [linter-shellcheck-pulsar](https://github.com/pulsar-cooperative/linter-shellcheck-pulsar).
 
 * VSCode, through [vscode-shellcheck](https://github.com/timonwong/vscode-shellcheck).
 
