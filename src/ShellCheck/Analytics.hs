@@ -19,6 +19,7 @@
 -}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE PatternGuards #-}
 module ShellCheck.Analytics (checker, optionalChecks, ShellCheck.Analytics.runTests) where
 
 import ShellCheck.AST
@@ -2749,18 +2750,17 @@ prop_checkLoopKeywordScope5 = verify checkLoopKeywordScope "if true; then break;
 prop_checkLoopKeywordScope6 = verify checkLoopKeywordScope "while true; do true | { break; }; done"
 prop_checkLoopKeywordScope7 = verifyNot checkLoopKeywordScope "#!/bin/ksh\nwhile true; do true | { break; }; done"
 checkLoopKeywordScope params t |
-        name `elem` map Just ["continue", "break"] =
+        Just name <- getCommandName t, name `elem` ["continue", "break"] =
     if not $ any isLoop path
     then if any isFunction $ take 1 path
         -- breaking at a source/function invocation is an abomination. Let's ignore it.
-        then err (getId t) 2104 $ "In functions, use return instead of " ++ fromJust name ++ "."
-        else err (getId t) 2105 $ fromJust name ++ " is only valid in loops."
+        then err (getId t) 2104 $ "In functions, use return instead of " ++ name ++ "."
+        else err (getId t) 2105 $ name ++ " is only valid in loops."
     else case map subshellType $ filter (not . isFunction) path of
         Just str:_ -> warn (getId t) 2106 $
             "This only exits the subshell caused by the " ++ str ++ "."
         _ -> return ()
   where
-    name = getCommandName t
     path = let p = getPath (parentMap params) t in NE.filter relevant p
     subshellType t = case leadType params t of
         NoneScope -> Nothing
