@@ -4628,7 +4628,8 @@ checkArrayValueUsedAsIndex params _ =
             -- Is this one of the 'for' arrays?
             (loopWord, _) <- find ((==arrayName) . snd) arrays
             -- Are we still in this loop?
-            guard $ getId loop `elem` NE.map getId (getPath parents t)
+            let loopId = getId loop
+            guard $ any (\t -> loopId == getId t) (getPath parents t)
             return [
                 makeComment WarningC (getId loopWord) 2302 "This loops over values. To loop over keys, use \"${!array[@]}\".",
                 makeComment WarningC (getId arrayRef) 2303 $ (e4m name) ++ " is an array value, not a key. Use directly or loop over keys instead."
