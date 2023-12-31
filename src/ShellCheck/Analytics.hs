@@ -4509,7 +4509,7 @@ prop_checkCommandWithTrailingSymbol9 = verifyNot checkCommandWithTrailingSymbol 
 checkCommandWithTrailingSymbol _ t =
     case t of
         T_SimpleCommand _ _ (cmd:_) ->
-            let str = fromJust $ getLiteralStringExt (\_ -> Just "x") cmd
+            let str = getLiteralStringDef "x" cmd
                 last = lastOrDefault 'x' str
             in
                 case str of
