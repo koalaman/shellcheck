@@ -1237,8 +1237,7 @@ checkSudoArgs = CommandCheck (Basename "sudo") f
   where
     f t = sequence_ $ do
         opts <- parseOpts $ arguments t
-        let nonFlags = [x | ("",(x, _)) <- opts]
-        commandArg <- nonFlags !!! 0
+        (_,(commandArg, _)) <- find (null . fst) opts
         command <- getLiteralString commandArg
         guard $ command `elem` builtins
         return $ warn (getId t) 2232 $ "Can't use sudo with builtins like " ++ command ++ ". Did you want sudo sh -c .. instead?"

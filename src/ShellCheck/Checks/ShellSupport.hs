@@ -79,9 +79,8 @@ prop_checkForDecimals3 = verifyNot checkForDecimals "declare -A foo; foo[1.2]=ba
 checkForDecimals = ForShell [Sh, Dash, BusyboxSh, Bash] f
   where
     f t@(TA_Expansion id _) = sequence_ $ do
-        str <- getLiteralString t
-        first <- str !!! 0
-        guard $ isDigit first && '.' `elem` str
+        first:rest <- getLiteralString t
+        guard $ isDigit first && '.' `elem` rest
         return $ err id 2079 "(( )) doesn't support decimals. Use bc or awk."
     f _ = return ()
 

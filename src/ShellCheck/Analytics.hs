@@ -468,9 +468,8 @@ checkAssignAteCommand _ (T_SimpleCommand id [T_Assignment _ _ _ _ assignmentTerm
   where
     isCommonCommand (Just s) = s `elem` commonCommands
     isCommonCommand _ = False
-    firstWordIsArg list = fromMaybe False $ do
-        head <- list !!! 0
-        return $ isGlob head || isUnquotedFlag head
+    firstWordIsArg (head:_) = isGlob head || isUnquotedFlag head
+    firstWordIsArg [] = False
 
 checkAssignAteCommand _ _ = return ()
 
@@ -491,9 +490,7 @@ prop_checkWrongArit2 = verify checkWrongArithmeticAssignment "n=2; i=n*2"
 checkWrongArithmeticAssignment params (T_SimpleCommand id [T_Assignment _ _ _ _ val] []) =
   sequence_ $ do
     str <- getNormalString val
-    match <- matchRegex regex str
-    var <- match !!! 0
-    op <- match !!! 1
+    var:op:_ <- matchRegex regex str
     Map.lookup var references
     return . warn (getId val) 2100 $
         "Use $((..)) for arithmetics, e.g. i=$((i " ++ op ++ " 2))"
@@ -1460,9 +1457,8 @@ prop_checkForDecimals2 = verify checkForDecimals "foo[1.2]=bar"
 prop_checkForDecimals3 = verifyNot checkForDecimals "declare -A foo; foo[1.2]=bar"
 checkForDecimals params t@(TA_Expansion id _) = sequence_ $ do
     guard $ not (hasFloatingPoint params)
-    str <- getLiteralString t
-    first <- str !!! 0
-    guard $ isDigit first && '.' `elem` str
+    first:rest <- getLiteralString t
+    guard $ isDigit first && '.' `elem` rest
     return $ err id 2079 "(( )) doesn't support decimals. Use bc or awk."
 checkForDecimals _ _ = return ()
 
