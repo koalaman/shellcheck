@@ -2751,15 +2751,15 @@ prop_checkLoopKeywordScope6 = verify checkLoopKeywordScope "while true; do true 
 prop_checkLoopKeywordScope7 = verifyNot checkLoopKeywordScope "#!/bin/ksh\nwhile true; do true | { break; }; done"
 checkLoopKeywordScope params t |
         Just name <- getCommandName t, name `elem` ["continue", "break"] =
-    if not $ any isLoop path
-    then if any isFunction $ take 1 path
-        -- breaking at a source/function invocation is an abomination. Let's ignore it.
-        then err (getId t) 2104 $ "In functions, use return instead of " ++ name ++ "."
-        else err (getId t) 2105 $ name ++ " is only valid in loops."
-    else case map subshellType $ filter (not . isFunction) path of
+    if any isLoop path
+    then case map subshellType $ filter (not . isFunction) path of
         Just str:_ -> warn (getId t) 2106 $
             "This only exits the subshell caused by the " ++ str ++ "."
         _ -> return ()
+    else if any isFunction $ take 1 path
+        -- breaking at a source/function invocation is an abomination. Let's ignore it.
+        then err (getId t) 2104 $ "In functions, use return instead of " ++ name ++ "."
+        else err (getId t) 2105 $ name ++ " is only valid in loops."
   where
     path = let p = getPath (parentMap params) t in NE.filter relevant p
     subshellType t = case leadType params t of
