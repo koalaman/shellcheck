@@ -430,7 +430,9 @@ getPathM t = do
     return $ getPath (parentMap params) t
 
 isParentOf tree parent child =
-    elem (getId parent) . NE.map getId $ getPath tree child
+    any (\t -> parentId == getId t) (getPath tree child)
+  where
+    parentId = getId parent
 
 parents params = getPath (parentMap params)
 
