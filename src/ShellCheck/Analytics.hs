@@ -4847,9 +4847,7 @@ checkExtraMaskedReturns params t =
             ,"shopt"
             ]
 
-    isTransparentCommand t = fromMaybe False $ do
-        basename <- getCommandBasename t
-        return $ basename == "time"
+    isTransparentCommand t = getCommandBasename t == Just "time"
 
 
 -- hard error on negated command that is not last
