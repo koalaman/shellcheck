@@ -2756,10 +2756,10 @@ checkLoopKeywordScope params t |
         Just str:_ -> warn (getId t) 2106 $
             "This only exits the subshell caused by the " ++ str ++ "."
         _ -> return ()
-    else if any isFunction $ take 1 path
+    else case path of
         -- breaking at a source/function invocation is an abomination. Let's ignore it.
-        then err (getId t) 2104 $ "In functions, use return instead of " ++ name ++ "."
-        else err (getId t) 2105 $ name ++ " is only valid in loops."
+        h:_ | isFunction h -> err (getId t) 2104 $ "In functions, use return instead of " ++ name ++ "."
+        _ -> err (getId t) 2105 $ name ++ " is only valid in loops."
   where
     path = let p = getPath (parentMap params) t in NE.filter relevant p
     subshellType t = case leadType params t of
