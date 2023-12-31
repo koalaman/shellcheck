@@ -346,13 +346,11 @@ dist a b
 hasFloatingPoint params = shellType params == Ksh
 
 -- Checks whether the current parent path is part of a condition
-isCondition [] = False
-isCondition [_] = False
-isCondition (child:parent:rest) =
-    case child of
-        T_BatsTest {} -> True -- count anything in a @test as conditional
-        _ -> getId child `elem` map getId (getConditionChildren parent) || isCondition (parent:rest)
+isCondition (x NE.:| xs) = foldr go (const False) xs x
   where
+    go _ _ T_BatsTest{} = True -- count anything in a @test as conditional
+    go parent go_rest child =
+        getId child `elem` map getId (getConditionChildren parent) || go_rest parent
     getConditionChildren t =
         case t of
             T_AndIf _ left right -> [left]
@@ -886,7 +884,7 @@ checkShorthandIf params x@(T_OrIf _ (T_AndIf id _ _) (T_Pipeline _ _ t))
         name <- getCommandBasename t
         return $ name `elem` ["echo", "exit", "return", "printf"])
     isOk _ = False
-    inCondition = isCondition $ NE.toList $ getPath (parentMap params) x
+    inCondition = isCondition $ getPath (parentMap params) x
 checkShorthandIf _ _ = return ()
 
 
@@ -3185,7 +3183,7 @@ checkUncheckedCdPushdPopd params root =
         | name `elem` ["cd", "pushd", "popd"]
             && not (isSafeDir t)
             && not (name `elem` ["pushd", "popd"] && ("n" `elem` map snd (getAllFlags t)))
-            && not (isCondition $ NE.toList $ getPath (parentMap params) t) =
+            && not (isCondition $ getPath (parentMap params) t) =
                 warnWithFix (getId t) 2164
                     ("Use '" ++ name ++ " ... || exit' or '" ++ name ++ " ... || return' in case " ++ name ++ " fails.")
                     (fixWith [replaceEnd (getId t) params 0 " || exit"])
@@ -4002,7 +4000,7 @@ checkUselessBang params t = when (hasSetE params) $ mapM_ check (getNonReturning
   where
     check t =
         case t of
-            T_Banged id cmd | not $ isCondition (NE.toList $ getPath (parentMap params) t) ->
+            T_Banged id cmd | not $ isCondition (getPath (parentMap params) t) ->
                 addComment $ makeCommentWithFix InfoC id 2251
                         "This ! is not on a condition and skips errexit. Use `&& exit 1` instead, or make sure $? is checked."
                         (fixWith [replaceStart id params 1 "", replaceEnd (getId cmd) params 0 " && exit 1"])
