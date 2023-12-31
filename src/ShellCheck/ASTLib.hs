@@ -897,10 +897,9 @@ getUnmodifiedParameterExpansion t =
         _ -> Nothing
 
 --- A list of the element and all its parents up to the root node.
-getPath tree t = t :
-    case Map.lookup (getId t) tree of
-        Nothing     -> []
-        Just parent -> getPath tree parent
+getPath tree t = t : unfoldr go t
+  where
+    go s = (\x -> (x,x)) <$> Map.lookup (getId s) tree
 
 isClosingFileOp op =
     case op of
