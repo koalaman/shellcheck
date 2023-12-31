@@ -4819,15 +4819,15 @@ checkExtraMaskedReturns params t =
         ++ "separately to avoid masking its return value (or use '|| true' "
         ++ "to ignore).")
 
-    isMaskDeliberate t = hasParent isOrIf t
+    isMaskDeliberate t = any isOrIf $ NE.init $ parents params t
       where
-        isOrIf _ (T_OrIf _ _ (T_Pipeline _ _ [T_Redirecting _ _ cmd]))
+        isOrIf (T_OrIf _ _ (T_Pipeline _ _ [T_Redirecting _ _ cmd]))
             = getCommandBasename cmd `elem` [Just "true", Just ":"]
-        isOrIf _ _ = False
+        isOrIf _ = False
 
-    isCheckedElsewhere t = hasParent isDeclaringCommand t
+    isCheckedElsewhere t = any isDeclaringCommand $ NE.tail $ parents params t
       where
-        isDeclaringCommand t _ = fromMaybe False $ do
+        isDeclaringCommand t = fromMaybe False $ do
             cmd <- getCommand t
             basename <- getCommandBasename cmd
             return $
@@ -4850,13 +4850,6 @@ checkExtraMaskedReturns params t =
     isTransparentCommand t = fromMaybe False $ do
         basename <- getCommandBasename t
         return $ basename == "time"
-
-    parentChildPairs t = go $ NE.toList $ parents params t
-      where
-        go (child:parent:rest) = (parent, child):go (parent:rest)
-        go _ = []
-
-    hasParent pred t = any (uncurry pred) (parentChildPairs t)
 
 
 -- hard error on negated command that is not last
