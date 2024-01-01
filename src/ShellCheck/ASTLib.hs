@@ -158,9 +158,10 @@ isFlag token =
         _ -> False
 
 -- Is this token a flag where the - is unquoted?
-isUnquotedFlag token = fromMaybe False $ do
-    str <- getLeadingUnquotedString token
-    return $ "-" `isPrefixOf` str
+isUnquotedFlag token =
+    case getLeadingUnquotedString token of
+        Just ('-':_) -> True
+        _ -> False
 
 -- getGnuOpts "erd:u:" will parse a list of arguments tokens like `read`
 --     -re -d : -u 3 bar
