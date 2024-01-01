@@ -858,8 +858,7 @@ getBracedModifier s = headOrDefault "" $ do
 -- Get the variables from indices like ["x", "y"] in ${var[x+y+1]}
 prop_getIndexReferences1 = getIndexReferences "var[x+y+1]" == ["x", "y"]
 getIndexReferences s = fromMaybe [] $ do
-    match <- matchRegex re s
-    index <- match !!! 0
+    index:_ <- matchRegex re s
     return $ matchAllStrings variableNameRegex index
   where
     re = mkRegex "(\\[.*\\])"
@@ -870,8 +869,7 @@ prop_getOffsetReferences3 = getOffsetReferences "[foo]:bar" == ["bar"]
 prop_getOffsetReferences4 = getOffsetReferences "[foo]:bar:baz" == ["bar", "baz"]
 getOffsetReferences mods = fromMaybe [] $ do
 -- if mods start with [, then drop until ]
-    match <- matchRegex re mods
-    offsets <- match !!! 1
+    _:offsets:_ <- matchRegex re mods
     return $ matchAllStrings variableNameRegex offsets
   where
     re = mkRegex "^(\\[.+\\])? *:([^-=?+].*)"
