@@ -615,15 +615,15 @@ build t = do
 
         T_CaseExpression id t [] -> build t
 
-        T_CaseExpression id t list -> do
+        T_CaseExpression id t list@(hd:tl) -> do
             start <- newStructuralNode
             token <- build t
-            branches <- mapM buildBranch list
+            branches <- mapM buildBranch (hd NE.:| tl)
             end <- newStructuralNode
 
-            let neighbors = zip branches $ tail branches
-            let (_, firstCond, _) = head branches
-            let (_, lastCond, lastBody) = last branches
+            let neighbors = zip (NE.toList branches) $ NE.tail branches
+            let (_, firstCond, _) = NE.head branches
+            let (_, lastCond, lastBody) = NE.last branches
 
             linkRange start token
             linkRange token firstCond
