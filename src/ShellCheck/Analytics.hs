@@ -5020,7 +5020,7 @@ checkPlusEqualsNumber params t =
         let
             unquotedLiteral = getUnquotedLiteral word
             isEmpty = unquotedLiteral == Just ""
-            isUnquotedNumber = not isEmpty && fromMaybe False (all isDigit <$> unquotedLiteral)
+            isUnquotedNumber = not isEmpty && maybe False (all isDigit) unquotedLiteral
             isNumericalVariableName = fromMaybe False $ do
                 str <- unquotedLiteral
                 CF.variableMayBeAssignedInteger state str

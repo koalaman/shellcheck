@@ -829,7 +829,7 @@ lookupStack' functionOnly get dep def ctx key = do
     f (s:rest) = do
         -- Go up the stack until we find the value, and add
         -- a dependency on each state (including where it was found)
-        res <- fromMaybe (f rest) (return <$> get (stackState s) key)
+        res <- maybe (f rest) return (get (stackState s) key)
         modifySTRef (dependencies s) $ S.insert $ dep key res
         return res
 
