@@ -71,6 +71,11 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 
 :   Don't try to look for .shellcheckrc configuration files.
 
+--rcfile\ RCFILE
+
+:   Prefer the specified configuration file over searching for one
+    in the default locations.
+
 **-o**\ *NAME1*[,*NAME2*...],\ **--enable=***NAME1*[,*NAME2*...]
 
 :   Enable optional checks. The special name *all* enables all of them.
