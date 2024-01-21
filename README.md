@@ -194,6 +194,12 @@ On Windows (via [chocolatey](https://chocolatey.org/packages/shellcheck)):
 C:\> choco install shellcheck
 ```
 
+Or Windows (via [winget](https://github.com/microsoft/winget-pkgs)):
+
+```cmd
+C:\> winget install --id koalaman.shellcheck
+```
+
 Or Windows (via [scoop](http://scoop.sh)):
 
 ```cmd
