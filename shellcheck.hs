@@ -76,7 +76,8 @@ data Options = Options {
     externalSources  :: Bool,
     sourcePaths      :: [FilePath],
     formatterOptions :: FormatterOptions,
-    minSeverity      :: Severity
+    minSeverity      :: Severity,
+    verbose          :: Bool
 }
 
 defaultOptions = Options {
@@ -86,7 +87,8 @@ defaultOptions = Options {
     formatterOptions = newFormatterOptions {
         foColorOption = ColorAuto
     },
-    minSeverity = StyleC
+    minSeverity = StyleC,
+    verbose = False
 }
 
 usageHeader = "Usage: shellcheck [OPTIONS...] FILES..."
@@ -119,6 +121,8 @@ options = [
     Option "S" ["severity"]
         (ReqArg (Flag "severity") "SEVERITY")
         "Minimum severity of errors to consider (error, warning, info, style)",
+    Option "v" ["vebose"]
+        (NoArg $ Flag "verbose" "true") "Verbose mode",
     Option "V" ["version"]
         (NoArg $ Flag "version" "true") "Print version information",
     Option "W" ["wiki-link-count"]
@@ -304,6 +308,11 @@ parseOption flag options =
                         then old
                         else Just new `mappend` old
                 }
+            }
+
+        Flag "verbose" _ ->
+            return options {
+                verbose = True
             }
 
         Flag "version" _ -> do
