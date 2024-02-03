@@ -62,8 +62,32 @@ verify :: CommandCheck -> String -> Bool
 verify f s = producesComments (getChecker [f]) s == Just True
 verifyNot f s = producesComments (getChecker [f]) s == Just False
 
-commandChecks :: [CommandCheck]
-commandChecks = [
+verifyDisabledCheckerInPortage :: String -> Bool
+verifyDisabledCheckerInPortage = verifyDisabledCheckerInPortage2 $
+                                   Ebuild { is9999Ebuild = True }
+
+verifyDisabledCheckerInPortage2 :: PortageFileType -> String -> Bool
+verifyDisabledCheckerInPortage2 portageFileType s = fromMaybe False $ do
+    params <- makeTestParams s portageTypeSpec
+    testSpec <- makeTestSpec
+    return $ null $ runChecker params (checker testSpec params)
+    where
+      portageTypeSpec spec = spec {
+           asPortageFileType = portageFileType
+        }
+      makeTestSpec = do
+        let pr = pScript s
+        prRoot pr
+        return $ portageTypeSpec $ defaultSpec pr
+
+
+commandCheckWhen :: Bool -> CommandCheck -> CommandCheck
+commandCheckWhen predicate commandCheck = if predicate
+                                          then commandCheck
+                                          else CommandCheck (Exactly "skipped") nullCheck
+
+commandChecks :: Parameters -> [CommandCheck]
+commandChecks params = [
     checkTr
     ,checkFindNameGlob
     ,checkExpr
@@ -86,7 +110,7 @@ commandChecks = [
     ,checkAliasesUsesArgs
     ,checkAliasesExpandEarly
     ,checkUnsetGlobs
-    ,checkFindWithoutPath
+    ,commandCheckWhen (not $ isPortageBuild params) checkFindWithoutPath
     ,checkTimeParameters
     ,checkTimedCommand
     ,checkLocalScope
@@ -94,7 +118,7 @@ commandChecks = [
     ,checkDeprecatedEgrep
     ,checkDeprecatedFgrep
     ,checkWhileGetoptsCase
-    ,checkCatastrophicRm
+    ,checkCatastrophicRm (isPortageBuild params)
     ,checkLetUsage
     ,checkMvArguments, checkCpArguments, checkLnArguments
     ,checkFindRedirections
@@ -207,7 +231,7 @@ getChecker list = Checker {
 
 
 checker :: AnalysisSpec -> Parameters -> Checker
-checker spec params = getChecker $ commandChecks ++ optionals
+checker spec params = getChecker $ (commandChecks params) ++ optionals
   where
     keys = asOptionalChecks spec
     optionals =
@@ -894,6 +918,7 @@ prop_checkFindWithoutPath5 = verifyNot checkFindWithoutPath "find -O3 ."
 prop_checkFindWithoutPath6 = verifyNot checkFindWithoutPath "find -D exec ."
 prop_checkFindWithoutPath7 = verifyNot checkFindWithoutPath "find --help"
 prop_checkFindWithoutPath8 = verifyNot checkFindWithoutPath "find -Hx . -print"
+prop_checkFindWithoutPathPortage = verifyDisabledCheckerInPortage "find -type f"
 checkFindWithoutPath = CommandCheck (Basename "find") f
   where
     f t@(T_SimpleCommand _ _ (cmd:args)) =
@@ -1072,20 +1097,23 @@ checkWhileGetoptsCase = CommandCheck (Exactly "getopts") f
             T_Redirecting _ _ x@(T_CaseExpression {}) -> return x
             _ -> Nothing
 
-prop_checkCatastrophicRm1 = verify checkCatastrophicRm "rm -r $1/$2"
-prop_checkCatastrophicRm2 = verify checkCatastrophicRm "rm -r /home/$foo"
-prop_checkCatastrophicRm3 = verifyNot checkCatastrophicRm "rm -r /home/${USER:?}/*"
-prop_checkCatastrophicRm4 = verify checkCatastrophicRm "rm -fr /home/$(whoami)/*"
-prop_checkCatastrophicRm5 = verifyNot checkCatastrophicRm "rm -r /home/${USER:-thing}/*"
-prop_checkCatastrophicRm6 = verify checkCatastrophicRm "rm --recursive /etc/*$config*"
-prop_checkCatastrophicRm8 = verify checkCatastrophicRm "rm -rf /home"
-prop_checkCatastrophicRm10 = verifyNot checkCatastrophicRm "rm -r \"${DIR}\"/{.gitignore,.gitattributes,ci}"
-prop_checkCatastrophicRm11 = verify checkCatastrophicRm "rm -r /{bin,sbin}/$exec"
-prop_checkCatastrophicRm12 = verify checkCatastrophicRm "rm -r /{{usr,},{bin,sbin}}/$exec"
-prop_checkCatastrophicRm13 = verifyNot checkCatastrophicRm "rm -r /{{a,b},{c,d}}/$exec"
-prop_checkCatastrophicRmA = verify checkCatastrophicRm "rm -rf /usr /lib/nvidia-current/xorg/xorg"
-prop_checkCatastrophicRmB = verify checkCatastrophicRm "rm -rf \"$STEAMROOT/\"*"
-checkCatastrophicRm = CommandCheck (Basename "rm") $ \t ->
+prop_checkCatastrophicRm1 = verify (checkCatastrophicRm False) "rm -r $1/$2"
+prop_checkCatastrophicRm2 = verify (checkCatastrophicRm False) "rm -r /home/$foo"
+prop_checkCatastrophicRm3 = verifyNot (checkCatastrophicRm False) "rm -r /home/${USER:?}/*"
+prop_checkCatastrophicRm4 = verify (checkCatastrophicRm False) "rm -fr /home/$(whoami)/*"
+prop_checkCatastrophicRm5 = verifyNot (checkCatastrophicRm False) "rm -r /home/${USER:-thing}/*"
+prop_checkCatastrophicRm6 = verify (checkCatastrophicRm False) "rm --recursive /etc/*$config*"
+prop_checkCatastrophicRm8 = verify (checkCatastrophicRm False) "rm -rf /home"
+prop_checkCatastrophicRm10 = verifyNot (checkCatastrophicRm False) "rm -r \"${DIR}\"/{.gitignore,.gitattributes,ci}"
+prop_checkCatastrophicRm11 = verify (checkCatastrophicRm False) "rm -r /{bin,sbin}/$exec"
+prop_checkCatastrophicRm12 = verify (checkCatastrophicRm False) "rm -r /{{usr,},{bin,sbin}}/$exec"
+prop_checkCatastrophicRm13 = verifyNot (checkCatastrophicRm False) "rm -r /{{a,b},{c,d}}/$exec"
+prop_checkCatastrophicRmA = verify (checkCatastrophicRm False) "rm -rf /usr /lib/nvidia-current/xorg/xorg"
+prop_checkCatastrophicRmB = verify (checkCatastrophicRm False) "rm -rf \"$STEAMROOT/\"*"
+prop_checkCatastrophicRmED1 = verify (checkCatastrophicRm False) "rm -rf \"$ED/var/\"*"
+prop_checkCatastrophicRmED2 = verifyNot (checkCatastrophicRm True) "rm -rf \"$ED/var/\"*"
+checkCatastrophicRm isPortageBuild = CommandCheck (Basename "rm") $ \t ->
+
     when (isRecursive t) $
         mapM_ (mapM_ checkWord . braceExpand) $ arguments t
   where
@@ -1115,7 +1143,7 @@ checkCatastrophicRm = CommandCheck (Basename "rm") $ \t ->
         f (T_DollarBraced _ _ word) =
             let var = onlyLiteralString word in
                 -- This shouldn't handle non-colon cases.
-                if any (`isInfixOf` var) [":?", ":-", ":="]
+                if any (`isInfixOf` var) [":?", ":-", ":="] || (isPortageBuild && var `elem` ["D", "ED"])
                 then Nothing
                 else return ""
         f _ = return ""
@@ -1339,6 +1367,7 @@ checkMaskedReturns str = CommandCheck (Exactly str) checkCmd
     checkCmd t = do
         path <- getPathM t
         shell <- asks shellType
+        portageFileType <- asks portageFileType
         sequence_ $ do
             name <- getCommandName t
 
@@ -1349,10 +1378,11 @@ checkMaskedReturns str = CommandCheck (Exactly str) checkCmd
 
             let isLocal = not hasDashG && isLocalInFunction name && isInScopedFunction
             let isReadOnly = name == "readonly" || hasDashR
+            let isPortageBuild = portageFileType /= NonPortageRelated
 
             -- Don't warn about local variables that are declared readonly,
             -- because the workaround `local x; x=$(false); local -r x;` is annoying
-            guard . not $ isLocal && isReadOnly
+            guard . not $ isLocal && isReadOnly || isPortageBuild
 
             return $ mapM_ checkArgs $ arguments t
 

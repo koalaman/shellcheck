@@ -54,7 +54,9 @@ shellFromFilename filename = listToMaybe candidates
     shellExtensions = [(".ksh", Ksh)
                       ,(".bash", Bash)
                       ,(".bats", Bash)
-                      ,(".dash", Dash)]
+                      ,(".dash", Dash)
+                      ,(".ebuild", Bash)
+                      ,(".eclass", Bash)]
                       -- The `.sh` is too generic to determine the shell:
                       -- We fallback to Bash in this case and emit SC2148 if there is no shebang
     candidates =
@@ -86,7 +88,9 @@ checkScript sys spec = do
                     asCheckSourced = csCheckSourced spec,
                     asExecutionMode = Executed,
                     asTokenPositions = tokenPositions,
-                    asOptionalChecks = getEnableDirectives root ++ csOptionalChecks spec
+                    asOptionalChecks = getEnableDirectives root ++ csOptionalChecks spec,
+                    asPortageFileType = getPortageFileType $ csFilename spec,
+                    asGentooData = csGentooData spec
                 } where as = newAnalysisSpec root
         let analysisMessages =
                 maybe []
