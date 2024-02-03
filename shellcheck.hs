@@ -76,7 +76,8 @@ data Options = Options {
     externalSources  :: Bool,
     sourcePaths      :: [FilePath],
     formatterOptions :: FormatterOptions,
-    minSeverity      :: Severity
+    minSeverity      :: Severity,
+    rcfile           :: Maybe FilePath
 }
 
 defaultOptions = Options {
@@ -86,7 +87,8 @@ defaultOptions = Options {
     formatterOptions = newFormatterOptions {
         foColorOption = ColorAuto
     },
-    minSeverity = StyleC
+    minSeverity = StyleC,
+    rcfile = Nothing
 }
 
 usageHeader = "Usage: shellcheck [OPTIONS...] FILES..."
@@ -107,6 +109,9 @@ options = [
         (NoArg $ Flag "list-optional" "true") "List checks disabled by default",
     Option "" ["norc"]
         (NoArg $ Flag "norc" "true") "Don't look for .shellcheckrc files",
+    Option "" ["rcfile"]
+        (ReqArg (Flag "rcfile") "RCFILE")
+        "Prefer the specified configuration file over searching for one",
     Option "o" ["enable"]
         (ReqArg (Flag "enable") "check1,check2..")
         "List of optional checks to enable (or 'all')",
@@ -367,6 +372,11 @@ parseOption flag options =
                 }
             }
 
+        Flag "rcfile" str -> do
+            return options {
+                rcfile = Just str
+            }
+
         Flag "enable" value ->
             let cs = checkSpec options in return options {
                 checkSpec = cs {
@@ -441,18 +451,33 @@ ioInterface options files = do
         fallback :: FilePath -> IOException -> IO FilePath
         fallback path _ = return path
 
+
     -- Returns the name and contents of .shellcheckrc for the given file
-    getConfig cache filename = do
-        path <- normalize filename
-        let dir = takeDirectory path
-        (previousPath, result) <- readIORef cache
-        if dir == previousPath
-          then return result
-          else do
-            paths <- getConfigPaths dir
-            result <- findConfig paths
-            writeIORef cache (dir, result)
-            return result
+    getConfig cache filename =
+        case rcfile options of
+            Just file -> do
+                -- We have a specified rcfile. Ignore normal rcfile resolution.
+                (path, result) <- readIORef cache
+                if path == "/"
+                  then return result
+                  else do
+                    result <- readConfig file
+                    when (isNothing result) $
+                        hPutStrLn stderr $ "Warning: unable to read --rcfile " ++ file
+                    writeIORef cache ("/", result)
+                    return result
+
+            Nothing -> do
+                path <- normalize filename
+                let dir = takeDirectory path
+                (previousPath, result) <- readIORef cache
+                if dir == previousPath
+                  then return result
+                  else do
+                    paths <- getConfigPaths dir
+                    result <- findConfig paths
+                    writeIORef cache (dir, result)
+                    return result
 
     findConfig paths =
         case paths of
@@ -490,7 +515,7 @@ ioInterface options files = do
       where
         handler :: FilePath -> IOException -> IO (String, Bool)
         handler file err = do
-            putStrLn $ file ++ ": " ++ show err
+            hPutStrLn stderr $ file ++ ": " ++ show err
             return ("", True)
 
     andM a b arg = do
