@@ -152,6 +152,7 @@ data Annotation =
     | ShellOverride String
     | SourcePath String
     | ExternalSources Bool
+    | ExtendedAnalysis Bool
     deriving (Show, Eq)
 data ConditionType = DoubleBracket | SingleBracket deriving (Show, Eq)
 

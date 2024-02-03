@@ -910,5 +910,11 @@ getEnableDirectives root =
         T_Annotation _ list _ -> [s | EnableComment s <- list]
         _ -> []
 
+getExtendedAnalysisDirective :: Token -> Maybe Bool
+getExtendedAnalysisDirective root =
+    case root of
+        T_Annotation _ list _ -> listToMaybe $ [s | ExtendedAnalysis s <- list]
+        _ -> Nothing
+
 return []
 runTests = $quickCheckAll

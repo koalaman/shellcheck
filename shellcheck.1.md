@@ -56,6 +56,13 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
     options are cumulative, but all the codes can be specified at once,
     comma-separated as a single argument.
 
+**--extended-analysis=true/false**
+
+:   Enable/disable Dataflow Analysis to identify more issues (default true). If
+    ShellCheck uses too much CPU/RAM when checking scripts with several
+    thousand lines of code, extended analysis can be disabled with this flag
+    or a directive. This flag overrides directives and rc files.
+
 **-f** *FORMAT*, **--format=***FORMAT*
 
 :   Specify the output format of shellcheck, which prints its results in the
@@ -248,6 +255,12 @@ Valid keys are:
 **enable**
 :   Enable an optional check by name, as listed with **--list-optional**.
     Only file-wide `enable` directives are considered.
+
+**extended-analysis**
+:   Set to true/false to enable/disable dataflow analysis. Specifying
+    `# shellcheck extended-analysis=false` in particularly large (2000+ line)
+    auto-generated scripts will reduce ShellCheck's resource usage at the
+    expense of certain checks. Extended analysis is enabled by default.
 
 **external-sources**
 :   Set to `true` in `.shellcheckrc` to always allow ShellCheck to open

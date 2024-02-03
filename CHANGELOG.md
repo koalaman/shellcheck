@@ -1,5 +1,9 @@
 ## Git
 ### Added
+- Added support for busybox sh
+- Added flag --rcfile to specify an rc file by name.
+- Added `extended-analysis=true` directive to enable/disable dataflow analysis
+  (with a corresponding --extended-analysis flag).
 - SC2324: Warn when x+=1 appends instead of increments
 - SC2325: Warn about multiple `!`s in dash/sh.
 - SC2326: Warn about `foo | ! bar` in bash/dash/sh.
@@ -9,7 +13,6 @@
 - SC3015: Warn bashism `test _ =~ _` like in [ ]
 - SC3016: Warn bashism `test -v _` like in [ ]
 - SC3017: Warn bashism `test -a _` like in [ ]
-- Added support for busybox sh
 
 ### Fixed
 - source statements with here docs now work correctly

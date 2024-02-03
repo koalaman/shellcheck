@@ -21,11 +21,11 @@
 module ShellCheck.Interface
     (
     SystemInterface(..)
-    , CheckSpec(csFilename, csScript, csCheckSourced, csIncludedWarnings, csExcludedWarnings, csShellTypeOverride, csMinSeverity, csIgnoreRC, csOptionalChecks)
+    , CheckSpec(csFilename, csScript, csCheckSourced, csIncludedWarnings, csExcludedWarnings, csShellTypeOverride, csMinSeverity, csIgnoreRC, csExtendedAnalysis, csOptionalChecks)
     , CheckResult(crFilename, crComments)
     , ParseSpec(psFilename, psScript, psCheckSourced, psIgnoreRC, psShellTypeOverride)
     , ParseResult(prComments, prTokenPositions, prRoot)
-    , AnalysisSpec(asScript, asShellType, asFallbackShell, asExecutionMode, asCheckSourced, asTokenPositions, asOptionalChecks)
+    , AnalysisSpec(asScript, asShellType, asFallbackShell, asExecutionMode, asCheckSourced, asTokenPositions, asExtendedAnalysis, asOptionalChecks)
     , AnalysisResult(arComments)
     , FormatterOptions(foColorOption, foWikiLinkCount)
     , Shell(Ksh, Sh, Bash, Dash, BusyboxSh)
@@ -100,6 +100,7 @@ data CheckSpec = CheckSpec {
     csIncludedWarnings :: Maybe [Integer],
     csShellTypeOverride :: Maybe Shell,
     csMinSeverity :: Severity,
+    csExtendedAnalysis :: Maybe Bool,
     csOptionalChecks :: [String]
 } deriving (Show, Eq)
 
@@ -124,6 +125,7 @@ emptyCheckSpec = CheckSpec {
     csIncludedWarnings = Nothing,
     csShellTypeOverride = Nothing,
     csMinSeverity = StyleC,
+    csExtendedAnalysis = Nothing,
     csOptionalChecks = []
 }
 
@@ -174,6 +176,7 @@ data AnalysisSpec = AnalysisSpec {
     asExecutionMode :: ExecutionMode,
     asCheckSourced :: Bool,
     asOptionalChecks :: [String],
+    asExtendedAnalysis :: Maybe Bool,
     asTokenPositions :: Map.Map Id (Position, Position)
 }
 
@@ -184,6 +187,7 @@ newAnalysisSpec token = AnalysisSpec {
     asExecutionMode = Executed,
     asCheckSourced = False,
     asOptionalChecks = [],
+    asExtendedAnalysis = Nothing,
     asTokenPositions = Map.empty
 }
 

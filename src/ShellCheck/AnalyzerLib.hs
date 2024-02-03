@@ -104,7 +104,7 @@ data Parameters = Parameters {
     -- map from token id to start and end position
     tokenPositions     :: Map.Map Id (Position, Position),
     -- Result from Control Flow Graph analysis (including data flow analysis)
-    cfgAnalysis :: CF.CFGAnalysis
+    cfgAnalysis :: Maybe CF.CFGAnalysis
     } deriving (Show)
 
 -- TODO: Cache results of common AST ops here
@@ -197,8 +197,10 @@ makeCommentWithFix severity id code str fix =
         }
     in force withFix
 
+-- makeParameters :: CheckSpec -> Parameters
 makeParameters spec = params
   where
+    extendedAnalysis = fromMaybe True $ msum [asExtendedAnalysis spec, getExtendedAnalysisDirective root]
     params = Parameters {
         rootNode = root,
         shellType = fromMaybe (determineShell (asFallbackShell spec) root) $ asShellType spec,
@@ -229,7 +231,9 @@ makeParameters spec = params
         parentMap = getParentTree root,
         variableFlow = getVariableFlow params root,
         tokenPositions = asTokenPositions spec,
-        cfgAnalysis = CF.analyzeControlFlow cfParams root
+        cfgAnalysis = do
+            guard extendedAnalysis
+            return $ CF.analyzeControlFlow cfParams root
     }
     cfParams = CF.CFGParameters {
         CF.cfLastpipe = hasLastpipe params,

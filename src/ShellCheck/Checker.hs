@@ -25,6 +25,7 @@ import ShellCheck.ASTLib
 import ShellCheck.Interface
 import ShellCheck.Parser
 
+import Debug.Trace -- DO NOT SUBMIT
 import Data.Either
 import Data.Functor
 import Data.List
@@ -86,6 +87,7 @@ checkScript sys spec = do
                     asCheckSourced = csCheckSourced spec,
                     asExecutionMode = Executed,
                     asTokenPositions = tokenPositions,
+                    asExtendedAnalysis = csExtendedAnalysis spec,
                     asOptionalChecks = getEnableDirectives root ++ csOptionalChecks spec
                 } where as = newAnalysisSpec root
         let analysisMessages =
@@ -519,6 +521,44 @@ prop_hereDocsAreParsedWithoutTrailingLinefeed = 1044 `elem` result
 prop_hereDocsWillHaveParsedIndices = null result
   where
     result = check "#!/bin/bash\nmy_array=(a b)\ncat <<EOF >> ./test\n $(( 1 + my_array[1] ))\nEOF"
+
+prop_rcCanSuppressDfa = null result
+  where
+    result = checkWithRc "extended-analysis=false" emptyCheckSpec {
+        csScript = "#!/bin/sh\nexit; foo;"
+    }
+
+prop_fileCanSuppressDfa = null $ traceShowId result
+  where
+    result = checkWithRc "" emptyCheckSpec {
+        csScript = "#!/bin/sh\n# shellcheck extended-analysis=false\nexit; foo;"
+    }
+
+prop_fileWinsWhenSuppressingDfa1 = null result
+  where
+    result = checkWithRc "extended-analysis=true" emptyCheckSpec {
+        csScript = "#!/bin/sh\n# shellcheck extended-analysis=false\nexit; foo;"
+    }
+
+prop_fileWinsWhenSuppressingDfa2 = result == [2317]
+  where
+    result = checkWithRc "extended-analysis=false" emptyCheckSpec {
+        csScript = "#!/bin/sh\n# shellcheck extended-analysis=true\nexit; foo;"
+    }
+
+prop_flagWinsWhenSuppressingDfa1 = result == [2317]
+  where
+    result = checkWithRc "extended-analysis=false" emptyCheckSpec {
+        csScript = "#!/bin/sh\n# shellcheck extended-analysis=false\nexit; foo;",
+        csExtendedAnalysis = Just True
+    }
+
+prop_flagWinsWhenSuppressingDfa2 = null result
+  where
+    result = checkWithRc "extended-analysis=true" emptyCheckSpec {
+        csScript = "#!/bin/sh\n# shellcheck extended-analysis=true\nexit; foo;",
+        csExtendedAnalysis = Just False
+    }
 
 return []
 runTests = $quickCheckAll

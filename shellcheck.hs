@@ -102,6 +102,8 @@ options = [
         (ReqArg (Flag "include") "CODE1,CODE2..") "Consider only given types of warnings",
     Option "e" ["exclude"]
         (ReqArg (Flag "exclude") "CODE1,CODE2..") "Exclude types of warnings",
+    Option "" ["extended-analysis"]
+        (ReqArg (Flag "extended-analysis") "bool") "Perform dataflow analysis (default true)",
     Option "f" ["format"]
         (ReqArg (Flag "format") "FORMAT") $
         "Output format (" ++ formatList ++ ")",
@@ -384,6 +386,14 @@ parseOption flag options =
                 }
             }
 
+        Flag "extended-analysis" str -> do
+            value <- parseBool str
+            return options {
+                checkSpec = (checkSpec options) {
+                    csExtendedAnalysis = Just value
+                }
+            }
+
         -- This flag is handled specially in 'process'
         Flag "format" _ -> return options
 
@@ -400,6 +410,14 @@ parseOption flag options =
             printErr $ "Invalid number: " ++ num
             throwError SyntaxFailure
         return (Prelude.read num :: Integer)
+
+    parseBool str = do
+        case str of
+            "true" -> return True
+            "false" -> return False
+            _ -> do
+                printErr $ "Invalid boolean, expected true/false: " ++ str
+                throwError SyntaxFailure
 
 ioInterface :: Options -> [FilePath] -> IO (SystemInterface IO)
 ioInterface options files = do

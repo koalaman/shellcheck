@@ -1262,7 +1262,8 @@ checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
                     str = concat $ oversimplify c
                     var = getBracedReference str
                 in fromMaybe False $ do
-                    state <- CF.getIncomingState (cfgAnalysis params) id
+                    cfga <- cfgAnalysis params
+                    state <- CF.getIncomingState cfga id
                     value <- Map.lookup var $ CF.variablesInScope state
                     return $ CF.numericalStatus (CF.variableValue value) >= CF.NumericalStatusMaybe
             _ ->
@@ -2143,7 +2144,8 @@ checkSpacefulnessCfg' dirtyPass params token@(T_DollarBraced id _ list) =
               && not (usedAsCommandName parents token)
 
     isClean = fromMaybe False $ do
-        state <- CF.getIncomingState (cfgAnalysis params) id
+        cfga <- cfgAnalysis params
+        state <- CF.getIncomingState cfga id
         value <- Map.lookup name $ CF.variablesInScope state
         return $ isCleanState value
 
@@ -4896,7 +4898,8 @@ prop_checkCommandIsUnreachable3 = verifyNot checkCommandIsUnreachable "foo; bar 
 checkCommandIsUnreachable params t =
     case t of
         T_Pipeline {} -> sequence_ $ do
-            state <- CF.getIncomingState (cfgAnalysis params) id
+            cfga <- cfgAnalysis params
+            state <- CF.getIncomingState cfga id
             guard . not $ CF.stateIsReachable state
             guard . not $ isSourced params t
             return $ info id 2317 "Command appears to be unreachable. Check usage (or ignore if invoked indirectly)."
@@ -4918,14 +4921,15 @@ checkOverwrittenExitCode params t =
         _ -> return ()
   where
     check id = sequence_ $ do
-        state <- CF.getIncomingState (cfgAnalysis params) id
+        cfga <- cfgAnalysis params
+        state <- CF.getIncomingState cfga id
         let exitCodeIds = CF.exitCodes state
         guard . not $ S.null exitCodeIds
 
         let idToToken = idMap params
         exitCodeTokens <- traverse (\k -> Map.lookup k idToToken) $ S.toList exitCodeIds
         return $ do
-            when (all isCondition exitCodeTokens && not (usedUnconditionally t exitCodeIds)) $
+            when (all isCondition exitCodeTokens && not (usedUnconditionally cfga t exitCodeIds)) $
                 warn id 2319 "This $? refers to a condition, not a command. Assign to a variable to avoid it being overwritten."
             when (all isPrinting exitCodeTokens) $
                 warn id 2320 "This $? refers to echo/printf, not a previous command. Assign to variable to avoid it being overwritten."
@@ -4938,8 +4942,8 @@ checkOverwrittenExitCode params t =
 
     -- If we don't do anything based on the condition, assume we wanted the condition itself
     -- This helps differentiate `x; [ $? -gt 0 ] && exit $?` vs `[ cond ]; exit $?`
-    usedUnconditionally t testIds =
-        all (\c -> CF.doesPostDominate (cfgAnalysis params) (getId t) c) testIds
+    usedUnconditionally cfga t testIds =
+        all (\c -> CF.doesPostDominate cfga (getId t) c) testIds
 
     isPrinting t =
         case getCommandBasename t of
@@ -5009,7 +5013,8 @@ prop_checkPlusEqualsNumber9 = verifyNot checkPlusEqualsNumber "declare -ia var; 
 checkPlusEqualsNumber params t =
     case t of
         T_Assignment id Append var _ word -> sequence_ $ do
-            state <- CF.getIncomingState (cfgAnalysis params) id
+            cfga <- cfgAnalysis params
+            state <- CF.getIncomingState cfga id
             guard $ isNumber state word
             guard . not $ fromMaybe False $ CF.variableMayBeDeclaredInteger state var
             return $ warn id 2324 "var+=1 will append, not increment. Use (( var += 1 )), declare -i var, or quote number to silence."

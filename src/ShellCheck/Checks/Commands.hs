@@ -1430,26 +1430,28 @@ prop_checkBackreferencingDeclaration6 = verify (checkBackreferencingDeclaration 
 prop_checkBackreferencingDeclaration7 = verify (checkBackreferencingDeclaration "declare") "declare x=var $k=$x"
 checkBackreferencingDeclaration cmd = CommandCheck (Exactly cmd) check
   where
-    check t = foldM_ perArg M.empty $ arguments t
+    check t = do
+        cfga <- asks cfgAnalysis
+        when (isJust cfga) $
+            foldM_ (perArg $ fromJust cfga) M.empty $ arguments t
 
-    perArg leftArgs t =
+    perArg cfga leftArgs t =
         case t of
             T_Assignment id _ name idx t -> do
-                warnIfBackreferencing leftArgs $ t:idx
+                warnIfBackreferencing cfga leftArgs $ t:idx
                 return $ M.insert name id leftArgs
             t -> do
-                warnIfBackreferencing leftArgs [t]
+                warnIfBackreferencing cfga leftArgs [t]
                 return leftArgs
 
-    warnIfBackreferencing backrefs l = do
-        references <- findReferences l
+    warnIfBackreferencing cfga backrefs l = do
+        references <- findReferences cfga l
         let reused = M.intersection backrefs references
         mapM msg $ M.toList reused
 
     msg (name, id) = warn id 2318 $ "This assignment is used again in this '" ++ cmd ++ "', but won't have taken effect. Use two '" ++ cmd ++ "'s."
 
-    findReferences list = do
-        cfga <- asks cfgAnalysis
+    findReferences cfga list = do
         let graph = CF.graph cfga
         let nodesMap = CF.tokenToNodes cfga
         let nodes = S.unions $ map (\id -> M.findWithDefault S.empty id nodesMap) $ map getId $ list

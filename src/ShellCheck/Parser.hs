@@ -1058,6 +1058,16 @@ readAnnotationWithoutPrefix sandboxed = do
                         "This shell type is unknown. Use e.g. sh or bash."
                 return [ShellOverride shell]
 
+            "extended-analysis" -> do
+                pos <- getPosition
+                value <- plainOrQuoted $ many1 letter
+                case value of
+                    "true" -> return [ExtendedAnalysis True]
+                    "false" -> return [ExtendedAnalysis False]
+                    _ -> do
+                        parseNoteAt pos ErrorC 1146 "Unknown extended-analysis value. Expected true/false."
+                        return []
+
             "external-sources" -> do
                 pos <- getPosition
                 value <- plainOrQuoted $ many1 letter

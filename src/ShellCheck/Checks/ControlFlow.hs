@@ -78,7 +78,7 @@ controlFlowEffectChecks = [
 runNodeChecks :: [ControlFlowNodeCheck] -> ControlFlowCheck
 runNodeChecks perNode = do
     cfg <- asks cfgAnalysis
-    runOnAll cfg
+    sequence_ $ runOnAll <$> cfg
   where
     getData datas n@(node, label) = do
         (pre, post) <- M.lookup node datas
