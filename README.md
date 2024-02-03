@@ -309,10 +309,6 @@ Verify that `cabal` is installed and update its dependency list with
 
     $ cabal install
 
-Or if you intend to run the tests:
-
-    $ cabal install --enable-tests
-
 This will compile ShellCheck and install it to your `~/.cabal/bin` directory.
 
 Add this directory to your `PATH` (for bash, add this to your `~/.bashrc`):
@@ -558,4 +554,3 @@ Happy ShellChecking!
 
 * The wiki has [long form descriptions](https://github.com/koalaman/shellcheck/wiki/Checks) for each warning, e.g. [SC2221](https://github.com/koalaman/shellcheck/wiki/SC2221).
 * ShellCheck does not attempt to enforce any kind of formatting or indenting style, so also check out [shfmt](https://github.com/mvdan/sh)!
-
