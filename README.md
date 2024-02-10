@@ -262,6 +262,17 @@ repos:
 #       args: ["--severity=warning"]  # Optionally only show errors and warnings
 ```
 
+Or (pre-commit version > 3.4.0)
+
+```yaml
+repos:
+-   repo: https://github.com/koalaman/shellcheck
+    rev: v0.7.2
+    hooks:
+    -   id: shellcheck
+#       args: ["--severity=warning"]  # Optionally only show errors and warnings
+```
+
 ### Travis CI
 
 Travis CI has now integrated ShellCheck by default, so you don't need to manually install it.

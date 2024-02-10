@@ -1,0 +1,13 @@
+---
+- id: shellcheck
+  name: ShellCheck v0.9.0
+  description: Static analysis tool for shell scripts
+  language: haskell
+  # https://pre-commit.com/#haskell
+  minimum_pre_commit_version: 3.4.0
+  entry: shellcheck
+  types:
+    - shell
+  # https://github.com/koalaman/shellcheck/issues/809
+  exclude_types:
+    - zsh
