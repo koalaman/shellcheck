@@ -23,7 +23,7 @@ description: |
       # snap connect shellcheck:removable-media
 
 version: git
-base: core18
+base: core20
 grade: stable
 confinement: strict
 
@@ -40,16 +40,16 @@ parts:
     source: .
     build-packages:
       - cabal-install
-      - squid
+    stage-packages:
+      - libatomic1
     override-build: |
-      # See comments in .snapsquid.conf
-      [ "$http_proxy" ] && {
-        squid3 -f .snapsquid.conf
-        export http_proxy="http://localhost:8888"
-        sleep 3
-      }
+      # Give ourselves enough memory to build
+      dd if=/dev/zero of=/tmp/swap bs=1M count=2000
+      mkswap /tmp/swap
+      swapon /tmp/swap
+
       cabal sandbox init
-      cabal update || cat /var/log/squid/*
+      cabal update
       cabal install -j
 
       install -d $SNAPCRAFT_PART_INSTALL/usr/bin
