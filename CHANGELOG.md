@@ -1,5 +1,6 @@
-## Git
+## v0.10.0 - 2024-03-07
 ### Added
+- Precompiled binaries for macOS ARM64 (darwin.aarch64)
 - Added support for busybox sh
 - Added flag --rcfile to specify an rc file by name.
 - Added `extended-analysis=true` directive to enable/disable dataflow analysis
@@ -16,8 +17,7 @@
 
 ### Fixed
 - source statements with here docs now work correctly
-
-### Changed
+- "(Array.!): undefined array element" error should no longer occur
 
 
 ## v0.9.0 - 2022-12-12
