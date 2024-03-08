@@ -1,3 +1,8 @@
+## Git
+### Added
+### Fixed
+
+
 ## v0.10.0 - 2024-03-07
 ### Added
 - Precompiled binaries for macOS ARM64 (darwin.aarch64)
