@@ -12,6 +12,17 @@ then
   fail "There are uncommitted changes"
 fi
 
+version=${current#v}
+if ! grep "Version:" ShellCheck.cabal | grep -qFw "$version"
+then
+  fail "The cabal file does not match tag version $version"
+fi
+
+if ! grep -qF "## $current" CHANGELOG.md
+then
+  fail "CHANGELOG.md does not contain '## $current'"
+fi
+
 current=$(git tag --points-at)
 if [[ -z "$current" ]]
 then
@@ -32,17 +43,6 @@ fi
 if [[ "$(git tag --points-at master)" != "$current" ]]
 then
   fail "You are not on master"
-fi
-
-version=${current#v}
-if ! grep "Version:" ShellCheck.cabal | grep -qFw "$version"
-then
-  fail "The cabal file does not match tag version $version"
-fi
-
-if ! grep -qF "## $current" CHANGELOG.md
-then
-  fail "CHANGELOG.md does not contain '## $current'"
 fi
 
 if [[ $(git log -1 --pretty=%B) != "Stable version "* ]]
