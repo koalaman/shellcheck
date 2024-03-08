@@ -5017,7 +5017,8 @@ checkPlusEqualsNumber params t =
             state <- CF.getIncomingState cfga id
             guard $ isNumber state word
             guard . not $ fromMaybe False $ CF.variableMayBeDeclaredInteger state var
-            return $ warn id 2324 "var+=1 will append, not increment. Use (( var += 1 )), declare -i var, or quote number to silence."
+            -- Recommend "typeset" because ksh does not have "declare".
+            return $ warn id 2324 "var+=1 will append, not increment. Use (( var += 1 )), typeset -i var, or quote number to silence."
         _ -> return ()
 
   where
