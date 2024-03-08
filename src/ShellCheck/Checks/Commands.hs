@@ -93,6 +93,7 @@ commandChecks = [
     ,checkDeprecatedTempfile
     ,checkDeprecatedEgrep
     ,checkDeprecatedFgrep
+    ,checkDeprecatedRgrep
     ,checkWhileGetoptsCase
     ,checkCatastrophicRm
     ,checkLetUsage
@@ -988,6 +989,10 @@ checkDeprecatedEgrep = CommandCheck (Basename "egrep") $
 prop_checkDeprecatedFgrep = verify checkDeprecatedFgrep "fgrep '*' files"
 checkDeprecatedFgrep = CommandCheck (Basename "fgrep") $
     \t -> info (getId $ getCommandTokenOrThis t) 2197 "fgrep is non-standard and deprecated. Use grep -F instead."
+
+prop_checkDeprecatedRgrep = verify checkDeprecatedRgrep "rgrep '*' dir"
+checkDeprecatedRgrep = CommandCheck (Basename "rgrep") $
+    \t -> info (getId $ getCommandTokenOrThis t) 2324 "rgrep is non-standard and deprecated. Use grep -r instead."
 
 prop_checkWhileGetoptsCase1 = verify checkWhileGetoptsCase "while getopts 'a:b' x; do case $x in a) foo;; esac; done"
 prop_checkWhileGetoptsCase2 = verify checkWhileGetoptsCase "while getopts 'a:' x; do case $x in a) foo;; b) bar;; esac; done"
