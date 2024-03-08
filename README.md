@@ -228,6 +228,16 @@ Using the [nix package manager](https://nixos.org/nix):
 nix-env -iA nixpkgs.shellcheck
 ```
 
+Using [Guix](https://guix.gnu.org/) to install shellcheck to you default profile:
+```sh
+guix install shellcheck
+```
+
+Alternatively using [guix shell](https://guix.gnu.org/manual/devel/en/html_node/Invoking-guix-shell.html) to create a temporary environment, you can check a file with the following command, for example:
+```sh
+guix shell shellcheck -- shellcheck foo.sh
+```
+
 Alternatively, you can download pre-compiled binaries for the latest release here:
 
 * [Linux, x86_64](https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.linux.x86_64.tar.xz) (statically linked)
