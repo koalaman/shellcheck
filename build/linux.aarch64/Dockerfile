@@ -12,11 +12,15 @@ RUN apt-get update && apt-get install -y llvm gcc-$TARGET
 
 # The rest are from 22.10
 RUN sed -e 's/focal/kinetic/g' -i /etc/apt/sources.list
+# Kinetic does not receive updates anymore, switch to last available
+RUN sed -e 's/archive.ubuntu.com/old-releases.ubuntu.com/g' -i /etc/apt/sources.list
+RUN sed -e 's/security.ubuntu.com/old-releases.ubuntu.com/g' -i /etc/apt/sources.list
+
 RUN apt-get update && apt-get install -y ghc alex happy automake autoconf build-essential curl qemu-user-static
 
 # Build GHC
 WORKDIR /ghc
-RUN curl -L "https://downloads.haskell.org/~ghc/9.2.5/ghc-9.2.5-src.tar.xz" | tar xJ --strip-components=1
+RUN curl -L "https://downloads.haskell.org/~ghc/9.2.8/ghc-9.2.8-src.tar.xz" | tar xJ --strip-components=1
 RUN ./boot && ./configure --host x86_64-linux-gnu --build x86_64-linux-gnu --target "$TARGET"
 RUN cp mk/flavours/quick-cross.mk mk/build.mk && make -j "$(nproc)"
 RUN make install
