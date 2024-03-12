@@ -1,4 +1,8 @@
-FROM alpine:latest
+FROM alpine:3.16
+# alpine:3.16 (GHC 9.0.1):  5.8 megabytes
+# alpine:3.17 (GHC 9.0.2): 15.0 megabytes
+# alpine:3.18 (GHC 9.4.4): 29.0 megabytes
+# alpine:3.19 (GHC 9.4.7): 29.0 megabytes
 
 ENV TARGETNAME linux.x86_64
 
