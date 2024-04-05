@@ -56,11 +56,14 @@ cat << EOF
 Manual Checklist
 
 $((i++)). Make sure none of the automated checks above failed
+$((i++)). Run \`build/build_builder build/*/\` to update all builder images.
+$((j++)). \`build/run_builder dist-newstyle/sdist/ShellCheck-*.tar.gz build/*/\` to verify that they work.
+$((j++)). \`for f in \$(cat build/*/tag); do docker push "\$f"; done\` to upload them.
+$((i++)). Run test/distrotest to ensure that most distros can build OOTB.
 $((i++)). Make sure GitHub Build currently passes: https://github.com/koalaman/shellcheck/actions
 $((i++)). Make sure SnapCraft build currently works: https://build.snapcraft.io/user/koalaman
-$((i++)). Run test/distrotest to ensure that most distros can build OOTB.
 $((i++)). Format and read over the manual for bad formatting and outdated info.
-$((i++)). Make sure the Hackage package builds.
+$((i++)). Make sure the Hackage package builds locally.
 
 Release Steps
 
