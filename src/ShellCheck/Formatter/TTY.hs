@@ -169,7 +169,7 @@ showFixedString color comments lineNum fileLines =
             -- and/or other unrelated lines.
             let (excerptFix, excerpt) = sliceFile mergedFix fileLines
             -- in the spirit of error prone
-            putStrLn $ color "message" "Did you mean: "
+            putStrLn $ color "message" "Did you mean:"
             putStrLn $ unlines $ applyFix excerptFix excerpt
 
 cuteIndent :: PositionedComment -> String
