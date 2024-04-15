@@ -1,5 +1,6 @@
 ## Git
 ### Added
+- SC2327/SC2328: Warn about capturing the output of redirected commands.
 ### Fixed
 
 

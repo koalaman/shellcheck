@@ -204,6 +204,7 @@ nodeChecks = [
     ,checkUnnecessaryArithmeticExpansionIndex
     ,checkUnnecessaryParens
     ,checkPlusEqualsNumber
+    ,checkExpansionWithRedirection
     ]
 
 optionalChecks = map fst optionalTreeChecks
@@ -5038,6 +5039,47 @@ checkPlusEqualsNumber params t =
                     _ -> False
         in
             isUnquotedNumber || isNumericalVariableName || isNumericalVariableExpansion
+
+
+
+prop_checkExpansionWithRedirection1 = verify checkExpansionWithRedirection "var=$(foo > bar)"
+prop_checkExpansionWithRedirection2 = verify checkExpansionWithRedirection "var=`foo 1> bar`"
+prop_checkExpansionWithRedirection3 = verify checkExpansionWithRedirection "var=${ foo >> bar; }"
+prop_checkExpansionWithRedirection4 = verify checkExpansionWithRedirection "var=$(foo | bar > baz)"
+prop_checkExpansionWithRedirection5 = verifyNot checkExpansionWithRedirection "stderr=$(foo 2>&1 > /dev/null)"
+prop_checkExpansionWithRedirection6 = verifyNot checkExpansionWithRedirection "var=$(foo; bar > baz)"
+prop_checkExpansionWithRedirection7 = verifyNot checkExpansionWithRedirection "var=$(foo > bar; baz)"
+prop_checkExpansionWithRedirection8 = verifyNot checkExpansionWithRedirection "var=$(cat <&3)"
+checkExpansionWithRedirection params t =
+    case t of
+        T_DollarExpansion id [cmd] -> check id cmd
+        T_Backticked id [cmd] -> check id cmd
+        T_DollarBraceCommandExpansion id [cmd] -> check id cmd
+        _ -> return ()
+  where
+    check id pipe =
+        case pipe of
+            (T_Pipeline _ _ t@(_:_)) -> checkCmd id (last t)
+            _ -> return ()
+
+    checkCmd captureId (T_Redirecting _ redirs _) = walk captureId redirs
+
+    walk captureId [] = return ()
+    walk captureId (t:rest) =
+        case t of
+            T_FdRedirect _ _ (T_IoDuplicate _ _ "1") -> return ()
+            T_FdRedirect id "1" (T_IoDuplicate _ _ _) -> return ()
+            T_FdRedirect id "" (T_IoDuplicate _ op _) | op `elem` [T_GREATAND (Id 0), T_Greater (Id 0)] -> emit id captureId True
+            T_FdRedirect id str (T_IoFile _ op file) | str `elem` ["", "1"] && op `elem` [ T_DGREAT (Id 0), T_Greater (Id 0) ]  ->
+                if getLiteralString file == Just "/dev/null"
+                then emit id captureId False
+                else emit id captureId True
+            _ -> walk captureId rest
+
+    emit redirectId captureId suggestTee = do
+        warn captureId 2327 "This command substitution will be empty because the command's output gets redirected away."
+        err redirectId 2328 $ "This redirection takes output away from the command substitution" ++ if suggestTee then " (use tee to duplicate)." else "."
+
 
 
 return []
