@@ -1525,6 +1525,7 @@ prop_checkComparisonAgainstGlob3 = verify checkComparisonAgainstGlob "[ $cow = *
 prop_checkComparisonAgainstGlob4 = verifyNot checkComparisonAgainstGlob "[ $cow = foo ]"
 prop_checkComparisonAgainstGlob5 = verify checkComparisonAgainstGlob "[[ $cow != $bar ]]"
 prop_checkComparisonAgainstGlob6 = verify checkComparisonAgainstGlob "[ $f != /* ]"
+prop_checkComparisonAgainstGlob7 = verify checkComparisonAgainstGlob "#!/bin/busybox sh\n[[ $f == *foo* ]]"
 checkComparisonAgainstGlob _ (TC_Binary _ DoubleBracket op _ (T_NormalWord id [T_DollarBraced _ _ _]))
     | op `elem` ["=", "==", "!="] =
         warn id 2053 $ "Quote the right-hand side of " ++ op ++ " in [[ ]] to prevent glob matching."
@@ -1532,9 +1533,13 @@ checkComparisonAgainstGlob params (TC_Binary _ SingleBracket op _ word)
         | op `elem` ["=", "==", "!="] && isGlob word =
     err (getId word) 2081 msg
   where
-    msg = if isBashLike params
+    msg = if (shellType params) `elem` [Bash, Ksh]  -- Busybox does not support glob matching
             then "[ .. ] can't match globs. Use [[ .. ]] or case statement."
             else "[ .. ] can't match globs. Use a case statement."
+
+checkComparisonAgainstGlob params (TC_Binary _ DoubleBracket op _ word)
+        | shellType params == BusyboxSh && op `elem` ["=", "==", "!="] && isGlob word =
+    err (getId word) 2330 "BusyBox [[ .. ]] does not support glob matching. Use a case statement."
 
 checkComparisonAgainstGlob _ _ = return ()
 
@@ -4534,13 +4539,13 @@ prop_checkRequireDoubleBracket2 = verifyTree checkRequireDoubleBracket "[ foo -o
 prop_checkRequireDoubleBracket3 = verifyNotTree checkRequireDoubleBracket "#!/bin/sh\n[ -x foo ]"
 prop_checkRequireDoubleBracket4 = verifyNotTree checkRequireDoubleBracket "[[ -x foo ]]"
 checkRequireDoubleBracket params =
-    if isBashLike params
+    if (shellType params) `elem` [Bash, Ksh, BusyboxSh]
     then nodeChecksToTreeCheck [check] params
     else const []
   where
     check _ t = case t of
         T_Condition id SingleBracket _ ->
-            styleWithFix id 2292 "Prefer [[ ]] over [ ] for tests in Bash/Ksh." (fixFor t)
+            styleWithFix id 2292 "Prefer [[ ]] over [ ] for tests in Bash/Ksh/Busybox." (fixFor t)
         _ -> return ()
 
     fixFor t = fixWith $

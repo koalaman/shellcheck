@@ -902,16 +902,6 @@ supportsArrays Bash = True
 supportsArrays Ksh = True
 supportsArrays _ = False
 
--- Returns true if the shell is Bash or Ksh (sorry for the name, Ksh)
-isBashLike :: Parameters -> Bool
-isBashLike params =
-    case shellType params of
-        Bash -> True
-        Ksh -> True
-        Dash -> False
-        BusyboxSh -> False
-        Sh -> False
-
 isTrueAssignmentSource c =
     case c of
         DataString SourceChecked -> False
