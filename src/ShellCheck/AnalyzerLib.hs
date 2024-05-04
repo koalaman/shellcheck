@@ -929,6 +929,14 @@ modifiesVariable params token name =
             Assignment (_, _, n, source) -> isTrueAssignmentSource source && n == name
             _ -> False
 
+isTestCommand t =
+    case t of
+        T_Condition {} -> True
+        T_SimpleCommand {} -> t `isCommand` "test"
+        T_Redirecting _ _ t -> isTestCommand t
+        T_Annotation _ _ t -> isTestCommand t
+        T_Pipeline _ _ [t] -> isTestCommand t
+        _ -> False
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

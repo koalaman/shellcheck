@@ -877,8 +877,9 @@ prop_checkShorthandIf5 = verifyNot checkShorthandIf "foo && rm || printf b"
 prop_checkShorthandIf6 = verifyNot checkShorthandIf "if foo && bar || baz; then true; fi"
 prop_checkShorthandIf7 = verifyNot checkShorthandIf "while foo && bar || baz; do true; done"
 prop_checkShorthandIf8 = verify checkShorthandIf "if true; then foo && bar || baz; fi"
-checkShorthandIf params x@(T_OrIf _ (T_AndIf id _ _) (T_Pipeline _ _ t))
-        | not (isOk t || inCondition) =
+prop_checkShorthandIf9 = verifyNot checkShorthandIf "foo && [ -x /file ] || bar"
+checkShorthandIf params x@(T_OrIf _ (T_AndIf id _ b) (T_Pipeline _ _ t))
+        | not (isOk t || inCondition) && not (isTestCommand b) =
     info id 2015 "Note that A && B || C is not if-then-else. C may run when A is true."
   where
     isOk [t] = isAssignment t || fromMaybe False (do
@@ -4197,7 +4198,7 @@ checkBadTestAndOr params t =
         in
             mapM_ checkTest commandWithSeps
     checkTest (before, cmd, after) =
-        when (isTest cmd) $ do
+        when (isTestCommand cmd) $ do
             checkPipe before
             checkPipe after
 
@@ -4213,17 +4214,10 @@ checkBadTestAndOr params t =
             T_AndIf _ _ rhs -> checkAnds id rhs
             T_OrIf _ _ rhs -> checkAnds id rhs
             T_Pipeline _ _ list | not (null list) -> checkAnds id (last list)
-            cmd -> when (isTest cmd) $
+            cmd -> when (isTestCommand cmd) $
                 errWithFix id 2265 "Use && for logical AND. Single & will background and return true." $
                     (fixWith [replaceEnd id params 0 "&"])
 
-    isTest t =
-        case t of
-            T_Condition {} -> True
-            T_SimpleCommand {} -> t `isCommand` "test"
-            T_Redirecting _ _ t -> isTest t
-            T_Annotation _ _ t -> isTest t
-            _ -> False
 
 prop_checkComparisonWithLeadingX1 = verify checkComparisonWithLeadingX "[ x$foo = xlol ]"
 prop_checkComparisonWithLeadingX2 = verify checkComparisonWithLeadingX "test x$foo = xlol"
