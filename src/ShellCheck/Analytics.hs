@@ -2447,6 +2447,7 @@ prop_checkUnassignedReferences_minusZDefault = verifyNotTree checkUnassignedRefe
 prop_checkUnassignedReferences50 = verifyNotTree checkUnassignedReferences "echo ${foo:+bar}"
 prop_checkUnassignedReferences51 = verifyNotTree checkUnassignedReferences "echo ${foo:+$foo}"
 prop_checkUnassignedReferences52 = verifyNotTree checkUnassignedReferences "wait -p pid; echo $pid"
+prop_checkUnassignedReferences53 = verify checkUnassignedReferences "x=($foo)"
 
 checkUnassignedReferences = checkUnassignedReferences' False
 checkUnassignedReferences' includeGlobals params t = warnings
@@ -2502,14 +2503,12 @@ checkUnassignedReferences' includeGlobals params t = warnings
 
     warnings = execWriter . sequence $ mapMaybe warningFor unassigned
 
-    -- Due to parsing, foo=( [bar]=baz ) parses 'bar' as a reference even for assoc arrays.
-    -- Similarly, ${foo[bar baz]} may not be referencing bar/baz. Just skip these.
+    -- ${foo[bar baz]} may not be referencing bar/baz. Just skip these.
     -- We can also have ${foo:+$foo} should be treated like [[ -n $foo ]] && echo $foo
     isException var t = any shouldExclude $ getPath (parentMap params) t
       where
         shouldExclude t =
             case t of
-                T_Array {} -> True
                 (T_DollarBraced _ _ l) ->
                     let str = concat $ oversimplify l
                         ref = getBracedReference str
