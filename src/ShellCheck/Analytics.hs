@@ -4896,16 +4896,33 @@ checkBatsTestDoesNotUseNegation params t =
 prop_checkCommandIsUnreachable1 = verify checkCommandIsUnreachable "foo; bar; exit; baz"
 prop_checkCommandIsUnreachable2 = verify checkCommandIsUnreachable "die() { exit; }; foo; bar; die; baz"
 prop_checkCommandIsUnreachable3 = verifyNot checkCommandIsUnreachable "foo; bar || exit; baz"
+prop_checkCommandIsUnreachable4 = verifyNot checkCommandIsUnreachable "f() { foo; };    # Maybe sourced"
+prop_checkCommandIsUnreachable5 = verify checkCommandIsUnreachable "f() { foo; }; exit  # Not sourced"
 checkCommandIsUnreachable params t =
     case t of
         T_Pipeline {} -> sequence_ $ do
             cfga <- cfgAnalysis params
-            state <- CF.getIncomingState cfga id
+            state <- CF.getIncomingState cfga (getId t)
             guard . not $ CF.stateIsReachable state
             guard . not $ isSourced params t
-            return $ info id 2317 "Command appears to be unreachable. Check usage (or ignore if invoked indirectly)."
+            guard . not $ any (\t -> isUnreachable t || isUnreachableFunction t) $ NE.drop 1 $ getPath (parentMap params) t
+            return $ info (getId t) 2317 "Command appears to be unreachable. Check usage (or ignore if invoked indirectly)."
+        T_Function id _ _ _ _ ->
+            when (isUnreachableFunction t
+                    && (not . any isUnreachableFunction . NE.drop 1 $ getPath (parentMap params) t)
+                    && (not $ isSourced params t)) $
+                info id 2329 "This function is never invoked. Check usage (or ignored if invoked indirectly)."
         _ -> return ()
-  where id = getId t
+  where
+    isUnreachableFunction :: Token -> Bool
+    isUnreachableFunction f =
+        case f of
+            T_Function id _ _ _ t -> isUnreachable t
+            _ -> False
+    isUnreachable t = fromMaybe False $ do
+        cfga <- cfgAnalysis params
+        state <- CF.getIncomingState cfga (getId t)
+        return . not $ CF.stateIsReachable state
 
 
 prop_checkOverwrittenExitCode1 = verify checkOverwrittenExitCode "x; [ $? -eq 1 ] || [ $? -eq 2 ]"

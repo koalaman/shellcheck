@@ -1,7 +1,9 @@
 ## Git
 ### Added
 - SC2327/SC2328: Warn about capturing the output of redirected commands.
+- SC2329: Warn when (non-escaping) functions are never invoked.
 ### Fixed
+- SC2317 about unreachable commands is now less spammy for nested ones.
 
 
 ## v0.10.0 - 2024-03-07
