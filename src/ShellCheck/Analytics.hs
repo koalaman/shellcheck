@@ -4000,6 +4000,7 @@ prop_checkUselessBang6 = verify checkUselessBang "set -e; { ! true; }"
 prop_checkUselessBang7 = verifyNot checkUselessBang "set -e; x() { ! [ x ]; }"
 prop_checkUselessBang8 = verifyNot checkUselessBang "set -e; if { ! true; }; then true; fi"
 prop_checkUselessBang9 = verifyNot checkUselessBang "set -e; while ! true; do true; done"
+prop_checkUselessBang10 = verify checkUselessBang "set -e\nshellcheck disable=SC0000\n! true\nrest"
 checkUselessBang params t = when (hasSetE params) $ mapM_ check (getNonReturningCommands t)
   where
     check t =
@@ -4008,6 +4009,7 @@ checkUselessBang params t = when (hasSetE params) $ mapM_ check (getNonReturning
                 addComment $ makeCommentWithFix InfoC id 2251
                         "This ! is not on a condition and skips errexit. Use `&& exit 1` instead, or make sure $? is checked."
                         (fixWith [replaceStart id params 1 "", replaceEnd (getId cmd) params 0 " && exit 1"])
+            T_Annotation _ _ t -> check t
             _ -> return ()
 
     -- Get all the subcommands that aren't likely to be the return value
