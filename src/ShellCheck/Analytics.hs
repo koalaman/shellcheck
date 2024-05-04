@@ -2447,7 +2447,7 @@ prop_checkUnassignedReferences_minusZDefault = verifyNotTree checkUnassignedRefe
 prop_checkUnassignedReferences50 = verifyNotTree checkUnassignedReferences "echo ${foo:+bar}"
 prop_checkUnassignedReferences51 = verifyNotTree checkUnassignedReferences "echo ${foo:+$foo}"
 prop_checkUnassignedReferences52 = verifyNotTree checkUnassignedReferences "wait -p pid; echo $pid"
-prop_checkUnassignedReferences53 = verify checkUnassignedReferences "x=($foo)"
+prop_checkUnassignedReferences53 = verifyTree checkUnassignedReferences "x=($foo)"
 
 checkUnassignedReferences = checkUnassignedReferences' False
 checkUnassignedReferences' includeGlobals params t = warnings
