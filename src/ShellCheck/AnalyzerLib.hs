@@ -535,7 +535,9 @@ getModifiedVariables t =
         T_BatsTest {} -> [
             (t, t, "lines", DataArray SourceExternal),
             (t, t, "status", DataString SourceInteger),
-            (t, t, "output", DataString SourceExternal)
+            (t, t, "output", DataString SourceExternal),
+            (t, t, "stderr", DataString SourceExternal),
+            (t, t, "stderr_lines", DataArray SourceExternal)
             ]
 
         -- Count [[ -v foo ]] as an "assignment".
