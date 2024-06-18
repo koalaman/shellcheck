@@ -80,6 +80,7 @@ function multi_arch_docker::main() {
   export DOCKER_PLATFORMS='linux/amd64'
   DOCKER_PLATFORMS+=' linux/arm64'
   DOCKER_PLATFORMS+=' linux/arm/v6'
+  DOCKER_PLATFORMS+=' linux/riscv64'
 
   multi_arch_docker::install_docker_buildx
   multi_arch_docker::login_to_docker_hub
