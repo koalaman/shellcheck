@@ -1,8 +1,9 @@
 #!/bin/sh
 set -xe
-cd /scratch
+mkdir /scratch && cd /scratch
 {
   tar xzv --strip-components=1
+  cp /etc/cabal.project.freeze .
   chmod +x striptests && ./striptests
   mkdir "$TARGETNAME"
   # This script does not cabal update because compiling anything new is slow

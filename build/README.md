@@ -11,3 +11,7 @@ This makes it simple to build any release without exotic hardware or software.
 
 An image can be built and tagged using `build_builder`,
 and run on a source tarball using `run_builder`.
+
+Tip: Are you developing an image that relies on QEmu usermode emulation?
+     It's easy to accidentally depend on binfmt\_misc on the host OS.
+     Do a `echo 0 | sudo tee /proc/sys/fs/binfmt_misc/status` before testing.

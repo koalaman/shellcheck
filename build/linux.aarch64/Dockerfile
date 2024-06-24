@@ -28,7 +28,7 @@ RUN curl -L "https://downloads.haskell.org/~cabal/cabal-install-3.9.0.0/cabal-in
 
 # Due to an apparent cabal bug, we specify our options directly to cabal
 # It won't reuse caches if ghc-options are specified in ~/.cabal/config
-ENV CABALOPTS "--ghc-options;-split-sections -optc-Os -optc-Wl,--gc-sections -optc-fPIC;--with-ghc=$TARGET-ghc;--with-hc-pkg=$TARGET-ghc-pkg"
+ENV CABALOPTS "--ghc-options;-split-sections -optc-Os -optc-Wl,--gc-sections -optc-fPIC;--with-ghc=$TARGET-ghc;--with-hc-pkg=$TARGET-ghc-pkg;-c;hashable -arch-native"
 
 # Prebuild the dependencies
 RUN cabal update && IFS=';' && cabal install --dependencies-only $CABALOPTS ShellCheck

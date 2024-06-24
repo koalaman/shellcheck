@@ -8,7 +8,6 @@ set -xe
   tar xzv --strip-components=1
   chmod +x striptests && ./striptests
   mkdir "$TARGETNAME"
-  cabal update
   ( IFS=';'; cabal build $CABALOPTS )
   find dist*/ -name shellcheck.exe -type f -ls -exec mv {} "$TARGETNAME/" \;
   ls -l "$TARGETNAME"

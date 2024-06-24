@@ -2,6 +2,8 @@
 set -xe
 IFS=';'
 {
+  mkdir -p /tmp/scratch
+  cd /tmp/scratch
   tar xzv --strip-components=1
   chmod +x striptests && ./striptests
   # Use a freeze file to ensure we use the same dependencies we cached during
@@ -9,7 +11,7 @@ IFS=';'
   cp /etc/cabal.project.freeze .
   mkdir "$TARGETNAME"
   # Retry in case of random segfault
-  cabal build --enable-executable-static || cabal build --enable-executable-static
+  scutil retry 3 cabal build --enable-executable-static
   find . -name shellcheck -type f -exec mv {} "$TARGETNAME/" \;
   ls -l "$TARGETNAME"
   "$TARGET-strip" -s "$TARGETNAME/shellcheck"
