@@ -214,6 +214,9 @@ prop_checkBashisms120 = verify checkBashisms "#!/bin/sh\n[ x == y ]"
 prop_checkBashisms121 = verifyNot checkBashisms "#!/bin/sh\n# shellcheck shell=busybox\n[ x == y ]"
 prop_checkBashisms122 = verify checkBashisms "#!/bin/dash\n$'a'"
 prop_checkBashisms123 = verifyNot checkBashisms "#!/bin/busybox sh\n$'a'"
+prop_checkBashisms124 = verify checkBashisms "#!/bin/dash\ntype -p test"
+prop_checkBashisms125 = verifyNot checkBashisms "#!/bin/busybox sh\ntype -p test"
+prop_checkBashisms126 = verifyNot checkBashisms "#!/bin/busybox sh\nread -p foo -r bar"
 checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
     params <- ask
     kludge params t
@@ -446,10 +449,10 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
             ("hash", Just $ if isDash then ["r", "v"] else ["r"]),
             ("jobs", Just ["l", "p"]),
             ("printf", Just []),
-            ("read", Just $ if isDash then ["r", "p"] else ["r"]),
+            ("read", Just $ if isDash || isBusyboxSh then ["r", "p"] else ["r"]),
             ("readonly", Just ["p"]),
             ("trap", Just []),
-            ("type", Just []),
+            ("type", Just $ if isBusyboxSh then ["p"] else []),
             ("ulimit", if isDash then Nothing else Just ["f"]),
             ("umask", Just ["S"]),
             ("unset", Just ["f", "v"]),
