@@ -295,19 +295,19 @@ removeUnnecessaryStructuralNodes (nodes, edges, mapping, association) =
     regularEdges = filter isRegularEdge edges
     inDegree = counter $ map (\(from,to,_) -> from) regularEdges
     outDegree = counter $ map (\(from,to,_) -> to) regularEdges
-    structuralNodes = S.fromList $ map fst $ filter isStructural nodes
+    structuralNodes = S.fromList [node | (node, CFStructuralNode) <- nodes]
     candidateNodes = S.filter isLinear structuralNodes
     edgesToCollapse = S.fromList $ filter filterEdges regularEdges
 
     remapping :: M.Map Node Node
-    remapping = foldl' (\m (old, new) -> M.insert old new m) M.empty $ map orderEdge $ S.toList edgesToCollapse
-    recursiveRemapping = M.fromList $ map (\c -> (c, recursiveLookup remapping c)) $ M.keys remapping
+    remapping = M.fromList $ map orderEdge $ S.toList edgesToCollapse
+    recursiveRemapping = M.mapWithKey (\c _ -> recursiveLookup remapping c) remapping
 
     filterEdges (a,b,_) =
         a `S.member` candidateNodes && b `S.member` candidateNodes
 
     orderEdge (a,b,_) = if a < b then (b,a) else (a,b)
-    counter = foldl' (\map key -> M.insertWith (+) key 1 map) M.empty
+    counter = M.fromListWith (+) . map (\key -> (key, 1))
     isRegularEdge (_, _, CFEFlow) = True
     isRegularEdge _ = False
 
@@ -316,11 +316,6 @@ removeUnnecessaryStructuralNodes (nodes, edges, mapping, association) =
         case M.lookup node map of
             Nothing -> node
             Just x -> recursiveLookup map x
-
-    isStructural (node, label) =
-        case label of
-            CFStructuralNode -> True
-            _ -> False
 
     isLinear node =
         M.findWithDefault 0 node inDegree == 1
