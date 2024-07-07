@@ -496,10 +496,7 @@ checkWrongArithmeticAssignment params (T_SimpleCommand id [T_Assignment _ _ _ _ 
         "Use $((..)) for arithmetics, e.g. i=$((i " ++ op ++ " 2))"
   where
     regex = mkRegex "^([_a-zA-Z][_a-zA-Z0-9]*)([+*-]).+$"
-    references = foldl (flip ($)) S.empty (map insertRef $ variableFlow params)
-    insertRef (Assignment (_, _, name, _)) =
-        S.insert name
-    insertRef _ = Prelude.id
+    references = S.fromList [name | Assignment (_, _, name, _) <- variableFlow params]
 
     getNormalString (T_NormalWord _ words) = do
         parts <- mapM getLiterals words
@@ -2380,15 +2377,9 @@ prop_checkUnused51 = verifyTree checkUnusedAssignments "x[y[z=1]]=1; echo ${x[@]
 checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
     flow = variableFlow params
-    references = foldl (flip ($)) defaultMap (map insertRef flow)
-    insertRef (Reference (base, token, name)) =
-        Map.insert (stripSuffix name) ()
-    insertRef _ = id
+    references = Map.union (Map.fromList [(stripSuffix name, ()) | Reference (base, token, name) <- flow]) defaultMap
 
-    assignments = foldl (flip ($)) Map.empty (map insertAssignment flow)
-    insertAssignment (Assignment (_, token, name, _)) | isVariableName name =
-        Map.insert name token
-    insertAssignment _ = id
+    assignments = Map.fromList [(name, token) | Assignment (_, token, name, _) <- flow, isVariableName name]
 
     unused = Map.assocs $ Map.difference assignments references
 
@@ -3971,10 +3962,7 @@ checkTranslatedStringVariable params (T_DollarDoubleQuoted id [T_Literal _ s])
   && S.member s assignments
   = warnWithFix id 2256 "This translated string is the name of a variable. Flip leading $ and \" if this should be a quoted substitution." (fix id)
   where
-    assignments = foldl (flip ($)) S.empty (map insertAssignment $ variableFlow params)
-    insertAssignment (Assignment (_, _, name, _)) | isVariableName name =
-        S.insert name
-    insertAssignment _ = Prelude.id
+    assignments = S.fromList [name | Assignment (_, _, name, _) <- variableFlow params, isVariableName name]
     fix id = fixWith [replaceStart id params 2 "\"$"]
 checkTranslatedStringVariable _ _ = return ()
 

@@ -1286,7 +1286,7 @@ dataflow ctx entry = do
             else do
                 let (next, rest) = S.deleteFindMin ps
                 nexts <- process states next
-                writeSTRef pending $ foldl (flip S.insert) rest nexts
+                writeSTRef pending $ S.union (S.fromList nexts) rest
                 f (n-1) pending states
 
     process states node = do
