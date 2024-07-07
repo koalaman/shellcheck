@@ -1350,7 +1350,7 @@ analyzeControlFlow params t =
 
         -- All nodes we've touched
         invocations <- readSTRef $ cInvocations ctx
-        let invokedNodes = M.fromDistinctAscList $ map (\c -> (c, ())) $ S.toList $ M.keysSet $ groupByNode $ M.map snd invocations
+        let invokedNodes = M.fromSet (const ()) $ S.unions $ map (M.keysSet . snd) $ M.elems invocations
 
         -- Invoke all functions that were declared but not invoked
         -- This is so that we still get warnings for dead code
