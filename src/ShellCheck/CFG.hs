@@ -300,13 +300,13 @@ removeUnnecessaryStructuralNodes (nodes, edges, mapping, association) =
     edgesToCollapse = S.fromList $ filter filterEdges regularEdges
 
     remapping :: M.Map Node Node
-    remapping = foldl' (\m (new, old) -> M.insert old new m) M.empty $ map orderEdge $ S.toList edgesToCollapse
+    remapping = foldl' (\m (old, new) -> M.insert old new m) M.empty $ map orderEdge $ S.toList edgesToCollapse
     recursiveRemapping = M.fromList $ map (\c -> (c, recursiveLookup remapping c)) $ M.keys remapping
 
     filterEdges (a,b,_) =
         a `S.member` candidateNodes && b `S.member` candidateNodes
 
-    orderEdge (a,b,_) = if a < b then (a,b) else (b,a)
+    orderEdge (a,b,_) = if a < b then (b,a) else (a,b)
     counter = foldl' (\map key -> M.insertWith (+) key 1 map) M.empty
     isRegularEdge (_, _, CFEFlow) = True
     isRegularEdge _ = False
