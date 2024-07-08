@@ -1083,6 +1083,10 @@ readAnnotationWithoutPrefix sandboxed = do
                         parseNoteAt pos ErrorC 1145 "Unknown external-sources value. Expected true/false."
                         return []
 
+            -- noop to allow a reason to be given for the annotation
+            "reason" -> do
+                return []
+
             _ -> do
                 parseNoteAt keyPos WarningC 1107 "This directive is unknown. It will be ignored."
                 anyChar `reluctantlyTill` whitespace
