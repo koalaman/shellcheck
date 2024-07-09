@@ -217,6 +217,7 @@ prop_checkBashisms123 = verifyNot checkBashisms "#!/bin/busybox sh\n$'a'"
 prop_checkBashisms124 = verify checkBashisms "#!/bin/dash\ntype -p test"
 prop_checkBashisms125 = verifyNot checkBashisms "#!/bin/busybox sh\ntype -p test"
 prop_checkBashisms126 = verifyNot checkBashisms "#!/bin/busybox sh\nread -p foo -r bar"
+prop_checkBashisms127 = verifyNot checkBashisms "#!/bin/busybox sh\necho -ne foo"
 checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
     params <- ask
     kludge params t
@@ -327,7 +328,11 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
 
     bashism t@(T_SimpleCommand _ _ (cmd:arg:_))
         | t `isCommand` "echo" && argString `matches` flagRegex =
-            if isDash
+            if isBusyboxSh
+            then
+                when (not (argString `matches` busyboxFlagRegex)) $
+                    warnMsg (getId arg) 3036 "echo flags besides -n and -e"
+            else if isDash
             then
                 when (argString /= "-n") $
                     warnMsg (getId arg) 3036 "echo flags besides -n"
@@ -336,6 +341,7 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
       where
           argString = concat $ oversimplify arg
           flagRegex = mkRegex "^-[eEsn]+$"
+          busyboxFlagRegex = mkRegex "^-[en]+$"
 
     bashism t@(T_SimpleCommand _ _ (cmd:arg:_))
         | getLiteralString cmd == Just "exec" && "-" `isPrefixOf` concat (oversimplify arg) =
