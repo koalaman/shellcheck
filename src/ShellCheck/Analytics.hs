@@ -3294,7 +3294,7 @@ checkReturnAgainstZero params token =
             next@(TA_Unary _ "!" _):_ -> isOnlyTestInCommand next
             next@(TC_Group {}):_ -> isOnlyTestInCommand next
             next@(TA_Sequence _ [_]):_ -> isOnlyTestInCommand next
-            next@(TA_Parentesis _ _):_ -> isOnlyTestInCommand next
+            next@(TA_Parenthesis _ _):_ -> isOnlyTestInCommand next
             _ -> False
 
     -- TODO: Do better $? tracking and filter on whether
@@ -4990,14 +4990,14 @@ checkUnnecessaryParens params t =
         T_ForArithmetic _ x y z _ -> mapM_ (checkLeading "for (((x); (y); (z))) is the same as for ((x; y; z))")  [x,y,z]
         T_Assignment _ _ _ [t] _ -> checkLeading "a[(x)] is the same as a[x]" t
         T_Arithmetic _ t -> checkLeading "(( (x) )) is the same as (( x ))" t
-        TA_Parentesis _ (TA_Sequence _ [ TA_Parentesis id _ ]) ->
+        TA_Parenthesis _ (TA_Sequence _ [ TA_Parenthesis id _ ]) ->
             styleWithFix id 2322 "In arithmetic contexts, ((x)) is the same as (x). Prefer only one layer of parentheses." $ fix id
         _ -> return ()
   where
 
     checkLeading str t =
         case t of
-            TA_Sequence _ [TA_Parentesis id _ ] -> styleWithFix id 2323 (str ++ ". Prefer not wrapping in additional parentheses.") $ fix id
+            TA_Sequence _ [TA_Parenthesis id _ ] -> styleWithFix id 2323 (str ++ ". Prefer not wrapping in additional parentheses.") $ fix id
             _ -> return ()
 
     fix id =
