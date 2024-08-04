@@ -212,6 +212,12 @@ prop_checkBashisms118 = verify checkBashisms "#!/bin/busybox sh\nxyz=1\n${!x*}" 
 prop_checkBashisms119 = verify checkBashisms "#!/bin/busybox sh\nx='test'\n${x^^[t]}" -- SC3059
 prop_checkBashisms120 = verify checkBashisms "#!/bin/sh\n[ x == y ]"
 prop_checkBashisms121 = verifyNot checkBashisms "#!/bin/sh\n# shellcheck shell=busybox\n[ x == y ]"
+prop_checkBashisms122 = verify checkBashisms "#!/bin/dash\n$'a'"
+prop_checkBashisms123 = verifyNot checkBashisms "#!/bin/busybox sh\n$'a'"
+prop_checkBashisms124 = verify checkBashisms "#!/bin/dash\ntype -p test"
+prop_checkBashisms125 = verifyNot checkBashisms "#!/bin/busybox sh\ntype -p test"
+prop_checkBashisms126 = verifyNot checkBashisms "#!/bin/busybox sh\nread -p foo -r bar"
+prop_checkBashisms127 = verifyNot checkBashisms "#!/bin/busybox sh\necho -ne foo"
 checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
     params <- ask
     kludge params t
@@ -229,7 +235,8 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
 
     bashism (T_ProcSub id _ _) = warnMsg id 3001 "process substitution is"
     bashism (T_Extglob id _ _) = warnMsg id 3002 "extglob is"
-    bashism (T_DollarSingleQuoted id _) = warnMsg id 3003 "$'..' is"
+    bashism (T_DollarSingleQuoted id _) =
+        unless isBusyboxSh $ warnMsg id 3003 "$'..' is"
     bashism (T_DollarDoubleQuoted id _) = warnMsg id 3004 "$\"..\" is"
     bashism (T_ForArithmetic id _ _ _ _) = warnMsg id 3005 "arithmetic for loops are"
     bashism (T_Arithmetic id _) = warnMsg id 3006 "standalone ((..)) is"
@@ -321,7 +328,11 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
 
     bashism t@(T_SimpleCommand _ _ (cmd:arg:_))
         | t `isCommand` "echo" && argString `matches` flagRegex =
-            if isDash
+            if isBusyboxSh
+            then
+                when (not (argString `matches` busyboxFlagRegex)) $
+                    warnMsg (getId arg) 3036 "echo flags besides -n and -e"
+            else if isDash
             then
                 when (argString /= "-n") $
                     warnMsg (getId arg) 3036 "echo flags besides -n"
@@ -330,6 +341,7 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
       where
           argString = concat $ oversimplify arg
           flagRegex = mkRegex "^-[eEsn]+$"
+          busyboxFlagRegex = mkRegex "^-[en]+$"
 
     bashism t@(T_SimpleCommand _ _ (cmd:arg:_))
         | getLiteralString cmd == Just "exec" && "-" `isPrefixOf` concat (oversimplify arg) =
@@ -443,10 +455,10 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
             ("hash", Just $ if isDash then ["r", "v"] else ["r"]),
             ("jobs", Just ["l", "p"]),
             ("printf", Just []),
-            ("read", Just $ if isDash then ["r", "p"] else ["r"]),
+            ("read", Just $ if isDash || isBusyboxSh then ["r", "p"] else ["r"]),
             ("readonly", Just ["p"]),
             ("trap", Just []),
-            ("type", Just []),
+            ("type", Just $ if isBusyboxSh then ["p"] else []),
             ("ulimit", if isDash then Nothing else Just ["f"]),
             ("umask", Just ["S"]),
             ("unset", Just ["f", "v"]),
