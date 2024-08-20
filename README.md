@@ -229,6 +229,11 @@ Using the [nix package manager](https://nixos.org/nix):
 nix-env -iA nixpkgs.shellcheck
 ```
 
+Using the [Flox package manager](https://flox.dev/)
+```sh
+flox install shellcheck
+```
+
 Alternatively, you can download pre-compiled binaries for the latest release here:
 
 * [Linux, x86_64](https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.linux.x86_64.tar.xz) (statically linked)
