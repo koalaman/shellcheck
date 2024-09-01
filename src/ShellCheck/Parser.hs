@@ -141,15 +141,9 @@ carriageReturn = do
     parseProblemAt pos ErrorC 1017 "Literal carriage return. Run script through tr -d '\\r' ."
     return '\r'
 
-almostSpace =
-    choice [
-        check '\xA0' "unicode non-breaking space",
-        check '\x200B' "unicode zerowidth space"
-    ]
-  where
-    check c name = do
-        parseNote ErrorC 1018 $ "This is a " ++ name ++ ". Delete and retype it."
-        char c
+almostSpace = do
+        parseNote ErrorC 1018 $ "This is a unicode space. Delete and retype it."
+        oneOf "\xA0\x2002\x2003\x2004\x2005\x2006\x2007\x2008\x2009\x200B\x202F"
         return ' '
 
 --------- Message/position annotation on top of user state
