@@ -103,8 +103,7 @@ nodeChecksToTreeCheck checkList =
 
 nodeChecks :: [Parameters -> Token -> Writer [TokenComment] ()]
 nodeChecks = [
-    checkUuoc
-    ,checkPipePitfalls
+    checkPipePitfalls
     ,checkForInQuoted
     ,checkForInLs
     ,checkShorthandIf
@@ -273,6 +272,13 @@ optionalTreeChecks = [
         cdPositive = "rm -r \"$(get_chroot_dir)/home\"",
         cdNegative = "set -e; dir=\"$(get_chroot_dir)\"; rm -r \"$dir/home\""
     }, checkExtraMaskedReturns)
+
+    ,(newCheckDescription {
+        cdName = "useless-use-of-cat",
+        cdDescription = "Check for Useless Use Of Cat (UUOC)",
+        cdPositive = "cat foo | grep bar",
+        cdNegative = "grep bar foo"
+    }, nodeChecksToTreeCheck [checkUuoc])
     ]
 
 optionalCheckMap :: Map.Map String (Parameters -> Token -> [TokenComment])
