@@ -62,6 +62,9 @@ internalVariables = [
     , "FLAGS_ARGC", "FLAGS_ARGV", "FLAGS_ERROR", "FLAGS_FALSE", "FLAGS_HELP",
     "FLAGS_PARENT", "FLAGS_RESERVED", "FLAGS_TRUE", "FLAGS_VERSION",
     "flags_error", "flags_return"
+
+    -- Bats
+    ,"stderr", "stderr_lines"
   ]
 
 specialIntegerVariables = [
