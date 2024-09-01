@@ -43,7 +43,7 @@ jobs:
           path: source/
 
   build_source:
-    name: Build Source Code
+    name: Build
     needs: package_source
     strategy:
       matrix:
@@ -80,13 +80,13 @@ jobs:
         uses: actions/download-artifact@v4
 
       - name: Work around GitHub permissions bug
-        run: chmod +x bin/*/shellcheck*
+        run: chmod +x *.bin/*/shellcheck*
 
       - name: Package binaries
         run: |
           export TAGS="$(cat source/tags)"
           mkdir -p deploy
-          cp -r bin/* deploy
+          cp -r *.bin/* deploy
           cd deploy
           ../.prepare_deploy
           rm -rf */ README* LICENSE*
