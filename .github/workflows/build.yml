@@ -42,6 +42,29 @@ jobs:
           name: source
           path: source/
 
+  run_tests:
+    name: Run tests
+    needs: package_source
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install ghc cabal-install
+          cabal update
+
+      - name: Unpack source
+        run: |
+          cd source
+          tar xvf source.tar.gz --strip-components=1
+
+      - name: Build and run tests
+        run: |
+          cd source
+          cabal test
+
   build_source:
     name: Build
     needs: package_source
