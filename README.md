@@ -68,23 +68,28 @@ Run `shellcheck yourscript` in your terminal for instant output, as seen above.
 You can see ShellCheck suggestions directly in a variety of editors.
 
 * Vim / Neovim, through
-  [Bash Language Server](https://github.com/bash-lsp/bash-language-server),
-  [ALE](https://github.com/w0rp/ale), [Neomake](https://github.com/neomake/neomake),
+  [Bash Language Server][],
+  [ALE](https://github.com/w0rp/ale), [Neomake](https://github.com/neomake/neomake)
   or [Syntastic](https://github.com/scrooloose/syntastic):
 
 ![Screenshot of Vim showing inlined shellcheck feedback](doc/vim-syntastic.png).
 
-* Emacs, through [Flycheck](https://github.com/flycheck/flycheck) or [Flymake](https://github.com/federicotdn/flymake-shellcheck):
+* Emacs, through
+  [Bash Language Server][],
+  [Flycheck](https://github.com/flycheck/flycheck)
+  or [Flymake](https://github.com/federicotdn/flymake-shellcheck):
 
 ![Screenshot of emacs showing inlined shellcheck feedback](doc/emacs-flycheck.png).
 
-* Sublime, through [SublimeLinter](https://github.com/SublimeLinter/SublimeLinter-shellcheck).
+* Sublime, through [Bash Language Server][] or [SublimeLinter](https://github.com/SublimeLinter/SublimeLinter-shellcheck).
 
 * Pulsar Edit (former Atom), through [linter-shellcheck-pulsar](https://github.com/pulsar-cooperative/linter-shellcheck-pulsar).
 
-* VSCode, through [vscode-shellcheck](https://github.com/timonwong/vscode-shellcheck).
+* VSCode, through [Bash Language Server][] or [vscode-shellcheck](https://github.com/timonwong/vscode-shellcheck).
 
 * Most other editors, through [GCC error compatibility](shellcheck.1.md#user-content-formats).
+
+[Bash Language Server]: https://github.com/bash-lsp/bash-language-server
 
 ### In your build or test suites
 
