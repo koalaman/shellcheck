@@ -67,7 +67,10 @@ Run `shellcheck yourscript` in your terminal for instant output, as seen above.
 
 You can see ShellCheck suggestions directly in a variety of editors.
 
-* Vim, through [ALE](https://github.com/w0rp/ale), [Neomake](https://github.com/neomake/neomake), or [Syntastic](https://github.com/scrooloose/syntastic):
+* Vim / Neovim, through
+  [Bash Language Server](https://github.com/bash-lsp/bash-language-server),
+  [ALE](https://github.com/w0rp/ale), [Neomake](https://github.com/neomake/neomake),
+  or [Syntastic](https://github.com/scrooloose/syntastic):
 
 ![Screenshot of Vim showing inlined shellcheck feedback](doc/vim-syntastic.png).
 
