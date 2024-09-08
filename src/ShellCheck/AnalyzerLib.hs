@@ -559,8 +559,12 @@ getModifiedVariables t =
         T_FdRedirect _ ('{':var) op -> -- {foo}>&2 modifies foo
             [(t, t, takeWhile (/= '}') var, DataString SourceInteger) | not $ isClosingFileOp op]
 
-        T_CoProc _ name _ ->
-            [(t, t, fromMaybe "COPROC" name, DataArray SourceInteger)]
+        T_CoProc _ Nothing _ ->
+            [(t, t, "COPROC", DataArray SourceInteger)]
+
+        T_CoProc _ (Just token) _ -> do
+            name <- maybeToList $ getLiteralString token
+            [(t, t, name, DataArray SourceInteger)]
 
         --Points to 'for' rather than variable
         T_ForIn id str [] _ -> [(t, t, str, DataString SourceExternal)]

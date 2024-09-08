@@ -2795,17 +2795,29 @@ readFunctionDefinition = called "function" $ do
 prop_readCoProc1 = isOk readCoProc "coproc foo { echo bar; }"
 prop_readCoProc2 = isOk readCoProc "coproc { echo bar; }"
 prop_readCoProc3 = isOk readCoProc "coproc echo bar"
+prop_readCoProc4 = isOk readCoProc "coproc a=b echo bar"
+prop_readCoProc5 = isOk readCoProc "coproc 'foo' { echo bar; }"
+prop_readCoProc6 = isOk readCoProc "coproc \"foo$$\" { echo bar; }"
+prop_readCoProc7 = isOk readCoProc "coproc 'foo' ( echo bar )"
+prop_readCoProc8 = isOk readCoProc "coproc \"foo$$\" while true; do true; done"
 readCoProc = called "coproc" $ do
     start <- startSpan
     try $ do
         string "coproc"
-        whitespace
+        spacing1
     choice [ try $ readCompoundCoProc start, readSimpleCoProc start ]
   where
     readCompoundCoProc start = do
-        var <- optionMaybe $
-            readVariableName `thenSkip` whitespace
-        body <- readBody readCompoundCommand
+        notFollowedBy2 readAssignmentWord
+        (var, body) <- choice [
+            try $ do
+                body <- readBody readCompoundCommand
+                return (Nothing, body),
+            try $ do
+                var <- readNormalWord `thenSkip` spacing
+                body <- readBody readCompoundCommand
+                return (Just var, body)
+            ]
         id <- endSpan start
         return $ T_CoProc id var body
     readSimpleCoProc start = do
@@ -3436,13 +3448,22 @@ isOk p s =      parsesCleanly p s == Just True   -- The string parses with no wa
 isWarning p s = parsesCleanly p s == Just False  -- The string parses with warnings
 isNotOk p s =   parsesCleanly p s == Nothing     -- The string does not parse
 
-parsesCleanly parser string = runIdentity $ do
+-- If the parser matches the string, return Right [ParseNotes+ParseProblems]
+-- If it does not match the string,  return Left  [ParseProblems]
+getParseOutput parser string = runIdentity $ do
     (res, sys) <- runParser testEnvironment
                     (parser >> eof >> getState) "-" string
     case (res, sys) of
         (Right userState, systemState) ->
-            return $ Just . null $ parseNotes userState ++ parseProblems systemState
-        (Left _, _) -> return Nothing
+            return $ Right $ parseNotes userState ++ parseProblems systemState
+        (Left _, systemState) -> return $ Left $ parseProblems systemState
+
+-- If the parser matches the string, return Just whether it was clean (without emitting suggestions)
+-- Otherwise, Nothing
+parsesCleanly parser string =
+    case getParseOutput parser string of
+        Right list -> Just $ null list
+        Left _ -> Nothing
 
 parseWithNotes parser = do
     item <- parser

@@ -668,10 +668,18 @@ build t = do
             status <- newNodeRange $ CFSetExitCode id
             linkRange cond status
 
-        T_CoProc id maybeName t -> do
-            let name = fromMaybe "COPROC" maybeName
+        T_CoProc id maybeNameToken t -> do
+            -- If unspecified, "COPROC". If not a constant string, Nothing.
+            let maybeName = case maybeNameToken of
+                    Just x -> getLiteralString x
+                    Nothing -> Just "COPROC"
+
+            let parentNode = case maybeName of
+                    Just str -> applySingle $ IdTagged id $ CFWriteVariable str CFValueArray
+                    Nothing -> CFStructuralNode
+
             start <- newStructuralNode
-            parent <- newNodeRange $ applySingle $ IdTagged id $ CFWriteVariable name CFValueArray
+            parent <- newNodeRange parentNode
             child <- subshell id "coproc" $ build t
             end <- newNodeRange $ CFSetExitCode id
 

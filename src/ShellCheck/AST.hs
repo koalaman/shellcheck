@@ -138,7 +138,7 @@ data InnerToken t =
     | Inner_T_WhileExpression [t] [t]
     | Inner_T_Annotation [Annotation] t
     | Inner_T_Pipe String
-    | Inner_T_CoProc (Maybe String) t
+    | Inner_T_CoProc (Maybe Token) t
     | Inner_T_CoProcBody t
     | Inner_T_Include t
     | Inner_T_SourceCommand t t
