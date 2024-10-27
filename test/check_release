@@ -50,6 +50,11 @@ then
   fail "Expected git log message to be 'Stable version ...'"
 fi
 
+if [[ $(git log -1 --pretty=%B) != *"CHANGELOG"* ]]
+then
+  fail "Expected git log message to contain CHANGELOG"
+fi
+
 i=1 j=1
 cat << EOF
 
