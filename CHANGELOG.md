@@ -7,6 +7,7 @@
 ### Changed
 - SC2015 about `A && B || C` no longer triggers when B is a test command.
 ### Fixed
+- SC2218 about function use-before-define is now more accurate.
 - SC2317 about unreachable commands is now less spammy for nested ones.
 - SC2292, optional suggestion for [[ ]], now triggers for Busybox.
 

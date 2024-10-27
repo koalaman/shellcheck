@@ -3765,32 +3765,32 @@ prop_checkUseBeforeDefinition1 = verifyTree checkUseBeforeDefinition "f; f() { t
 prop_checkUseBeforeDefinition2 = verifyNotTree checkUseBeforeDefinition "f() { true; }; f"
 prop_checkUseBeforeDefinition3 = verifyNotTree checkUseBeforeDefinition "if ! mycmd --version; then mycmd() { true; }; fi"
 prop_checkUseBeforeDefinition4 = verifyNotTree checkUseBeforeDefinition "mycmd || mycmd() { f; }"
-checkUseBeforeDefinition _ t =
-    execWriter $ evalStateT (mapM_ examine $ revCommands) Map.empty
+prop_checkUseBeforeDefinition5 = verifyTree checkUseBeforeDefinition "false || mycmd; mycmd() { f; }"
+prop_checkUseBeforeDefinition6 = verifyNotTree checkUseBeforeDefinition "f() { one; }; f; f() { two; }; f"
+checkUseBeforeDefinition :: Parameters -> Token -> [TokenComment]
+checkUseBeforeDefinition params t = fromMaybe [] $ do
+    cfga <- cfgAnalysis params
+    let funcs = execState (doAnalysis findFunction t) Map.empty
+    -- Green cut: no point enumerating commands if there are no functions.
+    guard . not $ Map.null funcs
+    return $ execWriter $ doAnalysis (findInvocation cfga funcs) t
   where
-    examine t = case t of
-        T_Pipeline _ _ [T_Redirecting _ _ (T_Function _ _ _ name _)] ->
-            modify $ Map.insert name t
-        T_Annotation _ _ w -> examine w
-        T_Pipeline _ _ cmds -> do
-            m <- get
-            unless (Map.null m) $
-                mapM_ (checkUsage m) $ concatMap recursiveSequences cmds
-        _ -> return ()
+    findFunction t =
+        case t of
+            T_Function id _ _ name _ -> modify (Map.insertWith (++) name [id])
+            _ -> return ()
 
-    checkUsage map cmd = sequence_ $ do
-        name <- getCommandName cmd
-        def <- Map.lookup name map
-        return $
-            err (getId cmd) 2218
-                "This function is only defined later. Move the definition up."
-
-    revCommands = reverse $ concat $ getCommandSequences t
-    recursiveSequences x =
-        let list = concat $ getCommandSequences x in
-            if null list
-            then [x]
-            else concatMap recursiveSequences list
+    findInvocation cfga funcs t =
+        case t of
+            T_SimpleCommand id _ (cmd:_) -> sequence_ $ do
+                name <- getLiteralString cmd
+                invocations <- Map.lookup name funcs
+                -- Is the function definitely being defined later?
+                guard $ any (\c -> CF.doesPostDominate cfga c id) invocations
+                -- Was one already defined, so it's actually a re-definition?
+                guard . not $ any (\c -> CF.doesPostDominate cfga id c) invocations
+                return $ err id 2218 "This function is only defined later. Move the definition up."
+            _ -> return ()
 
 prop_checkForLoopGlobVariables1 = verify checkForLoopGlobVariables "for i in $var/*.txt; do true; done"
 prop_checkForLoopGlobVariables2 = verifyNot checkForLoopGlobVariables "for i in \"$var\"/*.txt; do true; done"
