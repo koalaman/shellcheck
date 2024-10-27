@@ -110,6 +110,7 @@ Services and platforms that have ShellCheck pre-installed and ready to use:
 * [Codacy](https://www.codacy.com/)
 * [Code Climate](https://codeclimate.com/)
 * [Code Factor](https://www.codefactor.io/)
+* [Codety](https://www.codety.io/) via the [Codety Scanner](https://github.com/codetyio/codety-scanner)
 * [CircleCI](https://circleci.com) via the [ShellCheck Orb](https://circleci.com/orbs/registry/orb/circleci/shellcheck)
 * [Github](https://github.com/features/actions) (only Linux)
 * [Trunk Check](https://trunk.io/products/check) (universal linter; [allows you to explicitly version your shellcheck install](https://github.com/trunk-io/plugins/blob/bcbb361dcdbe4619af51ea7db474d7fb87540d20/.trunk/trunk.yaml#L32)) via the [shellcheck plugin](https://github.com/trunk-io/plugins/blob/main/linters/shellcheck/plugin.yaml)
