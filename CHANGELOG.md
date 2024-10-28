@@ -5,6 +5,8 @@
 - SC2330: Warn about unsupported glob matches with [[ .. ]] in BusyBox.
 - Precompiled binaries for Linux riscv64 (linux.riscv64)
 ### Changed
+- SC2002 about Useless Use Of Cat is now disabled by default. It can be
+  re-enabled with `--enable=useless-use-of-cat` or equivalent directive.
 - SC2015 about `A && B || C` no longer triggers when B is a test command.
 ### Fixed
 - SC2218 about function use-before-define is now more accurate.
