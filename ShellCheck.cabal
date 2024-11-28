@@ -58,7 +58,7 @@ library
       filepath             >= 1.4.0 && < 1.6,
       mtl                  >= 2.2.2 && < 2.4,
       parsec               >= 3.1.14 && < 3.2,
-      QuickCheck           >= 2.14.2 && < 2.15,
+      QuickCheck           >= 2.14.2 && < 2.16,
       regex-tdfa           >= 1.2.0 && < 1.4,
       transformers         >= 0.4.2 && < 0.7,
 
