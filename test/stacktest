@@ -15,7 +15,7 @@ die() { echo "$*" >&2; exit 1; }
 command -v stack ||
   die "stack is missing"
 
-stack setup        || die "Failed to setup with default resolver"
+stack setup --allow-different-user || die "Failed to setup with default resolver"
 stack build --test || die "Failed to build/test with default resolver"
 
 # Nice to haves, but not necessary

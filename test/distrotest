@@ -17,13 +17,13 @@ and is still highly experimental.
 Make sure you're plugged in and have screen/tmux in place,
 then re-run with $0 --run to continue.
 
-Also note that dist* will be deleted.
+Also note that dist*/ and .stack-work/ will be deleted.
 EOF
 exit 0
 }
 
-echo "Deleting 'dist' and 'dist-newstyle'..."
-rm -rf dist dist-newstyle
+echo "Deleting 'dist', 'dist-newstyle', and '.stack-work'..."
+rm -rf dist dist-newstyle .stack-work
 
 execs=$(find . -name shellcheck)
 
