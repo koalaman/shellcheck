@@ -3387,7 +3387,8 @@ readScriptFile sourced = do
         "busybox sh",
         "bash",
         "bats",
-        "ksh"
+        "ksh",
+        "oksh"
         ]
     badShells = [
         "awk",
