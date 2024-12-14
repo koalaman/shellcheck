@@ -5082,9 +5082,7 @@ checkExpansionWithRedirection params t =
             T_FdRedirect id "1" (T_IoDuplicate _ _ _) -> return ()
             T_FdRedirect id "" (T_IoDuplicate _ op _) | op `elem` [T_GREATAND (Id 0), T_Greater (Id 0)] -> emit id captureId True
             T_FdRedirect id str (T_IoFile _ op file) | str `elem` ["", "1"] && op `elem` [ T_DGREAT (Id 0), T_Greater (Id 0) ]  ->
-                if getLiteralString file == Just "/dev/null"
-                then emit id captureId False
-                else emit id captureId True
+                emit id captureId $ getLiteralString file /= Just "/dev/null"
             _ -> acc
 
     emit redirectId captureId suggestTee = do
