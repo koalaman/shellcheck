@@ -1431,9 +1431,8 @@ prop_checkBackreferencingDeclaration7 = verify (checkBackreferencingDeclaration 
 checkBackreferencingDeclaration cmd = CommandCheck (Exactly cmd) check
   where
     check t = do
-        cfga <- asks cfgAnalysis
-        when (isJust cfga) $
-            foldM_ (perArg $ fromJust cfga) M.empty $ arguments t
+        maybeCfga <- asks cfgAnalysis
+        mapM_ (\cfga -> foldM_ (perArg cfga) M.empty $ arguments t) maybeCfga
 
     perArg cfga leftArgs t =
         case t of
