@@ -330,7 +330,7 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
         | t `isCommand` "echo" && argString `matches` flagRegex =
             if isBusyboxSh
             then
-                when (not (argString `matches` busyboxFlagRegex)) $
+                unless (argString `matches` busyboxFlagRegex) $
                     warnMsg (getId arg) 3036 "echo flags besides -n and -e"
             else if isDash
             then
