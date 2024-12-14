@@ -3451,12 +3451,12 @@ isNotOk p s =   parsesCleanly p s == Nothing     -- The string does not parse
 -- If the parser matches the string, return Right [ParseNotes+ParseProblems]
 -- If it does not match the string,  return Left  [ParseProblems]
 getParseOutput parser string = runIdentity $ do
-    (res, sys) <- runParser testEnvironment
-                    (parser >> eof >> getState) "-" string
-    case (res, sys) of
-        (Right userState, systemState) ->
-            return $ Right $ parseNotes userState ++ parseProblems systemState
-        (Left _, systemState) -> return $ Left $ parseProblems systemState
+    (res, systemState) <- runParser testEnvironment
+                            (parser >> eof >> getState) "-" string
+    return $ case res of
+        Right userState ->
+            Right $ parseNotes userState ++ parseProblems systemState
+        Left _ -> Left $ parseProblems systemState
 
 -- If the parser matches the string, return Just whether it was clean (without emitting suggestions)
 -- Otherwise, Nothing
