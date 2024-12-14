@@ -187,6 +187,7 @@ nodeChecks = [
     ,checkDollarQuoteParen
     ,checkUselessBang
     ,checkTranslatedStringVariable
+    ,checkPipelineE
     ,checkModifiedArithmeticInRedirection
     ,checkBlatantRecursion
     ,checkBadTestAndOr
@@ -4037,6 +4038,12 @@ checkUselessBang params t = when (hasSetE params) $ mapM_ check (getNonReturning
             [_] -> []
             x:rest -> x : dropLast rest
             _ -> []
+
+prop_checkPipelineE1 = verify checkPipelineE "set -e; echo hi && echo hello"
+prop_checkPipelineE2 = verifyNot checkPipelineE "echo hi && echo hello"
+checkPipelineE params x@(T_AndIf id _ _) = when (hasSetE params) $
+    info id 3061 "&& operators running with -e set will not exit on error"
+checkPipelineE _ _ = return ()
 
 prop_checkModifiedArithmeticInRedirection1 = verify checkModifiedArithmeticInRedirection "ls > $((i++))"
 prop_checkModifiedArithmeticInRedirection2 = verify checkModifiedArithmeticInRedirection "cat < \"foo$((i++)).txt\""
