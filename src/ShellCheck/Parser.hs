@@ -66,7 +66,9 @@ singleQuote = char '\''
 doubleQuote = char '"'
 variableStart = upper <|> lower <|> oneOf "_"
 variableChars = upper <|> lower <|> digit <|> oneOf "_"
--- Chars to allow in function names
+-- Chars to allow function names to start with
+functionStartChars = variableChars <|> oneOf ":+?-./^@,"
+-- Chars to allow inside function names
 functionChars = variableChars <|> oneOf "#:+?-./^@,"
 -- Chars to allow in functions using the 'function' keyword
 extendedFunctionChars = functionChars <|> oneOf "[]*=!"
@@ -2768,7 +2770,7 @@ readFunctionDefinition = called "function" $ do
                 string "function"
                 whitespace
             spacing
-            name <- many1 extendedFunctionChars
+            name <- (:) <$> functionStartChars <*> many extendedFunctionChars
             spaces <- spacing
             hasParens <- wasIncluded readParens
             when (not hasParens && null spaces) $
@@ -2777,7 +2779,7 @@ readFunctionDefinition = called "function" $ do
             return $ \id -> T_Function id (FunctionKeyword True) (FunctionParentheses hasParens) name
 
         readWithoutFunction = try $ do
-            name <- many1 functionChars
+            name <- (:) <$> functionStartChars <*> many functionChars
             guard $ name /= "time"  -- Interferes with time ( foo )
             spacing
             readParens
