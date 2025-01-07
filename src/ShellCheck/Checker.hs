@@ -359,7 +359,7 @@ prop_optionIncludes2 =
 
 prop_optionIncludes3 =
     -- expect 2086, no inclusions provided, so it is reported
-    [2086, 2331] == checkOptionIncludes Nothing "#!/bin/sh\n var='a b'\n echo $var"
+    [2086] == checkOptionIncludes Nothing "#!/bin/sh\n var='a b'\n echo $var"
 
 prop_optionIncludes4 =
     -- expect 2086 & 2154, only 2154 included, so only that's reported
@@ -398,6 +398,12 @@ prop_canEnableOptionalsWithRc = result == [2244]
   where
     result = checkWithRc "enable=avoid-nullary-conditions" emptyCheckSpec {
         csScript = "#!/bin/sh\n[ \"$1\" ]"
+    }
+
+prop_canEnableCheckForReadonlyVariables = result == [2331]
+  where
+    result = checkWithRc "enable=check-variable-can-be-readonly" emptyCheckSpec {
+        csScript = "#!/bin/sh\na=3\necho \"$a\""
     }
 
 prop_sourcePathRedirectsName = result == [2086]
@@ -520,7 +526,7 @@ prop_hereDocsAreParsedWithoutTrailingLinefeed = 1044 `elem` result
 
 prop_hereDocsWillHaveParsedIndices = null result
   where
-    result = check "#!/bin/bash\nreadonly my_array=(a b)\ncat <<EOF >> ./test\n $(( 1 + my_array[1] ))\nEOF"
+    result = check "#!/bin/bash\nmy_array=(a b)\ncat <<EOF >> ./test\n $(( 1 + my_array[1] ))\nEOF"
 
 prop_rcCanSuppressDfa = null result
   where
