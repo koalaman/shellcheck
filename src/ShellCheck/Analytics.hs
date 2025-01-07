@@ -71,6 +71,7 @@ treeChecks = [
     ,checkUseBeforeDefinition
     ,checkAliasUsedInSameParsingUnit
     ,checkArrayValueUsedAsIndex
+    ,checkVariableCanBeReadonly
     ]
 
 checker spec params = mkChecker spec params treeChecks
@@ -4671,6 +4672,54 @@ checkArrayValueUsedAsIndex params _ =
                 return (parent, arrayName)
 
             _ -> Nothing
+
+prop_checkVariableCanBeReadonly = verifyTree checkVariableCanBeReadonly "x=42; echo $x"
+prop_checkVariableCanBeReadonly2 = verifyTree checkVariableCanBeReadonly "x=\"a\"; echo $x"
+prop_checkVariableCanBeReadonly3 = verifyNotTree checkVariableCanBeReadonly "readonly x=\"a\"; echo $x"
+prop_checkVariableCanBeReadonly4 = verifyTree checkVariableCanBeReadonly "declare -i num=100; echo $num"
+prop_checkVariableCanBeReadonly5 = verifyTree checkVariableCanBeReadonly "declare -r CONFIG=\"config_value\"; echo $CONFIG"
+prop_checkVariableCanBeReadonly6 = verifyTree checkVariableCanBeReadonly "declare -x ENV_VAR=\"environment\"; echo $ENV_VAR"
+prop_checkVariableCanBeReadonly7 = verifyTree checkVariableCanBeReadonly "local variable=\"local_val\"; echo $variable"
+prop_checkVariableCanBeReadonly8 = verifyNotTree checkVariableCanBeReadonly "readonly PI=3.14; echo $PI"
+prop_checkVariableCanBeReadonly9 = verifyTree checkVariableCanBeReadonly "x=$(date); echo $x"
+prop_checkVariableCanBeReadonly10 = verifyTree checkVariableCanBeReadonly "x=\"hello\"; echo $x"
+prop_checkVariableCanBeReadonly11 = verifyTree checkVariableCanBeReadonly "varname=\"y\"; declare $varname=10; echo $y"
+prop_checkVariableCanBeReadonly12 = verifyNotTree checkVariableCanBeReadonly "source somescript.sh; echo $foo"
+prop_checkVariableCanBeReadonly13 = verifyTree checkVariableCanBeReadonly "export -r PERM=\"constant\"; echo $PERM"
+prop_checkVariableCanBeReadonly14 = verifyTree checkVariableCanBeReadonly "arr=(1 2 3); echo ${arr[0]}"
+prop_checkVariableCanBeReadonly15 = verifyTree checkVariableCanBeReadonly "declare -a arr=(1 2 3); echo ${arr[1]}"
+prop_checkVariableCanBeReadonly16 = verifyTree checkVariableCanBeReadonly "dict=([key]=\"value\"); echo ${dict[key]}"
+prop_checkVariableCanBeReadonly17 = verifyNotTree checkVariableCanBeReadonly "x=3; x=4; echo $x"
+prop_checkVariableCanBeReadonly18 = verifyNotTree checkVariableCanBeReadonly "name=\"Alice\"; name=\"Bob\"; echo $name"
+prop_checkVariableCanBeReadonly19 = verifyNotTree checkVariableCanBeReadonly "export PATH=\"/usr/local/bin\"; export PATH=\"/usr/bin\"; echo $PATH"
+prop_checkVariableCanBeReadonly20 = verifyNotTree checkVariableCanBeReadonly "declare -i num=100; num=200; echo $num"
+prop_checkVariableCanBeReadonly21 = verifyNotTree checkVariableCanBeReadonly "declare -r CONFIG=\"config_value\"; CONFIG=\"new_value\"; echo $CONFIG"
+prop_checkVariableCanBeReadonly22 = verifyNotTree checkVariableCanBeReadonly "declare -x ENV_VAR=\"environment\"; ENV_VAR=\"new_env\"; echo $ENV_VAR"
+prop_checkVariableCanBeReadonly23 = verifyNotTree checkVariableCanBeReadonly "local variable=\"local_val\"; variable=\"new_val\"; echo $variable"
+prop_checkVariableCanBeReadonly24 = verifyNotTree checkVariableCanBeReadonly "readonly PI=3.14; PI=3.1415; echo $PI"
+prop_checkVariableCanBeReadonly25 = verifyNotTree checkVariableCanBeReadonly "x=$(date); x=$(date +%Y); echo $x"
+prop_checkVariableCanBeReadonly26 = verifyNotTree checkVariableCanBeReadonly "x=\"hello\"; x=\"world\"; echo $x"
+prop_checkVariableCanBeReadonly27 = verifyTree checkVariableCanBeReadonly "varname=\"y\"; declare $varname=10; declare $varname=20; echo $y"
+prop_checkVariableCanBeReadonly28 = verifyNotTree checkVariableCanBeReadonly "source some_script.sh; source some_script.sh; echo $SOME_VARIABLE"
+prop_checkVariableCanBeReadonly29 = verifyNotTree checkVariableCanBeReadonly "export -r PERM=\"constant\"; export -r PERM=\"updated\"; echo $PERM"
+prop_checkVariableCanBeReadonly30 = verifyNotTree checkVariableCanBeReadonly "arr=(1 2 3); arr=(4 5 6); echo ${arr[0]}"
+prop_checkVariableCanBeReadonly31 = verifyNotTree checkVariableCanBeReadonly "declare -a arr=(1 2 3); declare -a arr=(4 5 6); echo ${arr[1]}"
+prop_checkVariableCanBeReadonly32 = verifyNotTree checkVariableCanBeReadonly "dict=([key]=\"value\"); dict=([key]=\"new_value\"); echo ${dict[key]}"
+
+checkVariableCanBeReadonly params t = execWriter (mapM_ infoFor canBeReadonly)
+    where
+        flow = variableFlow params
+        references = nub [stripSuffix name | Reference (base, token, name) <- flow]
+        assignments = [(base, name, token) | Assignment (base, token, name, _) <- flow, isVariableName name]
+        canBeReadonly = filter (\(base, name, token) -> name `elem` references && countAssignments name == 1 && not (isDeclaredReadonly base)) assignments
+        infoFor (_, name, token) =
+            info (getId token) 2331 $ name ++ " appears to never be assigned after initialization. Consider making it readonly."
+        stripSuffix = takeWhile isVariableChar
+        countAssignments name = length (filter (\(_, a, _) -> a == name) assignments)
+
+        isDeclaredReadonly (OuterToken _ (Inner_T_SimpleCommand [] (token:_))) = isDeclaredReadonly token
+        isDeclaredReadonly (OuterToken _ (Inner_T_NormalWord [(OuterToken _ (Inner_T_Literal "readonly"))])) = True
+        isDeclaredReadonly (OuterToken _ _) = False
 
 prop_checkSetESuppressed1  = verifyTree    checkSetESuppressed "set -e; f(){ :; }; x=$(f)"
 prop_checkSetESuppressed2  = verifyNotTree checkSetESuppressed "f(){ :; }; x=$(f)"
