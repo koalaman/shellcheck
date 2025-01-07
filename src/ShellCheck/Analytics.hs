@@ -71,7 +71,6 @@ treeChecks = [
     ,checkUseBeforeDefinition
     ,checkAliasUsedInSameParsingUnit
     ,checkArrayValueUsedAsIndex
-    ,checkVariableCanBeReadonly
     ]
 
 checker spec params = mkChecker spec params treeChecks
@@ -280,6 +279,13 @@ optionalTreeChecks = [
         cdPositive = "cat foo | grep bar",
         cdNegative = "grep bar foo"
     }, nodeChecksToTreeCheck [checkUuoc])
+
+    ,(newCheckDescription {
+        cdName = "check-variable-can-be-readonly",
+        cdDescription = "Check that a variable can be made readonly if it isn't assigned to.",
+        cdPositive = "x=3; echo $x",
+        cdNegative = "readonly x=3; echo $x"
+    }, checkVariableCanBeReadonly)
     ]
 
 optionalCheckMap :: Map.Map String (Parameters -> Token -> [TokenComment])
