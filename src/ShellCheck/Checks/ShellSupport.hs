@@ -86,7 +86,7 @@ checkForDecimals = ForShell [Sh, Dash, BusyboxSh, Bash] f
 
 
 prop_checkBashisms = verify checkBashisms "while read a; do :; done < <(a)"
-prop_checkBashisms2 = verify checkBashisms "[ foo -nt bar ]"
+prop_checkBashisms2 = verifyNot checkBashisms "[ foo -nt bar ]"
 prop_checkBashisms3 = verify checkBashisms "echo $((i++))"
 prop_checkBashisms4 = verify checkBashisms "rm !(*.hs)"
 prop_checkBashisms5 = verify checkBashisms "source file"
@@ -252,12 +252,6 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
     bashism (T_SimpleCommand id _ [asStr -> Just "test", lhs, asStr -> Just op, rhs])
         | op `elem` [ "<", ">", "\\<", "\\>", "<=", ">=", "\\<=", "\\>="] =
             unless isDash $ warnMsg id 3012 $ "lexicographical " ++ op ++ " is"
-    bashism (TC_Binary id SingleBracket op _ _)
-        | op `elem` [ "-ot", "-nt", "-ef" ] =
-            unless isDash $ warnMsg id 3013 $ op ++ " is"
-    bashism (T_SimpleCommand id _ [asStr -> Just "test", lhs, asStr -> Just op, rhs])
-        | op `elem` [ "-ot", "-nt", "-ef" ] =
-            unless isDash $ warnMsg id 3013 $ op ++ " is"
     bashism (TC_Binary id SingleBracket "==" _ _) =
         unless isBusyboxSh $ warnMsg id 3014 "== in place of = is"
     bashism (T_SimpleCommand id _ [asStr -> Just "test", lhs, asStr -> Just "==", rhs]) =
