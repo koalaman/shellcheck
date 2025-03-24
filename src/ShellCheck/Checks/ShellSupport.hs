@@ -220,6 +220,9 @@ prop_checkBashisms125 = verifyNot checkBashisms "#!/bin/busybox sh\ntype -p test
 prop_checkBashisms126 = verifyNot checkBashisms "#!/bin/busybox sh\nread -p foo -r bar"
 prop_checkBashisms127 = verifyNot checkBashisms "#!/bin/busybox sh\necho -ne foo"
 prop_checkBashisms128 = verify checkBashisms "#!/bin/dash\ntype -p test"
+prop_checkBashisms129 = verify checkBashisms "#!/bin/sh\n[ -k /tmp ]"
+prop_checkBashisms130 = verifyNot checkBashisms "#!/bin/dash\ntest -k /tmp"
+prop_checkBashisms131 = verify checkBashisms "#!/bin/sh\n[ -o errexit ]"
 checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
     params <- ask
     kludge params t
@@ -254,6 +257,18 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
     bashism (T_SimpleCommand id _ [asStr -> Just "test", lhs, asStr -> Just op, rhs])
         | op `elem` [ "<", ">", "\\<", "\\>", "<=", ">=", "\\<=", "\\>="] =
             unless isDash $ warnMsg id 3012 $ "lexicographical " ++ op ++ " is"
+    bashism (TC_Unary id _ op _)
+        | op `elem` [ "-k", "-G", "-O" ] =
+            unless isDash $ warnMsg id 3013 $ op ++ " is"
+    bashism (T_SimpleCommand id _ [asStr -> Just "test", asStr -> Just op, _])
+        | op `elem` [ "-k", "-G", "-O" ] =
+            unless isDash $ warnMsg id 3013 $ op ++ " is"
+    bashism (TC_Unary id _ op _)
+        | op `elem` [ "-N", "-o", "-R" ] =
+            warnMsg id 3013 $ op ++ " is"
+    bashism (T_SimpleCommand id _ [asStr -> Just "test", asStr -> Just op, _])
+        | op `elem` [ "-N", "-o", "-R" ] =
+            warnMsg id 3013 $ op ++ " is"
     bashism (TC_Binary id SingleBracket op _ _)
         | op `elem` [ "-ot", "-nt", "-ef" ] =
             unless isDash $ warnMsg id 3013 $ op ++ " is"
