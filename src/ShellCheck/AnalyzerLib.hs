@@ -89,6 +89,8 @@ data Parameters = Parameters {
     hasSetE            :: Bool,
     -- Whether this script has 'set -o pipefail' anywhere.
     hasPipefail        :: Bool,
+    -- Whether this script has 'shopt -s execfail' anywhere.
+    hasExecfail        :: Bool,
     -- A linear (bad) analysis of data flow
     variableFlow       :: [StackData],
     -- A map from Id to Token
@@ -226,6 +228,10 @@ makeParameters spec = params
                 BusyboxSh -> isOptionSet "pipefail" root
                 Sh   -> True
                 Ksh  -> isOptionSet "pipefail" root,
+        hasExecfail =
+            case shellType params of
+                Bash -> isOptionSet "execfail" root
+                _ -> False,
         shellTypeSpecified = isJust (asShellType spec) || isJust (asFallbackShell spec),
         idMap = getTokenMap root,
         parentMap = getParentTree root,

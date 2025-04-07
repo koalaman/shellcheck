@@ -1896,7 +1896,9 @@ prop_checkSpuriousExec8 = verifyNot checkSpuriousExec "exec {origout}>&1- >tmp.l
 prop_checkSpuriousExec9 = verify checkSpuriousExec "for file in rc.d/*; do exec \"$file\"; done"
 prop_checkSpuriousExec10 = verifyNot checkSpuriousExec "exec file; r=$?; printf >&2 'failed\n'; return $r"
 prop_checkSpuriousExec11 = verifyNot checkSpuriousExec "exec file; :"
-checkSpuriousExec _ = doLists
+prop_checkSpuriousExec12 = verifyNot checkSpuriousExec "#!/bin/bash\nshopt -s execfail; exec foo; exec bar; echo 'Error'; exit 1;"
+prop_checkSpuriousExec13 = verify checkSpuriousExec "#!/bin/dash\nshopt -s execfail; exec foo; exec bar; echo 'Error'; exit 1;"
+checkSpuriousExec params t = when (not $ hasExecfail params) $ doLists t
   where
     doLists (T_Script _ _ cmds) = doList cmds False
     doLists (T_BraceGroup _ cmds) = doList cmds False
