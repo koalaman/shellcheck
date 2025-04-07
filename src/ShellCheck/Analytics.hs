@@ -3596,6 +3596,8 @@ prop_checkPipeToNowhere17 = verify checkPipeToNowhere "echo World | cat << 'EOF'
 prop_checkPipeToNowhere18 = verifyNot checkPipeToNowhere "ls 1>&3 3>&1 3>&- | wc -l"
 prop_checkPipeToNowhere19 = verifyNot checkPipeToNowhere "find . -print0 | du --files0-from=/dev/stdin"
 prop_checkPipeToNowhere20 = verifyNot checkPipeToNowhere "find . | du --exclude-from=/dev/fd/0"
+prop_checkPipeToNowhere21 = verifyNot checkPipeToNowhere "yes | cp -ri foo/* bar"
+prop_checkPipeToNowhere22 = verifyNot checkPipeToNowhere "yes | rm --interactive *"
 
 data PipeType = StdoutPipe | StdoutStderrPipe | NoPipe deriving (Eq)
 checkPipeToNowhere :: Parameters -> Token -> WriterT [TokenComment] Identity ()
@@ -3661,6 +3663,7 @@ checkPipeToNowhere params t =
     commandSpecificException name cmd =
         case name of
             "du" -> any ((`elem` ["exclude-from", "files0-from"]) . snd) $ getAllFlags cmd
+            _ | name `elem` interactiveFlagCmds -> hasInteractiveFlag cmd
             _ -> False
 
     warnAboutDupes (n, list@(_:_:_)) =
@@ -3684,7 +3687,7 @@ checkPipeToNowhere params t =
         name <- getCommandBasename cmd
         guard $ name `elem` nonReadingCommands
         guard . not $ hasAdditionalConsumers cmd
-        guard . not $ name `elem` ["cp", "mv", "rm"] && cmd `hasFlag` "i"
+        guard . not $ name `elem` interactiveFlagCmds && hasInteractiveFlag cmd
         let suggestion =
                 if name == "echo"
                 then "Did you want 'cat' instead?"
@@ -3698,6 +3701,9 @@ checkPipeToNowhere params t =
     hasAdditionalProducers = treeContains mayProduce
     treeContains pred t = isNothing $
         doAnalysis (guard . not . pred) t
+
+    interactiveFlagCmds = [ "cp", "mv", "rm" ]
+    hasInteractiveFlag cmd = cmd `hasFlag` "i" || cmd `hasFlag` "interactive"
 
     mayConsume t =
         case t of
