@@ -204,6 +204,7 @@ nodeChecks = [
     ,checkUnnecessaryParens
     ,checkPlusEqualsNumber
     ,checkExpansionWithRedirection
+    ,checkUnaryTestA
     ]
 
 optionalChecks = map fst optionalTreeChecks
@@ -5098,6 +5099,15 @@ checkExpansionWithRedirection params t =
         err redirectId 2328 $ "This redirection takes output away from the command substitution" ++ if suggestTee then " (use tee to duplicate)." else "."
 
 
+prop_checkUnaryTestA1 = verify checkUnaryTestA "[ -a foo ]"
+prop_checkUnaryTestA2 = verify checkUnaryTestA "[ ! -a foo ]"
+prop_checkUnaryTestA3 = verifyNot checkUnaryTestA "[ foo -a bar ]"
+checkUnaryTestA params t =
+    case t of
+        TC_Unary id _ "-a" _ ->
+            styleWithFix id 2331 "For file existence, prefer standard -e over legacy -a." $
+                fixWith [replaceStart id params 2 "-e"]
+        _ -> return ()
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

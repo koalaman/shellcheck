@@ -3,6 +3,7 @@
 - SC2327/SC2328: Warn about capturing the output of redirected commands.
 - SC2329: Warn when (non-escaping) functions are never invoked.
 - SC2330: Warn about unsupported glob matches with [[ .. ]] in BusyBox.
+- SC2331: Suggest using standard -e instead of unary -a in tests.
 - Precompiled binaries for Linux riscv64 (linux.riscv64)
 ### Changed
 - SC2002 about Useless Use Of Cat is now disabled by default. It can be
