@@ -63,6 +63,7 @@ checks = [
     ,checkPS1Assignments
     ,checkMultipleBangs
     ,checkBangAfterPipe
+    ,checkNegatedUnaryOps
     ]
 
 testChecker (ForShell _ t) =
@@ -218,6 +219,7 @@ prop_checkBashisms124 = verify checkBashisms "#!/bin/dash\ntype -p test"
 prop_checkBashisms125 = verifyNot checkBashisms "#!/bin/busybox sh\ntype -p test"
 prop_checkBashisms126 = verifyNot checkBashisms "#!/bin/busybox sh\nread -p foo -r bar"
 prop_checkBashisms127 = verifyNot checkBashisms "#!/bin/busybox sh\necho -ne foo"
+prop_checkBashisms128 = verify checkBashisms "#!/bin/dash\ntype -p test"
 checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
     params <- ask
     kludge params t
@@ -272,6 +274,8 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
             warnMsg id 3016 "unary -v (in place of [ -n \"${var+x}\" ]) is"
     bashism (TC_Unary id _ "-a" _) =
             warnMsg id 3017 "unary -a in place of -e is"
+    bashism (TC_Unary id _ "-o" _) =
+            warnMsg id 3062 "unary -o to check options is"
     bashism (T_SimpleCommand id _ [asStr -> Just "test", asStr -> Just "-a", _]) =
             warnMsg id 3017 "unary -a in place of -e is"
     bashism (TA_Unary id op _)
@@ -648,6 +652,23 @@ checkBangAfterPipe = ForShell [Dash, BusyboxSh, Sh, Bash] f
         T_Banged id _ ->
             err id 2326 "! is not allowed in the middle of pipelines. Use command group as in cmd | { ! cmd; } if necessary."
         _ -> return ()
+
+
+prop_checkNegatedUnaryOps1 = verify checkNegatedUnaryOps "[ ! -o braceexpand ]"
+prop_checkNegatedUnaryOps2 = verifyNot checkNegatedUnaryOps "[ -o braceexpand ]"
+prop_checkNegatedUnaryOps3 = verifyNot checkNegatedUnaryOps "[[ ! -o braceexpand ]]"
+prop_checkNegatedUnaryOps4 = verifyNot checkNegatedUnaryOps "! [ -o braceexpand ]"
+prop_checkNegatedUnaryOps5 = verify checkNegatedUnaryOps "[ ! -a file ]"
+checkNegatedUnaryOps = ForShell [Bash] f
+  where
+    f token = case token of
+        TC_Unary id SingleBracket "!" (TC_Unary _ _ op _) | op `elem` ["-a", "-o"] ->
+            err id 2332 $ msg op
+        _ -> return ()
+
+    msg "-o" = "[ ! -o opt ] is always true because -o becomes logical OR. Use [[ ]] or ! [ -o opt ]."
+    msg "-a" = "[ ! -a file ] is always true because -a becomes logical AND. Use -e instead."
+    msg _ = pleaseReport "unhandled negated unary message"
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
