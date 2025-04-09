@@ -2827,6 +2827,8 @@ prop_checkUnpassedInFunctions13 = verifyNotTree checkUnpassedInFunctions "# shel
 prop_checkUnpassedInFunctions14 = verifyTree checkUnpassedInFunctions "foo() { echo $#; }; foo"
 prop_checkUnpassedInFunctions15 = verifyNotTree checkUnpassedInFunctions "foo() { echo ${1-x}; }; foo"
 prop_checkUnpassedInFunctions16 = verifyNotTree checkUnpassedInFunctions "foo() { echo ${1:-x}; }; foo"
+prop_checkUnpassedInFunctions17 = verifyNotTree checkUnpassedInFunctions "foo() { mycommand ${1+--verbose}; }; foo"
+prop_checkUnpassedInFunctions18 = verifyNotTree checkUnpassedInFunctions "foo() { if mycheck; then foo ${1?Missing}; fi; }; foo"
 checkUnpassedInFunctions params root =
     execWriter $ mapM_ warnForGroup referenceGroups
   where
@@ -2882,9 +2884,10 @@ checkUnpassedInFunctions params root =
 
     isDefaultValueModifier str =
         case str of
-            '-':_ -> True
-            ':':'-':_ -> True
+            ':':c:_ -> c `elem` handlesDefault
+            c:_ -> c `elem` handlesDefault
             _ -> False
+      where handlesDefault = "-+?"
 
     isArgumentless (_, b, _) = b
     referenceGroups = Map.elems $ foldr updateWith Map.empty referenceList
