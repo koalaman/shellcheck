@@ -78,7 +78,7 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 
 :   Don't try to look for .shellcheckrc configuration files.
 
---rcfile\ RCFILE
+**--rcfile** *RCFILE*
 
 :   Prefer the specified configuration file over searching for one
     in the default locations.
@@ -317,7 +317,7 @@ Here is an example `.shellcheckrc`:
     disable=SC2236
 
 If no `.shellcheckrc` is found in any of the parent directories, ShellCheck
-will look in `~/.shellcheckrc` followed by the XDG config directory
+will look in `~/.shellcheckrc` followed by the `$XDG_CONFIG_HOME`
 (usually `~/.config/shellcheckrc`) on Unix, or `%APPDATA%/shellcheckrc` on
 Windows. Only the first file found will be used.
 
@@ -403,4 +403,4 @@ see https://gnu.org/licenses/gpl.html
 
 # SEE ALSO
 
-sh(1) bash(1)
+sh(1) bash(1) dash(1) ksh(1)
