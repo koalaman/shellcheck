@@ -249,10 +249,10 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
         unless isBusyboxSh $ warnMsg id 3010 "[[ ]] is"
     bashism (T_HereString id _) = warnMsg id 3011 "here-strings are"
     bashism (TC_Binary id SingleBracket op _ _)
-        | op `elem` [ "<", ">", "\\<", "\\>", "<=", ">=", "\\<=", "\\>="] =
+        | op `elem` [ "<", ">", "<=", ">=", "\\<=", "\\>="] =
             unless isDash $ warnMsg id 3012 $ "lexicographical " ++ op ++ " is"
     bashism (T_SimpleCommand id _ [asStr -> Just "test", lhs, asStr -> Just op, rhs])
-        | op `elem` [ "<", ">", "\\<", "\\>", "<=", ">=", "\\<=", "\\>="] =
+        | op `elem` [ "<", ">", "<=", ">=", "\\<=", "\\>="] =
             unless isDash $ warnMsg id 3012 $ "lexicographical " ++ op ++ " is"
     bashism (TC_Binary id SingleBracket op _ _)
         | op `elem` [ "-ot", "-nt", "-ef" ] =
