@@ -220,6 +220,9 @@ prop_checkBashisms125 = verifyNot checkBashisms "#!/bin/busybox sh\ntype -p test
 prop_checkBashisms126 = verifyNot checkBashisms "#!/bin/busybox sh\nread -p foo -r bar"
 prop_checkBashisms127 = verifyNot checkBashisms "#!/bin/busybox sh\necho -ne foo"
 prop_checkBashisms128 = verify checkBashisms "#!/bin/dash\ntype -p test"
+prop_checkBashisms129 = verify checkBashisms "#!/bin/sh\n[ -k /tmp ]"
+prop_checkBashisms130 = verifyNot checkBashisms "#!/bin/dash\ntest -k /tmp"
+prop_checkBashisms131 = verify checkBashisms "#!/bin/sh\n[ -o errexit ]"
 checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
     params <- ask
     kludge params t
@@ -248,36 +251,16 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
     bashism (T_Condition id DoubleBracket _) =
         unless isBusyboxSh $ warnMsg id 3010 "[[ ]] is"
     bashism (T_HereString id _) = warnMsg id 3011 "here-strings are"
-    bashism (TC_Binary id SingleBracket op _ _)
-        | op `elem` [ "<", ">", "\\<", "\\>", "<=", ">=", "\\<=", "\\>="] =
-            unless isDash $ warnMsg id 3012 $ "lexicographical " ++ op ++ " is"
-    bashism (T_SimpleCommand id _ [asStr -> Just "test", lhs, asStr -> Just op, rhs])
-        | op `elem` [ "<", ">", "\\<", "\\>", "<=", ">=", "\\<=", "\\>="] =
-            unless isDash $ warnMsg id 3012 $ "lexicographical " ++ op ++ " is"
-    bashism (TC_Binary id SingleBracket op _ _)
-        | op `elem` [ "-ot", "-nt", "-ef" ] =
-            unless isDash $ warnMsg id 3013 $ op ++ " is"
-    bashism (T_SimpleCommand id _ [asStr -> Just "test", lhs, asStr -> Just op, rhs])
-        | op `elem` [ "-ot", "-nt", "-ef" ] =
-            unless isDash $ warnMsg id 3013 $ op ++ " is"
-    bashism (TC_Binary id SingleBracket "==" _ _) =
-        unless isBusyboxSh $ warnMsg id 3014 "== in place of = is"
-    bashism (T_SimpleCommand id _ [asStr -> Just "test", lhs, asStr -> Just "==", rhs]) =
-        unless isBusyboxSh $ warnMsg id 3014 "== in place of = is"
-    bashism (TC_Binary id SingleBracket "=~" _ _) =
-            warnMsg id 3015 "=~ regex matching is"
-    bashism (T_SimpleCommand id _ [asStr -> Just "test", lhs, asStr -> Just "=~", rhs]) =
-            warnMsg id 3015 "=~ regex matching is"
-    bashism (TC_Unary id SingleBracket "-v" _) =
-            warnMsg id 3016 "unary -v (in place of [ -n \"${var+x}\" ]) is"
-    bashism (T_SimpleCommand id _ [asStr -> Just "test", asStr -> Just "-v", _]) =
-            warnMsg id 3016 "unary -v (in place of [ -n \"${var+x}\" ]) is"
-    bashism (TC_Unary id _ "-a" _) =
-            warnMsg id 3017 "unary -a in place of -e is"
-    bashism (TC_Unary id _ "-o" _) =
-            warnMsg id 3062 "unary -o to check options is"
-    bashism (T_SimpleCommand id _ [asStr -> Just "test", asStr -> Just "-a", _]) =
-            warnMsg id 3017 "unary -a in place of -e is"
+
+    bashism (TC_Binary id _ op _ _) =
+        checkTestOp bashismBinaryTestFlags op id
+    bashism (T_SimpleCommand id _ [asStr -> Just "test", lhs, asStr -> Just op, rhs]) =
+        checkTestOp bashismBinaryTestFlags op id
+    bashism (TC_Unary id _ op _) =
+        checkTestOp bashismUnaryTestFlags op id
+    bashism (T_SimpleCommand id _ [asStr -> Just "test", asStr -> Just op, _]) =
+        checkTestOp bashismUnaryTestFlags op id
+
     bashism (TA_Unary id op _)
         | op `elem` [ "|++", "|--", "++|", "--|"] =
             warnMsg id 3018 $ filter (/= '|') op ++ " is"
@@ -513,6 +496,52 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
         f x = case x of
                 Assignment (_, _, name, _) -> name == var
                 _ -> False
+
+    checkTestOp table op id = sequence_ $ do
+        (code, shells, msg) <- Map.lookup op table
+        guard . not $ shellType params `elem` shells
+        return $ warnMsg id code (msg op)
+
+
+buildTestFlagMap list = Map.fromList $ concatMap (\(x,y) -> map (\c -> (c,y)) x) list
+bashismBinaryTestFlags = buildTestFlagMap [
+    -- ([list of applicable flags],
+    --     (error code, exempt shells, message builder :: String -> String)),
+    --
+    -- Distinct error codes allow the wiki to give more helpful, targeted
+    -- information.
+    (["<", ">", "\\<", "\\>", "<=", ">=", "\\<=", "\\>="],
+        (3012, [Dash, BusyboxSh], \op -> "lexicographical " ++ op ++ " is")),
+    (["-nt", "-ot", "-ef"],
+        (3013, [Dash, BusyboxSh], \op -> op ++ " is")),
+    (["=="],
+        (3014, [BusyboxSh], \op -> op ++ " in place of = is")),
+    (["=~"],
+        (3015, [], \op -> op ++ " regex matching is")),
+
+    ([], (0,[],const ""))
+  ]
+bashismUnaryTestFlags = buildTestFlagMap [
+    (["-v"],
+        (3016, [], \op -> "test " ++ op ++ " (in place of [ -n \"${var+x}\" ]) is")),
+    (["-a"],
+        (3017, [], \op -> "unary " ++ op ++ " in place of -e is")),
+    (["-o"],
+        (3062, [], \op -> "test " ++ op ++ " to check options is")),
+    (["-R"],
+        (3063, [], \op -> "test " ++ op ++ " and namerefs in general are")),
+    (["-N"],
+        (3064, [], \op -> "test " ++ op ++ " is")),
+    (["-k"],
+        (3065, [Dash, BusyboxSh], \op -> "test " ++ op ++ " is")),
+    (["-G"],
+        (3066, [Dash, BusyboxSh], \op -> "test " ++ op ++ " is")),
+    (["-O"],
+        (3067, [Dash, BusyboxSh], \op -> "test " ++ op ++ " is")),
+
+    ([], (0,[],const ""))
+  ]
+
 
 prop_checkEchoSed1 = verify checkEchoSed "FOO=$(echo \"$cow\" | sed 's/foo/bar/g')"
 prop_checkEchoSed1b = verify checkEchoSed "FOO=$(sed 's/foo/bar/g' <<< \"$cow\")"
