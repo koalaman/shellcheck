@@ -11,6 +11,7 @@
 - SC2002 about Useless Use Of Cat is now disabled by default. It can be
   re-enabled with `--enable=useless-use-of-cat` or equivalent directive.
 - SC2015 about `A && B || C` no longer triggers when B is a test command.
+- SC3012: Do not warn about `\<` and `\>` in test/[] as specified in POSIX.1-2024
 ### Fixed
 - SC2218 about function use-before-define is now more accurate.
 - SC2317 about unreachable commands is now less spammy for nested ones.
