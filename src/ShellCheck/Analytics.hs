@@ -882,13 +882,15 @@ prop_checkShorthandIf6 = verifyNot checkShorthandIf "if foo && bar || baz; then 
 prop_checkShorthandIf7 = verifyNot checkShorthandIf "while foo && bar || baz; do true; done"
 prop_checkShorthandIf8 = verify checkShorthandIf "if true; then foo && bar || baz; fi"
 prop_checkShorthandIf9 = verifyNot checkShorthandIf "foo && [ -x /file ] || bar"
+prop_checkShorthandIf10 = verifyNot checkShorthandIf "foo && bar || true"
+prop_checkShorthandIf11 = verify checkShorthandIf "foo && bar || false"
 checkShorthandIf params x@(T_OrIf _ (T_AndIf id _ b) (T_Pipeline _ _ t))
         | not (isOk t || inCondition) && not (isTestCommand b) =
     info id 2015 "Note that A && B || C is not if-then-else. C may run when A is true."
   where
     isOk [t] = isAssignment t || fromMaybe False (do
         name <- getCommandBasename t
-        return $ name `elem` ["echo", "exit", "return", "printf"])
+        return $ name `elem` ["echo", "exit", "return", "printf", "true", ":"])
     isOk _ = False
     inCondition = isCondition $ getPath (parentMap params) x
 checkShorthandIf _ _ = return ()
