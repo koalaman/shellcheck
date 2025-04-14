@@ -3992,6 +3992,11 @@ prop_checkInvertedStringTest2 = verify checkInvertedStringTest "! [[ -n $var ]]"
 prop_checkInvertedStringTest3 = verifyNot checkInvertedStringTest "! [ -x $var ]"
 prop_checkInvertedStringTest4 = verifyNot checkInvertedStringTest "[[ ! -w $var ]]"
 prop_checkInvertedStringTest5 = verifyNot checkInvertedStringTest "[ -z $var ]"
+prop_checkInvertedStringTest6 = verify checkInvertedStringTest "! [ $var != foo ]"
+prop_checkInvertedStringTest7 = verify checkInvertedStringTest "[[ ! $var == foo ]]"
+prop_checkInvertedStringTest8 = verifyNot checkInvertedStringTest "! [[ $var =~ .* ]]"
+prop_checkInvertedStringTest9 = verify checkInvertedStringTest "[ ! $var -eq 0 ]"
+prop_checkInvertedStringTest10 = verify checkInvertedStringTest "! [[ $var -gt 3 ]]"
 checkInvertedStringTest _ t =
     case t of
         TC_Unary _ _ "!" (TC_Unary _ _ op _) ->
@@ -3999,11 +4004,36 @@ checkInvertedStringTest _ t =
                 "-n" -> style (getId t) 2236 "Use -z instead of ! -n."
                 "-z" -> style (getId t) 2236 "Use -n instead of ! -z."
                 _ -> return ()
+        TC_Unary _ _ "!" (TC_Binary _ _ op _ _) ->
+            case op of
+                "=" -> style (getId t) 2335 "Use a != b instead of ! a = b."
+                "==" -> style (getId t) 2335 "Use a != b instead of ! a == b."
+                "!=" -> style (getId t) 2335 "Use a = b instead of ! a != b."
+                "-eq" -> style (getId t) 2335 "Use a -ne b instead of ! a -eq b."
+                "-ne" -> style (getId t) 2335 "Use a -eq b instead of ! a -ne b."
+                "-gt" -> style (getId t) 2335 "Use a -le b instead of ! a -gt b."
+                "-ge" -> style (getId t) 2335 "Use a -lt b instead of ! a -ge b."
+                "-lt" -> style (getId t) 2335 "Use a -ge b instead of ! a -lt b."
+                "-le" -> style (getId t) 2335 "Use a -gt b instead of ! a -le b."
+                _ -> return ()
         T_Banged _ (T_Pipeline _ _
           [T_Redirecting _ _ (T_Condition _ _ (TC_Unary _ _ op _))]) ->
             case op of
                 "-n" -> style (getId t) 2237 "Use [ -z .. ] instead of ! [ -n .. ]."
                 "-z" -> style (getId t) 2237 "Use [ -n .. ] instead of ! [ -z .. ]."
+                _ -> return ()
+        T_Banged _ (T_Pipeline _ _
+          [T_Redirecting _ _ (T_Condition _ _ (TC_Binary _ _ op _ _))]) ->
+            case op of
+                "=" -> style (getId t) 2335 "Use [ a != b ] instead of ! [ a = b ]."
+                "==" -> style (getId t) 2335 "Use [[ a != b ]] instead of ! [[ a == b ]]."
+                "!=" -> style (getId t) 2335 "Use [ a = b ] instead of ! [ a != b ]."
+                "-eq" -> style (getId t) 2335 "Use [ a -ne b ] instead of ! [ a -eq b ]."
+                "-ne" -> style (getId t) 2335 "Use [ a -eq b ] instead of ! [ a -ne b ]."
+                "-gt" -> style (getId t) 2335 "Use [ a -le b ] instead of ! [ a -gt b ]."
+                "-ge" -> style (getId t) 2335 "Use [ a -lt b ] instead of ! [ a -ge b ]."
+                "-lt" -> style (getId t) 2335 "Use [ a -ge b ] instead of ! [ a -lt b ]."
+                "-le" -> style (getId t) 2335 "Use [ a -gt b ] instead of ! [ a -le b ]."
                 _ -> return ()
         _ -> return ()
 
