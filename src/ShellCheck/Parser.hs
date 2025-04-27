@@ -3397,6 +3397,7 @@ readScriptFile sourced = do
         "fish",
         "perl",
         "python",
+        "python3",
         "ruby",
         "tcsh",
         "zsh"
