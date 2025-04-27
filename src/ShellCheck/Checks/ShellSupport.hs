@@ -87,7 +87,7 @@ checkForDecimals = ForShell [Sh, Dash, BusyboxSh, Bash] f
 
 
 prop_checkBashisms = verify checkBashisms "while read a; do :; done < <(a)"
-prop_checkBashisms2 = verify checkBashisms "[ foo -nt bar ]"
+prop_checkBashisms2 = verifyNot checkBashisms "[ foo -nt bar ]"
 prop_checkBashisms3 = verify checkBashisms "echo $((i++))"
 prop_checkBashisms4 = verify checkBashisms "rm !(*.hs)"
 prop_checkBashisms5 = verify checkBashisms "source file"
@@ -512,8 +512,6 @@ bashismBinaryTestFlags = buildTestFlagMap [
     -- information.
     (["<", ">", "\\<", "\\>", "<=", ">=", "\\<=", "\\>="],
         (3012, [Dash, BusyboxSh], \op -> "lexicographical " ++ op ++ " is")),
-    (["-nt", "-ot", "-ef"],
-        (3013, [Dash, BusyboxSh], \op -> op ++ " is")),
     (["=="],
         (3014, [BusyboxSh], \op -> op ++ " in place of = is")),
     (["=~"],

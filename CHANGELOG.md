@@ -17,6 +17,8 @@
 - SC2317 about unreachable commands is now less spammy for nested ones.
 - SC2292, optional suggestion for [[ ]], now triggers for Busybox.
 
+### Removed
+- SC3013: removed since the operators `-ot/-nt/-ef` are specified in POSIX.1-2024
 
 ## v0.10.0 - 2024-03-07
 ### Added
