@@ -123,6 +123,7 @@ nodeChecks = [
     ,checkCaseAgainstGlob
     ,checkCommarrays
     ,checkOrNeq
+    ,checkAndEq
     ,checkEchoWc
     ,checkConstantIfs
     ,checkPipedAssignment
@@ -1632,6 +1633,64 @@ checkOrNeq _ (T_OrIf id lhs rhs) = sequence_ $ do
 
 
 checkOrNeq _ _ = return ()
+
+
+prop_checkAndEq1 = verifyNot checkAndEq "cow=0; foo=0; if [[ $lol -eq cow && $lol -eq foo ]]; then echo foo; fi"
+prop_checkAndEq2 = verifyNot checkAndEq "lol=0 foo=0; (( a==lol && a==foo ))"
+prop_checkAndEq3 = verify checkAndEq "[ \"$a\" = lol && \"$a\" = foo ]"
+prop_checkAndEq4 = verifyNot checkAndEq "[ a = $cow && b = $foo ]"
+prop_checkAndEq5 = verifyNot checkAndEq "[[ $a = /home && $a = */public_html/* ]]"
+prop_checkAndEq6 = verify checkAndEq "[ $a = a ] && [ $a = b ]"
+prop_checkAndEq7 = verify checkAndEq "[ $a = a ] && [ $a = b ] || true"
+prop_checkAndEq8 = verifyNot checkAndEq "[[ $a == x && $a == x ]]"
+prop_checkAndEq9 = verifyNot checkAndEq "[ 0 -eq $FOO ] && [ 0 -eq $BAR ]"
+prop_checkAndEq10 = verify checkAndEq "(( a == 1 && a == 2 ))"
+prop_checkAndEq11 = verify checkAndEq "[ $x -eq 1 ] && [ $x -eq 2 ]"
+prop_checkAndEq12 = verify checkAndEq "[ 1 -eq $x ] && [ $x -eq 2 ]"
+prop_checkAndEq13 = verifyNot checkAndEq "[ 1 -eq $x ] && [ $x -eq 1 ]"
+prop_checkAndEq14 = verifyNot checkAndEq "[ $a = $b ] && [ $a = $c ]"
+
+checkAndEqOperands "-eq" rhs1 rhs2 = isLiteralNumber rhs1 && isLiteralNumber rhs2
+checkAndEqOperands op rhs1 rhs2 | op == "=" || op == "=="  = isLiteral rhs1 && isLiteral rhs2
+checkAndEqOperands _ _ _ = False
+
+-- For test-level "and": [ x = y -a x = z ]
+checkAndEq _ (TC_And id typ op (TC_Binary _ _ op1 lhs1 rhs1 ) (TC_Binary _ _ op2 lhs2 rhs2))
+    | op1 == op2 && lhs1 == lhs2 && rhs1 /= rhs2 && checkAndEqOperands op1 rhs1 rhs2 =
+        warn id 2333 $ "You probably wanted " ++ (if typ == SingleBracket then "-o" else "||") ++ " here, otherwise it's always false."
+
+-- For arithmetic context "and"
+checkAndEq _ (TA_Binary id "&&" (TA_Binary _ "==" lhs1 rhs1) (TA_Binary _ "==" lhs2 rhs2))
+    | lhs1 == lhs2 && isLiteralNumber rhs1 && isLiteralNumber rhs2 =
+        warn id 2334 "You probably wanted || here, otherwise it's always false."
+
+-- For command level "and": [ x = y ] && [ x = z ]
+checkAndEq _ (T_AndIf id lhs rhs) = sequence_ $ do
+    (lhs1, op1, rhs1) <- getExpr lhs
+    (lhs2, op2, rhs2) <- getExpr rhs
+    guard $ op1 == op2
+    guard $ lhs1 == lhs2 && rhs1 /= rhs2
+    guard $ checkAndEqOperands op1 rhs1 rhs2
+    return $ warn id 2333 "You probably wanted || here, otherwise it's always false."
+  where
+    getExpr x =
+        case x of
+            T_AndIf _ lhs _ -> getExpr lhs -- Fetches x and y in `T_AndIf x (T_AndIf y z)`
+            T_Pipeline _ _ [x] -> getExpr x
+            T_Redirecting _ _ c -> getExpr c
+            T_Condition _ _ c -> getExpr c
+            TC_Binary _ _ op lhs rhs -> orient (lhs, op, rhs)
+            _ -> Nothing
+
+    -- Swap items so that the constant side is rhs (or Nothing if both/neither is constant)
+    orient (lhs, op, rhs) =
+        case (isConstant lhs, isConstant rhs) of
+            (True, False) -> return (rhs, op, lhs)
+            (False, True) -> return (lhs, op, rhs)
+            _ -> Nothing
+
+
+checkAndEq _ _ = return ()
 
 
 prop_checkValidCondOps1 = verify checkValidCondOps "[[ a -xz b ]]"

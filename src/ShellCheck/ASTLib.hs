@@ -446,6 +446,12 @@ getLiteralStringExt more = g
 -- Is this token a string literal?
 isLiteral t = isJust $ getLiteralString t
 
+-- Is this token a string literal number?
+isLiteralNumber t = fromMaybe False $ do
+    s <- getLiteralString t
+    guard $ all isDigit s
+    return True
+
 -- Escape user data for messages.
 -- Messages generally avoid repeating user data, but sometimes it's helpful.
 e4m = escapeForMessage
