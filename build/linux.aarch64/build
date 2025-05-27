@@ -1,0 +1,14 @@
+#!/bin/sh
+set -xe
+{
+  tar xzv --strip-components=1
+  chmod +x striptests && ./striptests
+  mkdir "$TARGETNAME"
+  ( IFS=';'; cabal build $CABALOPTS --enable-executable-static )
+  find . -name shellcheck -type f -exec mv {} "$TARGETNAME/" \;
+  ls -l "$TARGETNAME"
+  "$TARGET-strip" -s "$TARGETNAME/shellcheck"
+  ls -l "$TARGETNAME"
+  qemu-aarch64-static "$TARGETNAME/shellcheck" --version
+} >&2
+tar czv "$TARGETNAME"

@@ -1,17 +1,213 @@
-## ???
+## Git
+### Added
+- SC2327/SC2328: Warn about capturing the output of redirected commands.
+- SC2329: Warn when (non-escaping) functions are never invoked.
+- SC2330: Warn about unsupported glob matches with [[ .. ]] in BusyBox.
+- SC2331: Suggest using standard -e instead of unary -a in tests.
+- SC2332: Warn about `[ ! -o opt ]` being unconditionally true in Bash.
+- SC3062: Warn about bashism `[ -o opt ]`.
+- Precompiled binaries for Linux riscv64 (linux.riscv64)
+### Changed
+- SC2002 about Useless Use Of Cat is now disabled by default. It can be
+  re-enabled with `--enable=useless-use-of-cat` or equivalent directive.
+- SC2015 about `A && B || C` no longer triggers when B is a test command.
+- SC3012: Do not warn about `\<` and `\>` in test/[] as specified in POSIX.1-2024
+### Fixed
+- SC2218 about function use-before-define is now more accurate.
+- SC2317 about unreachable commands is now less spammy for nested ones.
+- SC2292, optional suggestion for [[ ]], now triggers for Busybox.
+
+### Removed
+- SC3013: removed since the operators `-ot/-nt/-ef` are specified in POSIX.1-2024
+
+## v0.10.0 - 2024-03-07
+### Added
+- Precompiled binaries for macOS ARM64 (darwin.aarch64)
+- Added support for busybox sh
+- Added flag --rcfile to specify an rc file by name.
+- Added `extended-analysis=true` directive to enable/disable dataflow analysis
+  (with a corresponding --extended-analysis flag).
+- SC2324: Warn when x+=1 appends instead of increments
+- SC2325: Warn about multiple `!`s in dash/sh.
+- SC2326: Warn about `foo | ! bar` in bash/dash/sh.
+- SC3012: Warn about lexicographic-compare bashism in test like in [ ]
+- SC3013: Warn bashism `test _ -op/-nt/-ef _` like in [ ]
+- SC3014: Warn bashism `test _ == _` like in [ ]
+- SC3015: Warn bashism `test _ =~ _` like in [ ]
+- SC3016: Warn bashism `test -v _` like in [ ]
+- SC3017: Warn bashism `test -a _` like in [ ]
+
+### Fixed
+- source statements with here docs now work correctly
+- "(Array.!): undefined array element" error should no longer occur
+
+
+## v0.9.0 - 2022-12-12
+### Added
+- SC2316: Warn about 'local readonly foo' and similar (thanks, patrickxia!)
+- SC2317: Warn about unreachable commands
+- SC2318: Warn about backreferences in 'declare x=1 y=$x'
+- SC2319/SC2320: Warn when $? refers to echo/printf/[ ]/[[ ]]/test
+- SC2321: Suggest removing $((..)) in array[$((idx))]=val
+- SC2322: Suggest collapsing double parentheses in arithmetic contexts
+- SC2323: Suggest removing wrapping parentheses in a[(x+1)]=val
+
+### Fixed
+- SC2086: Now uses DFA to make more accurate predictions about values
+- SC2086: No longer warns about values declared as integer with declare -i
+
+### Changed
+- ShellCheck now has a Data Flow Analysis engine to make smarter decisions
+  based on control flow rather than just syntax. Existing checks will
+  gradually start using it, which may cause them to trigger differently
+  (but more accurately).
+- Values in directives/shellcheckrc can now be quoted with '' or ""
+
+
+## v0.8.0 - 2021-11-06
+### Added
+- `disable=all` now conveniently disables all warnings
+- `external-sources=true` directive can be added to .shellcheckrc to make
+  shellcheck behave as if `-x` was specified.
+- Optional `check-extra-masked-returns` for pointing out commands with
+  suppressed exit codes (SC2312).
+- Optional `require-double-brackets` for recommending \[\[ ]] (SC2292).
+- SC2286-SC2288: Warn when command name ends in a symbol like `/.)'"`
+- SC2289: Warn when command name contains tabs or linefeeds
+- SC2291: Warn about repeated unquoted spaces between words in echo
+- SC2292: Suggest [[ over [ in Bash/Ksh scripts (optional)
+- SC2293/SC2294: Warn when calling `eval` with arrays
+- SC2295: Warn about "${x#$y}" treating $y as a pattern when not quoted
+- SC2296-SC2301: Improved warnings for bad parameter expansions
+- SC2302/SC2303: Warn about loops over array values when using them as keys
+- SC2304-SC2306: Warn about unquoted globs in expr arguments
+- SC2307: Warn about insufficient number of arguments to expr
+- SC2308: Suggest other approaches for non-standard expr extensions
+- SC2313: Warn about `read` with unquoted, array indexed variable
+
+### Fixed
+- SC2102 about repetitions in ranges no longer triggers on [[ -v arr[xx] ]]
+- SC2155 now recognizes `typeset` and local read-only `declare` statements
+- SC2181 now tries to avoid triggering for error handling functions
+- SC2290: Warn about misused = in declare & co, which were not caught by SC2270+
+- The flag --color=auto no longer outputs color when TERM is "dumb" or unset
+
+### Changed
+- SC2048: Warning about $\* now also applies to ${array[\*]}
+- SC2181 now only triggers on single condition tests like `[ $? = 0 ]`.
+- Quote warnings are now emitted for declaration utilities in sh
+- Leading `_` can now be used to suppress warnings about unused variables
+- TTY output now includes warning level in text as well as color
+
+### Removed
+- SC1004: Literal backslash+linefeed in '' was found to be usually correct
+
+
+## v0.7.2 - 2021-04-19
+### Added
+- `disable` directives can now be a range, e.g. `disable=SC3000-SC4000`
+- SC1143: Warn about line continuations in comments
+- SC2259/SC2260: Warn when redirections override pipes
+- SC2261: Warn about multiple competing redirections
+- SC2262/SC2263: Warn about aliases declared and used in the same parsing unit
+- SC2264: Warn about wrapper functions that blatantly recurse
+- SC2265/SC2266: Warn when using & or | with test statements
+- SC2267: Warn when using xargs -i instead of -I
+- SC2268: Warn about unnecessary x-comparisons like `[ x$var = xval ]`
+
+### Fixed
+- SC1072/SC1073 now respond to disable annotations, though ignoring parse errors
+  is still purely cosmetic and does not allow ShellCheck to continue.
+- Improved error reporting for trailing tokens after ]/]] and compound commands
+- `#!/usr/bin/env -S shell` is now handled correctly
+- Here docs with \r are now parsed correctly and give better warnings
+
+### Changed
+- Assignments are now parsed to spec, without leniency for leading $ or spaces
+- POSIX/dash unsupported feature warnings now have individual SC3xxx codes
+- SC1090: A leading `$x/` or `$(x)/` is now treated as `./` when locating files
+- SC2154: Variables appearing in -z/-n tests are no longer considered unassigned
+- SC2270-SC2285: Improved warnings about misused `=`, e.g. `${var}=42`
+
+
+## v0.7.1 - 2020-04-04
+### Fixed
+- `-f diff` no longer claims that it found more issues when it didn't
+- Known empty variables now correctly trigger SC2086
+- ShellCheck should now be compatible with Cabal 3
+- SC2154 and all command-specific checks now trigger for builtins
+  called with `builtin`
+
+### Added
+- SC1136: Warn about unexpected characters after ]/]]
+- SC2254: Suggest quoting expansions in case statements
+- SC2255: Suggest using `$((..))` in `[ 2*3 -eq 6 ]`
+- SC2256: Warn about translated strings that are known variables
+- SC2257: Warn about arithmetic mutation in redirections
+- SC2258: Warn about trailing commas in for loop elements
+
+### Changed
+- SC2230: 'command -v' suggestion is now off by default (-i deprecate-which)
+- SC1081: Keywords are now correctly parsed case sensitively, with a warning
+
+
+## v0.7.0 - 2019-07-28
+### Added
+- Precompiled binaries for macOS and Linux aarch64
+- Preliminary support for fix suggestions
+- New `-f diff` unified diff format for auto-fixes
+- Files containing Bats tests can now be checked
+- Directory wide directives can now be placed in a `.shellcheckrc`
+- Optional checks: Use `--list-optional` to show a list of tests,
+                   Enable with `-o` flags or `enable=name` directives
+- Source paths: Use `-P dir1:dir2` or a `source-path=dir1` directive
+                to specify search paths for sourced files.
+- json1 format like --format=json but treats tabs as single characters
+- Recognize FLAGS variables created by the shflags library.
+- Site-specific changes can now be made in Custom.hs for ease of patching
+- SC2154: Also warn about unassigned uppercase variables (optional)
+- SC2252: Warn about `[ $a != x ] || [ $a != y ]`, similar to SC2055
+- SC2251: Inform about ineffectual ! in front of commands
+- SC2250: Warn about variable references without braces (optional)
+- SC2249: Warn about `case` with missing default case (optional)
+- SC2248: Warn about unquoted variables without special chars (optional)
+- SC2247: Warn about $"(cmd)" and $"{var}"
+- SC2246: Warn if a shebang's interpreter ends with /
+- SC2245: Warn that Ksh ignores all but the first glob result in `[`
+- SC2243/SC2244: Suggest using explicit -n for `[ $foo ]` (optional)
+- SC1135: Suggest not ending double quotes just to make $ literal
+
+### Changed
+- If a directive or shebang is not specified, a `.bash/.bats/.dash/.ksh`
+  extension will be used to infer the shell type when present.
+- Disabling SC2120 on a function now disables SC2119 on call sites
+
+### Fixed
+- SC2183 no longer warns about missing printf args for `%()T`
+
+## v0.6.0 - 2018-12-02
 ### Added
 - Command line option --severity/-S for filtering by minimum severity
 - Command line option --wiki-link-count/-W for showing wiki links
+- SC2152/SC2151: Warn about bad `exit` values like `1234` and `"foo"`
 - SC2236/SC2237: Suggest -n/-z instead of ! -z/-n
 - SC2238: Warn when redirecting to a known command name, e.g. ls > rm
 - SC2239: Warn if the shebang is not an absolute path, e.g. #!bin/sh
+- SC2240: Warn when passing additional arguments to dot (.) in sh/dash
 - SC1133: Better diagnostics when starting a line with |/||/&&
+
 ### Changed
 - Most warnings now have useful end positions
 - SC1117 about unknown double-quoted escape sequences has been retired
+
 ### Fixed
-- SC2021 no longer triggers for equivalence classes like '[=e=]'
+- SC2021 no longer triggers for equivalence classes like `[=e=]`
 - SC2221/SC2222 no longer mistriggers on fall-through case branches
+- SC2081 about glob matches in `[ .. ]` now also triggers for `!=`
+- SC2086 no longer warns about spaces in `$#`
+- SC2164 no longer suggests subshells for `cd ..; cmd; cd ..`
+- `read -a` is now correctly considered an array assignment
+- SC2039 no longer warns about LINENO now that it's POSIX
 
 ## v0.5.0 - 2018-05-31
 ### Added
@@ -74,7 +270,7 @@
 - SC2204/SC2205: Warn about `( -z foo )` and `( foo -eq bar )`
 - SC2200/SC2201: Warn about brace expansion in [/[[
 - SC2198/SC2199: Warn about arrays in [/[[
-- SC2196/SC2197: Warn about deprected egrep/fgrep
+- SC2196/SC2197: Warn about deprecated egrep/fgrep
 - SC2195: Warn about unmatchable case branches
 - SC2194: Warn about constant 'case' statements
 - SC2193: Warn about `[[ file.png == *.mp3 ]]` and other unmatchables
@@ -91,7 +287,7 @@
 ### Fixed
 - `-c` no longer suggested when using `grep -o | wc`
 - Comments and whitespace are now allowed before filewide directives
-- Here doc delimters with esoteric quoting like `foo""` are now handled
+- Here doc delimiters with esoteric quoting like `foo""` are now handled
 - SC2095 about `ssh` in while read loops is now suppressed when using `-n`
 - `%(%Y%M%D)T` now recognized as a single formatter in `printf` checks
 - `grep -F` now suppresses regex related suggestions
@@ -104,7 +300,7 @@
 - SC2185: Suggest explicitly adding path for `find`
 - SC2184: Warn about unsetting globs (e.g. `unset foo[1]`)
 - SC2183: Warn about `printf` with more formatters than variables
-- SC2182: Warn about ignored arguments with `printf` 
+- SC2182: Warn about ignored arguments with `printf`
 - SC2181: Suggest using command directly instead of `if [ $? -eq 0 ]`
 - SC1106: Warn when using `test` operators in `(( 1 -eq 2 ))`
 
@@ -275,7 +471,7 @@
 ### Added
 - SC2121: Warn about trying to `set` variables, e.g. `set var = value`
 - SC2120/SC2119: Warn when a function uses `$1..` if none are ever passed
-- SC2117: Warn when using `su` in interactive mode, e.g. `su foo; whoami` 
+- SC2117: Warn when using `su` in interactive mode, e.g. `su foo; whoami`
 - SC2116: Detect useless use of echo, e.g. `for i in $(echo $var)`
 - SC2115/SC2114: Detect some catastrophic `rm -r "$empty/"` mistakes
 - SC1081: Warn when capitalizing keywords like `While`
@@ -326,7 +522,7 @@
 
 ### Removed
 - Suggestions about using parameter expansion over basename
-- The `jsoncheck` binary. Use `shellcheck -f json` instead. 
+- The `jsoncheck` binary. Use `shellcheck -f json` instead.
 
 
 ## v0.2.0 - 2013-10-27

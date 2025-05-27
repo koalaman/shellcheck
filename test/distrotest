@@ -16,10 +16,21 @@ and is still highly experimental.
 
 Make sure you're plugged in and have screen/tmux in place,
 then re-run with $0 --run to continue.
+
+Also note that dist*/ and .stack-work/ will be deleted.
 EOF
 exit 0
 }
 
+echo "Deleting 'dist', 'dist-newstyle', and '.stack-work'..."
+rm -rf dist dist-newstyle .stack-work
+
+execs=$(find . -name shellcheck)
+
+if [ -n "$execs" ]
+then
+  die "Found unexpected executables. Remove and try again: $execs"
+fi
 
 log=$(mktemp) || die "Can't create temp file"
 date >> "$log" || die "Can't write to log"
@@ -57,19 +68,18 @@ done << EOF
 debian:stable         apt-get update && apt-get install -y cabal-install
 debian:testing        apt-get update && apt-get install -y cabal-install
 ubuntu:latest         apt-get update && apt-get install -y cabal-install
-opensuse:latest       zypper install -y cabal-install ghc
-
-# Older Ubuntu versions we want to support
-ubuntu:18.04          apt-get update && apt-get install -y cabal-install
-ubuntu:17.10          apt-get update && apt-get install -y cabal-install
-
-# Misc
 haskell:latest        true
+opensuse/leap:latest  zypper install -y cabal-install ghc
+fedora:latest         dnf install -y cabal-install ghc-template-haskell-devel findutils libstdc++-static gcc-c++
+archlinux:latest      pacman -S -y --noconfirm cabal-install ghc-static base-devel
 
-# Known to currently fail
-centos:latest         yum install -y epel-release && yum install -y cabal-install
-fedora:latest         dnf install -y cabal-install
-base/archlinux:latest pacman -S -y --noconfirm cabal-install ghc-static base-devel
+# Ubuntu LTS
+ubuntu:24.04          apt-get update && apt-get install -y cabal-install
+ubuntu:22.04          apt-get update && apt-get install -y cabal-install
+ubuntu:20.04          apt-get update && apt-get install -y cabal-install
+
+# Stack on Ubuntu LTS
+ubuntu:24.04          set -e; apt-get update && apt-get install -y curl && curl -sSL https://get.haskellstack.org/ | sh -s - -f && cd /mnt && exec test/stacktest
 EOF
 
 exit "$final"

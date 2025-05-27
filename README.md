@@ -1,4 +1,5 @@
-[![Build Status](https://travis-ci.org/koalaman/shellcheck.svg?branch=master)](https://travis-ci.org/koalaman/shellcheck)
+[![Build Status](https://github.com/koalaman/shellcheck/actions/workflows/build.yml/badge.svg)](https://github.com/koalaman/shellcheck/actions/workflows/build.yml)
+
 
 # ShellCheck - A shell script static analysis tool
 
@@ -8,45 +9,45 @@ ShellCheck is a GPLv3 tool that gives warnings and suggestions for bash/sh shell
 
 The goals of ShellCheck are
 
-- To point out and clarify typical beginner's syntax issues that cause a shell
+* To point out and clarify typical beginner's syntax issues that cause a shell
   to give cryptic error messages.
 
-- To point out and clarify typical intermediate level semantic problems that
+* To point out and clarify typical intermediate level semantic problems that
   cause a shell to behave strangely and counter-intuitively.
 
-- To point out subtle caveats, corner cases and pitfalls that may cause an
+* To point out subtle caveats, corner cases and pitfalls that may cause an
   advanced user's otherwise working script to fail under future circumstances.
 
 See [the gallery of bad code](README.md#user-content-gallery-of-bad-code) for examples of what ShellCheck can help you identify!
 
 ## Table of Contents
 
-- [How to use](#how-to-use)
-  - [On the web](#on-the-web)
-  - [From your terminal](#from-your-terminal)
-  - [In your editor](#in-your-editor)
-  - [In your build or test suites](#in-your-build-or-test-suites)
-- [Installing](#installing)
-- [Travis CI](#travis-ci)
-- [Compiling from source](#compiling-from-source)
-  - [Installing Cabal](#installing-cabal)
-  - [Compiling ShellCheck](#compiling-shellcheck)
-  - [Running tests](#running-tests)
-- [Gallery of bad code](#gallery-of-bad-code)
-  - [Quoting](#quoting)
-  - [Conditionals](#conditionals)
-  - [Frequently misused commands](#frequently-misused-commands)
-  - [Common beginner's mistakes](#common-beginners-mistakes)
-  - [Style](#style)
-  - [Data and typing errors](#data-and-typing-errors)
-  - [Robustness](#robustness)
-  - [Portability](#portability)
-  - [Miscellaneous](#miscellaneous)
-- [Testimonials](#testimonials)
-- [Ignoring issues](#ignoring-issues)
-- [Reporting bugs](#reporting-bugs)
-- [Contributing](#contributing)
-- [Copyright](#copyright)
+* [How to use](#how-to-use)
+  * [On the web](#on-the-web)
+  * [From your terminal](#from-your-terminal)
+  * [In your editor](#in-your-editor)
+  * [In your build or test suites](#in-your-build-or-test-suites)
+* [Installing](#installing)
+* [Compiling from source](#compiling-from-source)
+  * [Installing Cabal](#installing-cabal)
+  * [Compiling ShellCheck](#compiling-shellcheck)
+  * [Running tests](#running-tests)
+* [Gallery of bad code](#gallery-of-bad-code)
+  * [Quoting](#quoting)
+  * [Conditionals](#conditionals)
+  * [Frequently misused commands](#frequently-misused-commands)
+  * [Common beginner's mistakes](#common-beginners-mistakes)
+  * [Style](#style)
+  * [Data and typing errors](#data-and-typing-errors)
+  * [Robustness](#robustness)
+  * [Portability](#portability)
+  * [Miscellaneous](#miscellaneous)
+* [Testimonials](#testimonials)
+* [Ignoring issues](#ignoring-issues)
+* [Reporting bugs](#reporting-bugs)
+* [Contributing](#contributing)
+* [Copyright](#copyright)
+* [Other Resources](#other-resources)
 
 ## How to use
 
@@ -54,7 +55,7 @@ There are a number of ways to use ShellCheck!
 
 ### On the web
 
-Paste a shell script on https://www.shellcheck.net for instant feedback.
+Paste a shell script on <https://www.shellcheck.net> for instant feedback.
 
 [ShellCheck.net](https://www.shellcheck.net) is always synchronized to the latest git commit, and is the easiest way to give ShellCheck a go. Tell your friends!
 
@@ -76,7 +77,7 @@ You can see ShellCheck suggestions directly in a variety of editors.
 
 * Sublime, through [SublimeLinter](https://github.com/SublimeLinter/SublimeLinter-shellcheck).
 
-* Atom, through [Linter](https://github.com/AtomLinter/linter-shellcheck).
+* Pulsar Edit (former Atom), through [linter-shellcheck-pulsar](https://github.com/pulsar-cooperative/linter-shellcheck-pulsar).
 
 * VSCode, through [vscode-shellcheck](https://github.com/timonwong/vscode-shellcheck).
 
@@ -85,8 +86,46 @@ You can see ShellCheck suggestions directly in a variety of editors.
 ### In your build or test suites
 
 While ShellCheck is mostly intended for interactive use, it can easily be added to builds or test suites.
+It makes canonical use of exit codes, so you can just add a `shellcheck` command as part of the process.
 
-ShellCheck makes canonical use of exit codes, and can output simple JSON, CheckStyle compatible XML, GCC compatible warnings as well as human readable text (with or without ANSI colors). See the [Integration](https://github.com/koalaman/shellcheck/wiki/Integration) wiki page for more documentation.
+For example, in a Makefile:
+
+```Makefile
+check-scripts:
+    # Fail if any of these files have warnings
+    shellcheck myscripts/*.sh
+```
+
+or in a Travis CI `.travis.yml` file:
+
+```yaml
+script:
+  # Fail if any of these files have warnings
+  - shellcheck myscripts/*.sh
+```
+
+Services and platforms that have ShellCheck pre-installed and ready to use:
+
+* [Travis CI](https://travis-ci.org/)
+* [Codacy](https://www.codacy.com/)
+* [Code Climate](https://codeclimate.com/)
+* [Code Factor](https://www.codefactor.io/)
+* [Codety](https://www.codety.io/) via the [Codety Scanner](https://github.com/codetyio/codety-scanner)
+* [CircleCI](https://circleci.com) via the [ShellCheck Orb](https://circleci.com/orbs/registry/orb/circleci/shellcheck)
+* [Github](https://github.com/features/actions) (only Linux)
+* [Trunk Check](https://trunk.io/products/check) (universal linter; [allows you to explicitly version your shellcheck install](https://github.com/trunk-io/plugins/blob/bcbb361dcdbe4619af51ea7db474d7fb87540d20/.trunk/trunk.yaml#L32)) via the [shellcheck plugin](https://github.com/trunk-io/plugins/blob/main/linters/shellcheck/plugin.yaml)
+* [CodeRabbit](https://coderabbit.ai/)
+
+Most other services, including [GitLab](https://about.gitlab.com/), let you install
+ShellCheck yourself, either through the system's package manager (see [Installing](#installing)),
+or by downloading and unpacking a [binary release](#installing-a-pre-compiled-binary).
+
+It's a good idea to manually install a specific ShellCheck version regardless. This avoids
+any surprise build breaks when a new version with new warnings is published.
+
+For customized filtering or reporting, ShellCheck can output simple JSON, CheckStyle compatible XML,
+GCC compatible warnings as well as human readable text (with or without ANSI colors). See the
+[Integration](https://github.com/koalaman/shellcheck/wiki/Integration) wiki page for more documentation.
 
 ## Installing
 
@@ -104,13 +143,13 @@ On systems with Stack (installs to `~/.local/bin`):
 
 On Debian based distros:
 
-    apt-get install shellcheck
+    sudo apt install shellcheck
 
 On Arch Linux based distros:
 
     pacman -S shellcheck
 
-or get the dependency free [shellcheck-static](https://aur.archlinux.org/packages/shellcheck-static/) from the AUR.
+or get the dependency free [shellcheck-bin](https://aur.archlinux.org/packages/shellcheck-bin/) from the AUR.
 
 On Gentoo based distros:
 
@@ -118,8 +157,8 @@ On Gentoo based distros:
 
 On EPEL based distros:
 
-    yum -y install epel-release
-    yum install ShellCheck
+    sudo yum -y install epel-release
+    sudo yum install ShellCheck
 
 On Fedora based distros:
 
@@ -129,23 +168,49 @@ On FreeBSD:
 
     pkg install hs-ShellCheck
 
-On OS X with homebrew:
+On macOS (OS X) with Homebrew:
 
     brew install shellcheck
+
+Or with MacPorts:
+
+    sudo port install shellcheck
+
+On OpenBSD:
+
+    pkg_add shellcheck
 
 On openSUSE
 
     zypper in ShellCheck
 
-Or use OneClickInstall - https://software.opensuse.org/package/ShellCheck
+Or use OneClickInstall - <https://software.opensuse.org/package/ShellCheck>
 
 On Solus:
 
     eopkg install shellcheck
-    
-On Windows (via [scoop](http://scoop.sh)):
 
-    scoop install shellcheck
+On Windows (via [chocolatey](https://chocolatey.org/packages/shellcheck)):
+
+```cmd
+C:\> choco install shellcheck
+```
+
+Or Windows (via [winget](https://github.com/microsoft/winget-pkgs)):
+
+```cmd
+C:\> winget install --id koalaman.shellcheck
+```
+
+Or Windows (via [scoop](http://scoop.sh)):
+
+```cmd
+C:\> scoop install shellcheck
+```
+
+From [conda-forge](https://anaconda.org/conda-forge/shellcheck):
+
+    conda install -c conda-forge shellcheck
 
 From Snap Store:
 
@@ -154,37 +219,77 @@ From Snap Store:
 From Docker Hub:
 
 ```sh
-docker pull koalaman/shellcheck:stable  # Or :v0.4.7 for that version, or :latest for daily builds
-docker run -v "$PWD:/mnt" koalaman/shellcheck myscript
+docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable myscript
+# Or :v0.4.7 for that version, or :latest for daily builds
 ```
 
 or use `koalaman/shellcheck-alpine` if you want a larger Alpine Linux based image to extend. It works exactly like a regular Alpine image, but has shellcheck preinstalled.
 
+Using the [nix package manager](https://nixos.org/nix):
+```sh
+nix-env -iA nixpkgs.shellcheck
+```
+
+Using the [Flox package manager](https://flox.dev/)
+```sh
+flox install shellcheck
+```
+
 Alternatively, you can download pre-compiled binaries for the latest release here:
 
-* [Linux, x86_64](https://storage.googleapis.com/shellcheck/shellcheck-stable.linux.x86_64.tar.xz) (statically linked)
-* [Linux, armv6hf](https://storage.googleapis.com/shellcheck/shellcheck-stable.linux.armv6hf.tar.xz), i.e. Raspberry Pi (statically linked)
-* [Windows, x86](https://storage.googleapis.com/shellcheck/shellcheck-stable.zip)
+* [Linux, x86_64](https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.linux.x86_64.tar.xz) (statically linked)
+* [Linux, armv6hf](https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.linux.armv6hf.tar.xz), i.e. Raspberry Pi (statically linked)
+* [Linux, aarch64](https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.linux.aarch64.tar.xz) aka ARM64 (statically linked)
+* [macOS, aarch64](https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.darwin.aarch64.tar.xz)
+* [macOS, x86_64](https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.darwin.x86_64.tar.xz)
+* [Windows, x86](https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.zip)
 
-or see the [storage bucket listing](https://shellcheck.storage.googleapis.com/index.html) for checksums, older versions and the latest daily builds.
+or see the [GitHub Releases](https://github.com/koalaman/shellcheck/releases) for other releases
+(including the [latest](https://github.com/koalaman/shellcheck/releases/tag/latest) meta-release for daily git builds).
 
-## Travis CI
+There are currently no official binaries for Apple Silicon, but third party builds are available via
+[ShellCheck for Visual Studio Code](https://github.com/vscode-shellcheck/shellcheck-binaries/releases).
+
+Distro packages already come with a `man` page. If you are building from source, it can be installed with:
+
+```console
+pandoc -s -f markdown-smart -t man shellcheck.1.md -o shellcheck.1
+sudo mv shellcheck.1 /usr/share/man/man1
+```
+
+### pre-commit
+
+To run ShellCheck via [pre-commit](https://pre-commit.com/), add the hook to your `.pre-commit-config.yaml`:
+
+```
+repos:
+-   repo: https://github.com/koalaman/shellcheck-precommit
+    rev: v0.7.2
+    hooks:
+    -   id: shellcheck
+#       args: ["--severity=warning"]  # Optionally only show errors and warnings
+```
+
+### Travis CI
 
 Travis CI has now integrated ShellCheck by default, so you don't need to manually install it.
 
-If you still want to do so in order to upgrade at your leisure or ensure the latest release, follow the steps to install the shellcheck binary, bellow.
+If you still want to do so in order to upgrade at your leisure or ensure you're
+using the latest release, follow the steps below to install a binary version.
 
-## Installing the shellcheck binary
+### Installing a pre-compiled binary
 
-*Pre-requisite*: the program 'xz' needs to be installed on the system.  
-To install it on debian/ubuntu/linux mint, run `apt install xz-utils`.  
-To install it on Redhat/Fedora/CentOS, run `yum -y install xz`.  
+The pre-compiled binaries come in `tar.xz` files. To decompress them, make sure
+`xz` is installed.
+On Debian/Ubuntu/Mint, you can `apt install xz-utils`.
+On Redhat/Fedora/CentOS, `yum -y install xz`.
+
+A simple installer may do something like:
 
 ```bash
-export scversion="stable" # or "v0.4.7", or "latest"
-wget "https://storage.googleapis.com/shellcheck/shellcheck-${scversion}.linux.x86_64.tar.xz"
-tar --xz -xvf shellcheck-"${scversion}".linux.x86_64.tar.xz
-cp shellcheck-"${scversion}"/shellcheck /usr/bin/
+scversion="stable" # or "v0.4.7", or "latest"
+wget -qO- "https://github.com/koalaman/shellcheck/releases/download/${scversion?}/shellcheck-${scversion?}.linux.x86_64.tar.xz" | tar -xJv
+cp "shellcheck-${scversion}/shellcheck" /usr/bin/
 shellcheck --version
 ```
 
@@ -196,13 +301,11 @@ This section describes how to build ShellCheck from a source directory. ShellChe
 
 ShellCheck is built and packaged using Cabal. Install the package `cabal-install` from your system's package manager (with e.g. `apt-get`, `brew`, `emerge`, `yum`, or `zypper`).
 
-On MacOS (OS X), you can do a fast install of Cabal using brew, which takes a couple of minutes instead of more than 30 minutes if you try to compile it from source.
+On macOS (OS X), you can do a fast install of Cabal using brew, which takes a couple of minutes instead of more than 30 minutes if you try to compile it from source.
 
-    brew install cask
-    brew cask install haskell-platform
-    cabal install cabal-install
+    $ brew install cabal-install
 
-On MacPorts, the package is instead called `hs-cabal-install`, while native Windows users should install the latest version of the Haskell platform from https://www.haskell.org/platform/
+On MacPorts, the package is instead called `hs-cabal-install`, while native Windows users should install the latest version of the Haskell platform from <https://www.haskell.org/platform/>
 
 Verify that `cabal` is installed and update its dependency list with
 
@@ -213,10 +316,6 @@ Verify that `cabal` is installed and update its dependency list with
 `git clone` this repository, and `cd` to the ShellCheck source directory to build/install:
 
     $ cabal install
-
-Or if you intend to run the tests:
-
-    $ cabal install --enable-tests
 
 This will compile ShellCheck and install it to your `~/.cabal/bin` directory.
 
@@ -238,12 +337,15 @@ may use a legacy codepage. In `cmd.exe`, `powershell.exe` and Powershell ISE,
 make sure to use a TrueType font, not a Raster font, and set the active
 codepage to UTF-8 (65001) with `chcp`:
 
-    > chcp 65001
-    Active code page: 65001
+```cmd
+chcp 65001
+```
 
 In Powershell ISE, you may need to additionally update the output encoding:
 
-    > [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+```
 
 ### Running tests
 
@@ -270,6 +372,7 @@ echo 'Don't forget to restart!'   # Singlequote closed by apostrophe
 echo 'Don\'t try this at home'    # Attempting to escape ' in ''
 echo 'Path is $PATH'              # Variables in single quotes
 trap "echo Took ${SECONDS}s" 0    # Prematurely expanded trap
+unset var[i]                      # Array index treated as glob
 ```
 
 ### Conditionals
@@ -288,6 +391,7 @@ ShellCheck can recognize many types of incorrect test statements.
 [ grep -q foo file ]              # Command without $(..)
 [[ "$$file" == *.jpg ]]           # Comparisons that can't succeed
 (( 1 -lt 2 ))                     # Using test operators in ((..))
+[ x ] & [ y ] | [ z ]             # Accidental backgrounding and piping
 ```
 
 ### Frequently misused commands
@@ -359,6 +463,8 @@ echo "Hello $name"                # Unassigned lowercase variables
 cmd | read bar; echo $bar         # Assignments in subshells
 cat foo | cp bar                  # Piping to commands that don't read
 printf '%s: %s\n' foo             # Mismatches in printf argument count
+eval "${array[@]}"                # Lost word boundaries in array eval
+for i in "${x[@]}"; do ${x[$i]}   # Using array value as key
 ```
 
 ### Robustness
@@ -383,6 +489,7 @@ ShellCheck will warn when using features not supported by the shebang. For examp
 echo {1..$n}                     # Works in ksh, but not bash/dash/sh
 echo {1..10}                     # Works in ksh and bash, but not dash/sh
 echo -n 42                       # Works in ksh, bash and dash, undefined in sh
+expr match str regex             # Unportable alias for `expr str : regex`
 trap 'exit 42' sigint            # Unportable signal spec
 cmd &> file                      # Unportable redirection operator
 read foo < /dev/tcp/host/22      # Unportable intercepted files
@@ -403,10 +510,15 @@ rm “file”                         # Unicode quotes
 echo "Hello world"                # Carriage return / DOS line endings
 echo hello \                      # Trailing spaces after \
 var=42 echo $var                  # Expansion of inlined environment
-#!/bin/bash -x -e                 # Common shebang errors
+!# bin/bash -x -e                 # Common shebang errors
 echo $((n/180*100))               # Unnecessary loss of precision
 ls *[:digit:].txt                 # Bad character class globs
 sed 's/foo/bar/' file > file      # Redirecting to input
+var2=$var2                        # Variable assigned to itself
+[ x$var = xval ]                  # Antiquated x-comparisons
+ls() { ls -l "$@"; }              # Infinitely recursive wrapper
+alias ls='ls -l'; ls foo          # Alias used before it takes effect
+for x; do for x; do               # Nested loop uses same variable
 while getopts "a" f; do case $f in "b") # Unhandled getopts flags
 ```
 
@@ -421,13 +533,13 @@ Alexander Tarasikov,
 
 Issues can be ignored via environmental variable, command line, individually or globally within a file:
 
-https://github.com/koalaman/shellcheck/wiki/Ignore
+<https://github.com/koalaman/shellcheck/wiki/Ignore>
 
 ## Reporting bugs
 
 Please use the GitHub issue tracker for any bugs or feature suggestions:
 
-https://github.com/koalaman/shellcheck/issues
+<https://github.com/koalaman/shellcheck/issues>
 
 ## Contributing
 
@@ -442,11 +554,11 @@ The contributor retains the copyright.
 
 ShellCheck is licensed under the GNU General Public License, v3. A copy of this license is included in the file [LICENSE](LICENSE).
 
-Copyright 2012-2018, Vidar 'koala_man' Holen and contributors.
+Copyright 2012-2019, [Vidar 'koala_man' Holen](https://github.com/koalaman/) and contributors.
 
 Happy ShellChecking!
 
+## Other Resources
 
-## Other Resources                                                                          
 * The wiki has [long form descriptions](https://github.com/koalaman/shellcheck/wiki/Checks) for each warning, e.g. [SC2221](https://github.com/koalaman/shellcheck/wiki/SC2221).
 * ShellCheck does not attempt to enforce any kind of formatting or indenting style, so also check out [shfmt](https://github.com/mvdan/sh)!

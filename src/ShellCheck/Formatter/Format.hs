@@ -1,5 +1,5 @@
 {-
-    Copyright 2012-2015 Vidar Holen
+    Copyright 2012-2019 Vidar Holen
 
     This file is part of ShellCheck.
     https://www.shellcheck.net
@@ -21,6 +21,14 @@ module ShellCheck.Formatter.Format where
 
 import ShellCheck.Data
 import ShellCheck.Interface
+import ShellCheck.Fixer
+
+import Control.Monad
+import Data.Array
+import Data.List
+import System.IO
+import System.Info
+import System.Environment
 
 -- A formatter that carries along an arbitrary piece of data
 data Formatter = Formatter {
@@ -50,21 +58,25 @@ severityText pc =
 makeNonVirtual comments contents =
     map fix comments
   where
-    ls = lines contents
-    fix c = c {
-        pcStartPos = (pcStartPos c) {
-            posColumn = realignColumn lineNo colNo c
-        }
-      , pcEndPos = (pcEndPos c) {
-            posColumn = realignColumn endLineNo endColNo c
-        }
+    list = lines contents
+    arr = listArray (1, length list) list
+    untabbedFix f = newFix {
+      fixReplacements = map (\r -> removeTabStops r arr) (fixReplacements f)
     }
-    realignColumn lineNo colNo c =
-      if lineNo c > 0 && lineNo c <= fromIntegral (length ls)
-      then real (ls !! fromIntegral (lineNo c - 1)) 0 0 (colNo c)
-      else colNo c
-    real _ r v target | target <= v = r
-    real [] r v _ = r -- should never happen
-    real ('\t':rest) r v target =
-        real rest (r+1) (v + 8 - (v `mod` 8)) target
-    real (_:rest) r v target = real rest (r+1) (v+1) target
+    fix c = (removeTabStops c arr) {
+      pcFix = fmap untabbedFix (pcFix c)
+    }
+
+
+shouldOutputColor :: ColorOption -> IO Bool
+shouldOutputColor colorOption =
+    case colorOption of
+        ColorAlways -> return True
+        ColorNever -> return False
+        ColorAuto -> do
+            isTerminal <- hIsTerminalDevice stdout
+            term <- lookupEnv "TERM"
+            let windows = "mingw" `isPrefixOf` os
+            let dumbTerm = term `elem` [Just "dumb", Just "", Nothing]
+            let isUsableTty = isTerminal && not windows && not dumbTerm
+            return isUsableTty

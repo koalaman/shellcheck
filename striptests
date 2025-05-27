@@ -29,6 +29,7 @@ detestify() {
       state = 0;
     }
 
+    /STRIP/ { next; }
     /LANGUAGE TemplateHaskell/ { next; }
     /^import.*Test\./ { next; }
 
@@ -75,4 +76,3 @@ find . -name '.git' -prune -o -type f -name '*.hs' -print |
   do
     modify "$file" detestify
   done
-

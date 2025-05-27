@@ -1,0 +1,89 @@
+#!/bin/bash
+# This script builds and deploys multi-architecture docker images from the
+# binaries previously built and deployed to GitHub.
+
+function multi_arch_docker::install_docker_buildx() {
+  # Install QEMU multi-architecture support for docker buildx.
+  docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+
+  # Instantiate docker buildx builder with multi-architecture support.
+  docker buildx create --name mybuilder
+  docker buildx use mybuilder
+  # Start up buildx and verify that all is OK.
+  docker buildx inspect --bootstrap
+}
+
+# Log in to Docker Hub for deployment.
+function multi_arch_docker::login_to_docker_hub() {
+  echo "$DOCKER_PASSWORD" | docker login -u="$DOCKER_USERNAME" --password-stdin
+}
+
+# Run buildx build and push. Passed in arguments augment the command line.
+function multi_arch_docker::buildx() {
+  mkdir -p /tmp/empty
+  docker buildx build \
+    --platform "${DOCKER_PLATFORMS// /,}" \
+    --push \
+    --progress plain \
+    -f Dockerfile.multi-arch \
+    "$@" \
+    /tmp/empty
+  rmdir /tmp/empty
+}
+
+# Build and push plain and alpine docker images for all tags.
+function multi_arch_docker::build_and_push_all() {
+  for tag in $TAGS; do
+    multi_arch_docker::buildx -t "$DOCKER_BASE:$tag" --build-arg "tag=$tag"
+    multi_arch_docker::buildx -t "$DOCKER_BASE-alpine:$tag" \
+      --build-arg "tag=$tag" --target alpine
+  done
+}
+
+# Test all pushed docker images.
+function multi_arch_docker::test_all() {
+  printf '%s\n' "#!/bin/sh" "echo 'hello world'" > myscript
+
+  for platform in $DOCKER_PLATFORMS; do
+    for tag in $TAGS; do
+      for ext in '-alpine' ''; do
+        image="${DOCKER_BASE}${ext}:${tag}"
+        msg="Testing docker image $image on platform $platform"
+        line="${msg//?/=}"
+        printf '\n%s\n%s\n%s\n' "${line}" "${msg}" "${line}"
+        docker pull -q --platform "$platform" "$image"
+        if [ -n "$ext" ]; then
+          echo -n "Image architecture: "
+          docker run --rm --entrypoint /bin/sh "$image" -c 'uname -m'
+          version=$(docker run --rm "$image" shellcheck --version \
+            | grep 'version:')
+        else
+          version=$(docker run --rm "$image" --version | grep 'version:')
+        fi
+        version=${version/#version: /v}
+        echo "shellcheck version: $version"
+        if [[ ! ("$tag" =~ ^(latest|stable)$) && "$tag" != "$version" ]]; then
+          echo "Version mismatch: shellcheck $version tagged as $tag"
+          exit 1
+        fi
+        if [ -n "$ext" ]; then
+          docker run --rm -v "$PWD:/mnt" -w /mnt "$image" shellcheck myscript
+        else
+          docker run --rm -v "$PWD:/mnt" "$image" myscript
+        fi
+      done
+    done
+  done
+}
+
+function multi_arch_docker::main() {
+  export DOCKER_PLATFORMS='linux/amd64'
+  DOCKER_PLATFORMS+=' linux/arm64'
+  DOCKER_PLATFORMS+=' linux/arm/v6'
+  DOCKER_PLATFORMS+=' linux/riscv64'
+
+  multi_arch_docker::install_docker_buildx
+  multi_arch_docker::login_to_docker_hub
+  multi_arch_docker::build_and_push_all
+  multi_arch_docker::test_all
+}

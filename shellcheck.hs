@@ -1,5 +1,5 @@
 {-
-    Copyright 2012-2015 Vidar Holen
+    Copyright 2012-2019 Vidar Holen
 
     This file is part of ShellCheck.
     https://www.shellcheck.net
@@ -17,6 +17,7 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -}
+import qualified ShellCheck.Analyzer
 import           ShellCheck.Checker
 import           ShellCheck.Data
 import           ShellCheck.Interface
@@ -24,12 +25,17 @@ import           ShellCheck.Regex
 
 import qualified ShellCheck.Formatter.CheckStyle
 import           ShellCheck.Formatter.Format
+import qualified ShellCheck.Formatter.Diff
 import qualified ShellCheck.Formatter.GCC
 import qualified ShellCheck.Formatter.JSON
+import qualified ShellCheck.Formatter.JSON1
 import qualified ShellCheck.Formatter.TTY
+import qualified ShellCheck.Formatter.Quiet
 
 import           Control.Exception
 import           Control.Monad
+import           Control.Monad.IO.Class
+import           Control.Monad.Trans.Class
 import           Control.Monad.Except
 import           Data.Bits
 import           Data.Char
@@ -46,6 +52,7 @@ import           System.Console.GetOpt
 import           System.Directory
 import           System.Environment
 import           System.Exit
+import           System.FilePath
 import           System.IO
 
 data Flag = Flag String String
@@ -67,17 +74,21 @@ instance Monoid Status where
 data Options = Options {
     checkSpec        :: CheckSpec,
     externalSources  :: Bool,
+    sourcePaths      :: [FilePath],
     formatterOptions :: FormatterOptions,
-    minSeverity      :: Severity
+    minSeverity      :: Severity,
+    rcfile           :: Maybe FilePath
 }
 
 defaultOptions = Options {
     checkSpec = emptyCheckSpec,
     externalSources = False,
+    sourcePaths = [],
     formatterOptions = newFormatterOptions {
         foColorOption = ColorAuto
     },
-    minSeverity = StyleC
+    minSeverity = StyleC,
+    rcfile = Nothing
 }
 
 usageHeader = "Usage: shellcheck [OPTIONS...] FILES..."
@@ -87,14 +98,31 @@ options = [
     Option "C" ["color"]
         (OptArg (maybe (Flag "color" "always") (Flag "color")) "WHEN")
         "Use color (auto, always, never)",
+    Option "i" ["include"]
+        (ReqArg (Flag "include") "CODE1,CODE2..") "Consider only given types of warnings",
     Option "e" ["exclude"]
         (ReqArg (Flag "exclude") "CODE1,CODE2..") "Exclude types of warnings",
+    Option "" ["extended-analysis"]
+        (ReqArg (Flag "extended-analysis") "bool") "Perform dataflow analysis (default true)",
     Option "f" ["format"]
         (ReqArg (Flag "format") "FORMAT") $
         "Output format (" ++ formatList ++ ")",
+    Option "" ["list-optional"]
+        (NoArg $ Flag "list-optional" "true") "List checks disabled by default",
+    Option "" ["norc"]
+        (NoArg $ Flag "norc" "true") "Don't look for .shellcheckrc files",
+    Option "" ["rcfile"]
+        (ReqArg (Flag "rcfile") "RCFILE")
+        "Prefer the specified configuration file over searching for one",
+    Option "o" ["enable"]
+        (ReqArg (Flag "enable") "check1,check2..")
+        "List of optional checks to enable (or 'all')",
+    Option "P" ["source-path"]
+        (ReqArg (Flag "source-path") "SOURCEPATHS")
+        "Specify path when looking for sourced files (\"SCRIPTDIR\" for script's dir)",
     Option "s" ["shell"]
         (ReqArg (Flag "shell") "SHELLNAME")
-        "Specify dialect (sh, bash, dash, ksh)",
+        "Specify dialect (sh, bash, dash, ksh, busybox)",
     Option "S" ["severity"]
         (ReqArg (Flag "severity") "SEVERITY")
         "Minimum severity of errors to consider (error, warning, info, style)",
@@ -102,10 +130,13 @@ options = [
         (NoArg $ Flag "version" "true") "Print version information",
     Option "W" ["wiki-link-count"]
         (ReqArg (Flag "wiki-link-count") "NUM")
-        "The number of wiki links to show, when applicable.",
+        "The number of wiki links to show, when applicable",
     Option "x" ["external-sources"]
-        (NoArg $ Flag "externals" "true") "Allow 'source' outside of FILES"
+        (NoArg $ Flag "externals" "true") "Allow 'source' outside of FILES",
+    Option "" ["help"]
+        (NoArg $ Flag "help" "true") "Show this usage summary and exit"
     ]
+getUsageInfo = usageInfo usageHeader options
 
 printErr = lift . hPutStrLn stderr
 
@@ -114,15 +145,18 @@ parseArguments argv =
     case getOpt Permute options argv of
         (opts, files, []) -> return (opts, files)
         (_, _, errors) -> do
-            printErr $ concat errors ++ "\n" ++ usageInfo usageHeader options
+            printErr $ concat errors ++ "\n" ++ getUsageInfo
             throwError SyntaxFailure
 
 formats :: FormatterOptions -> Map.Map String (IO Formatter)
 formats options = Map.fromList [
     ("checkstyle", ShellCheck.Formatter.CheckStyle.format),
+    ("diff",  ShellCheck.Formatter.Diff.format options),
     ("gcc",  ShellCheck.Formatter.GCC.format),
     ("json", ShellCheck.Formatter.JSON.format),
-    ("tty",  ShellCheck.Formatter.TTY.format options)
+    ("json1", ShellCheck.Formatter.JSON1.format),
+    ("tty",  ShellCheck.Formatter.TTY.format options),
+    ("quiet",  ShellCheck.Formatter.Quiet.format options)
     ]
 
 formatList = intercalate ", " names
@@ -200,7 +234,7 @@ runFormatter sys format options files = do
     f :: Status -> FilePath -> IO Status
     f status file = do
         newStatus <- process file `catch` handler file
-        return $ status `mappend` newStatus
+        return $! status `mappend` newStatus
     handler :: FilePath -> IOException -> IO Status
     handler file e = reportFailure file (show e)
     reportFailure file str = do
@@ -209,7 +243,7 @@ runFormatter sys format options files = do
 
     process :: FilePath -> IO Status
     process filename = do
-        input <- siReadFile sys filename
+        input <- siReadFile sys Nothing filename
         either (reportFailure filename) check input
       where
         check contents = do
@@ -225,9 +259,9 @@ runFormatter sys format options files = do
                 else SomeProblems
 
 parseEnum name value list =
-    case filter ((== value) . fst) list of
-        [(name, value)] -> return value
-        [] -> do
+    case lookup value list of
+        Just value -> return value
+        Nothing -> do
             printErr $ "Unknown value for --" ++ name ++ ". " ++
                        "Valid options are: " ++ (intercalate ", " $ map fst list)
             throwError SupportFailure
@@ -267,8 +301,28 @@ parseOption flag options =
                 }
             }
 
+        Flag "include" str -> do
+            new <- mapM parseNum $ filter (not . null) $ split ',' str
+            let old = csIncludedWarnings . checkSpec $ options
+            return options {
+                checkSpec = (checkSpec options) {
+                    csIncludedWarnings =
+                      if null new
+                        then old
+                        else Just new `mappend` old
+                }
+            }
+
         Flag "version" _ -> do
             liftIO printVersion
+            throwError NoProblems
+
+        Flag "list-optional" _ -> do
+            liftIO printOptional
+            throwError NoProblems
+
+        Flag "help" _ -> do
+            liftIO $ putStrLn getUsageInfo
             throwError NoProblems
 
         Flag "externals" _ ->
@@ -282,6 +336,12 @@ parseOption flag options =
                 formatterOptions = (formatterOptions options) {
                     foColorOption = option
                 }
+            }
+
+        Flag "source-path" str -> do
+            let paths = splitSearchPath str
+            return options {
+                sourcePaths = (sourcePaths options) ++ paths
             }
 
         Flag "sourced" _ ->
@@ -307,7 +367,39 @@ parseOption flag options =
                 }
             }
 
-        _ -> return options
+        Flag "norc" _ ->
+            return options {
+                checkSpec = (checkSpec options) {
+                    csIgnoreRC = True
+                }
+            }
+
+        Flag "rcfile" str -> do
+            return options {
+                rcfile = Just str
+            }
+
+        Flag "enable" value ->
+            let cs = checkSpec options in return options {
+                checkSpec = cs {
+                    csOptionalChecks = (csOptionalChecks cs) ++ split ',' value
+                }
+            }
+
+        Flag "extended-analysis" str -> do
+            value <- parseBool str
+            return options {
+                checkSpec = (checkSpec options) {
+                    csExtendedAnalysis = Just value
+                }
+            }
+
+        -- This flag is handled specially in 'process'
+        Flag "format" _ -> return options
+
+        Flag str _ -> do
+            printErr $ "Internal error for --" ++ str ++ ". Please file a bug :("
+            return options
   where
     die s = do
         printErr s
@@ -319,23 +411,36 @@ parseOption flag options =
             throwError SyntaxFailure
         return (Prelude.read num :: Integer)
 
+    parseBool str = do
+        case str of
+            "true" -> return True
+            "false" -> return False
+            _ -> do
+                printErr $ "Invalid boolean, expected true/false: " ++ str
+                throwError SyntaxFailure
+
+ioInterface :: Options -> [FilePath] -> IO (SystemInterface IO)
 ioInterface options files = do
     inputs <- mapM normalize files
     cache <- newIORef emptyCache
-    return SystemInterface {
-        siReadFile = get cache inputs
+    configCache <- newIORef ("", Nothing)
+    return (newSystemInterface :: SystemInterface IO) {
+        siReadFile = get cache inputs,
+        siFindSource = findSourceFile inputs (sourcePaths options),
+        siGetConfig = getConfig configCache
     }
   where
     emptyCache :: Map.Map FilePath String
     emptyCache = Map.empty
-    get cache inputs file = do
+
+    get cache inputs rcSuggestsExternal file = do
         map <- readIORef cache
         case Map.lookup file map of
             Just x  -> return $ Right x
-            Nothing -> fetch cache inputs file
+            Nothing -> fetch cache inputs rcSuggestsExternal file
 
-    fetch cache inputs file = do
-        ok <- allowable inputs file
+    fetch cache inputs rcSuggestsExternal file = do
+        ok <- allowable rcSuggestsExternal inputs file
         if ok
           then (do
             (contents, shouldCache) <- inputFile file
@@ -343,14 +448,16 @@ ioInterface options files = do
                 modifyIORef cache $ Map.insert file contents
             return $ Right contents
             ) `catch` handler
-          else return $ Left (file ++ " was not specified as input (see shellcheck -x).")
-
+          else
+            if rcSuggestsExternal == Just False
+            then return $ Left (file ++ " was not specified as input, and external files were disabled via directive.")
+            else return $ Left (file ++ " was not specified as input (see shellcheck -x).")
       where
         handler :: IOException -> IO (Either ErrorMessage String)
         handler ex = return . Left $ show ex
 
-    allowable inputs x =
-        if externalSources options
+    allowable rcSuggestsExternal inputs x =
+        if fromMaybe (externalSources options) rcSuggestsExternal
         then return True
         else do
             path <- normalize x
@@ -361,6 +468,103 @@ ioInterface options files = do
       where
         fallback :: FilePath -> IOException -> IO FilePath
         fallback path _ = return path
+
+
+    -- Returns the name and contents of .shellcheckrc for the given file
+    getConfig cache filename =
+        case rcfile options of
+            Just file -> do
+                -- We have a specified rcfile. Ignore normal rcfile resolution.
+                (path, result) <- readIORef cache
+                if path == "/"
+                  then return result
+                  else do
+                    result <- readConfig file
+                    when (isNothing result) $
+                        hPutStrLn stderr $ "Warning: unable to read --rcfile " ++ file
+                    writeIORef cache ("/", result)
+                    return result
+
+            Nothing -> do
+                path <- normalize filename
+                let dir = takeDirectory path
+                (previousPath, result) <- readIORef cache
+                if dir == previousPath
+                  then return result
+                  else do
+                    paths <- getConfigPaths dir
+                    result <- findConfig paths
+                    writeIORef cache (dir, result)
+                    return result
+
+    findConfig paths =
+        case paths of
+            (file:rest) -> do
+                contents <- readConfig file
+                if isJust contents
+                  then return contents
+                  else findConfig rest
+            [] -> return Nothing
+
+    -- Get a list of candidate filenames. This includes .shellcheckrc
+    -- in all parent directories, plus the user's home dir and xdg dir.
+    -- The dot is optional for Windows and Snap users.
+    getConfigPaths dir = do
+        let next = takeDirectory dir
+        rest <- if next /= dir
+                then getConfigPaths next
+                else defaultPaths `catch`
+                        ((const $ return []) :: IOException -> IO [FilePath])
+        return $ (dir </> ".shellcheckrc") : (dir </> "shellcheckrc") : rest
+
+    defaultPaths = do
+        home <- getAppUserDataDirectory "shellcheckrc"
+        xdg <- getXdgDirectory XdgConfig "shellcheckrc"
+        return [home, xdg]
+
+    readConfig file = do
+        exists <- doesFileExist file
+        if exists
+          then do
+            (contents, _) <- inputFile file `catch` handler file
+            return $ Just (file, contents)
+          else
+            return Nothing
+      where
+        handler :: FilePath -> IOException -> IO (String, Bool)
+        handler file err = do
+            hPutStrLn stderr $ file ++ ": " ++ show err
+            return ("", True)
+
+    andM a b arg = do
+        first <- a arg
+        if not first then return False else b arg
+
+    findM p = foldr go (pure Nothing)
+      where
+        go x acc = do
+            b <- p x
+            if b then pure (Just x) else acc
+
+    findSourceFile inputs sourcePathFlag currentScript rcSuggestsExternal sourcePathAnnotation original =
+        if isAbsolute original
+        then
+            let (_, relative) = splitDrive original
+            in find relative original
+        else
+            find original original
+      where
+        find filename deflt = do
+            sources <- findM ((allowable rcSuggestsExternal inputs) `andM` doesFileExist) $
+                        (adjustPath filename):(map ((</> filename) . adjustPath) $ sourcePathFlag ++ sourcePathAnnotation)
+            case sources of
+                Nothing -> return deflt
+                Just first -> return first
+        scriptdir = dropFileName currentScript
+        adjustPath str =
+            case (splitDirectories str) of
+                ("SCRIPTDIR":rest) -> joinPath (scriptdir:rest)
+                _ -> str
 
 inputFile file = do
     (handle, shouldCache) <-
@@ -418,3 +622,14 @@ printVersion = do
     putStrLn $ "version: " ++ shellcheckVersion
     putStrLn   "license: GNU General Public License, version 3"
     putStrLn   "website: https://www.shellcheck.net"
+
+printOptional = do
+    mapM f list
+  where
+    list = sortOn cdName ShellCheck.Analyzer.optionalChecks
+    f item = do
+        putStrLn $ "name:    " ++ cdName item
+        putStrLn $ "desc:    " ++ cdDescription item
+        putStrLn $ "example: " ++ cdPositive item
+        putStrLn $ "fix:     " ++ cdNegative item
+        putStrLn ""

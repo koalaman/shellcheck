@@ -16,31 +16,41 @@ description: |
     advanced user's otherwise working script to fail under future
     circumstances.
 
-  By default ShellCheck can only check non-hidden files under /home, to make 
+  By default ShellCheck can only check non-hidden files under /home, to make
   ShellCheck be able to check files under /media and /run/media you must
   connect it to the `removable-media` interface manually:
 
       # snap connect shellcheck:removable-media
-  
+
 version: git
-grade: devel
+base: core20
+grade: stable
 confinement: strict
 
 apps:
   shellcheck:
     command: usr/bin/shellcheck
     plugs: [home, removable-media]
+    environment:
+      LANG: C.UTF-8
 
 parts:
   shellcheck:
     plugin: dump
-    source: ./
+    source: .
     build-packages:
       - cabal-install
-    build: |
+    stage-packages:
+      - libatomic1
+    override-build: |
+      # Give ourselves enough memory to build
+      dd if=/dev/zero of=/tmp/swap bs=1M count=2000
+      mkswap /tmp/swap
+      swapon /tmp/swap
+
       cabal sandbox init
       cabal update
       cabal install -j
-    install: |
+
       install -d $SNAPCRAFT_PART_INSTALL/usr/bin
       install .cabal-sandbox/bin/shellcheck $SNAPCRAFT_PART_INSTALL/usr/bin

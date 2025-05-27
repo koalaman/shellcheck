@@ -2,4 +2,12 @@
 # quickrun runs ShellCheck in an interpreted mode.
 # This allows testing changes without recompiling.
 
-runghc -isrc -idist/build/autogen shellcheck.hs "$@"
+path=$(find . -type f -path './dist*/Paths_ShellCheck.hs' | sort | head -n 1)
+if [ -z "$path" ]
+then
+  echo >&2 "Unable to find Paths_ShellCheck.hs. Please 'cabal build' once."
+  exit 1
+fi
+path="${path%/*}"
+
+exec runghc -isrc -i"$path" shellcheck.hs "$@"

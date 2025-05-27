@@ -1,0 +1,159 @@
+name: Build ShellCheck
+
+# Run this workflow every time a new commit pushed to your repository
+on: push
+
+jobs:
+  package_source:
+    name: Package Source Code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-mark manual ghc # Don't bother installing ghc just to tar up source
+          sudo apt-get install cabal-install
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Deduce tags
+        run: |
+          mkdir source
+          echo "latest" > source/tags
+          if tag=$(git describe --exact-match --tags)
+          then
+            echo "stable" >> source/tags
+            echo "$tag" >> source/tags
+          fi
+          cat source/tags
+
+      - name: Package Source
+        run: |
+          grep "stable" source/tags || ./setgitversion
+          cabal sdist
+          mv dist-newstyle/sdist/*.tar.gz source/source.tar.gz
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: source
+          path: source/
+
+  run_tests:
+    name: Run tests
+    needs: package_source
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install ghc cabal-install
+          cabal update
+
+      - name: Unpack source
+        run: |
+          cd source
+          tar xvf source.tar.gz --strip-components=1
+
+      - name: Build and run tests
+        run: |
+          cd source
+          cabal test
+
+  build_source:
+    name: Build
+    needs: package_source
+    strategy:
+      matrix:
+        build: [linux.x86_64, linux.aarch64, linux.armv6hf, linux.riscv64, darwin.x86_64, darwin.aarch64, windows.x86_64]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Build source
+        run: |
+          mkdir -p bin
+          mkdir -p bin/${{matrix.build}}
+          ( cd bin && ../build/run_builder ../source/source.tar.gz ../build/${{matrix.build}} )
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{matrix.build}}.bin
+          path: bin/
+
+  package_binary:
+    name: Package Binaries
+    needs: build_source
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Work around GitHub permissions bug
+        run: chmod +x *.bin/*/shellcheck*
+
+      - name: Package binaries
+        run: |
+          export TAGS="$(cat source/tags)"
+          mkdir -p deploy
+          cp -r *.bin/* deploy
+          cd deploy
+          ../.prepare_deploy
+          rm -rf */ README* LICENSE*
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy
+          path: deploy/
+
+  deploy:
+    name: Deploy binaries
+    needs: package_binary
+    runs-on: ubuntu-latest
+    environment: Deploy
+    steps:
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install hub
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Upload to GitHub
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          export TAGS="$(cat source/tags)"
+          ./.github_deploy
+
+      - name: Waiting for GitHub to replicate uploaded releases
+        run: |
+          sleep 300
+
+      - name: Upload to Docker Hub
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+          DOCKER_EMAIL: ${{ secrets.DOCKER_EMAIL }}
+          DOCKER_BASE: ${{ secrets.DOCKER_USERNAME }}/shellcheck
+        run: |
+          export TAGS="$(cat source/tags)"
+          ( source ./.multi_arch_docker && set -eux && multi_arch_docker::main )
