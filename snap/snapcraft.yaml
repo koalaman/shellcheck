@@ -44,7 +44,7 @@ parts:
       - libatomic1
     override-build: |
       # Give ourselves enough memory to build
-      dd if=/dev/zero of=/tmp/swap bs=1M count=2000
+      fallocate -l 2G /tmp/swap
       chmod 0600 /tmp/swap
       mkswap /tmp/swap
       swapon /tmp/swap
