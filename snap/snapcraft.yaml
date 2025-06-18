@@ -47,7 +47,10 @@ parts:
       fallocate -l 2G /tmp/swap
       chmod 0600 /tmp/swap
       mkswap /tmp/swap
-      swapon /tmp/swap
+      if ! swapon /tmp/swap; then
+        echo "Could not enable swap file, continuing anyway"
+        rm /tmp/swap
+      fi
 
       cabal update
       cabal install -j
