@@ -23,7 +23,7 @@ description: |
       # snap connect shellcheck:removable-media
 
 version: git
-base: core20
+base: core24
 grade: stable
 confinement: strict
 
@@ -52,5 +52,5 @@ parts:
       cabal update
       cabal install -j
 
-      install -d $SNAPCRAFT_PART_INSTALL/usr/bin
-      install .cabal-sandbox/bin/shellcheck $SNAPCRAFT_PART_INSTALL/usr/bin
+      install -d "${CRAFT_PART_INSTALL}/usr/bin"
+      install .cabal-sandbox/bin/shellcheck "${CRAFT_PART_INSTALL}/usr/bin"
