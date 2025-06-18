@@ -54,4 +54,4 @@ parts:
       cabal install -j
 
       install -d "${CRAFT_PART_INSTALL}/usr/bin"
-      install ~/.cabal/bin/shellcheck "${CRAFT_PART_INSTALL}/usr/bin"
+      install --strip ~/.cabal/bin/shellcheck "${CRAFT_PART_INSTALL}/usr/bin"
