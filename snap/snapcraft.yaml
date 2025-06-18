@@ -40,8 +40,6 @@ parts:
     source: .
     build-packages:
       - cabal-install
-    stage-packages:
-      - libatomic1
     override-build: |
       # Give ourselves enough memory to build
       fallocate -l 2G /tmp/swap
