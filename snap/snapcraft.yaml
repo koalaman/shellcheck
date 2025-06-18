@@ -49,9 +49,8 @@ parts:
       mkswap /tmp/swap
       swapon /tmp/swap
 
-      cabal sandbox init
       cabal update
       cabal install -j
 
       install -d "${CRAFT_PART_INSTALL}/usr/bin"
-      install .cabal-sandbox/bin/shellcheck "${CRAFT_PART_INSTALL}/usr/bin"
+      install ~/.cabal/bin/shellcheck "${CRAFT_PART_INSTALL}/usr/bin"
