@@ -397,10 +397,10 @@ long list of wonderful contributors.
 
 # COPYRIGHT
 
-Copyright 2012-2024, Vidar Holen and contributors.
+Copyright 2012-2025, Vidar Holen and contributors.
 Licensed under the GNU General Public License version 3 or later,
 see https://gnu.org/licenses/gpl.html
 
 # SEE ALSO
 
-sh(1) bash(1) dash(1) ksh(1)
+sh(1), bash(1), dash(1), ksh(1)
