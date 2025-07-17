@@ -221,6 +221,9 @@ prop_worksWhenSourcing =
 prop_worksWhenSourcingWithDashDash =
     null $ checkWithIncludes [("lib", "bar=1")] "source -- lib; echo \"$bar\""
 
+prop_worksWhenSourcingWithDashP =
+    null $ checkWithIncludes [("lib", "bar=1")] "source -p \"$MYPATH\" lib; echo \"$bar\""
+
 prop_worksWhenDotting =
     null $ checkWithIncludes [("lib", "bar=1")] ". lib; echo \"$bar\""
 

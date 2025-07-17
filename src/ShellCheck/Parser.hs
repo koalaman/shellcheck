@@ -48,6 +48,7 @@ import qualified Control.Monad.Reader as Mr
 import qualified Control.Monad.State as Ms
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map.Strict as Map
+import Debug.Trace
 
 import Test.QuickCheck.All (quickCheckAll)
 
@@ -2206,17 +2207,18 @@ readSimpleCommand = called "simple command" $ do
 
 
 readSource :: Monad m => Token -> SCParser m Token
-readSource t@(T_Redirecting _ _ (T_SimpleCommand cmdId _ (cmd:file':rest'))) = do
-    let file = getFile file' rest'
+readSource t@(T_Redirecting _ _ (T_SimpleCommand cmdId _ (cmd:args'))) = do
+    let file = getFile args'
     override <- getSourceOverride
     let literalFile = do
-        name <- override `mplus` getLiteralString file `mplus` stripDynamicPrefix file
+        name <- override `mplus` (getLiteralString =<< file) `mplus` (stripDynamicPrefix =<< file)
         -- Hack to avoid 'source ~/foo' trying to read from literal tilde
         guard . not $ "~/" `isPrefixOf` name
         return name
+    let fileId = fromMaybe (getId cmd) (getId <$> file)
     case literalFile of
         Nothing -> do
-            parseNoteAtId (getId file) WarningC 1090
+            parseNoteAtId fileId WarningC 1090
                 "ShellCheck can't follow non-constant source. Use a directive to specify location."
             return t
         Just filename -> do
@@ -2224,7 +2226,7 @@ readSource t@(T_Redirecting _ _ (T_SimpleCommand cmdId _ (cmd:file':rest'))) = d
             if not proceed
               then do
                 -- FIXME: This actually gets squashed without -a
-                parseNoteAtId (getId file) InfoC 1093
+                parseNoteAtId fileId InfoC 1093
                     "This file appears to be recursively sourced. Ignoring."
                 return t
               else do
@@ -2242,7 +2244,7 @@ readSource t@(T_Redirecting _ _ (T_SimpleCommand cmdId _ (cmd:file':rest'))) = d
                         return (contents, resolved)
                 case input of
                     Left err -> do
-                        parseNoteAtId (getId file) InfoC 1091 $
+                        parseNoteAtId fileId InfoC 1091 $
                             "Not following: " ++ err
                         return t
                     Right script -> do
@@ -2254,18 +2256,19 @@ readSource t@(T_Redirecting _ _ (T_SimpleCommand cmdId _ (cmd:file':rest'))) = d
                             return $ T_SourceCommand id1 t (T_Include id2 src)
 
                         let failed = do
-                            parseNoteAtId (getId file) WarningC 1094
+                            parseNoteAtId fileId WarningC 1094
                                 "Parsing of sourced file failed. Ignoring it."
                             return t
 
                         included <|> failed
   where
-    getFile :: Token -> [Token] -> Token
-    getFile file (next:rest) =
-        case getLiteralString file of
-            Just "--" -> next
-            x -> file
-    getFile file _ = file
+    getFile :: [Token] -> Maybe Token
+    getFile (first:rest) =
+        case getLiteralString first of
+            Just "--" -> rest !!! 0
+            Just "-p" -> rest !!! 1
+            _ -> return first
+    getFile _ = Nothing
 
     getSourcePath t =
         case t of
