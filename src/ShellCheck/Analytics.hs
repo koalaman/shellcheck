@@ -4318,6 +4318,7 @@ prop_checkComparisonWithLeadingX3 = verifyNot checkComparisonWithLeadingX "[ $fo
 prop_checkComparisonWithLeadingX4 = verifyNot checkComparisonWithLeadingX "test $foo = xbar"
 prop_checkComparisonWithLeadingX5 = verify checkComparisonWithLeadingX "[ \"x$foo\" = 'xlol' ]"
 prop_checkComparisonWithLeadingX6 = verify checkComparisonWithLeadingX "[ x\"$foo\" = x'lol' ]"
+prop_checkComparisonWithLeadingX7 = verify checkComparisonWithLeadingX "[ X$foo != Xbar ]"
 checkComparisonWithLeadingX params t =
     case t of
         TC_Binary id typ op lhs rhs
