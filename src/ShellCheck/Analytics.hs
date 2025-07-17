@@ -800,7 +800,7 @@ checkUnquotedExpansions params =
   where
     check t@(T_DollarExpansion _ c) = examine t c
     check t@(T_Backticked _ c) = examine t c
-    check t@(T_DollarBraceCommandExpansion _ c) = examine t c
+    check t@(T_DollarBraceCommandExpansion _ _ c) = examine t c
     check _ = return ()
     tree = parentMap params
     examine t contents =
@@ -3012,7 +3012,8 @@ checkTildeInPath _ _ = return ()
 
 prop_checkUnsupported3 = verify checkUnsupported "#!/bin/sh\ncase foo in bar) baz ;& esac"
 prop_checkUnsupported4 = verify checkUnsupported "#!/bin/ksh\ncase foo in bar) baz ;;& esac"
-prop_checkUnsupported5 = verify checkUnsupported "#!/bin/bash\necho \"${ ls; }\""
+prop_checkUnsupported5 = verifyNot checkUnsupported "#!/bin/bash\necho \"${ ls; }\""
+prop_checkUnsupported6 = verify checkUnsupported "#!/bin/ash\necho \"${ ls; }\""
 checkUnsupported params t =
     unless (null support || (shellType params `elem` support)) $
         report name
@@ -3026,7 +3027,7 @@ checkUnsupported params t =
 shellSupport t =
   case t of
     T_CaseExpression _ _ list -> forCase (map (\(a,_,_) -> a) list)
-    T_DollarBraceCommandExpansion {} -> ("${ ..; } command expansion", [Ksh])
+    T_DollarBraceCommandExpansion {} -> ("${ ..; } command expansion", [Bash, Ksh])
     _ -> ("", [])
   where
     forCase seps | CaseContinue `elem` seps = ("cases with ;;&", [Bash])
@@ -3606,7 +3607,7 @@ checkSplittingInArrays params t =
         _ -> return ()
     checkPart part = case part of
         T_DollarExpansion id _ -> forCommand id
-        T_DollarBraceCommandExpansion id _ -> forCommand id
+        T_DollarBraceCommandExpansion id _ _ -> forCommand id
         T_Backticked id _ -> forCommand id
         T_DollarBraced id _ str |
             not (isCountingReference part)
@@ -5161,7 +5162,7 @@ checkExpansionWithRedirection params t =
     case t of
         T_DollarExpansion id [cmd] -> check id cmd
         T_Backticked id [cmd] -> check id cmd
-        T_DollarBraceCommandExpansion id [cmd] -> check id cmd
+        T_DollarBraceCommandExpansion id _ [cmd] -> check id cmd
         _ -> return ()
   where
     check id pipe =

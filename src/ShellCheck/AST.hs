@@ -31,6 +31,7 @@ newtype Id = Id Int deriving (Show, Eq, Ord, Generic, NFData)
 
 data Quoted = Quoted | Unquoted deriving (Show, Eq)
 data Dashed = Dashed | Undashed deriving (Show, Eq)
+data Piped = Piped | Unpiped deriving (Show, Eq)
 data AssignmentMode = Assign | Append deriving (Show, Eq)
 newtype FunctionKeyword = FunctionKeyword Bool deriving (Show, Eq)
 newtype FunctionParentheses = FunctionParentheses Bool deriving (Show, Eq)
@@ -84,7 +85,7 @@ data InnerToken t =
     | Inner_T_DollarDoubleQuoted [t]
     | Inner_T_DollarExpansion [t]
     | Inner_T_DollarSingleQuoted String
-    | Inner_T_DollarBraceCommandExpansion [t]
+    | Inner_T_DollarBraceCommandExpansion Piped [t]
     | Inner_T_Done
     | Inner_T_DoubleQuoted [t]
     | Inner_T_EOF
@@ -228,7 +229,7 @@ pattern T_CoProc id var body = OuterToken id (Inner_T_CoProc var body)
 pattern TC_Or id typ str t1 t2 = OuterToken id (Inner_TC_Or typ str t1 t2)
 pattern TC_Unary id typ op token = OuterToken id (Inner_TC_Unary typ op token)
 pattern T_DollarArithmetic id c = OuterToken id (Inner_T_DollarArithmetic c)
-pattern T_DollarBraceCommandExpansion id list = OuterToken id (Inner_T_DollarBraceCommandExpansion list)
+pattern T_DollarBraceCommandExpansion id pipe list = OuterToken id (Inner_T_DollarBraceCommandExpansion pipe list)
 pattern T_DollarBraced id braced op = OuterToken id (Inner_T_DollarBraced braced op)
 pattern T_DollarBracket id c = OuterToken id (Inner_T_DollarBracket c)
 pattern T_DollarDoubleQuoted id list = OuterToken id (Inner_T_DollarDoubleQuoted list)

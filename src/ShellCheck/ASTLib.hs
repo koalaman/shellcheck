@@ -561,7 +561,7 @@ getCommandNameFromExpansion t =
     case t of
         T_DollarExpansion _ [c] -> extract c
         T_Backticked _ [c] -> extract c
-        T_DollarBraceCommandExpansion _ [c] -> extract c
+        T_DollarBraceCommandExpansion _ _ [c] -> extract c
         _ -> Nothing
   where
     extract (T_Pipeline _ _ [cmd]) = getCommandName cmd
@@ -616,7 +616,7 @@ getCommandSequences t =
         T_Annotation _ _ t -> getCommandSequences t
 
         T_DollarExpansion _ cmds -> [cmds]
-        T_DollarBraceCommandExpansion _ cmds -> [cmds]
+        T_DollarBraceCommandExpansion _ _ cmds -> [cmds]
         T_Backticked _ cmds -> [cmds]
         _ -> []
 

@@ -716,6 +716,9 @@ build t = do
                 linkRange totalRead result
               else return totalRead
 
+        T_DollarBraceCommandExpansion id _ body ->
+            sequentially body
+
         T_DoubleQuoted _ list -> sequentially list
 
         T_DollarExpansion id body ->

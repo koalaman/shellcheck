@@ -1695,16 +1695,17 @@ readAmbiguous prefix expected alternative warner = do
 
 prop_readDollarBraceCommandExpansion1 = isOk readDollarBraceCommandExpansion "${ ls; }"
 prop_readDollarBraceCommandExpansion2 = isOk readDollarBraceCommandExpansion "${\nls\n}"
-readDollarBraceCommandExpansion = called "ksh ${ ..; } command expansion" $ do
+prop_readDollarBraceCommandExpansion3 = isOk readDollarBraceCommandExpansion "${|  REPLY=42; }"
+readDollarBraceCommandExpansion = called "ksh-style ${ ..; } command expansion" $ do
     start <- startSpan
-    try $ do
-        string "${"
-        whitespace
+    c <- try $ do
+            string "${"
+            char '|' <|> whitespace
     allspacing
     term <- readTerm
-    char '}' <|> fail "Expected } to end the ksh ${ ..; } command expansion"
+    char '}' <|> fail "Expected } to end the ksh-style ${ ..; } command expansion"
     id <- endSpan start
-    return $ T_DollarBraceCommandExpansion id term
+    return $ T_DollarBraceCommandExpansion id (if c == '|' then Piped else Unpiped) term
 
 prop_readDollarBraced1 = isOk readDollarBraced "${foo//bar/baz}"
 prop_readDollarBraced2 = isOk readDollarBraced "${foo/'{cow}'}"
