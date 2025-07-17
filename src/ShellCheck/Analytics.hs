@@ -4318,14 +4318,16 @@ prop_checkComparisonWithLeadingX3 = verifyNot checkComparisonWithLeadingX "[ $fo
 prop_checkComparisonWithLeadingX4 = verifyNot checkComparisonWithLeadingX "test $foo = xbar"
 prop_checkComparisonWithLeadingX5 = verify checkComparisonWithLeadingX "[ \"x$foo\" = 'xlol' ]"
 prop_checkComparisonWithLeadingX6 = verify checkComparisonWithLeadingX "[ x\"$foo\" = x'lol' ]"
+prop_checkComparisonWithLeadingX7 = verify checkComparisonWithLeadingX "[ X$foo != Xbar ]"
 checkComparisonWithLeadingX params t =
     case t of
-        TC_Binary id typ op lhs rhs | op == "=" || op == "==" ->
-            check lhs rhs
-        T_SimpleCommand _ _ [cmd, lhs, op, rhs] |
-            getLiteralString cmd == Just "test" &&
-                getLiteralString op `elem` [Just "=", Just "=="] ->
-                    check lhs rhs
+        TC_Binary id typ op lhs rhs
+            | op `elem` ["=", "==", "!="] ->
+                check lhs rhs
+        T_SimpleCommand _ _ [cmd, lhs, op, rhs]
+            | getLiteralString cmd == Just "test" &&
+              getLiteralString op `elem` [Just "=", Just "==", Just "!="] ->
+                check lhs rhs
         _ -> return ()
   where
     msg = "Avoid x-prefix in comparisons as it no longer serves a purpose."
@@ -4335,18 +4337,19 @@ checkComparisonWithLeadingX params t =
         return $ styleWithFix (getId lhs) 2268 msg $ fixWith [l, r]
 
     fixLeadingX token =
-         case getWordParts token of
-            T_Literal id ('x':_):_ ->
+        case getWordParts token of
+            T_Literal id (c:_):_ | toLower c == 'x' ->
                 case token of
-                    -- The side is a single, unquoted x, so we have to quote
-                    T_NormalWord _ [T_Literal id "x"] ->
+                    -- The side is a single, unquoted x or X, so we have to quote
+                    T_NormalWord _ [T_Literal id [c]] ->
                         return $ replaceStart id params 1 "\"\""
                     -- Otherwise we can just delete it
                     _ -> return $ replaceStart id params 1 ""
-            T_SingleQuoted id ('x':_):_ ->
-                -- Replace the single quote and x
-                return $ replaceStart id params 2 "'"
+            T_SingleQuoted id (c:rest):_ | toLower c == 'x' ->
+                    -- Replace the single quote and the character x or X
+                    return $ replaceStart id params 2 "'"
             _ -> Nothing
+
 
 prop_checkAssignToSelf1 = verify checkAssignToSelf "x=$x"
 prop_checkAssignToSelf2 = verify checkAssignToSelf "x=${x}"
