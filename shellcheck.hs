@@ -29,6 +29,7 @@ import qualified ShellCheck.Formatter.Diff
 import qualified ShellCheck.Formatter.GCC
 import qualified ShellCheck.Formatter.JSON
 import qualified ShellCheck.Formatter.JSON1
+import qualified ShellCheck.Formatter.Codeclimate
 import qualified ShellCheck.Formatter.TTY
 import qualified ShellCheck.Formatter.Quiet
 
@@ -155,6 +156,7 @@ formats options = Map.fromList [
     ("gcc",  ShellCheck.Formatter.GCC.format),
     ("json", ShellCheck.Formatter.JSON.format),
     ("json1", ShellCheck.Formatter.JSON1.format),
+    ("codeclimate", ShellCheck.Formatter.Codeclimate.format),
     ("tty",  ShellCheck.Formatter.TTY.format options),
     ("quiet",  ShellCheck.Formatter.Quiet.format options)
     ]

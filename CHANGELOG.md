@@ -7,6 +7,7 @@
 - SC2332: Warn about `[ ! -o opt ]` being unconditionally true in Bash.
 - SC3062: Warn about bashism `[ -o opt ]`.
 - Precompiled binaries for Linux riscv64 (linux.riscv64)
+- Codeclimate: New Codeclimate formatter for GitLab Pipelines.
 ### Changed
 - SC2002 about Useless Use Of Cat is now disabled by default. It can be
   re-enabled with `--enable=useless-use-of-cat` or equivalent directive.
