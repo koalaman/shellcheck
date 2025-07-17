@@ -191,11 +191,17 @@ splitLast x =
     let (last, rest) = splitAt 1 $ reverse x
     in (reverse rest, last)
 
+-- git patch does not like `\` on Windows
+normalizePath path =
+    case path of
+        c:rest -> (if c == pathSeparator then '/' else c) : normalizePath rest
+        [] -> []
+
 formatDoc color (DiffDoc name lf regions) =
     let (most, last) = splitLast regions
     in
-          (color bold $ "--- " ++ ("a" </> name)) ++ "\n" ++
-          (color bold $ "+++ " ++ ("b" </> name)) ++ "\n" ++
+          (color bold $ "--- " ++ (normalizePath $ "a" </> name)) ++ "\n" ++
+          (color bold $ "+++ " ++ (normalizePath $ "b" </> name)) ++ "\n" ++
           concatMap (formatRegion color LinefeedOk) most ++
           concatMap (formatRegion color lf) last
 
