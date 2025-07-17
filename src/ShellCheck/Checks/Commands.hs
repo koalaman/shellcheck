@@ -725,6 +725,9 @@ prop_checkGetPrintfFormats4 = getPrintfFormats "%d%%%(%s)T" == "dT"
 prop_checkGetPrintfFormats5 = getPrintfFormats "%bPassed: %d, %bFailed: %d%b, Skipped: %d, %bErrored: %d%b\\n" == "bdbdbdbdb"
 prop_checkGetPrintfFormats6 = getPrintfFormats "%s%s" == "ss"
 prop_checkGetPrintfFormats7 = getPrintfFormats "%s\n%s" == "ss"
+prop_checkGetPrintfFormats8 = getPrintfFormats "%ld" == "d"
+prop_checkGetPrintfFormats9 = getPrintfFormats "%lld" == "d"
+prop_checkGetPrintfFormats10 = getPrintfFormats "%Q" == "Q"
 getPrintfFormats = getFormats
   where
     -- Get the arguments in the string as a string of type characters,
@@ -743,17 +746,17 @@ getPrintfFormats = getFormats
 
     regexBasedGetFormats rest =
         case matchRegex re rest of
-            Just [width, precision, typ, rest, _] ->
+            Just [width, precision, len, typ, rest, _] ->
                 (if width == "*" then "*" else "") ++
                 (if precision == "*" then "*" else "") ++
                 typ ++ getFormats rest
             Nothing -> take 1 rest ++ getFormats rest
       where
         -- constructed based on specifications in "man printf"
-        re = mkRegex "#?-?\\+? ?0?(\\*|\\d*)\\.?(\\d*|\\*)([diouxXfFeEgGaAcsbq])((\n|.)*)"
-        --            \____ _____/\___ ____/   \____ ____/\_________ _________/ \______ /
-        --                 V          V             V               V               V
-        --               flags    field width  precision   format character        rest
+        re = mkRegex "^#?-?\\+? ?0?(\\*|\\d*)\\.?(\\d*|\\*)(hh|h|l|ll|q|L|j|z|Z|t)?([diouxXfFeEgGaAcsbqQSC])((\n|.)*)"
+        --             \____ _____/\___ ____/   \____ ____/\__________ ___________/\___________ ___________/\___ ___/
+        --                  V          V             V                V                        V                V
+        --                flags    field width  precision        length modifier      format character         rest
         -- field width and precision can be specified with an '*' instead of a digit,
         -- in which case printf will accept one more argument for each '*' used
 
