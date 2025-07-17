@@ -16,6 +16,7 @@
 - SC2218 about function use-before-define is now more accurate.
 - SC2317 about unreachable commands is now less spammy for nested ones.
 - SC2292, optional suggestion for [[ ]], now triggers for Busybox.
+- Updates for Bash 5.3, including `${| cmd; }` and `source -p`
 
 ### Removed
 - SC3013: removed since the operators `-ot/-nt/-ef` are specified in POSIX.1-2024
