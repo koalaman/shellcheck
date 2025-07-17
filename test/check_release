@@ -61,8 +61,8 @@ cat << EOF
 Manual Checklist
 
 $((i++)). Make sure none of the automated checks above failed
-$((i++)). Run \`build/build_builder build/*/\` to update all builder images.
-$((j++)). \`build/run_builder dist-newstyle/sdist/ShellCheck-*.tar.gz build/*/\` to verify that they work.
+$((i++)). Run \`builders/build_builder build/*/\` to update all builder images.
+$((j++)). \`builders/run_builder dist-newstyle/sdist/ShellCheck-*.tar.gz builders/*/\` to verify that they work.
 $((j++)). \`for f in \$(cat build/*/tag); do docker push "\$f"; done\` to upload them.
 $((i++)). Run test/distrotest to ensure that most distros can build OOTB.
 $((i++)). Make sure GitHub Build currently passes: https://github.com/koalaman/shellcheck/actions
