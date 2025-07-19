@@ -1105,6 +1105,8 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
                 ,"xprop"
                 ,"alias"
                 ,"sudo" -- covering "sudo sh" and such
+                ,"doas" -- same as sudo
+                ,"run0" -- same as sudo
                 ,"docker" -- like above
                 ,"podman"
                 ,"oc"
@@ -2330,7 +2332,7 @@ prop_checkFunctionsUsedExternally2c =
 prop_checkFunctionsUsedExternally3 =
   verifyNotTree checkFunctionsUsedExternally "f() { :; }; echo f"
 prop_checkFunctionsUsedExternally4 =
-  verifyNotTree checkFunctionsUsedExternally "foo() { :; }; sudo \"foo\""
+  verifyNotTree checkFunctionsUsedExternally "foo() { :; }; run0 \"foo\""
 prop_checkFunctionsUsedExternally5 =
   verifyTree checkFunctionsUsedExternally "foo() { :; }; ssh host foo"
 prop_checkFunctionsUsedExternally6 =
@@ -2340,7 +2342,7 @@ prop_checkFunctionsUsedExternally7 =
 prop_checkFunctionsUsedExternally8 =
   verifyTree checkFunctionsUsedExternally "foo() { :; }; command sudo foo"
 prop_checkFunctionsUsedExternally9 =
-  verifyTree checkFunctionsUsedExternally "foo() { :; }; exec -c sudo foo"
+  verifyTree checkFunctionsUsedExternally "foo() { :; }; exec -c doas foo"
 checkFunctionsUsedExternally params t =
     runNodeAnalysis checkCommand params t
   where
@@ -2364,6 +2366,8 @@ checkFunctionsUsedExternally params t =
             "chroot" -> firstNonFlag
             "screen" -> firstNonFlag
             "sudo" -> firstNonFlag
+            "doas" -> firstNonFlag
+            "run0" -> firstNonFlag
             "xargs" -> firstNonFlag
             "tmux" -> firstNonFlag
             "ssh" -> take 1 $ drop 1 $ dropFlags argAndString
