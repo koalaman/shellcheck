@@ -5,6 +5,7 @@
 - SC2330: Warn about unsupported glob matches with [[ .. ]] in BusyBox.
 - SC2331: Suggest using standard -e instead of unary -a in tests.
 - SC2332: Warn about `[ ! -o opt ]` being unconditionally true in Bash.
+- SC2335: Avoid double negative of a binary operator in test—suggest `[ a != b ]` over `[ ! a = b ]` and `! [ a = b ]`, and so forth.
 - SC3062: Warn about bashism `[ -o opt ]`.
 - Precompiled binaries for Linux riscv64 (linux.riscv64)
 ### Changed
