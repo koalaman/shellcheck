@@ -46,12 +46,12 @@ library
         semigroups
     build-depends:
       -- The lower bounds are based on GHC 7.10.3
-      -- The upper bounds are based on GHC 9.8.1
+      -- The upper bounds are based on GHC 9.12.1
       aeson                >= 1.4.0 && < 2.3,
       array                >= 0.5.1 && < 0.6,
       base                 >= 4.8.0.0 && < 5,
       bytestring           >= 0.10.6 && < 0.13,
-      containers           >= 0.5.6 && < 0.8,
+      containers           >= 0.5.6 && < 0.9,
       deepseq              >= 1.4.1 && < 1.6,
       Diff                 >= 0.4.0 && < 1.1,
       fgl                  (>= 5.7.0 && < 5.8.1.0) || (>= 5.8.1.1 && < 5.9),
