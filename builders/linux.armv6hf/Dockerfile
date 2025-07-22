@@ -1,7 +1,7 @@
 # This Docker file uses a custom QEmu fork with patches to follow execve
 # to build all of ShellCheck emulated.
 
-FROM ubuntu:24.04
+FROM ubuntu:25.04
 
 ENV TARGETNAME linux.armv6hf
 

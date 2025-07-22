@@ -30,7 +30,7 @@ install_from_freeze() {
   linefeed=${linefeed%x}
   flags=$(
     sed 's/constraints:/&\n /' "$1" |
-    grep -vw -e rts -e base |
+    grep -vw -e rts -e base -e ghc |
     sed -n -e 's/^  *\([^,]*\).*/\1/p' |
     sed -e 's/any\.\([^ ]*\) ==\(.*\)/\1-\2/; te; s/.*/--constraint\n&/; :e')
   shift

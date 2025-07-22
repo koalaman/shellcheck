@@ -1,26 +1,33 @@
-FROM ubuntu:20.04
+FROM ubuntu:25.04
 
-ENV TARGETNAME windows.x86_64
+ENV TARGETNAME=windows.x86_64
 
 # We don't need wine32, even though it complains
 USER root
-ENV DEBIAN_FRONTEND noninteractive
-RUN apt-get update && apt-get install -y curl busybox wine winbind
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y curl busybox wine winbind xz-utils
 
 # Fetch Windows version, will be available under z:\haskell
 WORKDIR /haskell
-RUN curl -L "https://downloads.haskell.org/~ghc/8.10.4/ghc-8.10.4-x86_64-unknown-mingw32.tar.xz" | tar xJ --strip-components=1
-WORKDIR /haskell/bin
-RUN curl -L "https://downloads.haskell.org/~cabal/cabal-install-3.2.0.0/cabal-install-3.2.0.0-x86_64-unknown-mingw32.zip" | busybox unzip -
-RUN curl -L "https://curl.se/windows/dl-8.7.1_7/curl-8.7.1_7-win64-mingw.zip" | busybox unzip - && mv curl-*-win64-mingw/bin/* .
-ENV WINEPATH /haskell/bin
+# 9.12.2 produces a 37M binary
+# 9.0.2  produces a 28M binary
+# 8.10.4 produces a 16M binary
+# We don't want to be stuck on old versions forever though, so just go with the latest version
+RUN curl -L "https://downloads.haskell.org/~ghc/9.12.2/ghc-9.12.2-x86_64-unknown-mingw32.tar.xz" | tar xJ --strip-components=1
 
-# It's unknown whether Cabal on Windows suffers from the same issue
-# that necessitated this but I don't care enough to find out
-ENV CABALOPTS "--ghc-options;-split-sections -optc-Os -optc-Wl,--gc-sections"
+# Fetch dependencies
+WORKDIR /haskell/bin
+RUN curl -L "https://downloads.haskell.org/~cabal/cabal-install-3.16.0.0/cabal-install-3.16.0.0-x86_64-windows.zip" | busybox unzip -
+RUN curl -L "https://curl.se/windows/dl-8.15.0_2/curl-8.15.0_2-win64-mingw.zip" | busybox unzip - && mv curl-*-win64-mingw/bin/* .
+RUN wine /haskell/bin/cabal.exe update
+ENV WINEPATH=/haskell/bin:/haskell/mingw/bin
+
+# None of these actually seem to have an effect on GHC on Windows anymore,
+# but we'll leave them in place anyways.
+ENV CABALOPTS="--ghc-options;-split-sections -optc-Os -optc-Wl,--gc-sections"
 
 # Precompile some deps to speed up later builds
-RUN wine /haskell/bin/cabal.exe update && IFS=';' && wine /haskell/bin/cabal.exe install --lib --dependencies-only $CABALOPTS ShellCheck
+RUN IFS=';' && wine /haskell/bin/cabal.exe install --lib --dependencies-only $CABALOPTS ShellCheck
 
 COPY build /usr/bin
 WORKDIR /scratch

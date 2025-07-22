@@ -1,12 +1,12 @@
-FROM ghcr.io/shepherdjerred/macos-cross-compiler:latest
+FROM ghcr.io/shepherdjerred/macos-cross-compiler@sha256:7d40c5e179d5d15453cf2a6b1bba3392bb1448b8257ee6b86021fc905c59dad6
 
-ENV TARGET aarch64-apple-darwin22
-ENV TARGETNAME darwin.aarch64
+ENV TARGET=aarch64-apple-darwin22
+ENV TARGETNAME=darwin.aarch64
 
 # Build dependencies
 USER root
-ENV DEBIAN_FRONTEND noninteractive
-ENV LC_ALL C.utf8
+ENV DEBIAN_FRONTEND=noninteractive
+ENV LC_ALL=C.utf8
 
 # Install basic deps
 RUN apt-get update && apt-get install -y automake autoconf build-essential curl xz-utils qemu-user-static
@@ -27,7 +27,7 @@ RUN make install
 
 # Due to an apparent cabal bug, we specify our options directly to cabal
 # It won't reuse caches if ghc-options are specified in ~/.cabal/config
-ENV CABALOPTS "--ghc-options;-optc-Os -optc-fPIC;--with-ghc=$TARGET-ghc;--with-hc-pkg=$TARGET-ghc-pkg;--constraint=hashable==1.3.5.0"
+ENV CABALOPTS="--ghc-options;-optc-Os -optc-fPIC;--with-ghc=$TARGET-ghc;--with-hc-pkg=$TARGET-ghc-pkg;--constraint=hashable==1.3.5.0"
 
 # Prebuild the dependencies
 RUN cabal update

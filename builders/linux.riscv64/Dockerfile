@@ -1,46 +1,35 @@
-FROM ubuntu:24.04
+FROM ubuntu:25.04
 
-ENV TARGETNAME linux.riscv64
-ENV TARGET riscv64-linux-gnu
+ENV TARGETNAME=linux.riscv64
+ENV TARGET=riscv64-linux-gnu
 
+# Build dependencies
 USER root
-ENV DEBIAN_FRONTEND noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y llvm-20 "gcc-$TARGET" "g++-$TARGET" ghc alex happy automake autoconf build-essential curl qemu-user-static
+RUN curl -L "https://downloads.haskell.org/~cabal/cabal-install-3.16.0.0/cabal-install-3.16.0.0-x86_64-linux-alpine3_20.tar.xz" | tar xJv -C /usr/local/bin && cabal update
 
-# Init base
-RUN apt-get update -y
+# Build GHC
+WORKDIR /ghc
+RUN curl -L "https://downloads.haskell.org/~ghc/9.12.2/ghc-9.12.2-src.tar.xz" | tar xJ --strip-components=1
+RUN ./boot.source && ./configure --host x86_64-linux-gnu --build x86_64-linux-gnu --target "$TARGET"
+# GHC fails to build if it can't encode non-ascii
+ENV LC_CTYPE=C.utf8
+# We have to do a binary-dist instead of a direct install, otherwise the targest won't have
+# cross compilation prefixes in /usr/local/lib/aarch64-linux-gnu-ghc-*/lib/settings
+RUN ./hadrian/build --flavour=quickest --bignum=native -V -j --prefix=/usr/local install
+# Hadrian just outputs "gcc" as the name of gcc, without accounting for $TARGET. Manually fix up the paths:
+RUN sed -e 's/"\(gcc\|g++\|ld\)"/"'"$TARGET"'-\1"/g' -i /usr/local/lib/$TARGET-ghc-*/lib/settings
 
-# Install qemu
-RUN apt-get install -y --no-install-recommends build-essential ninja-build python3 pkg-config libglib2.0-dev libpixman-1-dev curl ca-certificates python3-virtualenv git python3-setuptools debootstrap
-WORKDIR /qemu
-RUN git clone --depth 1 https://github.com/koalaman/qemu .
-RUN ./configure --target-list=riscv64-linux-user --static --disable-system --disable-pie --disable-werror
-RUN cd build && ninja qemu-riscv64
-ENV QEMU_EXECVE 1
+# Due to an apparent cabal bug, we specify our options directly to cabal
+# It won't reuse caches if ghc-options are specified in ~/.cabal/config
+ENV CABALOPTS="--ghc-options;-split-sections -optc-Os -optc-Wl,--gc-sections -optc-fPIC;--with-compiler=$TARGET-ghc;--with-hc-pkg=$TARGET-ghc-pkg;-c;hashable -arch-native"
 
-# Convenience utility
-COPY scutil /bin/scutil
-# We have to copy to /usr/bin because debootstrap will try to symlink /bin and fail if it exists
-COPY scutil /chroot/usr/bin/scutil
-RUN chmod +x /bin/scutil /chroot/usr/bin/scutil
-
-# Set up a riscv64 userspace
-WORKDIR /
-RUN debootstrap --arch=riscv64 --variant=minbase --components=main,universe --foreign noble /chroot http://ports.ubuntu.com/ubuntu-ports
-RUN cp /qemu/build/qemu-riscv64 /chroot/bin/qemu
-RUN scutil emu /debootstrap/debootstrap --second-stage
-
-# Install deps in the chroot
-RUN scutil emu apt-get update
-RUN scutil emu apt-get install -y --no-install-recommends ghc cabal-install
-RUN scutil emu cabal update
-
-# Generated with: cabal freeze -c 'hashable -arch-native'. We put it in /etc so cabal won't find it.
-COPY cabal.project.freeze /chroot/etc
-
-# Build all dependencies from the freeze file. The emulator segfaults at random,
-# so retry a few times.
-RUN scutil install_from_freeze /chroot/etc/cabal.project.freeze retry 5 emu cabal install --keep-going
+# Prebuild the dependencies
+RUN cabal update && IFS=';' && cabal install --dependencies-only $CABALOPTS ShellCheck
 
 # Copy the build script
-COPY build /chroot/bin/build
-ENTRYPOINT ["/bin/scutil", "emu", "/bin/build"]
+COPY build /usr/bin
+
+WORKDIR /scratch
+ENTRYPOINT ["/usr/bin/build"]
