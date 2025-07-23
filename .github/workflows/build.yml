@@ -83,7 +83,7 @@ jobs:
         run: |
           mkdir -p bin
           mkdir -p bin/${{matrix.build}}
-          ( cd bin && ../build/run_builder ../source/source.tar.gz ../build/${{matrix.build}} )
+          ( cd bin && ../builders/run_builder ../source/source.tar.gz ../builders/${{matrix.build}} )
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
