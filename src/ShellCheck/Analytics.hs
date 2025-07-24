@@ -3119,7 +3119,7 @@ checkShouldUseGrepQ params t =
             T_DollarExpansion _ [x] -> getPipeline x
             T_Pipeline _ _ cmds -> return cmds
             _ -> fail "unknown"
-    isGrep = (`elem` ["grep", "egrep", "fgrep", "zgrep"])
+    isGrep = (`elem` ["grep", "egrep", "fgrep", "bz3grep", "bzgrep", "xzgrep", "zgrep", "zipgrep", "zstdgrep"])
 
 prop_checkTestArgumentSplitting1 = verify checkTestArgumentSplitting "[ -e *.mp3 ]"
 prop_checkTestArgumentSplitting2 = verifyNot checkTestArgumentSplitting "[[ $a == *b* ]]"
