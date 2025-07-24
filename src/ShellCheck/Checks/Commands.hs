@@ -1244,7 +1244,7 @@ checkSudoArgs = CommandCheck (Basename "sudo") f
         command <- getLiteralString commandArg
         guard $ command `elem` builtins
         return $ warn (getId t) 2232 $ "Can't use sudo with builtins like " ++ command ++ ". Did you want sudo sh -c .. instead?"
-    builtins = [ "cd", "eval", "export", "history", "read", "source", "wait" ]
+    builtins = [ "cd", "command", "declare", "eval", "exec", "exit", "export", "hash", "history", "local", "popd", "pushd", "read", "readonly", "return", "set", "source", "trap", "type", "typeset", "ulimit", "umask", "unset", "wait" ]
     -- This mess is why ShellCheck prefers not to know.
     parseOpts = getBsdOpts "vAknSbEHPa:g:h:p:u:c:T:r:"
 
