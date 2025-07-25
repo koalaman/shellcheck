@@ -1808,13 +1808,17 @@ prop_checkBadParameterSubstitution8 = verify checkBadParameterSubstitution "${$(
 prop_checkBadParameterSubstitution9 = verifyNot checkBadParameterSubstitution "$# ${#} $! ${!} ${!#} ${#!}"
 prop_checkBadParameterSubstitution10 = verify checkBadParameterSubstitution "${'foo'}"
 prop_checkBadParameterSubstitution11 = verify checkBadParameterSubstitution "${${x%.*}##*/}"
+prop_checkBadParameterSubstitution12 = verify checkBadParameterSubstitution "${var:-}"
+prop_checkBadParameterSubstitution13 = verifyNot checkBadParameterSubstitution "${var:-x} ${var-} ${var:-$(cmd)}"
+prop_checkBadParameterSubstitution14 = verify checkBadParameterSubstitution "${var:=}"
+prop_checkBadParameterSubstitution15 = verifyNot checkBadParameterSubstitution "${var:=x} ${var=} ${var:=$(cmd)}"
 
-checkBadParameterSubstitution _ t =
+checkBadParameterSubstitution params t =
     case t of
-        (T_DollarBraced i _ (T_NormalWord _ contents@(first:_))) ->
+        (T_DollarBraced i _ (T_NormalWord _ contents@(first:more))) ->
             if isIndirection contents
             then err i 2082 "To expand via indirection, use arrays, ${!name} or (for sh only) eval."
-            else checkFirst first
+            else checkFirst first more
         _ -> return ()
 
   where
@@ -1833,11 +1837,15 @@ checkBadParameterSubstitution _ t =
                                     else Just False
                   _ -> Just False
 
-    checkFirst t =
+    checkFirst t more =
         case t of
-            T_Literal id (c:_) ->
+            T_Literal id s@(c:_) ->
                 if isVariableChar c || isSpecialVariableChar c
-                then return ()
+                then case reverse s of
+                    x : ':' : _ | [] <- more, x `elem` "-=" -> -- i.e., s ends with ":-" or ":="
+                        styleWithFix id 2335 ("Checking for null is unnecessary when replacing with null. Remove the colon.") $
+                            fixWith [ replaceEnd id params 2 [x] ]
+                    _ -> return ()
                 else err id 2296 $ "Parameter expansions can't start with " ++ e4m [c] ++ ". Double check syntax."
 
             T_ParamSubSpecialChar {} -> return ()
