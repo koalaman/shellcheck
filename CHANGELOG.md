@@ -6,10 +6,14 @@
 - SC2331: Suggest using standard -e instead of unary -a in tests.
 - SC2332: Warn about `[ ! -o opt ]` being unconditionally true in Bash.
 - SC3062: Warn about bashism `[ -o opt ]`.
+- Optional `avoid-negated-conditions`: suggest replacing `[ ! a -eq b ]`
+  with `[ a -ne b ]`, and similar for -ge/-lt/=/!=/etc (SC2335).
 - Precompiled binaries for Linux riscv64 (linux.riscv64)
 ### Changed
 - SC2002 about Useless Use Of Cat is now disabled by default. It can be
   re-enabled with `--enable=useless-use-of-cat` or equivalent directive.
+- SC2236/SC2237 about replacing `[ ! -n .. ]` with `[ -z ]` and vice versa
+  is now optional under `avoid-negated-conditions`.
 - SC2015 about `A && B || C` no longer triggers when B is a test command.
 - SC3012: Do not warn about `\<` and `\>` in test/[] as specified in POSIX.1-2024
 - Diff output now uses / as path separator on Windows

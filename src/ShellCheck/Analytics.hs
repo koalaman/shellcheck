@@ -183,7 +183,6 @@ nodeChecks = [
     ,checkPipeToNowhere
     ,checkForLoopGlobVariables
     ,checkSubshelledTests
-    ,checkInvertedStringTest
     ,checkRedirectionToCommand
     ,checkDollarQuoteParen
     ,checkUselessBang
@@ -232,6 +231,13 @@ optionalTreeChecks = [
         cdPositive = "[ \"$var\" ]",
         cdNegative = "[ -n \"$var\" ]"
     }, nodeChecksToTreeCheck [checkNullaryExpansionTest])
+
+    ,(newCheckDescription {
+        cdName = "avoid-negated-conditions",
+        cdDescription = "Suggest removing unnecessary comparison negations",
+        cdPositive = "[ ! \"$var\" -eq 1 ]",
+        cdNegative = "[ \"$var\" -ne 1 ]"
+    }, nodeChecksToTreeCheck [checkUnnecessarilyInvertedTest])
 
     ,(newCheckDescription {
         cdName = "add-default-case",
@@ -3991,12 +3997,17 @@ checkSubshelledTests params t =
             T_Annotation {} -> True
             _ -> False
 
-prop_checkInvertedStringTest1 = verify checkInvertedStringTest "[ ! -z $var ]"
-prop_checkInvertedStringTest2 = verify checkInvertedStringTest "! [[ -n $var ]]"
-prop_checkInvertedStringTest3 = verifyNot checkInvertedStringTest "! [ -x $var ]"
-prop_checkInvertedStringTest4 = verifyNot checkInvertedStringTest "[[ ! -w $var ]]"
-prop_checkInvertedStringTest5 = verifyNot checkInvertedStringTest "[ -z $var ]"
-checkInvertedStringTest _ t =
+prop_checkUnnecessarilyInvertedTest1 = verify checkUnnecessarilyInvertedTest "[ ! -z $var ]"
+prop_checkUnnecessarilyInvertedTest2 = verify checkUnnecessarilyInvertedTest "! [[ -n $var ]]"
+prop_checkUnnecessarilyInvertedTest3 = verifyNot checkUnnecessarilyInvertedTest "! [ -x $var ]"
+prop_checkUnnecessarilyInvertedTest4 = verifyNot checkUnnecessarilyInvertedTest "[[ ! -w $var ]]"
+prop_checkUnnecessarilyInvertedTest5 = verifyNot checkUnnecessarilyInvertedTest "[ -z $var ]"
+prop_checkUnnecessarilyInvertedTest6 = verify checkUnnecessarilyInvertedTest "! [ $var != foo ]"
+prop_checkUnnecessarilyInvertedTest7 = verify checkUnnecessarilyInvertedTest "[[ ! $var == foo ]]"
+prop_checkUnnecessarilyInvertedTest8 = verifyNot checkUnnecessarilyInvertedTest "! [[ $var =~ .* ]]"
+prop_checkUnnecessarilyInvertedTest9 = verify checkUnnecessarilyInvertedTest "[ ! $var -eq 0 ]"
+prop_checkUnnecessarilyInvertedTest10 = verify checkUnnecessarilyInvertedTest "! [[ $var -gt 3 ]]"
+checkUnnecessarilyInvertedTest _ t =
     case t of
         TC_Unary _ _ "!" (TC_Unary _ _ op _) ->
             case op of
@@ -4009,7 +4020,34 @@ checkInvertedStringTest _ t =
                 "-n" -> style (getId t) 2237 "Use [ -z .. ] instead of ! [ -n .. ]."
                 "-z" -> style (getId t) 2237 "Use [ -n .. ] instead of ! [ -z .. ]."
                 _ -> return ()
+        TC_Unary _ _ "!" (TC_Binary _ bracketStyle op _ _) ->
+            maybeSuggestRewrite True bracketStyle (getId t) op
+        T_Banged _ (T_Pipeline _ _
+          [T_Redirecting _ _ (T_Condition _ _ (TC_Binary _ bracketStyle op _ _))]) ->
+            maybeSuggestRewrite False bracketStyle (getId t) op
         _ -> return ()
+  where
+    inversionMap = Map.fromList [
+        ("=",  "!="),
+        ("==", "!="),
+        ("!=", "="),
+        ("-eq", "-ne"),
+        ("-ne", "-eq"),
+        ("-le", "-gt"),
+        ("-gt", "-le"),
+        ("-ge", "-lt"),
+        ("-lt", "-ge")
+      ]
+    maybeSuggestRewrite bangInside bracketStyle id op = sequence_ $ do
+        newOp <- Map.lookup op inversionMap
+        let oldExpr = "a " ++ op ++ " b"
+        let newExpr = "a " ++ newOp ++ " b"
+        let bracket s = if bracketStyle == SingleBracket then "[ " ++ s ++ " ]" else "[[ " ++ s ++ " ]]"
+        return $
+            if bangInside
+                then style id 2335 $ "Use " ++ newExpr ++ " instead of ! " ++ oldExpr ++ "."
+                else style id 2335 $ "Use " ++ (bracket newExpr) ++ " instead of ! " ++ (bracket oldExpr) ++ "."
+
 
 prop_checkRedirectionToCommand1 = verify checkRedirectionToCommand "ls > rm"
 prop_checkRedirectionToCommand2 = verifyNot checkRedirectionToCommand "ls > 'rm'"
