@@ -116,6 +116,10 @@ Services and platforms that have ShellCheck pre-installed and ready to use:
 * [Trunk Check](https://trunk.io/products/check) (universal linter; [allows you to explicitly version your shellcheck install](https://github.com/trunk-io/plugins/blob/bcbb361dcdbe4619af51ea7db474d7fb87540d20/.trunk/trunk.yaml#L32)) via the [shellcheck plugin](https://github.com/trunk-io/plugins/blob/main/linters/shellcheck/plugin.yaml)
 * [CodeRabbit](https://coderabbit.ai/)
 
+Services and platforms with third-party plugins:
+
+* [SonarQube](https://www.sonarqube.org/) through [sonar-shellcheck](https://github.com/sbaudoin/sonar-shellcheck)
+
 Most other services, including [GitLab](https://about.gitlab.com/), let you install
 ShellCheck yourself, either through the system's package manager (see [Installing](#installing)),
 or by downloading and unpacking a [binary release](#installing-a-pre-compiled-binary).
