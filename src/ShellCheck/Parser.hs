@@ -2759,6 +2759,8 @@ prop_readFunctionDefinition10 = isOk readFunctionDefinition "function foo () { t
 prop_readFunctionDefinition11 = isWarning readFunctionDefinition "function foo{\ntrue\n}"
 prop_readFunctionDefinition12 = isOk readFunctionDefinition "function []!() { true; }"
 prop_readFunctionDefinition13 = isOk readFunctionDefinition "@require(){ true; }"
+prop_readFunctionDefinition14 = isOk readFunctionDefinition "foo#bar(){ :; }"
+prop_readFunctionDefinition15 = isNotOk readFunctionDefinition "#bar(){ :; }"
 readFunctionDefinition = called "function" $ do
     start <- startSpan
     functionSignature <- try readFunctionSignature
