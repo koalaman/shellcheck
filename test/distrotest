@@ -8,6 +8,15 @@ die() { echo "$*" >&4; exit 1; }
 
 [ -e "ShellCheck.cabal" ] || die "ShellCheck.cabal not in this dir"
 
+if ( snap list | grep -q docker ) > /dev/null 2>&1
+then
+  # Snap docker can't mount /tmp in containers
+  echo "You appear to be using Docker from snap. Creating ~/tmp for temp files." >&2
+  echo >&2
+  export TMPDIR="$HOME/tmp"
+  mkdir -p "$TMPDIR"
+fi
+
 [ "$1" = "--run" ] || {
 cat << EOF
 This script pulls multiple distros via Docker and compiles
