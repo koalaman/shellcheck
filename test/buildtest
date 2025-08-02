@@ -12,6 +12,12 @@ command -v cabal ||
 cabal update ||
   die "can't update"
 
+if [ -e "cabal.project.freeze" ]
+then
+  echo "Renaming cabal.project.freeze to .bak to avoid it interferring" >&2
+  mv "cabal.project.freeze" "cabal.project.freeze.bak" || die "Couldn't rename"
+fi
+
 if [ -e /etc/arch-release ]
 then
   # Arch has an unconventional packaging setup
