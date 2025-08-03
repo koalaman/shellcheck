@@ -12,6 +12,11 @@ then
   fail "There are uncommitted changes"
 fi
 
+if [[ $(git log -1 --pretty=%B) != *"CHANGELOG"* ]]
+then
+  fail "Expected git log message to contain CHANGELOG"
+fi
+
 version=${current#v}
 if ! grep "Version:" ShellCheck.cabal | grep -qFw "$version"
 then
@@ -50,11 +55,6 @@ then
   fail "Expected git log message to be 'Stable version ...'"
 fi
 
-if [[ $(git log -1 --pretty=%B) != *"CHANGELOG"* ]]
-then
-  fail "Expected git log message to contain CHANGELOG"
-fi
-
 i=1 j=1
 cat << EOF
 
@@ -66,7 +66,7 @@ $((j++)). \`builders/run_builder dist-newstyle/sdist/ShellCheck-*.tar.gz builder
 $((j++)). \`for f in \$(cat build/*/tag); do docker push "\$f"; done\` to upload them.
 $((i++)). Run test/distrotest to ensure that most distros can build OOTB.
 $((i++)). Make sure GitHub Build currently passes: https://github.com/koalaman/shellcheck/actions
-$((i++)). Make sure SnapCraft build currently works: https://build.snapcraft.io/user/koalaman
+$((i++)). Make sure SnapCraft build currently works: https://snapcraft.io/shellcheck/builds
 $((i++)). Format and read over the manual for bad formatting and outdated info.
 $((i++)). Make sure the Hackage package builds locally.
 
@@ -80,5 +80,6 @@ $((j++)). Verify release:
   b. Check that the docker images have version tags: https://hub.docker.com/u/koalaman
 $((j++)). If no disaster, upload to Hackage: http://hackage.haskell.org/upload
 $((j++)). Push a new commit that updates CHANGELOG.md
+$((j++)). Run 'autoupdate' from https://github.com/koalaman/shellcheck-precommit
 EOF
 exit "$failed"
