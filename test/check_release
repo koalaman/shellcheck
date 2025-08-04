@@ -7,6 +7,39 @@ fail() {
   failed=1
 }
 
+i=1 j=1
+cat << EOF
+
+Manual Checklist
+
+$((i++)). Make sure README.md examples are up to date
+$((i++)). Format and read over the manual for bad formatting and outdated info.
+$((i++)). Run \`builders/build_builder build/*/\` to update all builder images.
+$((i++)). \`builders/run_builder dist-newstyle/sdist/ShellCheck-*.tar.gz builders/*/\` to verify that they work.
+$((i++)). \`for f in \$(cat build/*/tag); do docker push "\$f"; done\` to upload them.
+$((i++)). Run test/distrotest to ensure that most distros can build OOTB.
+$((i++)). Make sure GitHub Build currently passes: https://github.com/koalaman/shellcheck/actions
+$((i++)). Make sure SnapCraft build currently works: https://snapcraft.io/shellcheck/builds
+$((i++)). Make sure the Hackage package builds locally.
+$((i++)). Make sure none of the automated checks below fail
+
+Release Steps
+
+$((j++)). \`cabal sdist\` to generate a Hackage package
+$((j++)). \`git push --follow-tags\` to push commit
+$((j++)). Wait for GitHub Actions to build. (v0.11.0 "Deploy" failed, but worked on retry)
+$((j++)). Verify release:
+  a. Check that the new versions are uploaded: https://github.com/koalaman/shellcheck/tags
+  b. Check that the docker images have version tags: https://hub.docker.com/u/koalaman
+$((j++)). If no disaster, upload to Hackage: http://hackage.haskell.org/upload
+$((j++)). Run 'autoupdate' from https://github.com/koalaman/shellcheck-precommit
+$((j++)). Release new snap versions on https://snapcraft.io/shellcheck/releases
+$((j++)). Push a new commit that updates CHANGELOG.md
+
+Automated Checks
+
+EOF
+
 if git diff | grep -q ""
 then
   fail "There are uncommitted changes"
@@ -54,32 +87,4 @@ if [[ $(git log -1 --pretty=%B) != "Stable version "* ]]
 then
   fail "Expected git log message to be 'Stable version ...'"
 fi
-
-i=1 j=1
-cat << EOF
-
-Manual Checklist
-
-$((i++)). Make sure none of the automated checks above failed
-$((i++)). Run \`builders/build_builder build/*/\` to update all builder images.
-$((j++)). \`builders/run_builder dist-newstyle/sdist/ShellCheck-*.tar.gz builders/*/\` to verify that they work.
-$((j++)). \`for f in \$(cat build/*/tag); do docker push "\$f"; done\` to upload them.
-$((i++)). Run test/distrotest to ensure that most distros can build OOTB.
-$((i++)). Make sure GitHub Build currently passes: https://github.com/koalaman/shellcheck/actions
-$((i++)). Make sure SnapCraft build currently works: https://snapcraft.io/shellcheck/builds
-$((i++)). Format and read over the manual for bad formatting and outdated info.
-$((i++)). Make sure the Hackage package builds locally.
-
-Release Steps
-
-$((j++)). \`cabal sdist\` to generate a Hackage package
-$((j++)). \`git push --follow-tags\` to push commit
-$((j++)). Wait for GitHub Actions to build.
-$((j++)). Verify release:
-  a. Check that the new versions are uploaded: https://github.com/koalaman/shellcheck/tags
-  b. Check that the docker images have version tags: https://hub.docker.com/u/koalaman
-$((j++)). If no disaster, upload to Hackage: http://hackage.haskell.org/upload
-$((j++)). Push a new commit that updates CHANGELOG.md
-$((j++)). Run 'autoupdate' from https://github.com/koalaman/shellcheck-precommit
-EOF
 exit "$failed"
