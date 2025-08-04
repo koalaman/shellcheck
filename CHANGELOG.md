@@ -1,3 +1,13 @@
+## Git
+### Added
+
+### Changed
+
+### Fixed
+
+### Removed
+
+
 ## v0.11.0 - 2025-08-03
 ### Added
 - SC2327/SC2328: Warn about capturing the output of redirected commands.
