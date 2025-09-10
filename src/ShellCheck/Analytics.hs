@@ -169,6 +169,7 @@ nodeChecks = [
     ,checkConcatenatedDollarAt
     ,checkTildeInPath
     ,checkReadWithoutR
+    ,checkCpLegacyR
     ,checkLoopVariableReassignment
     ,checkTrailingBracket
     ,checkReturnAgainstZero
@@ -3244,6 +3245,17 @@ checkReadWithoutR _ t@T_SimpleCommand {} | t `isUnqualifiedCommand` "read"
         getLiteralString t
 
 checkReadWithoutR _ _ = return ()
+
+prop_checkCpLegacyR1 = verify checkCpLegacyR "cp -r foo bar"
+prop_checkCpLegacyR2 = verifyNot checkCpLegacyR "cp -R foo bar"
+checkCpLegacyR params t@T_SimpleCommand {} | t `isUnqualifiedCommand` "cp" = case legacyFlag of
+  Just (t, _) -> warnWithFix (getId t) 2336 "cp -r behavior is implementation-defined"
+                     (fixWith [replaceToken (getId t) params "-R"])
+  Nothing -> return ()
+  where
+    flags = getAllFlags t
+    legacyFlag = find ((=="r") . snd) flags
+checkCpLegacyR _ _ = return ()
 
 prop_checkUncheckedCd1 = verifyTree checkUncheckedCdPushdPopd "cd ~/src; rm -r foo"
 prop_checkUncheckedCd2 = verifyNotTree checkUncheckedCdPushdPopd "cd ~/src || exit; rm -r foo"
