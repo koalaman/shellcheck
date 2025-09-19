@@ -104,31 +104,31 @@ commonCommands = [
     "compress", "continue", "cp", "crontab", "csplit", "ctags", "cut",
     "cxref", "date", "dd", "delta", "df", "diff", "dirname", "dot",
     "du", "echo", "ed", "env", "eval", "ex", "exec", "exit", "expand",
-    "export", "expr", "fc", "fg", "file", "find", "fold", "fort77",
-    "fuser", "gencat", "get", "getconf", "getopts", "grep", "hash",
+    "export", "expr", "fc", "fg", "file", "find", "fold", "fuser",
+    "gencat", "get", "getconf", "getopts", "gettext", "grep", "hash",
     "head", "iconv", "ipcrm", "ipcs", "jobs", "join", "kill", "lex",
     "link", "ln", "locale", "localedef", "logger", "logname", "lp",
     "ls", "m4", "mailx", "make", "man", "mesg", "mkdir", "mkfifo",
-    "more", "mv", "newgrp", "nice", "nl", "nm", "nohup", "od", "paste",
-    "patch", "pathchk", "pax", "pr", "printf", "prs", "ps", "pwd",
-    "qalter", "qdel", "qhold", "qmove", "qmsg", "qrerun", "qrls",
-    "qselect", "qsig", "qstat", "qsub", "read", "readonly", "renice",
-    "return", "rm", "rmdel", "rmdir", "sact", "sccs", "sed", "set",
-    "sh", "shift", "sleep", "sort", "split", "strings", "strip", "stty",
-    "tabs", "tail", "talk", "tee", "test", "time", "times", "touch",
-    "tput", "tr", "trap", "tsort", "tty", "type", "ulimit", "umask",
-    "unalias", "uname", "uncompress", "unexpand", "unget", "uniq",
-    "unlink", "unset", "uucp", "uudecode", "uuencode", "uustat", "uux",
-    "val", "vi", "wait", "wc", "what", "who", "write", "xargs", "yacc",
-    "zcat"
+    "more", "msgfmt", "mv", "newgrp", "ngettext", "nice", "nl", "nm",
+    "nohup", "od", "paste", "patch", "pathchk", "pax", "pr", "printf",
+    "prs", "ps", "pwd", "read", "readlink", "readonly", "realpath",
+    "renice", "return", "rm", "rmdel", "rmdir", "sact", "sccs", "sed",
+    "set", "sh", "shift", "sleep", "sort", "split", "strings", "strip",
+    "stty", "tabs", "tail", "talk", "tee", "test", "time", "timeout",
+    "times", "touch", "tput", "tr", "trap", "tsort", "tty", "type",
+    "ulimit", "umask", "unalias", "uname", "uncompress", "unexpand",
+    "unget", "uniq", "unlink", "unset", "uucp", "uudecode", "uuencode",
+    "uustat", "uux", "val", "vi", "wait", "wc", "what", "who", "write",
+    "xargs", "xgettext", "yacc", "zcat"
   ]
 
 nonReadingCommands = [
     "alias", "basename", "bg", "cal", "cd", "chgrp", "chmod", "chown",
     "cp", "du", "echo", "export", "fg", "fuser", "getconf",
     "getopt", "getopts", "ipcrm", "ipcs", "jobs", "kill", "ln", "ls",
-    "locale", "mv", "printf", "ps", "pwd", "renice", "rm", "rmdir",
-    "set", "sleep", "touch", "trap", "ulimit", "unalias", "uname"
+    "locale", "mv", "printf", "ps", "pwd", "readlink", "realpath",
+    "renice", "rm", "rmdir", "set", "sleep", "touch", "trap", "ulimit",
+    "unalias", "uname"
     ]
 
 sampleWords = [
