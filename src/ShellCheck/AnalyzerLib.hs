@@ -224,9 +224,9 @@ makeParameters spec = params
         hasPipefail =
             case shellType params of
                 Bash -> isOptionSet "pipefail" root
-                Dash -> True
+                Dash -> isOptionSet "pipefail" root
                 BusyboxSh -> isOptionSet "pipefail" root
-                Sh   -> True
+                Sh -> isOptionSet "pipefail" root
                 Ksh  -> isOptionSet "pipefail" root,
         hasExecfail =
             case shellType params of
