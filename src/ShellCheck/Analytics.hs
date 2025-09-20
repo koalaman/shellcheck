@@ -2349,6 +2349,8 @@ prop_checkFunctionsUsedExternally8 =
   verifyTree checkFunctionsUsedExternally "foo() { :; }; command sudo foo"
 prop_checkFunctionsUsedExternally9 =
   verifyTree checkFunctionsUsedExternally "foo() { :; }; exec -c doas foo"
+prop_checkFunctionsUsedExternally10 =
+  verifyTree checkFunctionsUsedExternally "foo() { :; }; timeout -p 10 foo"
 checkFunctionsUsedExternally params t =
     runNodeAnalysis checkCommand params t
   where
@@ -2376,6 +2378,7 @@ checkFunctionsUsedExternally params t =
             "run0" -> firstNonFlag
             "xargs" -> firstNonFlag
             "tmux" -> firstNonFlag
+            "timeout" -> take 1 $ drop 1 $ dropFlags argAndString
             "ssh" -> take 1 $ drop 1 $ dropFlags argAndString
             "find" -> take 1 $ drop 1 $
                 dropWhile (\x -> fst x `notElem` findExecFlags) argAndString
