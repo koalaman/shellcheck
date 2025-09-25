@@ -483,7 +483,7 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
         "BASH_ARGV", "BASH_ARGV0", "BASH_CMDS", "BASH_COMMAND",
         "BASH_EXECUTION_STRING", "BASH_LINENO", "BASH_REMATCH", "BASH_SOURCE",
         "BASH_SUBSHELL", "BASH_VERSINFO", "EPOCHREALTIME", "EPOCHSECONDS",
-        "FUNCNAME", "GROUPS", "MACHTYPE", "MAPFILE"
+        "FUNCNAME", "GROUPS", "MAPFILE"
         ]
     bashDynamicVars = [ "RANDOM", "SECONDS" ]
     dashVars = [ "_" ]
