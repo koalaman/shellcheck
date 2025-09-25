@@ -175,7 +175,7 @@ prop_checkBashisms80 = verifyNot checkBashisms "#!/bin/sh\nhash -r"
 prop_checkBashisms81 = verifyNot checkBashisms "#!/bin/dash\nhash -v"
 prop_checkBashisms82 = verifyNot checkBashisms "#!/bin/sh\nset -v +o allexport -o errexit -C"
 prop_checkBashisms83 = verifyNot checkBashisms "#!/bin/sh\nset --"
-prop_checkBashisms84 = verify checkBashisms "#!/bin/sh\nset -o pipefail"
+prop_checkBashisms84 = verifyNot checkBashisms "#!/bin/sh\nset -o pipefail"
 prop_checkBashisms85 = verify checkBashisms "#!/bin/sh\nset -B"
 prop_checkBashisms86 = verifyNot checkBashisms "#!/bin/dash\nset -o emacs"
 prop_checkBashisms87 = verify checkBashisms "#!/bin/sh\nset -o emacs"
@@ -383,8 +383,8 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
         beginsWithDoubleDash = (`matches` mkRegex "^--.+$")
         longOptions          = Set.fromList
             [ "allexport", "errexit", "ignoreeof", "monitor", "noclobber"
-            , "noexec", "noglob", "nolog", "notify" , "nounset", "verbose"
-            , "vi", "xtrace" ]
+            , "noexec", "noglob", "nolog", "notify" , "nounset", "pipefail"
+            , "verbose", "vi", "xtrace" ]
 
     bashism t@(T_SimpleCommand id _ (cmd:rest)) =
         let name = fromMaybe "" $ getCommandName t
