@@ -14,6 +14,7 @@ cabal.sandbox.config
 cabal.config
 cabal.project.freeze
 .stack-work
+stack.yaml.lock
 
 ### Snap ###
 /snap/.snapcraft/
@@ -22,3 +23,6 @@ cabal.project.freeze
 /prime/
 *.snap
 /dist-newstyle/
+
+### misc ###
+/shellcheck.1
