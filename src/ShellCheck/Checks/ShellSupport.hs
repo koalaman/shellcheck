@@ -148,8 +148,8 @@ prop_checkBashisms53 = verifyNot checkBashisms "#!/bin/sh\nprintf -- -f\n"
 prop_checkBashisms54 = verify checkBashisms "#!/bin/sh\nfoo+=bar"
 prop_checkBashisms55 = verify checkBashisms "#!/bin/sh\necho ${@%foo}"
 prop_checkBashisms56 = verifyNot checkBashisms "#!/bin/sh\necho ${##}"
-prop_checkBashisms57 = verifyNot checkBashisms "#!/bin/dash\nulimit -c 0"
-prop_checkBashisms58 = verify checkBashisms "#!/bin/sh\nulimit -c 0"
+prop_checkBashisms57 = verifyNot checkBashisms "#!/bin/dash\nulimit -m unlimited"
+prop_checkBashisms58 = verify checkBashisms "#!/bin/sh\nulimit -x unlimited"
 prop_checkBashisms59 = verify checkBashisms "#!/bin/sh\njobs -s"
 prop_checkBashisms60 = verifyNot checkBashisms "#!/bin/sh\njobs -p"
 prop_checkBashisms61 = verifyNot checkBashisms "#!/bin/sh\njobs -lp"
@@ -446,7 +446,12 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
             ("readonly", Just ["p"]),
             ("trap", Just []),
             ("type", Just $ if isBusyboxSh then ["p"] else []),
-            ("ulimit", if isDash then Nothing else Just ["f"]),
+            ("ulimit",
+              Just $
+                if isDash
+                  then ["H", "S", "a", "c", "d", "f", "l", "m", "n", "p", "r", "s", "t", "v", "w"]
+                  else ["H", "S", "a", "c", "d", "f", "n", "s", "t", "v"] -- POSIX.1-2024
+            ),
             ("umask", Just ["S"]),
             ("unset", Just ["f", "v"]),
             ("wait", Just [])
