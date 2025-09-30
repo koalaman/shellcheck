@@ -37,7 +37,7 @@ Extra-Source-Files:
 
 source-repository head
     type: git
-    location: git://github.com/koalaman/shellcheck.git
+    location: https://github.com/koalaman/shellcheck.git
 
 library
     hs-source-dirs: src
