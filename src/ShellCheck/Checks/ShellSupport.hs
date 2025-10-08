@@ -484,13 +484,18 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
         -- for shell identification.
         "OSTYPE", "MACHTYPE", "HOSTTYPE", "HOSTNAME",
         "DIRSTACK", "EUID", "UID", "SHLVL", "PIPESTATUS", "SHELLOPTS",
-        "_", "BASHOPTS", "BASHPID", "BASH_ALIASES", "BASH_ARGC",
+        "_", "BASH", "BASHOPTS", "BASHPID", "BASH_ALIASES", "BASH_ARGC",
         "BASH_ARGV", "BASH_ARGV0", "BASH_CMDS", "BASH_COMMAND",
-        "BASH_EXECUTION_STRING", "BASH_LINENO", "BASH_REMATCH", "BASH_SOURCE",
-        "BASH_SUBSHELL", "BASH_VERSINFO", "EPOCHREALTIME", "EPOCHSECONDS",
-        "FUNCNAME", "GROUPS", "MAPFILE"
+        "BASH_EXECUTION_STRING", "BASH_LINENO", "BASH_LOADABLES_PATH",
+        "BASH_REMATCH", "BASH_SOURCE", "BASH_SUBSHELL", "BASH_VERSINFO",
+        "COMP_CWORD", "COMP_KEY", "COMP_LINE", "COMP_POINT", "COMP_TYPE",
+        "COMP_WORDBREAKS", "COMP_WORDS", "COPROC", "FUNCNAME", "GROUPS",
+        "HISTCMD", "MAPFILE", "OPTARG"
         ]
-    bashDynamicVars = [ "RANDOM", "SECONDS" ]
+    bashDynamicVars = [
+        "BASH_MONOSECONDS", "EPOCHREALTIME", "EPOCHSECONDS", "RANDOM",
+        "SECONDS", "SRANDOM"
+        ]
     dashVars = [ "_" ]
     isBashVariable var =
         (var `elem` bashDynamicVars
