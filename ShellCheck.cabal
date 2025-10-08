@@ -97,7 +97,7 @@ library
       ShellCheck.Regex
     other-modules:
       Paths_ShellCheck
-    default-language: Haskell98
+    default-language: Haskell2010
 
 executable shellcheck
     if impl(ghc < 8.0)
@@ -120,7 +120,7 @@ executable shellcheck
       regex-tdfa,
       transformers,
       ShellCheck
-    default-language: Haskell98
+    default-language: Haskell2010
     main-is: shellcheck.hs
 
 test-suite test-shellcheck
@@ -142,5 +142,5 @@ test-suite test-shellcheck
       regex-tdfa,
       transformers,
       ShellCheck
-    default-language: Haskell98
+    default-language: Haskell2010
     main-is: test/shellcheck.hs

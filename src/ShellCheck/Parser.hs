@@ -21,6 +21,7 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE NondecreasingIndentation #-}
 module ShellCheck.Parser (parseScript, runTests) where
 
 import ShellCheck.AST
