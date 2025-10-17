@@ -490,7 +490,7 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
         "BASH_REMATCH", "BASH_SOURCE", "BASH_SUBSHELL", "BASH_VERSINFO",
         "COMP_CWORD", "COMP_KEY", "COMP_LINE", "COMP_POINT", "COMP_TYPE",
         "COMP_WORDBREAKS", "COMP_WORDS", "COPROC", "FUNCNAME", "GROUPS",
-        "HISTCMD", "MAPFILE", "OPTARG"
+        "HISTCMD", "MAPFILE"
         ]
     bashDynamicVars = [
         "BASH_MONOSECONDS", "EPOCHREALTIME", "EPOCHSECONDS", "RANDOM",
