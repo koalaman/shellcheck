@@ -43,17 +43,20 @@ jobs:
           path: source/
 
   run_tests:
-    name: Run tests
+    name: Run tests (GHC ${{ matrix.ghc }})
     needs: package_source
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        ghc: ['8.0', '8.10', '9.0.1', 'latest']
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@v4
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update && sudo apt-get install ghc cabal-install
-          cabal update
+      - name: Setup Haskell
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: ${{ matrix.ghc }}
 
       - name: Unpack source
         run: |
