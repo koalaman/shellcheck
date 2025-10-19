@@ -176,3 +176,5 @@ flagsForRead = "sreu:n:N:i:p:a:t:"
 flagsForMapfile = "d:n:O:s:u:C:c:t"
 
 declaringCommands = ["local", "declare", "export", "readonly", "typeset", "let"]
+
+privilegeElevationCommands = ["sudo", "doas", "run0"]
