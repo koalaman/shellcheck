@@ -2336,7 +2336,7 @@ prop_checkFunctionsUsedExternally2 =
 prop_checkFunctionsUsedExternally2b =
   verifyNotTree checkFunctionsUsedExternally "alias f='a'; find . -type f"
 prop_checkFunctionsUsedExternally2c =
-  verifyTree checkFunctionsUsedExternally "alias f='a'; find . -type f -exec f +"
+  verifyTree checkFunctionsUsedExternally "alias f='a'; find . -type f -exec f {} +"
 prop_checkFunctionsUsedExternally3 =
   verifyNotTree checkFunctionsUsedExternally "f() { :; }; echo f"
 prop_checkFunctionsUsedExternally4 =
