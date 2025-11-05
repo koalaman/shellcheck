@@ -768,7 +768,9 @@ checkFindExec _ cmd@(T_SimpleCommand _ _ t@(h:r)) | cmd `isCommand` "find" = do
         when v (mapM_ warnFor $ fromWord w)
         case getLiteralString w of
             Just "-exec" -> broken r True
-            Just "-execdir" -> broken r True
+            Just "-execdir" -> broken r True -- n.b. -execdir ;/+ is not defined in POSIX
+            Just "-ok" -> broken r True      -- n.b. -ok + is not defined in POSIX
+            Just "-okdir" -> broken r True   -- n.b. -okdir ;/+ is not defined in POSIX
             Just "+" -> broken r False
             Just ";" -> broken r False
             _ -> broken r v
@@ -1142,7 +1144,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
 
     getFindCommand (T_SimpleCommand _ _ words) =
         let list = map getLiteralString words
-            cmd  = dropWhile (\x -> x /= Just "-exec" && x /= Just "-execdir") list
+            cmd  = dropWhile (\x -> x `notElem` map Just ["-exec", "-execdir", "-ok", "-okdir"]) list
         in
           case cmd of
             (flag:cmd:rest) -> fromMaybe "find" cmd
@@ -2336,7 +2338,7 @@ prop_checkFunctionsUsedExternally2 =
 prop_checkFunctionsUsedExternally2b =
   verifyNotTree checkFunctionsUsedExternally "alias f='a'; find . -type f"
 prop_checkFunctionsUsedExternally2c =
-  verifyTree checkFunctionsUsedExternally "alias f='a'; find . -type f -exec f +"
+  verifyTree checkFunctionsUsedExternally "alias f='a'; find . -type f -exec f {} +"
 prop_checkFunctionsUsedExternally3 =
   verifyNotTree checkFunctionsUsedExternally "f() { :; }; echo f"
 prop_checkFunctionsUsedExternally4 =
@@ -2387,7 +2389,7 @@ checkFunctionsUsedExternally params t =
             _ -> []
       where
         firstNonFlag = take 1 $ dropFlags argAndString
-        findExecFlags = ["-exec", "-execdir", "-ok"]
+        findExecFlags = ["-exec", "-execdir", "-ok", "-okdir"]
         dropFlags = dropWhile (\x -> "-" `isPrefixOf` fst x)
 
     functionsAndAliases = Map.union (functions t) (aliases t)
