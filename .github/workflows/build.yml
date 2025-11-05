@@ -51,7 +51,7 @@ jobs:
         ghc: ['8.0', '8.10', '9.0.1', 'latest']
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
 
       - name: Setup Haskell
         uses: haskell-actions/setup@v2
@@ -80,7 +80,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
 
       - name: Build source
         run: |
@@ -103,7 +103,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
 
       - name: Work around GitHub permissions bug
         run: chmod +x *.bin/*/shellcheck*
@@ -138,7 +138,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
 
       - name: Upload to GitHub
         env:
