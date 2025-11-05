@@ -52,6 +52,9 @@ jobs:
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@v6
+        with:
+          name: source
+          path: source/
 
       - name: Setup Haskell
         uses: haskell-actions/setup@v2
@@ -81,6 +84,9 @@ jobs:
 
       - name: Download artifacts
         uses: actions/download-artifact@v6
+        with:
+          name: source
+          path: source/
 
       - name: Build source
         run: |
@@ -104,6 +110,9 @@ jobs:
 
       - name: Download artifacts
         uses: actions/download-artifact@v6
+
+      - name: List files for debugging
+        run: find .
 
       - name: Work around GitHub permissions bug
         run: chmod +x *.bin/*/shellcheck*
@@ -137,8 +146,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Download artifacts
+      - name: Download artifacts (source)
         uses: actions/download-artifact@v6
+        with:
+          name: source
+          path: source/
+
+      - name: Download artifacts (binaries)
+        uses: actions/download-artifact@v6
+        with:
+          name: deploy
+          path: deploy/
 
       - name: Upload to GitHub
         env:
