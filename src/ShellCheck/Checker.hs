@@ -55,7 +55,8 @@ shellFromFilename filename = listToMaybe candidates
     shellExtensions = [(".ksh", Ksh)
                       ,(".bash", Bash)
                       ,(".bats", Bash)
-                      ,(".dash", Dash)]
+                      ,(".dash", Dash)
+                      ,(".envrc", Bash)]
                       -- The `.sh` is too generic to determine the shell:
                       -- We fallback to Bash in this case and emit SC2148 if there is no shebang
     candidates =
@@ -305,6 +306,13 @@ prop_deducesTypeFromExtension2 = result == [2079]
   where
     result = checkWithSpec [] emptyCheckSpec {
         csFilename = "file.bash",
+        csScript = "(( 3.14 ))"
+    }
+
+prop_deducesTypeFromEnvrcExtension = result == [2079]
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = ".envrc",
         csScript = "(( 3.14 ))"
     }
 
