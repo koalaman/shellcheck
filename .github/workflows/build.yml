@@ -15,7 +15,7 @@ jobs:
           sudo apt-get install cabal-install
 
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -80,7 +80,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Download artifacts
         uses: actions/download-artifact@v6
@@ -106,7 +106,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Download artifacts
         uses: actions/download-artifact@v6
@@ -144,7 +144,7 @@ jobs:
           sudo apt-get install hub
 
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Download artifacts (source)
         uses: actions/download-artifact@v6
