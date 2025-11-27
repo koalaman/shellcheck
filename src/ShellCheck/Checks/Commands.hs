@@ -691,7 +691,7 @@ checkPrintfVar = CommandCheck (Exactly "printf") (f . arguments) where
             let formats = getPrintfFormats string
             let formatCount = length formats
             let argCount = length more
-            let pluraliseIfMany word n = if n > 1 then word ++ "s" else word
+            let pluraliseIfMany word n = if n == 1 then word else word ++ "s"
 
             return $ if
                 | argCount == 0 && formatCount == 0 ->
