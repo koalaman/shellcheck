@@ -470,9 +470,9 @@ checkFindExecWithSingleArgument = CommandCheck (Basename "find") (f . arguments)
         termS <- getLiteralString term
         let cmdS = getLiteralStringDef " " arg
 
-        guard $ execS `elem` ["-exec", "-execdir"] && termS `elem` [";", "+"]
+        guard $ execS `elem` ["-exec", "-execdir", "-ok", "-okdir"] && termS `elem` [";", "+"]
         guard $ cmdS `matches` commandRegex
-        return $ warn (getId exec) 2150 "-exec does not invoke a shell. Rewrite or use -exec sh -c .. ."
+        return $ warn (getId exec) 2150 (execS ++ " does not invoke a shell. Rewrite or use " ++ execS ++ " sh -c .. .")
     check _ = Nothing
     commandRegex = mkRegex "[ |;]"
 
@@ -505,7 +505,7 @@ checkUnusedEchoEscapes = CommandCheck (Basename "echo") f
 
 prop_checkInjectableFindSh1 = verify checkInjectableFindSh "find . -exec sh -c 'echo {}' \\;"
 prop_checkInjectableFindSh2 = verify checkInjectableFindSh "find . -execdir bash -c 'rm \"{}\"' ';'"
-prop_checkInjectableFindSh3 = verifyNot checkInjectableFindSh "find . -exec sh -c 'rm \"$@\"' _ {} \\;"
+prop_checkInjectableFindSh3 = verifyNot checkInjectableFindSh "find . -ok sh -c 'rm \"$@\"' _ {} \\;"
 checkInjectableFindSh = CommandCheck (Basename "find") (check . arguments)
   where
     check args = do
@@ -519,7 +519,7 @@ checkInjectableFindSh = CommandCheck (Basename "find") (check . arguments)
         match (p:tests) args
 
     pattern = [
-        (`elem` ["-exec", "-execdir"]),
+        (`elem` ["-exec", "-execdir", "-ok", "-okdir"]),
         (`elem` ["sh", "bash", "dash", "ksh"]),
         (== "-c")
         ]
