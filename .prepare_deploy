@@ -42,6 +42,7 @@ do
   do
     base="${dir%/}"
     ( cd "$dir" && tar -cJf "../shellcheck-$tag.$base.tar.xz" --transform="s:^:shellcheck-$tag/:" * )
+    ( cd "$dir" && tar -czf "../shellcheck-$tag.$base.tar.gz" --transform="s:^:shellcheck-$tag/:" * )
   done
 done
 
