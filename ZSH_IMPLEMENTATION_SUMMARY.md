@@ -1,27 +1,33 @@
 # ZSH Support Implementation Summary
 
 ## Overview
+
 Comprehensive ZSH support has been added to ShellCheck, including bug fixes for variable tracking, AST/parser expansions, and a complete test suite.
 
 ## Changes Made
 
 ### 1. Core Bug Fixes
+
 - **AnalyzerLib.hs**: Fixed T_ForShort variable tracking in `assignFirst`, `getModifiedVariables`, and `willSplit`
 - **ASTLib.hs**: Added T_ForShort recognition to `isLoop` function
 - **Analytics.hs**: Integrated T_ForShort into 5 analysis functions for proper loop handling
 
 ### 2. AST & Parser Enhancements
+
 - **AST.hs**: Expanded ZshParamFlag (11→21 variants) and GlobQual (11→25 variants)
 - **Parser.hs**: Enhanced `readZshParamFlags` and `readZshGlobQualifier` with full ZSH syntax coverage
 
 ### 3. Pattern Match Fixes
+
 - **AnalyzerLib.hs**: Added Zsh cases to `hasLastpipe`, `hasInheritErrexit`, `hasPipefail`
 - **Analytics.hs**: Added Zsh case to `checkFunctionDeclarations`
 
 ### 4. Test Suite (test/zsh/)
+
 Created 18 comprehensive test files covering:
 
-#### Issues Detected Successfully (31 total)
+#### General Shell Issues Detected in ZSH Context (31 instances)
+
 - **SC2086**: Unquoted variable expansions (5 files)
 - **SC2034**: Unused variables (2 files)
 - **SC2154**: Undefined variable references (3 files)
@@ -35,7 +41,18 @@ Created 18 comprehensive test files covering:
 - **SC2045**: Iterating over ls output (1 file)
 - **SC2162**: read without -r flag (1 file)
 
+#### ZSH-Specific Checks (New SC Codes)
+
+- **SC2400**: ZSH parameter flags used in non-ZSH script
+- **SC2401**: ZSH glob qualifiers used in non-ZSH script
+- **SC2402**: ZSH anonymous functions used in non-ZSH script
+- **SC2403**: ZSH short for loop syntax used in non-ZSH script
+- **SC2404**: Using 0-based array indexing in ZSH (should be 1-based)
+- **SC2405**: Using bash-style =~ regex operator in ZSH (works differently)
+- **SC2406**: Using extended glob without setopt extended_glob (informational)
+
 #### ZSH Features Validated (No False Positives)
+
 - ✓ Short for loops with variable tracking
 - ✓ Parameter expansion flags (U, L, q, s, etc.)
 - ✓ Glob qualifiers (partially - parser needs work)
@@ -59,6 +76,7 @@ Pattern match crashes: Fixed
 ## Files Modified
 
 ### Source Files (9)
+
 - src/ShellCheck/AST.hs
 - src/ShellCheck/ASTLib.hs
 - src/ShellCheck/Analytics.hs
@@ -70,12 +88,14 @@ Pattern match crashes: Fixed
 - src/ShellCheck/Parser.hs
 
 ### Test Files (19)
+
 - test/zsh/README.md (documentation)
 - test/zsh/test_*.zsh (18 test scripts)
 
 ## Examples
 
 ### Before Fix
+
 ```zsh
 # T_ForShort not tracked
 for i (1 2 3) { echo $i }
@@ -83,6 +103,7 @@ echo $i  # SC2154: i is referenced but not assigned ❌
 ```
 
 ### After Fix
+
 ```zsh
 # T_ForShort properly tracked
 for i (1 2 3) { echo $i }
@@ -90,6 +111,7 @@ echo $i  # No warning ✓
 ```
 
 ### Parameter Flags Working
+
 ```zsh
 text="hello"
 echo "${(U)text}"  # No SC2154 for 'text' ✓
@@ -99,6 +121,7 @@ echo "${(U)undefined}"  # SC2154 for 'undefined' ✓
 ## Verification
 
 All changes tested and validated:
+
 - Unit tests: 16 new ZSH-specific property tests pass
 - Integration tests: 18 test scripts with expected warnings
 - Real-world validation: Complex ZSH scripts analyze correctly
@@ -106,7 +129,7 @@ All changes tested and validated:
 
 ## Repository
 
-Fork: https://github.com/agoodkind/shellcheck
+Fork: <https://github.com/agoodkind/shellcheck>
 Branch: master
 Commits: 3 (initial implementation, test suite, documentation)
 

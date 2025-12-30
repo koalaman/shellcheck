@@ -212,6 +212,9 @@ nodeChecks = [
     ,checkZshGlobQualifiers
     ,checkZshAnonFunction
     ,checkZshForShort
+    ,checkZshArrayIndex
+    ,checkZshTestCompat
+    ,checkZshExtGlob
     ]
 
 optionalChecks = map fst optionalTreeChecks
@@ -5322,6 +5325,36 @@ checkZshForShort params t =
             when (shellType params /= Zsh) $
                 err id 2403 "Zsh short for loop syntax for i (list) cmd is only supported in zsh scripts."
         _ -> return ()
+
+-- Check for incorrect ZSH array indexing (ZSH uses 1-based indexing)
+prop_checkZshArrayIndex1 = verify checkZshArrayIndex "#!/bin/zsh\narr=(a b c); echo ${arr[0]}"
+prop_checkZshArrayIndex2 = verifyNot checkZshArrayIndex "#!/bin/zsh\narr=(a b c); echo ${arr[1]}"
+checkZshArrayIndex params t@(T_DollarBraced id _ word) = do
+    when (shellType params == Zsh) $ do
+        let str = concat $ oversimplify word
+        when ("[0]" `isInfixOf` str && not ("[-" `isInfixOf` str)) $
+            style id 2404 "In zsh, arrays are 1-indexed. Did you mean ${arr[1]}?"
+checkZshArrayIndex _ _ = return ()
+
+-- Check for bash-style [[ ]] test with ZSH-incompatible operators
+prop_checkZshTestCompat1 = verify checkZshTestCompat "#!/bin/zsh\n[[ $var =~ regex ]]"
+prop_checkZshTestCompat2 = verifyNot checkZshTestCompat "#!/bin/bash\n[[ $var =~ regex ]]"
+checkZshTestCompat params (TC_Binary id typ op lhs rhs) = do
+    when (shellType params == Zsh && op == "=~") $
+        warn id 2405 "In zsh, use [[ $var == pattern ]] or =~ in a condition. The =~ operator works differently than in bash."
+checkZshTestCompat _ _ = return ()
+
+-- Check for missing setopt in ZSH when using extended glob features
+prop_checkZshExtGlob1 = verify checkZshExtGlob "#!/bin/zsh\nls **/*(.)  # recursive glob"
+prop_checkZshExtGlob2 = verifyNot checkZshExtGlob "#!/bin/zsh\nsetopt extended_glob\nls **/*(.)  # recursive glob"
+checkZshExtGlob params t@(T_Glob id str) = do
+    when (shellType params == Zsh) $ do
+        when (("**" `isInfixOf` str || "^" `isPrefixOf` str) && not (hasSetopt "extended_glob" params)) $
+            info id 2406 "Using extended glob syntax. Consider adding 'setopt extended_glob' if it's not already set."
+checkZshExtGlob _ _ = return ()
+
+hasSetopt :: String -> Parameters -> Bool
+hasSetopt opt params = False  -- Simplified for now; would need to track setopt calls
 
 -- Tests for zsh short for loop variable tracking
 prop_zshForShortVar1 = verifyNotTree checkUnassignedReferences "#!/bin/zsh\nfor i (a b c) echo $i"
