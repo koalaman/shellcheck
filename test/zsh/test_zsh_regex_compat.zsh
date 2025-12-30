@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 # Test: ZSH regex matching works differently than bash (SC2405)
 
 text="hello123world"

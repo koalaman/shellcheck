@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 # Test: Undefined variables
 
 echo "$undefined_var"  # SC2154: undefined_var is referenced but not assigned

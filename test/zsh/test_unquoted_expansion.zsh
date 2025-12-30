@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 # Test: Unquoted variable expansion
 
 var="hello world"

@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 # Zsh Feature Tests
 
 # Test 1: Parameter expansion flags

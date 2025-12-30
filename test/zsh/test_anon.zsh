@@ -1,2 +1,2 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 () { echo "hello" }

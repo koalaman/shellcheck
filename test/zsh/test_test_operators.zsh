@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 # Test: File test operators and common mistakes
 
 file="/tmp/test.txt"

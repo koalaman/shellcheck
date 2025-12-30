@@ -3467,14 +3467,14 @@ prop_readScript3 = isWarning readScript "#!/bin/bash\necho hello\xA0world"
 prop_readScript4 = isWarning readScript "#!/usr/bin/perl\nfoo=("
 prop_readScript5 = isOk readScript "#!/bin/bash\n#This is an empty script\n\n"
 prop_readScript6 = isOk readScript "#!/usr/bin/env -S X=FOO bash\n#This is an empty script\n\n"
-prop_readScript7 = isOk readScript "#!/bin/zsh\n# shellcheck disable=SC1071\nfor f (a b); echo $f\n"
+prop_readScript7 = isOk readScript "#!/usr/bin/env zsh\n# shellcheck disable=SC1071\nfor f (a b); echo $f\n"
 -- Zsh-specific tests
-prop_readScript_zsh1 = isOk readScript "#!/bin/zsh\necho ${(U)var}\n"
-prop_readScript_zsh2 = isOk readScript "#!/bin/zsh\nls *(.)\n"
-prop_readScript_zsh3 = isOk readScript "#!/bin/zsh\n() { echo hi; }\n"
-prop_readScript_zsh4 = isOk readScript "#!/bin/zsh\nfor i (a b c) echo $i\n"
-prop_readScript_zsh5 = isOk readScript "#!/bin/zsh\necho ${(o)array}\n"
-prop_readScript_zsh6 = isOk readScript "#!/bin/zsh\nls *(om[1,3])\n"
+prop_readScript_zsh1 = isOk readScript "#!/usr/bin/env zsh\necho ${(U)var}\n"
+prop_readScript_zsh2 = isOk readScript "#!/usr/bin/env zsh\nls *(.)\n"
+prop_readScript_zsh3 = isOk readScript "#!/usr/bin/env zsh\n() { echo hi; }\n"
+prop_readScript_zsh4 = isOk readScript "#!/usr/bin/env zsh\nfor i (a b c) echo $i\n"
+prop_readScript_zsh5 = isOk readScript "#!/usr/bin/env zsh\necho ${(o)array}\n"
+prop_readScript_zsh6 = isOk readScript "#!/usr/bin/env zsh\nls *(om[1,3])\n"
 readScriptFile sourced = do
     start <- startSpan
     pos <- getPosition

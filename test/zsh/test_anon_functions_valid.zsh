@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 # Test: ZSH anonymous functions - valid syntax
 
 # Simple anonymous function

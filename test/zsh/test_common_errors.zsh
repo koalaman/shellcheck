@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 # Test: Common programming errors
 
 # Using = instead of == in test

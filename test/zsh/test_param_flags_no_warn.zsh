@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 # Test: ZSH parameter flags - should NOT warn about undefined variables
 
 text="hello world"

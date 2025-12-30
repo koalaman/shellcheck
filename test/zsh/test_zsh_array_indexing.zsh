@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 # Test: ZSH uses 1-based array indexing (SC2404)
 
 arr=(first second third)

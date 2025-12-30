@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 # Test: Redirect and pipe issues
 
 # Redirecting to same file you're reading

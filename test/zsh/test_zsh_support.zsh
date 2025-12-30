@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 # Test script for zsh support in ShellCheck
 
 # Test 1: Zsh parameter expansion flags

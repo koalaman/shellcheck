@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 # Test: Globbing issues
 
 # Using ls in for loop (bad practice)

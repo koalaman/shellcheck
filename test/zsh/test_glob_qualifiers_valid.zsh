@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 # Test: ZSH glob qualifiers - valid syntax that should not warn
 
 # Glob with qualifier - all regular files

@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 # Test: ZSH short for loop variable tracking
 
 # Variable should be tracked in short for loop

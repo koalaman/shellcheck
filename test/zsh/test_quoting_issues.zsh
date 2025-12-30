@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 # Test: Quote issues in conditions
 
 file="my file.txt"

@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 # Test: Useless cat (UUOC)
 
 # Classic useless cat

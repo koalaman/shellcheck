@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 # Test: Unused variables
 
 unused_var="never used"  # SC2034: unused_var appears unused

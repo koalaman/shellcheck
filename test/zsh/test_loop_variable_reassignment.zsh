@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 # Test: Loop variable reassignment issues
 
 # Reassigning loop variable inside loop (bad practice)

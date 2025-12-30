@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 # Test: Extended glob requires setopt (SC2406)
 
 # Using ** recursive glob without setopt

@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 # Test: Command not found
 
 nonexistent_command  # SC2317 or similar: command not found
