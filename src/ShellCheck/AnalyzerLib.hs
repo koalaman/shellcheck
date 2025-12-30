@@ -216,21 +216,24 @@ makeParameters spec = params
                 Dash -> False
                 BusyboxSh -> False
                 Sh   -> False
-                Ksh  -> True,
+                Ksh  -> True
+                Zsh  -> False,
         hasInheritErrexit =
             case shellType params of
                 Bash -> isOptionSet "inherit_errexit" root
                 Dash -> True
                 BusyboxSh -> True
                 Sh   -> True
-                Ksh  -> False,
+                Ksh  -> False
+                Zsh  -> False,
         hasPipefail =
             case shellType params of
                 Bash -> isOptionSet "pipefail" root
                 Dash -> isOptionSet "pipefail" root
                 BusyboxSh -> isOptionSet "pipefail" root
                 Sh -> isOptionSet "pipefail" root
-                Ksh  -> isOptionSet "pipefail" root,
+                Ksh  -> isOptionSet "pipefail" root
+                Zsh  -> isOptionSet "pipefail" root,
         hasExecfail =
             case shellType params of
                 Bash -> isOptionSet "execfail" root

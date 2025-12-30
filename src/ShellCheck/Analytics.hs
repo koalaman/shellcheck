@@ -2874,6 +2874,7 @@ checkFunctionDeclarations params
         Ksh ->
             when (hasKeyword && hasParens) $
                 err id 2111 "ksh does not allow 'function' keyword and '()' at the same time."
+        Zsh -> return ()  -- Zsh allows both keyword and parentheses
         Dash -> forSh
         BusyboxSh -> forSh
         Sh   -> forSh
