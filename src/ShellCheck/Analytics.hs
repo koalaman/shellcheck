@@ -207,6 +207,11 @@ nodeChecks = [
     ,checkPlusEqualsNumber
     ,checkExpansionWithRedirection
     ,checkUnaryTestA
+    -- Zsh-specific checks
+    ,checkZshParamFlags
+    ,checkZshGlobQualifiers
+    ,checkZshAnonFunction
+    ,checkZshForShort
     ]
 
 optionalChecks = map fst optionalTreeChecks
@@ -1979,6 +1984,7 @@ checkSpuriousExec params t = when (not $ hasExecfail params) $ doLists t
     doLists (T_WhileExpression _ _ cmds) = doList cmds True
     doLists (T_UntilExpression _ _ cmds) = doList cmds True
     doLists (T_ForIn _ _ _ cmds) = doList cmds True
+    doLists (T_ForShort _ _ _ cmds) = doList cmds True
     doLists (T_ForArithmetic _ _ _ _ cmds) = doList cmds True
     doLists (T_IfExpression _ thens elses) = do
         mapM_ (\(_, l) -> doList l False) thens
@@ -3336,6 +3342,7 @@ prop_checkLoopVariableReassignment4 = verifyNot checkLoopVariableReassignment "f
 checkLoopVariableReassignment params token =
     sequence_ $ case token of
         T_ForIn {} -> check
+        T_ForShort {} -> check
         T_ForArithmetic {} -> check
         _ -> Nothing
   where
@@ -3351,6 +3358,7 @@ checkLoopVariableReassignment params token =
     loopVariable t =
         case t of
             T_ForIn _ s _ _ -> return s
+            T_ForShort _ s _ _ -> return s
             T_ForArithmetic _
                 (TA_Sequence _
                     [TA_Assignment _ "="
@@ -3932,6 +3940,7 @@ prop_checkForLoopGlobVariables3 = verifyNot checkForLoopGlobVariables "for i in 
 checkForLoopGlobVariables _ t =
     case t of
         T_ForIn _ _ words _ -> mapM_ check words
+        T_ForShort _ _ words _ -> mapM_ check words
         _ -> return ()
   where
     check (T_NormalWord _ parts) =
@@ -4187,6 +4196,7 @@ checkUselessBang params t = when (hasSetE params) $ mapM_ check (getNonReturning
             T_WhileExpression _ conds cmds -> dropLast conds ++ cmds
             T_UntilExpression _ conds cmds -> dropLast conds ++ cmds
             T_ForIn _ _ _ list -> list
+            T_ForShort _ _ _ list -> list
             T_ForArithmetic _ _ _ _ list -> list
             T_Annotation _ _ t -> getNonReturningCommands t
             T_IfExpression _ conds elses ->
@@ -4777,6 +4787,14 @@ checkArrayValueUsedAsIndex params _ =
             name <- getArrayName x
             return (x, name)
 
+    write loop@T_ForShort {}  _ name (DataString (SourceFrom words)) = do
+        modify $ Map.insert name (loop, mapMaybe f words)
+        return []
+      where
+        f x = do
+            name <- getArrayName x
+            return (x, name)
+
     write _ _ name _ = do
         modify $ Map.delete name
         return []
@@ -5268,6 +5286,69 @@ checkUnaryTestA params t =
             styleWithFix id 2331 "For file existence, prefer standard -e over legacy -a." $
                 fixWith [replaceStart id params 2 "-e"]
         _ -> return ()
+
+-- Zsh-specific checks
+
+-- Check for zsh parameter expansion flags: ${(flags)var}
+checkZshParamFlags params t =
+    case t of
+        T_ZshParamFlags id flags _ ->
+            -- Basic validation - just ensure we're in zsh mode
+            when (shellType params /= Zsh) $
+                err id 2400 "Zsh parameter expansion flags ${(...)...} are only supported in zsh scripts."
+        _ -> return ()
+
+-- Check for zsh glob qualifiers: *(.)
+checkZshGlobQualifiers params t =
+    case t of
+        T_GlobQualifier id quals ->
+            when (shellType params /= Zsh) $
+                err id 2401 "Zsh glob qualifiers like *(...) are only supported in zsh scripts."
+        _ -> return ()
+
+-- Check for zsh anonymous functions: () { body } args
+checkZshAnonFunction params t =
+    case t of
+        T_AnonFunction id _ _ ->
+            when (shellType params /= Zsh) $
+                err id 2402 "Zsh anonymous functions () { ... } are only supported in zsh scripts."
+        _ -> return ()
+
+-- Check for zsh short for loops: for i (list) cmd
+checkZshForShort params t =
+    case t of
+        T_ForShort id _ _ _ ->
+            when (shellType params /= Zsh) $
+                err id 2403 "Zsh short for loop syntax for i (list) cmd is only supported in zsh scripts."
+        _ -> return ()
+
+-- Tests for zsh short for loop variable tracking
+prop_zshForShortVar1 = verifyNotTree checkUnassignedReferences "#!/bin/zsh\nfor i (a b c) echo $i"
+prop_zshForShortVar2 = verifyNotTree checkUnassignedReferences "#!/bin/zsh\nfor f (*.txt) cat $f"
+
+-- Tests for zsh parameter expansion flags
+prop_zshParamFlagUpper = verifyNotTree checkUnassignedReferences "#!/bin/zsh\nvar=test; echo ${(U)var}"
+prop_zshParamFlagLower = verifyNotTree checkUnassignedReferences "#!/bin/zsh\nvar=TEST; echo ${(L)var}"
+prop_zshParamFlagCapitalize = verifyNotTree checkUnassignedReferences "#!/bin/zsh\nvar=hello; echo ${(C)var}"
+prop_zshParamFlagSort = verifyNotTree checkUnassignedReferences "#!/bin/zsh\narray=(c a b); echo ${(o)array}"
+prop_zshParamFlagUnique = verifyNotTree checkUnassignedReferences "#!/bin/zsh\narray=(a a b); echo ${(u)array}"
+prop_zshParamFlagJoin = verifyNotTree checkUnassignedReferences "#!/bin/zsh\narray=(a b c); echo ${(j:,:)array}"
+prop_zshParamFlagSplit = verifyNotTree checkUnassignedReferences "#!/bin/zsh\nvar='a,b,c'; echo ${(s:,:)var}"
+
+-- Tests for zsh glob qualifiers
+prop_zshGlobQualRegular = verifyNotTree checkUnassignedReferences "#!/bin/zsh\nls *(.) # regular files"
+prop_zshGlobQualDir = verifyNotTree checkUnassignedReferences "#!/bin/zsh\nls *(/) # directories"
+prop_zshGlobQualSymlink = verifyNotTree checkUnassignedReferences "#!/bin/zsh\nls *(@) # symlinks"
+prop_zshGlobQualExecutable = verifyNotTree checkUnassignedReferences "#!/bin/zsh\nls *(*) # executable files"
+
+-- Tests for zsh anonymous functions
+prop_zshAnonFunc1 = verifyNotTree checkUnassignedReferences "#!/bin/zsh\n() { echo hello; } arg1 arg2"
+prop_zshAnonFunc2 = verifyNotTree checkUnassignedReferences "#!/bin/zsh\nlocal func=(){ echo \\$1; }; \\$func arg"
+
+-- Tests for zsh complex variable references
+prop_zshComplexVar1 = verifyNotTree checkUnassignedReferences "#!/bin/zsh\narr=(a b c); echo ${arr[1]}"
+prop_zshComplexVar2 = verifyNotTree checkUnassignedReferences "#!/bin/zsh\ndeclare -A assoc; assoc[key]=value; echo ${assoc[key]}"
+prop_zshComplexVar3 = verifyNotTree checkUnassignedReferences "#!/bin/zsh\narr=(a b c); for item in \"${arr[@]}\"; do echo \\$item; done"
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])

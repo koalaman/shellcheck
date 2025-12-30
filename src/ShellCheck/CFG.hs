@@ -894,6 +894,21 @@ build t = do
         T_Less _ -> none
         T_ParamSubSpecialChar _ _ -> none
 
+        -- Zsh-specific constructs
+        T_ZshParamFlags _ _ t -> build t
+        T_GlobQualifier {} -> none
+        T_AnonFunction id body args -> do
+            -- Treat like an immediately invoked function (similar to T_Function but executed inline)
+            argExpansions <- sequentially args
+            bodyRange <- local (\c -> c { cfExitTarget = Nothing }) $ do
+                entry <- newNodeRange $ CFEntryPoint "anonymous function"
+                f <- withFunctionScope $ build body
+                linkRange entry f
+            exec <- newNodeRange (CFSetExitCode id)
+            linkRange argExpansions bodyRange
+            linkRange bodyRange exec
+        T_ForShort id name words body -> forInHelper id name words body
+
         x -> do
             error ("Unimplemented: " ++ show x) -- STRIP
             none

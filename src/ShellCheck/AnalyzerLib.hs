@@ -387,6 +387,7 @@ isQuoteFreeNode strict shell tree t =
             T_DollarBraced {}               -> return True
             -- When non-strict, pragmatically assume it's desirable to split here
             T_ForIn {}                      -> return (not strict)
+            T_ForShort {}                   -> return (not strict)
             T_SelectIn {}                   -> return (not strict)
             _                               -> Nothing
 
@@ -500,6 +501,7 @@ getVariableFlow params t =
             when (scopeType /= NoneScope) $ modify (StackScopeEnd:)
 
     assignFirst T_ForIn {}    = True
+    assignFirst T_ForShort {} = True
     assignFirst T_SelectIn {} = True
     assignFirst (T_BatsTest {}) = True
     assignFirst _             = False
@@ -589,6 +591,8 @@ getModifiedVariables t =
         --Points to 'for' rather than variable
         T_ForIn id str [] _ -> [(t, t, str, DataString SourceExternal)]
         T_ForIn id str words _ -> [(t, t, str, DataString $ SourceFrom words)]
+        T_ForShort id str [] _ -> [(t, t, str, DataString SourceExternal)]
+        T_ForShort id str words _ -> [(t, t, str, DataString $ SourceFrom words)]
         T_SelectIn id str words _ -> [(t, t, str, DataString $ SourceFrom words)]
         _ -> []
   where

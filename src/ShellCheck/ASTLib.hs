@@ -44,6 +44,7 @@ isLoop t = case t of
         T_WhileExpression {} -> True
         T_UntilExpression {} -> True
         T_ForIn {} -> True
+        T_ForShort {} -> True
         T_ForArithmetic {} -> True
         T_SelectIn {}  -> True
         _ -> False

@@ -1,0 +1,2 @@
+#!/bin/zsh
+() { echo hi }

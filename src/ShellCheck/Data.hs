@@ -60,6 +60,19 @@ internalVariables = [
     -- Ksh
     , ".sh.version"
 
+    -- Zsh
+    , "ZSH_VERSION", "ZSH_NAME", "VENDOR", "MACHTYPE", "OSTYPE", 
+    "MATCH", "match", "MBEGIN", "MEND", "mbegin", "mend",
+    "REPLY", "reply", "status", "pipestatus",
+    "ARGC", "argv", "signals", "widgets", "aliases", "options",
+    "parameters", "commands", "functions", "dis_functions",
+    "dis_aliases", "dis_reswords", "dis_builtins", "zsh_eval_context",
+    "ZSH_ARGZERO", "ZSH_SUBSHELL", "ZSH_SCRIPT", "ZSH_EXECUTION_STRING",
+    "HISTCMD", "FIGNORE", "READNULLCMD", "MODULE_PATH", "fpath",
+    "DIRSTACKSIZE", "ERRNO", "GID", "EGID", "HOST", "TTY", "USERNAME",
+    "UID", "EUID", "histchars", "WORDCHARS", "CORRECT_IGNORE",
+    "CORRECT_IGNORE_FILE", "KEYBOARD_HACK", "NULLCMD"
+
     -- shflags
     , "FLAGS_ARGC", "FLAGS_ARGV", "FLAGS_ERROR", "FLAGS_FALSE", "FLAGS_HELP",
     "FLAGS_PARENT", "FLAGS_RESERVED", "FLAGS_TRUE", "FLAGS_VERSION",
@@ -96,6 +109,12 @@ arrayVariables = [
     "BASH_ALIASES", "BASH_ARGC", "BASH_ARGV", "BASH_CMDS", "BASH_LINENO",
     "BASH_REMATCH", "BASH_SOURCE", "BASH_VERSINFO", "COMP_WORDS", "COPROC",
     "DIRSTACK", "FUNCNAME", "GROUPS", "MAPFILE", "PIPESTATUS", "COMPREPLY"
+    -- Zsh array variables
+    , "match", "mbegin", "mend", "reply", "pipestatus",
+    "argv", "signals", "widgets", "aliases", "options",
+    "parameters", "commands", "functions", "dis_functions",
+    "dis_aliases", "dis_reswords", "dis_builtins", "zsh_eval_context",
+    "fpath", "path", "manpath", "cdpath", "mailpath"
   ]
 
 commonCommands = [
@@ -170,6 +189,7 @@ shellForExecutable name =
         "ksh88" -> return Ksh
         "ksh93" -> return Ksh
         "oksh"  -> return Ksh
+        "zsh"   -> return Zsh
         _ -> Nothing
 
 flagsForRead = "sreu:n:N:i:p:a:t:"
@@ -178,3 +198,18 @@ flagsForMapfile = "d:n:O:s:u:C:c:t"
 declaringCommands = ["local", "declare", "export", "readonly", "typeset", "let"]
 
 privilegeElevationCommands = ["sudo", "doas", "run0"]
+
+-- Zsh-specific builtins (in addition to POSIX/common ones)
+zshBuiltins = [
+    "autoload", "bindkey", "builtin", "bye", "cap", "chdir", "clone",
+    "comparguments", "compcall", "compctl", "compdescribe", "compfiles",
+    "compgroups", "compquote", "comptags", "comptry", "compvalues",
+    "disable", "disown", "echotc", "echoti", "emulate", "enable",
+    "functions", "getcap", "getln", "getopts", "hash", "history",
+    "limit", "log", "noglob", "popd", "print", "printenv", "printf",
+    "pushd", "pushln", "r", "rehash", "sched", "setcap", "setopt",
+    "source", "stat", "suspend", "ttyctl", "unfunction", "unhash",
+    "unlimit", "unsetopt", "vared", "wait", "whence", "where", "which",
+    "zcompile", "zformat", "zftp", "zle", "zmodload", "zparseopts",
+    "zprof", "zpty", "zregexparse", "zsocket", "zstyle", "ztcp"
+  ]

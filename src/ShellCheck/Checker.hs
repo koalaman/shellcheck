@@ -56,6 +56,7 @@ shellFromFilename filename = listToMaybe candidates
                       ,(".bash", Bash)
                       ,(".bats", Bash)
                       ,(".dash", Dash)
+                      ,(".zsh", Zsh)
                       ,(".envrc", Bash)]
                       -- The `.sh` is too generic to determine the shell:
                       -- We fallback to Bash in this case and emit SC2148 if there is no shebang

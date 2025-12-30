@@ -37,6 +37,84 @@ newtype FunctionKeyword = FunctionKeyword Bool deriving (Show, Eq)
 newtype FunctionParentheses = FunctionParentheses Bool deriving (Show, Eq)
 data CaseType = CaseBreak | CaseFallThrough | CaseContinue deriving (Show, Eq)
 
+-- Zsh-specific data types
+-- Parameter expansion flags: ${(o)array}, ${(U)var}, ${(s.:.)var}
+data ZshParamFlag = 
+    -- Sorting and uniqueness
+    ZshFlag_Sort              -- (o) sort ascending
+    | ZshFlag_SortReverse     -- (O) sort descending
+    | ZshFlag_Unique          -- (u) unique values
+    | ZshFlag_SortNumeric     -- (n) sort numerically
+    | ZshFlag_SortNumericReverse -- (N) sort numerically reversed
+    
+    -- Case modification
+    | ZshFlag_Upper           -- (U) uppercase
+    | ZshFlag_Lower           -- (L) lowercase
+    | ZshFlag_Capitalize      -- (C) capitalize first letter
+    
+    -- String modification
+    | ZshFlag_Join String     -- (j:str:) join with string
+    | ZshFlag_Split String    -- (s:str:) split on string
+    | ZshFlag_SplitNewline    -- (f) split on newlines
+    | ZshFlag_Quote           -- (q) shell quote
+    | ZshFlag_DoubleQuote     -- (Q) remove quotes
+    | ZshFlag_Expand          -- (e) perform parameter expansion
+    | ZshFlag_EscapeBackslash -- (b) escape backslashes
+    
+    -- Array operations
+    | ZshFlag_Array           -- (@) use as array
+    | ZshFlag_Keys            -- (k) array keys
+    | ZshFlag_Values          -- (v) array values
+    
+    -- Type/format conversions
+    | ZshFlag_Print           -- (P) print escape sequences
+    | ZshFlag_Prompt          -- (%) prompt expansion
+    | ZshFlag_Type            -- (t) type of variable
+    | ZshFlag_Length          -- (#) length
+    
+    -- Other common flags
+    | ZshFlag_Glob            -- (g) filename expansion
+    | ZshFlag_Other String    -- For other flags not explicitly handled
+    deriving (Show, Eq)
+
+-- Glob qualifiers: *(.), *(@), *(om[1,3])
+data GlobQual =
+    GlobQual_Regular          -- (.) regular files
+    | GlobQual_Directory      -- (/) directories
+    | GlobQual_Symlink        -- (@) symbolic links
+    | GlobQual_Executable     -- (*) executable
+    | GlobQual_Device         -- (%) device special files
+    | GlobQual_Socket         -- (s) socket files
+    | GlobQual_Pipe           -- (p) named pipes (FIFOs)
+    
+    -- Permissions
+    | GlobQual_Readable       -- (r) readable
+    | GlobQual_Writable       -- (w) writable
+    | GlobQual_OwnedByUser    -- (U) owned by current user
+    | GlobQual_OwnedByGroup   -- (G) owned by current group
+    
+    -- Size and time
+    | GlobQual_Size String    -- (L) size qualifiers (+/-/= followed by size)
+    | GlobQual_Access String  -- (a) access time
+    | GlobQual_Modify String  -- (m) modification time
+    | GlobQual_Change String  -- (c) change time
+    | GlobQual_Birth String   -- (B) birth time
+    
+    -- Sorting
+    | GlobQual_SortAsc        -- (o) sort ascending by name
+    | GlobQual_SortDesc       -- (O) sort descending by name
+    | GlobQual_SortTime       -- (om) sort by modification time
+    | GlobQual_SortSize       -- (oL) sort by size
+    
+    -- Limiting
+    | GlobQual_Limit String   -- [n], [n,m], [+n], [-n] limit results
+    
+    -- Negation
+    | GlobQual_Negate         -- (^) negate the qualifier
+    
+    | GlobQual_Other String   -- For qualifiers not explicitly handled
+    deriving (Show, Eq)
+
 newtype Root = Root Token
 data Token = OuterToken Id (InnerToken Token) deriving (Show)
 
@@ -144,6 +222,11 @@ data InnerToken t =
     | Inner_T_Include t
     | Inner_T_SourceCommand t t
     | Inner_T_BatsTest String t
+    -- Zsh-specific constructs
+    | Inner_T_ZshParamFlags [ZshParamFlag] t  -- ${(flags)var}
+    | Inner_T_GlobQualifier [GlobQual]        -- *(.)
+    | Inner_T_AnonFunction t [t]              -- () { body } args
+    | Inner_T_ForShort String [t] [t]         -- for i (list) cmd
     deriving (Show, Eq, Functor, Foldable, Traversable)
 
 data Annotation =
@@ -259,8 +342,13 @@ pattern T_SourceCommand id includer t_include = OuterToken id (Inner_T_SourceCom
 pattern T_Subshell id l = OuterToken id (Inner_T_Subshell l)
 pattern T_UntilExpression id c l = OuterToken id (Inner_T_UntilExpression c l)
 pattern T_WhileExpression id c l = OuterToken id (Inner_T_WhileExpression c l)
+-- Zsh-specific patterns
+pattern T_ZshParamFlags id flags t = OuterToken id (Inner_T_ZshParamFlags flags t)
+pattern T_GlobQualifier id quals = OuterToken id (Inner_T_GlobQualifier quals)
+pattern T_AnonFunction id body args = OuterToken id (Inner_T_AnonFunction body args)
+pattern T_ForShort id var list cmds = OuterToken id (Inner_T_ForShort var list cmds)
 
-{-# COMPLETE T_AND_IF, T_Bang, T_Case, TC_Empty, T_CLOBBER, T_DGREAT, T_DLESS, T_DLESSDASH, T_Do, T_DollarSingleQuoted, T_Done, T_DSEMI, T_Elif, T_Else, T_EOF, T_Esac, T_Fi, T_For, T_Glob, T_GREATAND, T_Greater, T_If, T_In, T_Lbrace, T_Less, T_LESSAND, T_LESSGREAT, T_Literal, T_Lparen, T_NEWLINE, T_OR_IF, T_ParamSubSpecialChar, T_Pipe, T_Rbrace, T_Rparen, T_Select, T_Semi, T_SingleQuoted, T_Then, T_UnparsedIndex, T_Until, T_While, TA_Assignment, TA_Binary, TA_Expansion, T_AndIf, T_Annotation, T_Arithmetic, T_Array, TA_Sequence, TA_Parenthesis, T_Assignment, TA_Trinary, TA_Unary, TA_Variable, T_Backgrounded, T_Backticked, T_Banged, T_BatsTest, T_BraceExpansion, T_BraceGroup, TC_And, T_CaseExpression, TC_Binary, TC_Group, TC_Nullary, T_Condition, T_CoProcBody, T_CoProc, TC_Or, TC_Unary, T_DollarArithmetic, T_DollarBraceCommandExpansion, T_DollarBraced, T_DollarBracket, T_DollarDoubleQuoted, T_DollarExpansion, T_DoubleQuoted, T_Extglob, T_FdRedirect, T_ForArithmetic, T_ForIn, T_Function, T_HereDoc, T_HereString, T_IfExpression, T_Include, T_IndexedElement, T_IoDuplicate, T_IoFile, T_NormalWord, T_OrIf, T_Pipeline, T_ProcSub, T_Redirecting, T_Script, T_SelectIn, T_SimpleCommand, T_SourceCommand, T_Subshell, T_UntilExpression, T_WhileExpression #-}
+{-# COMPLETE T_AND_IF, T_Bang, T_Case, TC_Empty, T_CLOBBER, T_DGREAT, T_DLESS, T_DLESSDASH, T_Do, T_DollarSingleQuoted, T_Done, T_DSEMI, T_Elif, T_Else, T_EOF, T_Esac, T_Fi, T_For, T_Glob, T_GREATAND, T_Greater, T_If, T_In, T_Lbrace, T_Less, T_LESSAND, T_LESSGREAT, T_Literal, T_Lparen, T_NEWLINE, T_OR_IF, T_ParamSubSpecialChar, T_Pipe, T_Rbrace, T_Rparen, T_Select, T_Semi, T_SingleQuoted, T_Then, T_UnparsedIndex, T_Until, T_While, TA_Assignment, TA_Binary, TA_Expansion, T_AndIf, T_Annotation, T_Arithmetic, T_Array, TA_Sequence, TA_Parenthesis, T_Assignment, TA_Trinary, TA_Unary, TA_Variable, T_Backgrounded, T_Backticked, T_Banged, T_BatsTest, T_BraceExpansion, T_BraceGroup, TC_And, T_CaseExpression, TC_Binary, TC_Group, TC_Nullary, T_Condition, T_CoProcBody, T_CoProc, TC_Or, TC_Unary, T_DollarArithmetic, T_DollarBraceCommandExpansion, T_DollarBraced, T_DollarBracket, T_DollarDoubleQuoted, T_DollarExpansion, T_DoubleQuoted, T_Extglob, T_FdRedirect, T_ForArithmetic, T_ForIn, T_Function, T_HereDoc, T_HereString, T_IfExpression, T_Include, T_IndexedElement, T_IoDuplicate, T_IoFile, T_NormalWord, T_OrIf, T_Pipeline, T_ProcSub, T_Redirecting, T_Script, T_SelectIn, T_SimpleCommand, T_SourceCommand, T_Subshell, T_UntilExpression, T_WhileExpression, T_ZshParamFlags, T_GlobQualifier, T_AnonFunction, T_ForShort #-}
 
 instance Eq Token where
     OuterToken _ a == OuterToken _ b = a == b

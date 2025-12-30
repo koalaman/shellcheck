@@ -1422,8 +1422,65 @@ prop_readGlob7 = isOk readGlob "[^[]"
 prop_readGlob8 = isOk readGlob "[*?]"
 prop_readGlob9 = isOk readGlob "[!]^]"
 prop_readGlob10 = isOk readGlob "[]]"
-readGlob = readExtglob <|> readSimple <|> readClass <|> readGlobbyLiteral
+prop_readGlob11 = isOk readGlob "*(.)"      -- zsh glob qualifier
+prop_readGlob12 = isOk readGlob "*(om[1,3])" -- zsh glob qualifier
+
+readZshGlobQualifier :: Monad m => SCParser m [GlobQual]
+readZshGlobQualifier = do
+    char '('
+    quals <- many readQual
+    char ')'
+    return quals
+  where
+    readQual = choice [
+        -- File type qualifiers
+        char '.' >> return GlobQual_Regular,
+        char '/' >> return GlobQual_Directory,
+        char '@' >> return GlobQual_Symlink,
+        char '*' >> return GlobQual_Executable,
+        char '%' >> return GlobQual_Device,
+        char 's' >> return GlobQual_Socket,
+        char 'p' >> return GlobQual_Pipe,
+        
+        -- Permission qualifiers
+        char 'r' >> return GlobQual_Readable,
+        char 'w' >> return GlobQual_Writable,
+        char 'U' >> return GlobQual_OwnedByUser,
+        char 'G' >> return GlobQual_OwnedByGroup,
+        
+        -- Sorting qualifiers
+        try (string "om" >> return GlobQual_SortTime),
+        try (string "oL" >> return GlobQual_SortSize),
+        try (char 'o' >> return GlobQual_SortAsc),
+        try (char 'O' >> return GlobQual_SortDesc),
+        
+        -- Time qualifiers
+        try (char 'a' >> many1 (noneOf "()") >>= \s -> return (GlobQual_Access s)),
+        try (char 'm' >> many1 (noneOf "()") >>= \s -> return (GlobQual_Modify s)),
+        try (char 'c' >> many1 (noneOf "()") >>= \s -> return (GlobQual_Change s)),
+        try (char 'B' >> many1 (noneOf "()") >>= \s -> return (GlobQual_Birth s)),
+        
+        -- Size qualifiers
+        try (char 'L' >> many1 (noneOf "()") >>= \s -> return (GlobQual_Size s)),
+        
+        -- Limit qualifiers
+        try (char '[' >> many1 (noneOf "]") >>= \s -> char ']' >> return (GlobQual_Limit s)),
+        
+        -- Negation
+        char '^' >> return GlobQual_Negate,
+        
+        -- Catch-all for other qualifiers
+        anyChar >>= \c -> return (GlobQual_Other [c])
+      ]
+
+readGlob = readExtglob <|> readSimpleWithQualifier <|> readSimple <|> readClass <|> readGlobbyLiteral
     where
+        readSimpleWithQualifier = try $ do
+            start <- startSpan
+            c <- oneOf "*?"
+            quals <- readZshGlobQualifier
+            id <- endSpan start
+            return $ T_GlobQualifier id quals
         readSimple = do
             start <- startSpan
             c <- oneOf "*?"
@@ -1717,13 +1774,64 @@ prop_readDollarBraced1 = isOk readDollarBraced "${foo//bar/baz}"
 prop_readDollarBraced2 = isOk readDollarBraced "${foo/'{cow}'}"
 prop_readDollarBraced3 = isOk readDollarBraced "${foo%%$(echo cow\\})}"
 prop_readDollarBraced4 = isOk readDollarBraced "${foo#\\}}"
+prop_readDollarBraced5 = isOk readDollarBraced "${(o)array}"  -- zsh
+prop_readDollarBraced6 = isOk readDollarBraced "${(U)var}"     -- zsh
+
+readZshParamFlags :: Monad m => SCParser m [ZshParamFlag]
+readZshParamFlags = do
+    char '('
+    flags <- many readZshFlag
+    char ')'
+    return flags
+  where
+    readZshFlag = choice [
+        -- Sorting and uniqueness
+        char 'o' >> return ZshFlag_Sort,
+        char 'O' >> return ZshFlag_SortReverse,
+        char 'u' >> return ZshFlag_Unique,
+        char 'n' >> return ZshFlag_SortNumeric,
+        char 'N' >> return ZshFlag_SortNumericReverse,
+        
+        -- Case modification
+        char 'U' >> return ZshFlag_Upper,
+        char 'L' >> return ZshFlag_Lower,
+        char 'C' >> return ZshFlag_Capitalize,
+        
+        -- String modification and quoting
+        char 'q' >> return ZshFlag_Quote,
+        char 'Q' >> return ZshFlag_DoubleQuote,
+        char 'e' >> return ZshFlag_Expand,
+        char 'b' >> return ZshFlag_EscapeBackslash,
+        char 'f' >> return ZshFlag_SplitNewline,
+        char 'P' >> return ZshFlag_Print,
+        char '%' >> return ZshFlag_Prompt,
+        char 't' >> return ZshFlag_Type,
+        char '#' >> return ZshFlag_Length,
+        char '@' >> return ZshFlag_Array,
+        char 'k' >> return ZshFlag_Keys,
+        char 'v' >> return ZshFlag_Values,
+        char 'g' >> return ZshFlag_Glob,
+        
+        -- Join and split with delimiters
+        try (char 'j' >> char ':' >> many1 (noneOf ":)") >>= \s -> char ':' >> return (ZshFlag_Join s)),
+        try (char 's' >> char ':' >> many1 (noneOf ":)") >>= \s -> char ':' >> return (ZshFlag_Split s)),
+        
+        -- Catch-all for single characters we don't recognize
+        try (satisfy (\c -> c /= ')' && c /= ':') >>= \c -> return (ZshFlag_Other [c]))
+      ]
+
 readDollarBraced = called "parameter expansion" $ do
     start <- startSpan
     try (string "${")
+    -- Try to parse zsh parameter flags (e.g., ${(o)array})
+    -- Use lookAhead to check for '(' without consuming it, then require flags if present
+    zshFlags <- (lookAhead (char '(') >> readZshParamFlags) <|> return []
     word <- readDollarBracedWord
     char '}'
     id <- endSpan start
-    return $ T_DollarBraced id True word
+    if null zshFlags
+        then return $ T_DollarBraced id True word
+        else return $ T_ZshParamFlags id zshFlags (T_DollarBraced id True word)
 
 prop_readDollarExpansion1 = isOk readDollarExpansion "$(echo foo; ls\n)"
 prop_readDollarExpansion2 = isOk readDollarExpansion "$(  )"
@@ -2625,12 +2733,27 @@ prop_readForClause9 = isOk readForClause "for i do true; done"
 prop_readForClause10 = isOk readForClause "for ((;;)) { true; }"
 prop_readForClause12 = isWarning readForClause "for $a in *; do echo \"$a\"; done"
 prop_readForClause13 = isOk readForClause "for foo\nin\\\n  bar\\\n  baz\ndo true; done"
+prop_readForClause14 = isOk readForClause "for i (a b c) echo $i"  -- zsh short form
 readForClause = called "for loop" $ do
     pos <- getPosition
     (T_For id) <- g_For
     spacing
-    readArithmetic id <|> readRegular id
+    readArithmetic id <|> readZshShort id <|> readRegular id
   where
+    readZshShort id = try $ called "zsh short for loop" $ do
+        name <- readVariableName `thenSkip` spacing
+        g_Lparen
+        spacing
+        values <- many (readCmdWord `thenSkip` spacing)
+        g_Rparen
+        spacing
+        -- Zsh short form can have a single command, not do/done
+        -- Optional semicolon before the command(s)
+        optional g_Semi
+        spacing
+        cmds <- many1 (readCommand `thenSkip` spacing)
+        return $ T_ForShort id name values cmds
+
     readArithmetic id = called "arithmetic for condition" $ do
         readArithmeticDelimiter '(' "Missing second '(' to start arithmetic for ((;;)) loop"
         x <- readArithmeticContents
@@ -2762,6 +2885,23 @@ prop_readFunctionDefinition12 = isOk readFunctionDefinition "function []!() { tr
 prop_readFunctionDefinition13 = isOk readFunctionDefinition "@require(){ true; }"
 prop_readFunctionDefinition14 = isOk readFunctionDefinition "foo#bar(){ :; }"
 prop_readFunctionDefinition15 = isNotOk readFunctionDefinition "#bar(){ :; }"
+
+-- Zsh anonymous functions: () { body } args
+prop_readZshAnonFunction1 = isOk readZshAnonFunction "() { echo hi; }"
+prop_readZshAnonFunction2 = isOk readZshAnonFunction "() { echo hi; } arg1 arg2"
+readZshAnonFunction :: Monad m => SCParser m Token
+readZshAnonFunction = called "zsh anonymous function" $ try $ do
+    start <- startSpan
+    g_Lparen
+    g_Rparen
+    allspacing
+    body <- readBraceGroup <|> readSubshell
+    allspacing
+    args <- many (readNormalWord `thenSkip` allspacing)
+    id <- endSpan start
+    spacing
+    return $ T_AnonFunction id body args
+
 readFunctionDefinition = called "function" $ do
     start <- startSpan
     functionSignature <- try readFunctionSignature
@@ -2879,6 +3019,7 @@ readCompoundCommand = do
         readBraceGroup,
         readAmbiguous "((" readArithmeticExpression readSubshell (\pos ->
             parseNoteAt pos ErrorC 1105 "Shells disambiguate (( differently or not at all. For subshell, add spaces around ( . For ((, fix parsing errors."),
+        readZshAnonFunction,  -- Zsh anonymous functions
         readSubshell,
         readWhileClause,
         readUntilClause,
@@ -3327,6 +3468,13 @@ prop_readScript4 = isWarning readScript "#!/usr/bin/perl\nfoo=("
 prop_readScript5 = isOk readScript "#!/bin/bash\n#This is an empty script\n\n"
 prop_readScript6 = isOk readScript "#!/usr/bin/env -S X=FOO bash\n#This is an empty script\n\n"
 prop_readScript7 = isOk readScript "#!/bin/zsh\n# shellcheck disable=SC1071\nfor f (a b); echo $f\n"
+-- Zsh-specific tests
+prop_readScript_zsh1 = isOk readScript "#!/bin/zsh\necho ${(U)var}\n"
+prop_readScript_zsh2 = isOk readScript "#!/bin/zsh\nls *(.)\n"
+prop_readScript_zsh3 = isOk readScript "#!/bin/zsh\n() { echo hi; }\n"
+prop_readScript_zsh4 = isOk readScript "#!/bin/zsh\nfor i (a b c) echo $i\n"
+prop_readScript_zsh5 = isOk readScript "#!/bin/zsh\necho ${(o)array}\n"
+prop_readScript_zsh6 = isOk readScript "#!/bin/zsh\nls *(om[1,3])\n"
 readScriptFile sourced = do
     start <- startSpan
     pos <- getPosition
@@ -3378,8 +3526,8 @@ readScriptFile sourced = do
     verifyShebang pos s = do
         case isValidShell s of
             Just True -> return ()
-            Just False -> parseProblemAt pos ErrorC 1071 "ShellCheck only supports sh/bash/dash/ksh/'busybox sh' scripts. Sorry!"
-            Nothing -> parseProblemAt pos ErrorC 1008 "This shebang was unrecognized. ShellCheck only supports sh/bash/dash/ksh/'busybox sh'. Add a 'shell' directive to specify."
+            Just False -> parseProblemAt pos ErrorC 1071 "ShellCheck only supports sh/bash/dash/ksh/zsh/'busybox sh' scripts. Sorry!"
+            Nothing -> parseProblemAt pos ErrorC 1008 "This shebang was unrecognized. ShellCheck only supports sh/bash/dash/ksh/zsh/'busybox sh'. Add a 'shell' directive to specify."
 
     isValidShell s =
         let good = null s || any (`isPrefixOf` s) goodShells
@@ -3399,7 +3547,8 @@ readScriptFile sourced = do
         "bash",
         "bats",
         "ksh",
-        "oksh"
+        "oksh",
+        "zsh"
         ]
     badShells = [
         "awk",
@@ -3410,8 +3559,7 @@ readScriptFile sourced = do
         "python",
         "python3",
         "ruby",
-        "tcsh",
-        "zsh"
+        "tcsh"
         ]
 
     readUtf8Bom = called "Byte Order Mark" $ string "\xFEFF"
