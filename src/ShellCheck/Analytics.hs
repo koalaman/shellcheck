@@ -5049,6 +5049,8 @@ prop_checkCommandIsUnreachable2 = verify checkCommandIsUnreachable "die() { exit
 prop_checkCommandIsUnreachable3 = verifyNot checkCommandIsUnreachable "foo; bar || exit; baz"
 prop_checkCommandIsUnreachable4 = verifyNot checkCommandIsUnreachable "f() { foo; };    # Maybe sourced"
 prop_checkCommandIsUnreachable5 = verify checkCommandIsUnreachable "f() { foo; }; exit  # Not sourced"
+prop_checkCommandIsUnreachable10 = verifyNot checkCommandIsUnreachable "f() { :; }; PS4='$(f)'; exit"
+prop_checkCommandIsUnreachable11 = verifyNot checkCommandIsUnreachable "f() { :; }; PS4='`f`'; exit"
 checkCommandIsUnreachable params t =
     case t of
         T_Pipeline {} -> sequence_ $ do
@@ -5058,10 +5060,12 @@ checkCommandIsUnreachable params t =
             guard . not $ isSourced params t
             guard . not $ any (\t -> isUnreachable t || isUnreachableFunction t) $ NE.drop 1 $ getPath (parentMap params) t
             return $ info (getId t) 2317 "Command appears to be unreachable. Check usage (or ignore if invoked indirectly)."
-        T_Function id _ _ _ _ ->
+        T_Function id _ _ name _ ->
             when (isUnreachableFunction t
                     && (not . any isUnreachableFunction . NE.drop 1 $ getPath (parentMap params) t)
-                    && (not $ isSourced params t)) $
+                    && not (isSourced params t)
+                    && not (ps4CallsFunction name)
+                 ) $
                 info id 2329 "This function is never invoked. Check usage (or ignored if invoked indirectly)."
         _ -> return ()
   where
@@ -5074,6 +5078,28 @@ checkCommandIsUnreachable params t =
         cfga <- cfgAnalysis params
         state <- CF.getIncomingState cfga (getId t)
         return . not $ CF.stateIsReachable state
+
+    ps4CallsFunction :: String -> Bool
+    ps4CallsFunction name =
+        any (any mentionsTok) ps4Values
+      where
+        ps4Values :: [[Token]]
+        ps4Values =
+          [ values
+          | Assignment (_, _, "PS4", DataString (SourceFrom values)) <- variableFlow params
+          ]
+
+        mentionsTok :: Token -> Bool
+        mentionsTok tok
+          | isCommandSubstitution tok =
+              getCommandNameFromExpansion tok == Just name
+          | otherwise = case tok of
+              T_NormalWord _ parts         -> any mentionsTok parts
+              T_DoubleQuoted _ parts       -> any mentionsTok parts
+              T_DollarDoubleQuoted _ parts -> any mentionsTok parts
+              T_SingleQuoted _ s -> s `matches` mkRegex ("\\$\\([[:space:]]*" ++ name ++ "([[:space:]]|\\)|$)")
+                                 || s `matches` mkRegex ("`[[:space:]]*" ++ name ++ "([[:space:]]|`|$)")
+              _ -> False
 
 
 prop_checkOverwrittenExitCode1 = verify checkOverwrittenExitCode "x; [ $? -eq 1 ] || [ $? -eq 2 ]"
