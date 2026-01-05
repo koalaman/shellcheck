@@ -46,6 +46,8 @@ jobs:
     name: Run tests (GHC ${{ matrix.ghc }})
     needs: package_source
     runs-on: ubuntu-latest
+    # If one version fails, we still want the status of the others
+    continue-on-error: true
     strategy:
       matrix:
         ghc: ['8.0', '8.10', '9.0.1', 'latest']
