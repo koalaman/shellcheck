@@ -411,6 +411,12 @@ prop_canEnableOptionalsWithRc = result == [2244]
         csScript = "#!/bin/sh\n[ \"$1\" ]"
     }
 
+prop_canEnableCheckForReadonlyVariables = result == [2331]
+  where
+    result = checkWithRc "enable=check-variable-can-be-readonly" emptyCheckSpec {
+        csScript = "#!/bin/sh\na=3\necho \"$a\""
+    }
+
 prop_sourcePathRedirectsName = result == [2086]
   where
     f "dir/myscript" _ _ "lib" = return "foo/lib"
