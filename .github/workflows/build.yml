@@ -1,7 +1,7 @@
 name: Build ShellCheck
 
 # Run this workflow every time a new commit pushed to your repository
-on: push
+on: [push, pull_request]
 
 jobs:
   package_source:
@@ -46,11 +46,11 @@ jobs:
     name: Run tests (GHC ${{ matrix.ghc }})
     needs: package_source
     runs-on: ubuntu-latest
-    # If one version fails, we still want the status of the others
-    continue-on-error: true
     strategy:
       matrix:
         ghc: ['8.0', '8.10', '9.0.1', 'latest']
+      # If one version fails, we still want the status of the others
+      fail-fast: false
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@v7
@@ -135,6 +135,7 @@ jobs:
           path: deploy/
 
   deploy:
+    if: github.event_name == 'push'
     name: Deploy binaries
     needs: package_binary
     runs-on: ubuntu-latest
