@@ -22,6 +22,8 @@ Description:
   * To point out subtle caveats, corner cases and pitfalls, that may cause an
     advanced user's otherwise working script to fail under future circumstances.
 
+tested-with: GHC == 8.0, GHC == 8.10, GHC == 9.0.1
+
 Extra-Doc-Files:
     README.md
     CHANGELOG.md
