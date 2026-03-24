@@ -3294,6 +3294,7 @@ prop_checkUncheckedPopd10 = verifyNotTree checkUncheckedCdPushdPopd "cd ../.."
 prop_checkUncheckedPopd11 = verifyNotTree checkUncheckedCdPushdPopd "cd ../.././.."
 prop_checkUncheckedPopd12 = verifyNotTree checkUncheckedCdPushdPopd "cd /"
 prop_checkUncheckedPopd13 = verifyTree checkUncheckedCdPushdPopd "cd ../../.../.."
+prop_checkUncheckedCdInFunction1 = verifyNotTree checkUncheckedCdPushdPopd "#!/bin/bash\nfoo() {\n  cd /abc\n}"
 
 checkUncheckedCdPushdPopd params root =
     if hasSetE params then
@@ -3304,6 +3305,7 @@ checkUncheckedCdPushdPopd params root =
         | name `elem` ["cd", "pushd", "popd"]
             && not (isSafeDir t)
             && not (name `elem` ["pushd", "popd"] && ("n" `elem` map snd (getAllFlags t)))
+            && not (isLastCommandInFunction t)
             && not (isCondition $ getPath (parentMap params) t) =
                 warnWithFix (getId t) 2164
                     ("Use '" ++ name ++ " ... || exit' or '" ++ name ++ " ... || return' in case " ++ name ++ " fails.")
@@ -3311,6 +3313,15 @@ checkUncheckedCdPushdPopd params root =
         where name = getName t
     checkElement _ = return ()
     getName t = fromMaybe "" $ getCommandName t
+    isLastCommandInFunction t =
+        case getPath (parentMap params) t of
+            _ NE.:| T_BraceGroup _ commands:T_Function {}:_ -> t `isLastOf` commands
+            _ -> False
+    isLastOf t commands =
+        case commands of
+            [x] -> x == t
+            _:rest -> isLastOf t rest
+            [] -> False
     isSafeDir t = case oversimplify t of
           [_, str] -> str `matches` regex
           _ -> False
