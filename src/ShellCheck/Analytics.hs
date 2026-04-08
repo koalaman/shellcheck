@@ -3314,14 +3314,12 @@ checkUncheckedCdPushdPopd params root =
     checkElement _ = return ()
     getName t = fromMaybe "" $ getCommandName t
     isLastCommandInFunction t =
-        case getPath (parentMap params) t of
-            _ NE.:| T_BraceGroup _ commands:T_Function {}:_ -> t `isLastOf` commands
-            _ -> False
-    isLastOf t commands =
-        case commands of
-            [x] -> x == t
-            _:rest -> isLastOf t rest
-            [] -> False
+        go $ NE.tail $ getPath (parentMap params) t
+      where
+        go (child:T_BraceGroup _ commands:T_Function {}:_) =
+            not (null commands) && getId (last commands) == getId child
+        go (_:rest) = go rest
+        go [] = False
     isSafeDir t = case oversimplify t of
           [_, str] -> str `matches` regex
           _ -> False
