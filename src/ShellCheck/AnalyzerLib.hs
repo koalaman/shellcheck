@@ -87,6 +87,8 @@ data Parameters = Parameters {
     hasInheritErrexit  :: Bool,
     -- Whether this script has 'set -e' anywhere.
     hasSetE            :: Bool,
+    -- Whether this script has 'set -f' or 'set -o noglob' anywhere.
+    hasNoglob          :: Bool,
     -- Whether this script has 'set -o pipefail' anywhere.
     hasPipefail        :: Bool,
     -- Whether this script has 'shopt -s execfail' anywhere.
@@ -207,6 +209,7 @@ makeParameters spec = params
         rootNode = root,
         shellType = fromMaybe (determineShell (asFallbackShell spec) root) $ asShellType spec,
         hasSetE = containsSetE root,
+        hasNoglob = containsNoglob root,
         hasLastpipe =
             case shellType params of
                 Bash -> isOptionSet "lastpipe" root
@@ -262,6 +265,17 @@ containsSetE root = isNothing $ doAnalysis (guard . not . isSetE) root
             _ -> False
     re = mkRegex "[[:space:]]-[^-]*e"
 
+containsNoglob root = isNothing $ doAnalysis (guard . not . isNoglob) root
+  where
+    isNoglob t =
+        case t of
+            T_Script _ (T_Literal _ str) _ -> str `matches` re
+            T_SimpleCommand {}  ->
+                t `isUnqualifiedCommand` "set" &&
+                    ("noglob" `elem` oversimplify t ||
+                        "f" `elem` map snd (getAllFlags t))
+            _ -> False
+    re = mkRegex "[[:space:]]-[^-]*f"
 
 containsSetOption opt root = isNothing $ doAnalysis (guard . not . isPipefail) root
   where
