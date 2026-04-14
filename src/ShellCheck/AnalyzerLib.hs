@@ -85,8 +85,8 @@ data Parameters = Parameters {
     hasLastpipe        :: Bool,
     -- Whether this script has the 'inherit_errexit' option set/default.
     hasInheritErrexit  :: Bool,
-    -- Whether this script has 'set -e' anywhere.
-    hasSetE            :: Bool,
+    -- Whether this script has 'set -e' or 'set -o errexit' anywhere.
+    hasErrexit         :: Bool,
     -- Whether this script has 'set -f' or 'set -o noglob' anywhere.
     hasNoglob          :: Bool,
     -- Whether this script has 'set -o pipefail' anywhere.
@@ -208,7 +208,7 @@ makeParameters spec = params
     params = Parameters {
         rootNode = root,
         shellType = fromMaybe (determineShell (asFallbackShell spec) root) $ asShellType spec,
-        hasSetE = containsSetE root,
+        hasErrexit = containsErrexit root,
         hasNoglob = containsNoglob root,
         hasLastpipe =
             case shellType params of
@@ -253,9 +253,9 @@ makeParameters spec = params
 
 -- Does this script mention 'set -e' anywhere?
 -- Used as a hack to disable certain warnings.
-containsSetE root = isNothing $ doAnalysis (guard . not . isSetE) root
+containsErrexit root = isNothing $ doAnalysis (guard . not . isErrexit) root
   where
-    isSetE t =
+    isErrexit t =
         case t of
             T_Script _ (T_Literal _ str) _ -> str `matches` re
             T_SimpleCommand {}  ->

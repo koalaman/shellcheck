@@ -2816,7 +2816,7 @@ prop_checkCdAndBack6 = verify checkCdAndBack "for dir in */; do cd \"$dir\"; som
 prop_checkCdAndBack7 = verifyNot checkCdAndBack "set -e; for dir in */; do cd \"$dir\"; some_cmd; cd ..; done"
 prop_checkCdAndBack8 = verifyNot checkCdAndBack "cd tmp\nfoo\n# shellcheck disable=SC2103\ncd ..\n"
 checkCdAndBack params t =
-    unless (hasSetE params) $ mapM_ doList $ getCommandSequences t
+    unless (hasErrexit params) $ mapM_ doList $ getCommandSequences t
   where
     isCdRevert t =
         case oversimplify t of
@@ -3309,7 +3309,7 @@ prop_checkUncheckedPopd13 = verifyTree checkUncheckedCdPushdPopd "cd ../../.../.
 prop_checkUncheckedCdInFunction1 = verifyNotTree checkUncheckedCdPushdPopd "#!/bin/bash\nfoo() {\n  cd /abc\n}"
 
 checkUncheckedCdPushdPopd params root =
-    if hasSetE params then
+    if hasErrexit params then
         []
     else execWriter $ doAnalysis checkElement root
   where
@@ -4174,7 +4174,7 @@ prop_checkUselessBang7 = verifyNot checkUselessBang "set -e; x() { ! [ x ]; }"
 prop_checkUselessBang8 = verifyNot checkUselessBang "set -e; if { ! true; }; then true; fi"
 prop_checkUselessBang9 = verifyNot checkUselessBang "set -e; while ! true; do true; done"
 prop_checkUselessBang10 = verify checkUselessBang "set -e\nshellcheck disable=SC0000\n! true\nrest"
-checkUselessBang params t = when (hasSetE params) $ mapM_ check (getNonReturningCommands t)
+checkUselessBang params t = when (hasErrexit params) $ mapM_ check (getNonReturningCommands t)
   where
     check t =
         case t of
@@ -4885,7 +4885,7 @@ prop_checkSetESuppressed17 = verifyNotTree checkSetESuppressed "set -e; f(){ :; 
 prop_checkSetESuppressed18 = verifyNotTree checkSetESuppressed "set -e; shopt -s inherit_errexit; f(){ :; }; x=$(f)"
 prop_checkSetESuppressed19 = verifyNotTree checkSetESuppressed "set -e; set -o posix; f(){ :; }; x=$(f)"
 checkSetESuppressed params t =
-    if hasSetE params then runNodeAnalysis checkNode params t else []
+    if hasErrexit params then runNodeAnalysis checkNode params t else []
   where
     checkNode _ (T_SimpleCommand _ _ (cmd:_)) = when (isFunction cmd) (checkCmd cmd)
     checkNode _ _ = return ()
@@ -4922,7 +4922,7 @@ checkSetESuppressed params t =
                 "Bash implicitly disabled set -e for this function " ++
                 "invocation because it's inside a command substitution. " ++
                 "Add set -e; before it or enable inherit_errexit.")
-        errExitEnabled t = hasInheritErrexit params || containsSetE t
+        errExitEnabled t = hasInheritErrexit params || containsErrexit t
         isIn t cmds = getId t `elem` map getId cmds
 
 
