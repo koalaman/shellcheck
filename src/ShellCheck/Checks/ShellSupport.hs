@@ -223,6 +223,28 @@ prop_checkBashisms128 = verify checkBashisms "#!/bin/dash\ntype -p test"
 prop_checkBashisms129 = verify checkBashisms "#!/bin/sh\n[ -k /tmp ]"
 prop_checkBashisms130 = verifyNot checkBashisms "#!/bin/dash\ntest -k /tmp"
 prop_checkBashisms131 = verify checkBashisms "#!/bin/sh\n[ -o errexit ]"
+prop_checkBashisms132 = verify checkBashisms "echo $\"hello\"" -- SC3004
+prop_checkBashisms133 = verify checkBashisms "for ((;;)); do break; done" -- SC3005
+prop_checkBashisms134 = verify checkBashisms "((var))" -- SC3006
+prop_checkBashisms135 = verify checkBashisms "var=$[1 + 2]" -- SC3007
+prop_checkBashisms136 = verify checkBashisms "select x; do :; done" -- SC3008
+prop_checkBashisms137a = verify checkBashisms "echo {a,b}" -- SC3009
+prop_checkBashisms137b = verify checkBashisms "echo {1..3}" -- SC3009
+prop_checkBashisms138 = verify checkBashisms "[[ -z $var ]]" -- SC3010
+prop_checkBashisms139 = verify checkBashisms "cat <<< foo" -- SC3011
+prop_checkBashisms140a = verify checkBashisms "[ a '<' b ]" -- SC3012
+prop_checkBashisms140b = verify checkBashisms "test a \\> b" -- SC3012
+prop_checkBashisms141 = verify checkBashisms "echo $((2 ** 3))" -- SC3019
+prop_checkBashisms142 = verify checkBashisms "make |& less" -- SC3029
+prop_checkBashisms143 = verify checkBashisms "a=(foo bar)" -- SC3030
+prop_checkBashisms144 = verify checkBashisms "coproc foo { :; }" -- SC3032
+prop_checkBashisms145a = verify checkBashisms "#!/bin/sh\nf() { local i=; }" -- SC3043
+prop_checkBashisms145b = verifyNot checkBashisms "#!/bin/dash\nf() { local i=; }" -- SC3043
+prop_checkBashisms146 = verify checkBashisms "readarray < file" -- SC3044
+prop_checkBashisms147 = verify checkBashisms "[ -R ref ]" -- SC3063
+prop_checkBashisms148 = verify checkBashisms "[ -N file ]" -- SC3064
+prop_checkBashisms149 = verify checkBashisms "[ -G file ]" -- SC3066
+prop_checkBashisms150 = verify checkBashisms "[ -O file ]" -- SC3067
 checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
     params <- ask
     kludge params t
