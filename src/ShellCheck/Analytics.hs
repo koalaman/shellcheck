@@ -270,6 +270,13 @@ optionalTreeChecks = [
     }, checkRequireDoubleBracket)
 
     ,(newCheckDescription {
+        cdName = "require-double-equals",
+        cdDescription = "Require == and warn about = in Bash tests",
+        cdPositive = "[[ \"$x\" = \"$y\" ]]",
+        cdNegative = "[[ \"$x\" == \"$y\" ]]"
+    }, checkRequireDoubleEquals)
+
+    ,(newCheckDescription {
         cdName = "check-set-e-suppressed",
         cdDescription = "Notify when set -e is suppressed during function invocation",
         cdPositive = "set -e; func() { cp *.txt ~/backup; rm *.txt; }; func && echo ok",
@@ -4716,6 +4723,22 @@ checkRequireDoubleBracket params =
         TC_Unary {} -> True
         TC_Nullary {} -> True
         _ -> False
+
+
+prop_checkRequireDoubleEquals1 = verifyTree checkRequireDoubleEquals "[[ \"$x\" = \"$y\" ]]"
+prop_checkRequireDoubleEquals2 = verifyTree checkRequireDoubleEquals "[ \"$x\" = \"$y\" ]"
+prop_checkRequireDoubleEquals3 = verifyNotTree checkRequireDoubleEquals "[[ \"$x\" == \"$y\" ]]"
+prop_checkRequireDoubleEquals4 = verifyNotTree checkRequireDoubleEquals "#!/bin/sh\n[ \"$x\" = \"$y\" ]"
+prop_checkRequireDoubleEquals5 = verifyNotTree checkRequireDoubleEquals "#!/bin/ksh\n[[ \"$x\" = \"$y\" ]]"
+checkRequireDoubleEquals params =
+    if shellType params == Bash
+    then nodeChecksToTreeCheck [check] params
+    else const []
+  where
+    check _ t = case t of
+        TC_Binary id _ "=" _ _ ->
+            style id 2337 "Prefer == over = for string comparisons in Bash tests."
+        _ -> return ()
 
 
 prop_checkUnquotedParameterExpansionPattern1 = verify checkUnquotedParameterExpansionPattern  "echo \"${var#$x}\""
