@@ -29,6 +29,7 @@ import ShellCheck.AnalyzerLib hiding (producesComments)
 import ShellCheck.CFG
 import qualified ShellCheck.CFGAnalysis as CF
 import ShellCheck.Data
+import ShellCheck.Fixer (applyFix)
 import ShellCheck.Parser
 import ShellCheck.Prelude
 import ShellCheck.Interface
@@ -40,6 +41,7 @@ import Control.Monad.Identity
 import Control.Monad.State
 import Control.Monad.Writer hiding ((<>))
 import Control.Monad.Reader
+import Data.Array (listArray)
 import Data.Char
 import Data.Functor
 import Data.Function (on)
@@ -310,6 +312,17 @@ verifyTree f s = producesComments f s == Just True
 verifyNotTree :: (Parameters -> Token -> [TokenComment]) -> String -> Bool
 verifyNotTree f s = producesComments f s == Just False
 
+verifyTreeFix :: (Parameters -> Token -> [TokenComment]) -> String -> String -> Bool
+verifyTreeFix f input expected =
+    case runAndGetComments f input of
+        Just comments ->
+            let fixes = mapMaybe tcFix comments
+                inputLines = lines input
+            in
+                not (null fixes)
+                && applyFix (mconcat fixes) (listArray (1, length inputLines) inputLines) == lines expected
+        Nothing -> False
+
 checkCommand str f t@(T_SimpleCommand id _ (cmd:rest))
     | t `isCommand` str = f cmd rest
 checkCommand _ _ _ = return ()
@@ -332,7 +345,7 @@ producesComments f s = not . null <$> runAndGetComments f s
 runAndGetComments f s = do
         let pr = pScript s
         root <- prRoot pr
-        let spec = defaultSpec pr
+        let spec = (defaultSpec pr) { asSourceText = s }
         let params = makeParameters spec
         return $
             filterByAnnotation spec params $
@@ -4689,6 +4702,11 @@ prop_checkRequireDoubleBracket1 = verifyTree checkRequireDoubleBracket "[ -x foo
 prop_checkRequireDoubleBracket2 = verifyTree checkRequireDoubleBracket "[ foo -o bar ]"
 prop_checkRequireDoubleBracket3 = verifyNotTree checkRequireDoubleBracket "#!/bin/sh\n[ -x foo ]"
 prop_checkRequireDoubleBracket4 = verifyNotTree checkRequireDoubleBracket "[[ -x foo ]]"
+prop_checkRequireDoubleBracket5 = verifyTreeFix checkRequireDoubleBracket "#!/bin/bash\n[ -n \"$witness_me\" ]" "#!/bin/bash\n[[ -n \"$witness_me\" ]]"
+prop_checkRequireDoubleBracket6 = verifyTreeFix checkRequireDoubleBracket "#!/bin/bash\n[ -n \"$witness_me\" ]]" "#!/bin/bash\n[[ -n \"$witness_me\" ]]"
+prop_checkRequireDoubleBracket7 = verifyTreeFix checkRequireDoubleBracket "#!/bin/bash\n[ -n \"$witness_me\"  ]" "#!/bin/bash\n[[ -n \"$witness_me\"  ]]"
+prop_checkRequireDoubleBracket8 = verifyTreeFix checkRequireDoubleBracket "#!/bin/bash\n[\n  -n \"$witness_me\"\n]]" "#!/bin/bash\n[[\n  -n \"$witness_me\"\n]]"
+prop_checkRequireDoubleBracket9 = verifyTreeFix checkRequireDoubleBracket "#!/bin/bash\n[\t-n \"$witness_me\"\t]]" "#!/bin/bash\n[[\t-n \"$witness_me\"\t]]"
 checkRequireDoubleBracket params =
     if (shellType params) `elem` [Bash, Ksh, BusyboxSh]
     then nodeChecksToTreeCheck [check] params
@@ -4704,9 +4722,72 @@ checkRequireDoubleBracket params =
         then
             [
                 replaceStart (getId t) params 0 "[",
-                replaceEnd (getId t) params 0 "]"
+                replaceConditionEnd t
             ]
         else []
+
+    replaceConditionEnd t@(T_Condition id _ s) =
+        let (_, conditionEnd) = tokenPositions params Map.! id
+            (_, innerEnd) = simpleConditionRange s
+            suffix = sourceSpan innerEnd conditionEnd
+            leadingWhitespace = takeWhile isSpace suffix
+        in
+            if dropWhile isSpace suffix == "]]"
+            then replaceSpan id innerEnd conditionEnd (leadingWhitespace ++ "]]")
+            else replaceEnd id params 0 "]"
+
+    simpleConditionRange s =
+        case s of
+            TC_Binary id _ _ lhs rhs -> foldl1 mergeRanges [tokenRange id, simpleConditionRange lhs, simpleConditionRange rhs]
+            TC_Nullary id _ t -> mergeRanges (tokenRange id) (tokenRange (getId t))
+            TC_Unary id _ _ t -> mergeRanges (tokenRange id) (tokenRange (getId t))
+            _ -> tokenRange (getId s)
+
+    tokenRange id = tokenPositions params Map.! id
+    mergeRanges (start1, end1) (start2, end2) = (min start1 start2, max end1 end2)
+
+    sourceSpan start end
+        | otherwise =
+            let sourceLines = lines (sourceText params)
+                startLine = fromIntegral (posLine start)
+                endLine = fromIntegral (posLine end)
+                lineAt n
+                    | n >= 1 && n <= length sourceLines = Just (sourceLines !! (n - 1))
+                    | otherwise = Nothing
+            in
+                case (lineAt startLine, lineAt endLine) of
+                    (Just startText, Just endText) ->
+                        let startIndex = columnToIndex startText (fromIntegral $ posColumn start)
+                            endIndex = columnToIndex endText (fromIntegral $ posColumn end)
+                        in
+                            if startLine == endLine
+                            then
+                                take (endIndex - startIndex) . drop startIndex $ startText
+                            else
+                                intercalate "\n" $
+                                    [drop startIndex startText]
+                                    ++ [sourceLines !! (n - 1) | n <- [startLine + 1 .. endLine - 1]]
+                                    ++ [take endIndex endText]
+                    _ -> ""
+
+    columnToIndex line target = go line 0 1
+      where
+        go rest raw visual
+            | target <= visual = raw
+        go [] raw _ = raw
+        go ('\t':rest) raw visual = go rest (raw + 1) (visual + 8 - ((visual - 1) `mod` 8))
+        go (_:rest) raw visual = go rest (raw + 1) (visual + 1)
+
+    replaceSpan id start end r =
+        let depth = length $ getPath (parentMap params) (T_EOF id)
+        in
+            newReplacement {
+                repStartPos = start,
+                repEndPos = end,
+                repString = r,
+                repPrecedence = depth,
+                repInsertionPoint = InsertBefore
+            }
 
     -- We don't tag operators like < and -o well enough to replace them,
     -- so just handle the simple cases.

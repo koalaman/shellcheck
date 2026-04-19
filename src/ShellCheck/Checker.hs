@@ -88,6 +88,7 @@ checkScript sys spec = do
                     asCheckSourced = csCheckSourced spec,
                     asExecutionMode = Executed,
                     asTokenPositions = tokenPositions,
+                    asSourceText = contents,
                     asExtendedAnalysis = csExtendedAnalysis spec,
                     asOptionalChecks = getEnableDirectives root ++ csOptionalChecks spec
                 } where as = newAnalysisSpec root

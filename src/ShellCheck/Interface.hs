@@ -25,7 +25,7 @@ module ShellCheck.Interface
     , CheckResult(crFilename, crComments)
     , ParseSpec(psFilename, psScript, psCheckSourced, psIgnoreRC, psShellTypeOverride)
     , ParseResult(prComments, prTokenPositions, prRoot)
-    , AnalysisSpec(asScript, asShellType, asFallbackShell, asExecutionMode, asCheckSourced, asTokenPositions, asExtendedAnalysis, asOptionalChecks)
+    , AnalysisSpec(asScript, asShellType, asFallbackShell, asExecutionMode, asCheckSourced, asTokenPositions, asExtendedAnalysis, asOptionalChecks, asSourceText)
     , AnalysisResult(arComments)
     , FormatterOptions(foColorOption, foWikiLinkCount)
     , Shell(Ksh, Sh, Bash, Dash, BusyboxSh)
@@ -177,7 +177,8 @@ data AnalysisSpec = AnalysisSpec {
     asCheckSourced :: Bool,
     asOptionalChecks :: [String],
     asExtendedAnalysis :: Maybe Bool,
-    asTokenPositions :: Map.Map Id (Position, Position)
+    asTokenPositions :: Map.Map Id (Position, Position),
+    asSourceText :: String
 }
 
 newAnalysisSpec token = AnalysisSpec {
@@ -188,7 +189,8 @@ newAnalysisSpec token = AnalysisSpec {
     asCheckSourced = False,
     asOptionalChecks = [],
     asExtendedAnalysis = Nothing,
-    asTokenPositions = Map.empty
+    asTokenPositions = Map.empty,
+    asSourceText = ""
 }
 
 newtype AnalysisResult = AnalysisResult {

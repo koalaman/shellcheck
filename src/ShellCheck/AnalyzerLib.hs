@@ -105,6 +105,8 @@ data Parameters = Parameters {
     rootNode           :: Token,
     -- map from token id to start and end position
     tokenPositions     :: Map.Map Id (Position, Position),
+    -- original source text for source-sensitive fixes
+    sourceText         :: String,
     -- Result from Control Flow Graph analysis (including data flow analysis)
     cfgAnalysis :: Maybe CF.CFGAnalysis
     } deriving (Show)
@@ -138,7 +140,8 @@ defaultSpec pr = spec {
     asShellType = Nothing,
     asCheckSourced = False,
     asExecutionMode = Executed,
-    asTokenPositions = prTokenPositions pr
+    asTokenPositions = prTokenPositions pr,
+    asSourceText = ""
 } where spec = newAnalysisSpec (fromJust $ prRoot pr)
 
 pScript s =
@@ -154,7 +157,7 @@ producesComments :: Checker -> String -> Maybe Bool
 producesComments c s = do
         let pr = pScript s
         prRoot pr
-        let spec = defaultSpec pr
+        let spec = (defaultSpec pr) { asSourceText = s }
         let params = makeParameters spec
         return . not . null $ filterByAnnotation spec params $ runChecker params c
 
@@ -237,6 +240,7 @@ makeParameters spec = params
         parentMap = getParentTree root,
         variableFlow = getVariableFlow params root,
         tokenPositions = asTokenPositions spec,
+        sourceText = asSourceText spec,
         cfgAnalysis = do
             guard extendedAnalysis
             return $ CF.analyzeControlFlow cfParams root
