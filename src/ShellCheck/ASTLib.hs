@@ -386,6 +386,16 @@ prop_getLiteralString10 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\1234"
 prop_getLiteralString11 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\1") == Just "\1"
 prop_getLiteralString12 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\12") == Just "\o12"
 prop_getLiteralString13 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\123") == Just "\o123"
+prop_getLiteralString14 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\e[1mfoo\\E[0mbar") == Just "\ESC[1mfoo\ESC[0mbar"
+prop_getLiteralString15 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\?") == Just "?"
+prop_getLiteralString16 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\u9") == Just "\t"
+prop_getLiteralString17 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\u2F") == Just "/"
+prop_getLiteralString18 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\u100") == Just "Ā"
+prop_getLiteralString19 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\u1d00") == Just "ᴀ"
+prop_getLiteralString20 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\u1D56C") == Just "ᵖC"
+prop_getLiteralString21 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\U9z") == Just "\tz"
+prop_getLiteralString22 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\u1d00.") == Just "ᴀ."
+prop_getLiteralString23 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\U1D56C") == Just "𝕬"
 
 -- Maybe get the literal value of a token, using a custom function
 -- to map unrecognized Tokens into strings.
@@ -409,17 +419,27 @@ getLiteralStringExt more = g
             'a' -> '\a' : rest
             'b' -> '\b' : rest
             'e' -> '\x1B' : rest
+            'E' -> '\x1B' : rest
             'f' -> '\f' : rest
             'n' -> '\n' : rest
             'r' -> '\r' : rest
             't' -> '\t' : rest
             'v' -> '\v' : rest
+            '\\' -> '\\' : rest
             '\'' -> '\'' : rest
             '"' -> '"' : rest
-            '\\' -> '\\' : rest
+            '?' -> '?' : rest
             'x' ->
                 case readHex (take 2 cs) of
                     [(n, s)] -> chr n : s ++ decodeEscapes (drop 2 cs)
+                    _ -> '\\' : 'x' : rest
+            'u' ->
+                case readHex (take 4 cs) of
+                    [(n, s)] -> chr n : s ++ decodeEscapes (drop 4 cs)
+                    _ -> '\\' : 'x' : rest
+            'U' ->
+                case readHex (take 8 cs) of
+                    [(n, s)] -> chr n : s ++ decodeEscapes (drop 8 cs)
                     _ -> '\\' : 'x' : rest
             _ ->
                 case readOct (c:take 2 cs) of
