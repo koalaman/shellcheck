@@ -33,7 +33,7 @@ import Data.List
 import Data.Maybe
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as Map
-import Numeric (showHex)
+import Numeric (readHex, readOct, showHex)
 
 import Test.QuickCheck
 
@@ -418,28 +418,15 @@ getLiteralStringExt more = g
             '"' -> '"' : rest
             '\\' -> '\\' : rest
             'x' ->
-                case cs of
-                    (x:y:more) | isHexDigit x && isHexDigit y ->
-                        chr (16*(digitToInt x) + (digitToInt y)) : decodeEscapes more
-                    (x:more) | isHexDigit x ->
-                        chr (digitToInt x) : decodeEscapes more
-                    more -> '\\' : 'x' : decodeEscapes more
-            _ | isOctDigit c ->
-                let (digits, more) = spanMax isOctDigit 3 (c:cs)
-                    num = (parseOct digits) `mod` 256
-                in (chr num) : decodeEscapes more
-            _ -> '\\' : c : rest
+                case readHex (take 2 cs) of
+                    [(n, s)] -> chr n : s ++ decodeEscapes (drop 2 cs)
+                    _ -> '\\' : 'x' : rest
+            _ ->
+                case readOct (c:take 2 cs) of
+                    [(n, s)] -> chr (n `mod` 256) : s ++ decodeEscapes (drop 2 cs)
+                    _ -> '\\' : c : rest
       where
         rest = decodeEscapes cs
-        parseOct = f 0
-          where
-            f n "" = n
-            f n (c:rest) = f (n * 8 + digitToInt c) rest
-        spanMax f n list =
-            let (first, second) = span f list
-                (prefix, suffix) = splitAt n first
-            in
-                (prefix, suffix ++ second)
     decodeEscapes (c:cs) = c : decodeEscapes cs
     decodeEscapes [] = []
 
