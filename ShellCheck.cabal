@@ -41,6 +41,10 @@ source-repository head
     type: git
     location: https://github.com/koalaman/shellcheck.git
 
+flag dev-mode
+    manual: True
+    default: False
+
 library
     hs-source-dirs: src
     if impl(ghc < 8.0)
@@ -83,7 +87,6 @@ library
       ShellCheck.Checks.Custom
       ShellCheck.Checks.ShellSupport
       ShellCheck.Data
-      ShellCheck.Debug
       ShellCheck.Fixer
       ShellCheck.Formatter.Format
       ShellCheck.Formatter.CheckStyle
@@ -97,6 +100,11 @@ library
       ShellCheck.Parser
       ShellCheck.Prelude
       ShellCheck.Regex
+
+    if flag(dev-mode)
+      exposed-modules:
+        ShellCheck.Debug
+
     other-modules:
       Paths_ShellCheck
     default-language: Haskell2010
@@ -124,6 +132,17 @@ executable shellcheck
       ShellCheck
     default-language: Haskell2010
     main-is: shellcheck.hs
+
+executable shellcheck-dev
+    if flag(dev-mode)
+      buildable: True
+    else
+      buildable: False
+    build-depends:
+      base,
+      containers,
+      ShellCheck
+    main-is: shellcheck-dev.hs
 
 test-suite test-shellcheck
     type: exitcode-stdio-1.0
