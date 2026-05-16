@@ -678,10 +678,12 @@ prop_checkPrintfVar19 = verifyNot checkPrintfVar "printf '%(%s)T'"
 prop_checkPrintfVar20 = verifyNot checkPrintfVar "printf '%d %(%s)T' 42"
 prop_checkPrintfVar21 = verify checkPrintfVar "printf '%d %(%s)T'"
 prop_checkPrintfVar22 = verify checkPrintfVar "printf '%s\n%s' foo"
+prop_checkPrintfVar23 = verifyNot checkPrintfVar "printf -vTODAY '%(%Y)T'"
 
 checkPrintfVar = CommandCheck (Exactly "printf") (f . arguments) where
     f (doubledash:rest) | getLiteralString doubledash == Just "--" = f rest
     f (dashv:var:rest) | getLiteralString dashv == Just "-v" = f rest
+    f (dashvVar:rest) | Just ('-':'v':_:_) <- getLiteralString dashvVar = f rest
     f (format:params) = check format params
     f _ = return ()
 
