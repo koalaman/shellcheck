@@ -69,10 +69,7 @@ library
       transformers         >= 0.4.2 && < 0.7,
 
       -- getXdgDirectory from 1.2.3.0
-      directory            >= 1.2.3 && < 1.4,
-
-      -- When cabal supports it, move this to setup-depends:
-      process
+      directory            >= 1.2.3 && < 1.4
     exposed-modules:
       ShellCheck.AST
       ShellCheck.ASTLib
