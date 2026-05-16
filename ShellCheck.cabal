@@ -139,6 +139,7 @@ executable shellcheck-dev
       base,
       containers,
       ShellCheck
+    default-language: Haskell2010
     main-is: shellcheck-dev.hs
 
 test-suite test-shellcheck
