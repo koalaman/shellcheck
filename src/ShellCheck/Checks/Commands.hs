@@ -99,8 +99,6 @@ commandChecks = [
     ,checkMvArguments, checkCpArguments, checkLnArguments
     ,checkFindRedirections
     ,checkReadExpansions
-    ,checkSudoRedirect
-    ,checkSudoArgs
     ,checkSourceArgs
     ,checkChmodDashr
     ,checkXargsDashi
@@ -111,6 +109,8 @@ commandChecks = [
     ++ map checkMaskedReturns declaringCommands
     ++ map checkMultipleDeclaring declaringCommands
     ++ map checkBackreferencingDeclaration declaringCommands
+    ++ map checkSudoArgs privilegeElevationCommands
+    ++ map checkSudoRedirect privilegeElevationCommands
 
 
 optionalChecks = map fst optionalCommandChecks
@@ -1199,14 +1199,14 @@ prop_checkWhich = verify checkWhich "which '.+'"
 checkWhich = CommandCheck (Basename "which") $
     \t -> info (getId $ getCommandTokenOrThis t) 2230 "'which' is non-standard. Use builtin 'command -v' instead."
 
-prop_checkSudoRedirect1 = verify checkSudoRedirect "sudo echo 3 > /proc/file"
-prop_checkSudoRedirect2 = verify checkSudoRedirect "sudo cmd < input"
-prop_checkSudoRedirect3 = verify checkSudoRedirect "sudo cmd >> file"
-prop_checkSudoRedirect4 = verify checkSudoRedirect "sudo cmd &> file"
-prop_checkSudoRedirect5 = verifyNot checkSudoRedirect "sudo cmd 2>&1"
-prop_checkSudoRedirect6 = verifyNot checkSudoRedirect "sudo cmd 2> log"
-prop_checkSudoRedirect7 = verifyNot checkSudoRedirect "sudo cmd > /dev/null 2>&1"
-checkSudoRedirect = CommandCheck (Basename "sudo") f
+prop_checkSudoRedirect1 = verify (checkSudoRedirect "sudo") "sudo echo 3 > /proc/file"
+prop_checkSudoRedirect2 = verify (checkSudoRedirect "doas") "doas cmd < input"
+prop_checkSudoRedirect3 = verify (checkSudoRedirect "run0") "run0 cmd >> file"
+prop_checkSudoRedirect4 = verify (checkSudoRedirect "sudo") "sudo cmd &> file"
+prop_checkSudoRedirect5 = verifyNot (checkSudoRedirect "sudo") "sudo cmd 2>&1"
+prop_checkSudoRedirect6 = verifyNot (checkSudoRedirect "doas") "doas cmd 2> log"
+prop_checkSudoRedirect7 = verifyNot (checkSudoRedirect "run0") "run0 cmd > /dev/null 2>&1"
+checkSudoRedirect cmd = CommandCheck (Basename cmd) f
   where
     f t = do
         t_redir <- getClosestCommandM t
@@ -1218,32 +1218,32 @@ checkSudoRedirect = CommandCheck (Basename "sudo") f
         case op of
             T_Less _ ->
               info (getId op) 2024
-                "sudo doesn't affect redirects. Use sudo cat file | .."
+                "sudo/doas/run0 doesn't affect redirects. Use sudo cat file | .."
             T_Greater _ ->
               warn (getId op) 2024
-                "sudo doesn't affect redirects. Use ..| sudo tee file"
+                "sudo/doas/run0 doesn't affect redirects. Use ..| sudo tee file"
             T_DGREAT _ ->
               warn (getId op) 2024
-                "sudo doesn't affect redirects. Use .. | sudo tee -a file"
+                "sudo/doas/run0 doesn't affect redirects. Use .. | sudo tee -a file"
             _ -> return ()
     warnAbout _ = return ()
     special file = concat (oversimplify file) == "/dev/null"
 
-prop_checkSudoArgs1 = verify checkSudoArgs "sudo cd /root"
-prop_checkSudoArgs2 = verify checkSudoArgs "sudo export x=3"
-prop_checkSudoArgs3 = verifyNot checkSudoArgs "sudo ls /usr/local/protected"
-prop_checkSudoArgs4 = verifyNot checkSudoArgs "sudo ls && export x=3"
-prop_checkSudoArgs5 = verifyNot checkSudoArgs "sudo echo ls"
-prop_checkSudoArgs6 = verifyNot checkSudoArgs "sudo -n -u export ls"
-prop_checkSudoArgs7 = verifyNot checkSudoArgs "sudo docker export foo"
-checkSudoArgs = CommandCheck (Basename "sudo") f
+prop_checkSudoArgs1 = verify (checkSudoArgs "sudo") "sudo cd /root"
+prop_checkSudoArgs2 = verify (checkSudoArgs "run0") "run0 export x=3"
+prop_checkSudoArgs3 = verifyNot (checkSudoArgs "sudo") "sudo ls /usr/local/protected"
+prop_checkSudoArgs4 = verifyNot (checkSudoArgs "doas") "doas ls && export x=3"
+prop_checkSudoArgs5 = verifyNot (checkSudoArgs "sudo") "sudo echo ls"
+prop_checkSudoArgs6 = verifyNot (checkSudoArgs "sudo") "sudo -n -u export ls"
+prop_checkSudoArgs7 = verifyNot (checkSudoArgs "sudo") "sudo docker export foo"
+checkSudoArgs cmd = CommandCheck (Basename cmd) f
   where
     f t = sequence_ $ do
         opts <- parseOpts $ arguments t
         (_,(commandArg, _)) <- find (null . fst) opts
         command <- getLiteralString commandArg
         guard $ command `elem` builtins
-        return $ warn (getId t) 2232 $ "Can't use sudo with builtins like " ++ command ++ ". Did you want sudo sh -c .. instead?"
+        return $ warn (getId t) 2232 $ "Can't use sudo/doas/run0 with builtins like " ++ command ++ ". Did you want sudo/doas/run0 sh -c .. instead?"
     builtins = [ "cd", "command", "declare", "eval", "exec", "exit", "export", "hash", "history", "local", "popd", "pushd", "read", "readonly", "return", "set", "source", "trap", "type", "typeset", "ulimit", "umask", "unset", "wait" ]
     -- This mess is why ShellCheck prefers not to know.
     parseOpts = getBsdOpts "vAknSbEHPa:g:h:p:u:c:T:r:"
