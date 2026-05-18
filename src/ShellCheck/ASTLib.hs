@@ -33,7 +33,7 @@ import Data.List
 import Data.Maybe
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as Map
-import Numeric (showHex)
+import Numeric (readHex, readOct, showHex)
 
 import Test.QuickCheck
 
@@ -386,6 +386,16 @@ prop_getLiteralString10 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\1234"
 prop_getLiteralString11 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\1") == Just "\1"
 prop_getLiteralString12 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\12") == Just "\o12"
 prop_getLiteralString13 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\123") == Just "\o123"
+prop_getLiteralString14 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\e[1mfoo\\E[0mbar") == Just "\ESC[1mfoo\ESC[0mbar"
+prop_getLiteralString15 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\?") == Just "?"
+prop_getLiteralString16 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\u9") == Just "\t"
+prop_getLiteralString17 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\u2F") == Just "/"
+prop_getLiteralString18 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\u100") == Just "Ā"
+prop_getLiteralString19 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\u1d00") == Just "ᴀ"
+prop_getLiteralString20 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\u1D56C") == Just "ᵖC"
+prop_getLiteralString21 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\U9z") == Just "\tz"
+prop_getLiteralString22 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\u1d00.") == Just "ᴀ."
+prop_getLiteralString23 = getLiteralString (T_DollarSingleQuoted (Id 0) "\\U1D56C") == Just "𝕬"
 
 -- Maybe get the literal value of a token, using a custom function
 -- to map unrecognized Tokens into strings.
@@ -409,37 +419,34 @@ getLiteralStringExt more = g
             'a' -> '\a' : rest
             'b' -> '\b' : rest
             'e' -> '\x1B' : rest
+            'E' -> '\x1B' : rest
             'f' -> '\f' : rest
             'n' -> '\n' : rest
             'r' -> '\r' : rest
             't' -> '\t' : rest
             'v' -> '\v' : rest
+            '\\' -> '\\' : rest
             '\'' -> '\'' : rest
             '"' -> '"' : rest
-            '\\' -> '\\' : rest
+            '?' -> '?' : rest
             'x' ->
-                case cs of
-                    (x:y:more) | isHexDigit x && isHexDigit y ->
-                        chr (16*(digitToInt x) + (digitToInt y)) : decodeEscapes more
-                    (x:more) | isHexDigit x ->
-                        chr (digitToInt x) : decodeEscapes more
-                    more -> '\\' : 'x' : decodeEscapes more
-            _ | isOctDigit c ->
-                let (digits, more) = spanMax isOctDigit 3 (c:cs)
-                    num = (parseOct digits) `mod` 256
-                in (chr num) : decodeEscapes more
-            _ -> '\\' : c : rest
+                case readHex (take 2 cs) of
+                    [(n, s)] -> chr n : s ++ decodeEscapes (drop 2 cs)
+                    _ -> '\\' : 'x' : rest
+            'u' ->
+                case readHex (take 4 cs) of
+                    [(n, s)] -> chr n : s ++ decodeEscapes (drop 4 cs)
+                    _ -> '\\' : 'x' : rest
+            'U' ->
+                case readHex (take 8 cs) of
+                    [(n, s)] -> chr n : s ++ decodeEscapes (drop 8 cs)
+                    _ -> '\\' : 'x' : rest
+            _ ->
+                case readOct (c:take 2 cs) of
+                    [(n, s)] -> chr (n `mod` 256) : s ++ decodeEscapes (drop 2 cs)
+                    _ -> '\\' : c : rest
       where
         rest = decodeEscapes cs
-        parseOct = f 0
-          where
-            f n "" = n
-            f n (c:rest) = f (n * 8 + digitToInt c) rest
-        spanMax f n list =
-            let (first, second) = span f list
-                (prefix, suffix) = splitAt n first
-            in
-                (prefix, suffix ++ second)
     decodeEscapes (c:cs) = c : decodeEscapes cs
     decodeEscapes [] = []
 
