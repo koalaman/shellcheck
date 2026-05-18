@@ -134,11 +134,27 @@ options = [
     Option "x" ["external-sources"]
         (NoArg $ Flag "externals" "true") "Allow 'source' outside of FILES",
     Option "" ["help"]
-        (NoArg $ Flag "help" "true") "Show this usage summary and exit"
+        (NoArg $ Flag "help" "true") "Show this usage summary and exit",
+    Option "" ["files-from"]
+        (ReqArg (Flag "files-from") "FILE")
+        "Read input files from FILE (one per line, or '-' for stdin)"
     ]
 getUsageInfo = usageInfo usageHeader options
 
 printErr = lift . hPutStrLn stderr
+
+trim :: String -> String
+trim = f . f
+  where f = reverse . dropWhile isSpace
+
+parseFileListLines :: String -> [FilePath]
+parseFileListLines contents =
+    [ line
+    | raw <- lines contents
+    , let line = trim raw
+    , not (null line)
+    , not ("#" `isPrefixOf` line)
+    ]
 
 parseArguments :: [String] -> ExceptT Status IO ([Flag], [FilePath])
 parseArguments argv =
@@ -208,20 +224,42 @@ statusToCode status =
 process :: [Flag] -> [FilePath] -> ExceptT Status IO Status
 process flags files = do
     options <- foldM (flip parseOption) defaultOptions flags
-    verifyFiles files
+
+    extra <- fmap concat $ mapM readFilesFrom (getOptions flags "files-from")
+    let allFiles = extra ++ files
+
+    verifyFiles allFiles
+
     let format = fromMaybe "tty" $ getOption flags "format"
     let formatters = formats $ formatterOptions options
-    formatter <-
-        case Map.lookup format formatters of
-            Nothing -> do
-                printErr $ "Unknown format " ++ format
-                printErr "Supported formats:"
-                mapM_ (printErr . write) $ Map.keys formatters
-                throwError SupportFailure
-              where write s = "  " ++ s
-            Just f -> ExceptT $ fmap Right f
-    sys <- lift $ ioInterface options files
-    lift $ runFormatter sys formatter options files
+    formatter <- case Map.lookup format formatters of
+        Nothing -> do
+            printErr $ "Unknown format " ++ format
+            printErr "Supported formats:"
+            mapM_ (printErr . ("  " ++)) $ Map.keys formatters
+            throwError SupportFailure
+        Just f -> ExceptT $ fmap Right f
+
+    sys <- lift $ ioInterface options allFiles
+
+    lift $ runFormatter sys formatter options allFiles
+
+  where
+    readFilesFrom :: FilePath -> ExceptT Status IO [FilePath]
+    readFilesFrom "-" = do
+        contents <- lift getContents
+        return (parseFileListLines contents)
+
+    readFilesFrom path = do
+        result <- liftIO (try (readFile path) :: IO (Either IOException String))
+        case result of
+            Left e -> do
+                printErr $ "Could not read file list: " ++ path ++ ": " ++ show e
+                throwError RuntimeException
+            Right contents ->
+                return (parseFileListLines contents)
+
+
 
 runFormatter :: SystemInterface IO -> Formatter -> Options -> [FilePath]
             -> IO Status
@@ -396,6 +434,9 @@ parseOption flag options =
 
         -- This flag is handled specially in 'process'
         Flag "format" _ -> return options
+
+        -- This flag is handled specially in 'process'
+        Flag "files-from" _ -> return options
 
         Flag str _ -> do
             printErr $ "Internal error for --" ++ str ++ ". Please file a bug :("
