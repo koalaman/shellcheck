@@ -983,13 +983,20 @@ handleCommand cmd vars args literalCmd = do
 
     handleReturn = do
         returnTarget <- reader cfReturnTarget
-        case returnTarget of
-            Nothing -> error $ pleaseReport "missing return target"
-            Just target -> do
+        isFunction <- reader cfIsFunction
+        case (returnTarget, isFunction) of
+            (Nothing, _) -> error $ pleaseReport "missing return target"
+            (Just target, True) -> do
+                -- In a function: return actually returns, making subsequent code unreachable
                 ret <- newNode CFStructuralNode
                 link ret target CFEFlow
                 unreachable <- newNode CFUnreachable
                 return $ Range ret unreachable
+            (Just _, False) -> do
+                -- Not in a function: return will fail and execution continues
+                -- Treat it like a regular command that sets exit code
+                ret <- newNodeRange $ CFSetExitCode (getId cmd)
+                return ret
 
     handleUnset (cmd NE.:| args) = do
         case () of
