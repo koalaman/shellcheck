@@ -81,6 +81,8 @@ You can see ShellCheck suggestions directly in a variety of editors.
 
 * VSCode, through [vscode-shellcheck](https://github.com/timonwong/vscode-shellcheck).
 
+* JetBrains products (IntelliJ, Android Studio, PyCharm, etc.), through [Shell Script](https://plugins.jetbrains.com/plugin/13122-shell-script).
+
 * Most other editors, through [GCC error compatibility](shellcheck.1.md#user-content-formats).
 
 ### In your build or test suites
