@@ -2625,8 +2625,10 @@ prop_checkGlobsAsOptions3 = verifyNot checkGlobsAsOptions "rm -- *.txt"
 prop_checkGlobsAsOptions4 = verifyNot checkGlobsAsOptions "*.txt"
 prop_checkGlobsAsOptions5 = verifyNot checkGlobsAsOptions "echo 'Files:' *.txt"
 prop_checkGlobsAsOptions6 = verifyNot checkGlobsAsOptions "printf '%s\\n' *"
-checkGlobsAsOptions _ cmd@(T_SimpleCommand _ _ args) =
-    unless ((fromMaybe "" $ getCommandBasename cmd) `elem` ["echo", "printf"]) $
+prop_checkGlobsAsOptions7 = verifyNot checkGlobsAsOptions "set -f; ls *"
+prop_checkGlobsAsOptions8 = verifyNot checkGlobsAsOptions "set -o noglob\nrm *"
+checkGlobsAsOptions params cmd@(T_SimpleCommand _ _ args) =
+    unless (((fromMaybe "" $ getCommandBasename cmd) `elem` ["echo", "printf"]) || hasNoglob params) $
         mapM_ check $ takeWhile (not . isEndOfArgs) (drop 1 args)
   where
     check v@(T_NormalWord _ (T_Glob id s:_)) | s == "*" || s == "?" =
