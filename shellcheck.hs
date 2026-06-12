@@ -286,13 +286,7 @@ process flags files = do
         matches pat =
             Glob.match pat path ||
             Glob.match pat (takeFileName path) ||
-            any (Glob.match pat) (ancestors path)
-
-        ancestors p =
-            let parent = takeDirectory p
-            in if parent == p || parent == "." || parent == "/"
-               then []
-               else parent : ancestors parent
+            any (Glob.match pat) (splitDirectories path)
 
 runFormatter :: SystemInterface IO -> Formatter -> Options -> [FilePath]
             -> IO Status

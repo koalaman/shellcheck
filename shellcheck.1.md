@@ -142,9 +142,14 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 **--exclude-from** *FILE*
 
 :   Exclude files matching glob patterns listed in *FILE*. Each line should
-    contain one glob pattern. Lines starting with `#` are ignored. If this
-    option is not specified, ShellCheck will look for a file named
-    `.shellcheckignore` in the current working directory and use it if present.
+    contain one glob pattern. Lines starting with `#` or empty lines are
+    ignored. A pattern is matched against the full file path, the file name,
+    and each parent directory. For example, the pattern `vendor` would exclude
+    any file with a `vendor` parent directory.
+
+    If this option is not specified, ShellCheck will search for a file named
+    `.shellcheckignore` in the current working directory and its parent
+    directories, the same way shellcheckrc is searched for.
 
 
 # FORMATS
