@@ -6,7 +6,7 @@ shellcheck - Shell script analysis tool
 
 # SYNOPSIS
 
-**shellcheck** [*OPTIONS*...] [--files-from=FILE] *FILES*...
+**shellcheck** [*OPTIONS*...] [--files-from=FILE] [--exclude-from=FILE] *FILES*...
 
 # DESCRIPTION
 
@@ -138,6 +138,13 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
     file path. Lines starting with `#` or empty lines are ignored. Use `-` to
     read the list from standard input. This option is processed in addition to
     any files specified on the command line.
+
+**--exclude-from** *FILE*
+
+:   Exclude files matching glob patterns listed in *FILE*. Each line should
+    contain one glob pattern. Lines starting with `#` are ignored. If this
+    option is not specified, ShellCheck will look for a file named
+    `.shellcheckignore` in the current working directory and use it if present.
 
 
 # FORMATS

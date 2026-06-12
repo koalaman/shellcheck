@@ -139,7 +139,7 @@ options = [
     Option "" ["files-from"]
         (ReqArg (Flag "files-from") "FILE")
         "Read input files from FILE (one per line, or '-' for stdin)",
-    Option "X" ["exclude-from"]
+    Option "" ["exclude-from"]
         (ReqArg (Flag "exclude-from") "FILE")
         "Exclude files matching patterns listed in FILE, default .shellcheckignore"
     ]
