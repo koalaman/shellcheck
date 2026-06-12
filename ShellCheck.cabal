@@ -162,7 +162,6 @@ test-suite test-shellcheck
       QuickCheck,
       regex-tdfa,
       transformers,
-      ShellCheck,
-      Glob
+      ShellCheck
     default-language: Haskell2010
     main-is: test/shellcheck.hs
