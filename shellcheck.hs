@@ -54,6 +54,7 @@ import           System.Environment
 import           System.Exit
 import           System.FilePath
 import           System.IO
+import           System.FilePath.Glob            as Glob
 
 data Flag = Flag String String
 data Status =
@@ -137,7 +138,10 @@ options = [
         (NoArg $ Flag "help" "true") "Show this usage summary and exit",
     Option "" ["files-from"]
         (ReqArg (Flag "files-from") "FILE")
-        "Read input files from FILE (one per line, or '-' for stdin)"
+        "Read input files from FILE (one per line, or '-' for stdin)",
+    Option "" ["exclude-from"]
+        (ReqArg (Flag "exclude-from") "FILE")
+        "Exclude files matching patterns listed in FILE, default .shellcheckignore"
     ]
 getUsageInfo = usageInfo usageHeader options
 
@@ -233,6 +237,20 @@ process flags files = do
     when (null filesFrom) $
         verifyFiles allFiles
 
+    -- Determine which ignore files to read (fallback to default if flag is omitted)
+    let explicitExcludeFrom = getOptions flags "exclude-from"
+    let excludeFrom = if null explicitExcludeFrom 
+                        then [".shellcheckignore"] 
+                        else explicitExcludeFrom
+
+    -- Silently skip missing files so the default fallback doesn't cause a crash
+    existingExcludes <- liftIO $ filterM doesFileExist excludeFrom
+    excludePatterns  <- fmap concat $ mapM readFilesFrom existingExcludes
+
+    -- Compile glob patterns and filter the input files
+    let compiledExcludes = map Glob.compile excludePatterns
+    let allFilteredFiles = filter (not . isExcludedFile compiledExcludes) allFiles
+
     let format = fromMaybe "tty" $ getOption flags "format"
     let formatters = formats $ formatterOptions options
     formatter <- case Map.lookup format formatters of
@@ -243,9 +261,9 @@ process flags files = do
             throwError SupportFailure
         Just f -> ExceptT $ fmap Right f
 
-    sys <- lift $ ioInterface options allFiles
+    sys <- lift $ ioInterface options allFilteredFiles
 
-    lift $ runFormatter sys formatter options allFiles
+    lift $ runFormatter sys formatter options allFilteredFiles
 
   where
     readFilesFrom :: FilePath -> ExceptT Status IO [FilePath]
@@ -262,7 +280,13 @@ process flags files = do
             Right contents ->
                 return (parseFileListLines contents)
 
-
+    isExcludedFile :: [Glob.Pattern] -> FilePath -> Bool
+    isExcludedFile patterns path = any matches patterns
+      where
+        matches pat =
+            Glob.match pat path ||
+            Glob.match pat (takeFileName path) ||
+            any (Glob.match pat) (splitDirectories path)
 
 runFormatter :: SystemInterface IO -> Formatter -> Options -> [FilePath]
             -> IO Status
@@ -440,6 +464,9 @@ parseOption flag options =
 
         -- This flag is handled specially in 'process'
         Flag "files-from" _ -> return options
+
+        -- This flag is handled specially in 'process'
+        Flag "exclude-from" _ -> return options
 
         Flag str _ -> do
             printErr $ "Internal error for --" ++ str ++ ". Please file a bug :("
@@ -653,7 +680,6 @@ decodeString = decode
             then construct ((x `shiftL` 6) .|. (num .&. 0x3f)) (n-1) rest
             else Nothing
     construct _ _ _ = Nothing
-
 
 verifyFiles files =
     when (null files) $ do
