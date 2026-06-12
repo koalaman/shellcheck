@@ -67,6 +67,7 @@ library
       QuickCheck           >= 2.14.2 && < 2.17,
       regex-tdfa           >= 1.2.0 && < 1.4,
       transformers         >= 0.4.2 && < 0.7,
+      Glob                 >= 0.9.0 && < 0.11,
 
       -- getXdgDirectory from 1.2.3.0
       directory            >= 1.2.3 && < 1.4
@@ -126,7 +127,8 @@ executable shellcheck
       QuickCheck,
       regex-tdfa,
       transformers,
-      ShellCheck
+      ShellCheck,
+      Glob
     default-language: Haskell2010
     main-is: shellcheck.hs
 
@@ -160,6 +162,7 @@ test-suite test-shellcheck
       QuickCheck,
       regex-tdfa,
       transformers,
-      ShellCheck
+      ShellCheck,
+      Glob
     default-language: Haskell2010
     main-is: test/shellcheck.hs
