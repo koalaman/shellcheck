@@ -5244,6 +5244,7 @@ checkExpansionWithRedirection params t =
             _ -> return ()
 
     checkCmd captureId (T_Redirecting _ redirs _) = foldr (walk captureId) (return ()) redirs
+    checkCmd _ _ = return ()
 
     walk captureId t acc =
         case t of
