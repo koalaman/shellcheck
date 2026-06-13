@@ -352,6 +352,14 @@ prop_sourcedFileUsesOriginalShellExtension = result == [2079]
         csCheckSourced = True
     }
 
+prop_sourcedCommandInExpansionDoesntCrash = result == [2034]
+  where
+    result = checkWithSpec [("lib.sh", "echo hello")] emptyCheckSpec {
+        csFilename = "file.bash",
+        csScript = "x=$(source lib.sh)",
+        csCheckSourced = True
+    }
+
 prop_canEnableOptionalsWithSpec = result == [2244]
   where
     result = checkWithSpec [] emptyCheckSpec {
