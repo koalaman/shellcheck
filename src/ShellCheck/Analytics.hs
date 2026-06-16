@@ -5094,9 +5094,14 @@ prop_checkOverwrittenExitCode2 = verifyNot checkOverwrittenExitCode "x; [ $? -eq
 prop_checkOverwrittenExitCode3 = verify checkOverwrittenExitCode "x; echo \"Exit is $?\"; [ $? -eq 0 ]"
 prop_checkOverwrittenExitCode4 = verifyNot checkOverwrittenExitCode "x; [ $? -eq 0 ] && echo Success"
 prop_checkOverwrittenExitCode5 = verify checkOverwrittenExitCode "x; if [ $? -eq 0 ]; then var=$?; fi"
+prop_checkOverwrittenExitCode5a = verify checkOverwrittenExitCode "x; if [ $? -eq 0 ]; then exit $?; fi"
 prop_checkOverwrittenExitCode6 = verify checkOverwrittenExitCode "x; [ $? -gt 0 ] && fail=$?"
+prop_checkOverwrittenExitCode6a = verify checkOverwrittenExitCode "x; [ $? -eq 0 ] && exit $?"
 prop_checkOverwrittenExitCode7 = verifyNot checkOverwrittenExitCode "[ 1 -eq 2 ]; status=$?"
 prop_checkOverwrittenExitCode8 = verifyNot checkOverwrittenExitCode "[ 1 -eq 2 ]; exit $?"
+prop_checkOverwrittenExitCode9  = verifyNot checkOverwrittenExitCode "[[ -e \"./lockfile\" ]] || retval=$?"
+prop_checkOverwrittenExitCode10 = verifyNot checkOverwrittenExitCode "[ -e \"./lockfile\" ] || retval=$?"
+prop_checkOverwrittenExitCode11 = verifyNot checkOverwrittenExitCode "[ 1 -eq 2 ] && status=$?"
 checkOverwrittenExitCode params t =
     case t of
         T_DollarBraced id _ val | getLiteralString val == Just "?" -> check id
@@ -5110,10 +5115,16 @@ checkOverwrittenExitCode params t =
 
         let idToToken = idMap params
         exitCodeTokens <- traverse (\k -> Map.lookup k idToToken) $ S.toList exitCodeIds
+        let inAssignment = isInAssignment id
+            condHasDollarQ = conditionContainsDollarQuestion id exitCodeIds
+            suppress = inAssignment && not condHasDollarQ
         return $ do
-            when (all isCondition exitCodeTokens && not (usedUnconditionally cfga t exitCodeIds)) $
+            when (all isCondition exitCodeTokens
+                  && not (usedUnconditionally cfga t exitCodeIds)
+                  && not suppress) $
                 warn id 2319 "This $? refers to a condition, not a command. Assign to a variable to avoid it being overwritten."
-            when (all isPrinting exitCodeTokens) $
+            when (all isPrinting exitCodeTokens
+                  && not suppress) $
                 warn id 2320 "This $? refers to echo/printf, not a previous command. Assign to variable to avoid it being overwritten."
 
     isCondition t =
@@ -5132,6 +5143,26 @@ checkOverwrittenExitCode params t =
             Just "echo" -> True
             Just "printf" -> True
             _ -> False
+
+    isInAssignment tokenId =
+        let token = Map.lookup tokenId (idMap params)
+        in maybe False (\tok -> any isAssignmentToken $ getPath (parentMap params) tok) token
+      where
+        isAssignmentToken (T_Assignment _ _ _ _ _) = True
+        isAssignmentToken _ = False
+
+    conditionContainsDollarQuestion tokenId exitIds =
+        let tree = parentMap params
+            tokenMap = idMap params
+            condTokens = mapMaybe (`Map.lookup` tokenMap) (S.toList exitIds)
+            dollarQTokens = [(tid, tok) | (tid, tok) <- Map.toList tokenMap,
+                                           tid /= tokenId,
+                                           isDollarQ tok]
+            isDollarQ (T_DollarBraced _ _ val) = getLiteralString val == Just "?"
+            isDollarQ _ = False
+        in any (\(_, dqToken) ->
+            any (\cond -> isParentOf tree cond dqToken) condTokens
+          ) dollarQTokens
 
 
 prop_checkUnnecessaryArithmeticExpansionIndex1 = verify checkUnnecessaryArithmeticExpansionIndex "a[$((1+1))]=n"
