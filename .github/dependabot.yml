@@ -1,7 +1,8 @@
 version: 2
-
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "cron"
+      cronjob: 0 6 * * *
+      timezone: America/Los_Angeles
