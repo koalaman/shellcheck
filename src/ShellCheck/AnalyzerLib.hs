@@ -251,31 +251,24 @@ makeParameters spec = params
     root = asScript spec
 
 
+-- | detect e.g. 'set -o errexit' or 'set -e'
+isOptionSet' :: [Char] -> Char -> Token -> Bool
+isOptionSet' longOpt shortOpt root = isNothing $ doAnalysis (guard . not . isSetOption) root
+  where
+    isSetOption t =
+        case t of
+            T_Script _ (T_Literal _ str) _ -> str `matches` re
+            T_SimpleCommand {}  ->
+                t `isUnqualifiedCommand` "set" &&
+                    (longOpt `elem` oversimplify t ||
+                        [shortOpt] `elem` map snd (getAllFlags t))
+            _ -> False
+    re = mkRegex $ "[[:space:]]-[^-]*" ++ [shortOpt]
+
 -- Does this script mention 'set -e' anywhere?
 -- Used as a hack to disable certain warnings.
-containsErrexit root = isNothing $ doAnalysis (guard . not . isErrexit) root
-  where
-    isErrexit t =
-        case t of
-            T_Script _ (T_Literal _ str) _ -> str `matches` re
-            T_SimpleCommand {}  ->
-                t `isUnqualifiedCommand` "set" &&
-                    ("errexit" `elem` oversimplify t ||
-                        "e" `elem` map snd (getAllFlags t))
-            _ -> False
-    re = mkRegex "[[:space:]]-[^-]*e"
-
-containsNoglob root = isNothing $ doAnalysis (guard . not . isNoglob) root
-  where
-    isNoglob t =
-        case t of
-            T_Script _ (T_Literal _ str) _ -> str `matches` re
-            T_SimpleCommand {}  ->
-                t `isUnqualifiedCommand` "set" &&
-                    ("noglob" `elem` oversimplify t ||
-                        "f" `elem` map snd (getAllFlags t))
-            _ -> False
-    re = mkRegex "[[:space:]]-[^-]*f"
+containsErrexit = isOptionSet' "errexit" 'e'
+containsNoglob = isOptionSet' "noglob" 'f'
 
 containsSetOption opt root = isNothing $ doAnalysis (guard . not . isPipefail) root
   where
