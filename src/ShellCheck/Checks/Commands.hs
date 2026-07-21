@@ -104,6 +104,9 @@ commandChecks = [
     ,checkXargsDashi
     ,checkUnquotedEchoSpaces
     ,checkEvalArray
+    ,checkGrepQPipefail
+    ,checkEgrepQPipefail
+    ,checkFgrepQPipefail
     ]
     ++ map checkArgComparison ("alias" : declaringCommands)
     ++ map checkMaskedReturns declaringCommands
@@ -398,6 +401,40 @@ checkGrepRe = CommandCheck (Basename "grep") check where
         _ -> fail "looks good"
     suspicious = mkRegex "([A-Za-z1-9])\\*"
     contra = mkRegex "[^a-zA-Z1-9]\\*|[][^$+\\\\]"
+
+
+prop_checkGrepQPipefail1 = verify checkGrepQPipefail "set -o pipefail; cat file | grep -q pattern"
+prop_checkGrepQPipefail2 = verify checkGrepQPipefail "set -o pipefail; cat file | grep --quiet pattern"
+prop_checkGrepQPipefail3 = verify checkGrepQPipefail "set -o pipefail; cat file | grep -iq pattern"
+prop_checkGrepQPipefail4 = verify checkGrepQPipefail "set -o pipefail; cmd1 | cmd2 | grep -q pattern"
+prop_checkGrepQPipefail5 = verify checkGrepQPipefail "set -euo pipefail; cmd | grep -q foo"
+prop_checkGrepQPipefailN1 = verifyNot checkGrepQPipefail "cat file | grep -q pattern"
+prop_checkGrepQPipefailN2 = verifyNot checkGrepQPipefail "set -o pipefail; grep -q pattern file"
+prop_checkGrepQPipefailN3 = verifyNot checkGrepQPipefail "set -o pipefail; cat file | grep pattern"
+prop_checkGrepQPipefailN4 = verifyNot checkGrepQPipefail "set -o pipefail; grep -q pattern | cat"
+prop_checkGrepQPipefailN5 = verifyNot checkGrepQPipefail "grep -q pattern file"
+prop_checkGrepQPipefailN6 = verifyNot checkGrepQPipefail "set -o pipefail; cmd1 | bash -c 'grep -q pattern file'"
+checkGrepQPipefail = CommandCheck (Basename "grep") checkQuietGrepInPipefailImpl
+
+prop_checkEgrepQPipefail1 = verify checkEgrepQPipefail "set -o pipefail; cat file | egrep -q pattern"
+checkEgrepQPipefail = CommandCheck (Basename "egrep") checkQuietGrepInPipefailImpl
+
+prop_checkFgrepQPipefail1 = verify checkFgrepQPipefail "set -o pipefail; cat file | fgrep -q pattern"
+checkFgrepQPipefail = CommandCheck (Basename "fgrep") checkQuietGrepInPipefailImpl
+
+checkQuietGrepInPipefailImpl cmd = do
+    pipefail <- asks hasPipefail
+    astPath <- getPathM cmd
+    sequence_ $ do
+        guard pipefail
+        guard $ hasFlag cmd "q" || hasFlag cmd "quiet"
+        _simpleCmd:grepRedirectingCmd:parentNodes <- Just $ NE.toList astPath
+        T_Pipeline _ _ (_first:redirectingCmds) <- listToMaybe parentNodes
+        guard $ any (\node -> getId node == getId grepRedirectingCmd) redirectingCmds
+        return $ warn (getId cmd) 2337 warnMsg
+  where
+    warnMsg =
+      "In pipefail mode, grep -q may cause the pipeline to fail. Use a non-pipe input like '< <(cmd)', '<<<' or 'grep pattern > /dev/null' instead."
 
 
 prop_checkTrapQuotes1 = verify checkTrapQuotes "trap \"echo $num\" INT"
