@@ -414,6 +414,11 @@ prop_checkGrepQPipefailN3 = verifyNot checkGrepQPipefail "set -o pipefail; cat f
 prop_checkGrepQPipefailN4 = verifyNot checkGrepQPipefail "set -o pipefail; grep -q pattern | cat"
 prop_checkGrepQPipefailN5 = verifyNot checkGrepQPipefail "grep -q pattern file"
 prop_checkGrepQPipefailN6 = verifyNot checkGrepQPipefail "set -o pipefail; cmd1 | bash -c 'grep -q pattern file'"
+prop_checkGrepQPipefailN7 = verifyNot checkGrepQPipefail "set -o pipefail; cmd1 | grep -e -q"
+prop_checkGrepQPipefailN8 = verifyNot checkGrepQPipefail "set -o pipefail; cmd1 | grep -eq pattern"
+prop_checkGrepQPipefailN9 = verifyNot checkGrepQPipefail "set -o pipefail; cmd1 | grep --regexp -q"
+prop_checkGrepQPipefailN10 = verifyNot checkGrepQPipefail "set -o pipefail; cmd1 | grep -- -q"
+
 checkGrepQPipefail = CommandCheck (Basename "grep") checkQuietGrepInPipefailImpl
 
 prop_checkEgrepQPipefail1 = verify checkEgrepQPipefail "set -o pipefail; cat file | egrep -q pattern"
@@ -427,12 +432,19 @@ checkQuietGrepInPipefailImpl cmd = do
     astPath <- getPathM cmd
     sequence_ $ do
         guard pipefail
-        guard $ hasFlag cmd "q" || hasFlag cmd "quiet"
+        opts <- parseGrepOpts $ arguments cmd
+        guard $ any (\(flag, _) -> flag == "q" || flag == "quiet") opts
         _simpleCmd:grepRedirectingCmd:parentNodes <- Just $ NE.toList astPath
         T_Pipeline _ _ (_first:redirectingCmds) <- listToMaybe parentNodes
         guard $ any (\node -> getId node == getId grepRedirectingCmd) redirectingCmds
         return $ warn (getId cmd) 2337 warnMsg
   where
+    parseGrepOpts = getOpts (True, True)
+        "cilLnoqsvwxhHrRbaEFGPe:f:m:A:B:C:d:D:"
+        (map (\name -> (name, True)) longOptionsConsumingParameter)
+    longOptionsConsumingParameter =
+        ["regexp", "file", "max-count", "after-context", "before-context",
+            "context", "directories", "devices"]
     warnMsg =
       "In pipefail mode, grep -q may cause the pipeline to fail. Use a non-pipe input like '< <(cmd)', '<<<' or 'grep pattern > /dev/null' instead."
 
