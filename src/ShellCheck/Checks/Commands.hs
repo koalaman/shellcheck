@@ -408,6 +408,9 @@ prop_checkGrepQPipefail2 = verify checkGrepQPipefail "set -o pipefail; cat file 
 prop_checkGrepQPipefail3 = verify checkGrepQPipefail "set -o pipefail; cat file | grep -iq pattern"
 prop_checkGrepQPipefail4 = verify checkGrepQPipefail "set -o pipefail; cmd1 | cmd2 | grep -q pattern"
 prop_checkGrepQPipefail5 = verify checkGrepQPipefail "set -euo pipefail; cmd | grep -q foo"
+prop_checkGrepQPipefail6 = verify checkGrepQPipefail "set -o pipefail; cmd | grep -m 2 foo | cmd2"
+prop_checkGrepQPipefail7 = verify checkGrepQPipefail "set -o pipefail; cmd | grep -L foo | cmd2"
+
 prop_checkGrepQPipefailN1 = verifyNot checkGrepQPipefail "cat file | grep -q pattern"
 prop_checkGrepQPipefailN2 = verifyNot checkGrepQPipefail "set -o pipefail; grep -q pattern file"
 prop_checkGrepQPipefailN3 = verifyNot checkGrepQPipefail "set -o pipefail; cat file | grep pattern"
@@ -427,18 +430,25 @@ checkEgrepQPipefail = CommandCheck (Basename "egrep") checkQuietGrepInPipefailIm
 prop_checkFgrepQPipefail1 = verify checkFgrepQPipefail "set -o pipefail; cat file | fgrep -q pattern"
 checkFgrepQPipefail = CommandCheck (Basename "fgrep") checkQuietGrepInPipefailImpl
 
+-- Catches occurrences of "grep -q" and variants inside of pipes under pipefail.
 checkQuietGrepInPipefailImpl cmd = do
     pipefail <- asks hasPipefail
     astPath <- getPathM cmd
     sequence_ $ do
         guard pipefail
-        opts <- parseGrepOpts $ arguments cmd
-        guard $ any (\(flag, _) -> flag == "q" || flag == "quiet") opts
+        opts <- map fst <$> parseGrepOpts (arguments cmd)
+        guard $ any isEarlyExitFlag opts
         _simpleCmd:grepRedirectingCmd:parentNodes <- Just $ NE.toList astPath
         T_Pipeline _ _ (_first:redirectingCmds) <- listToMaybe parentNodes
         guard $ any (\node -> getId node == getId grepRedirectingCmd) redirectingCmds
         return $ warn (getId cmd) 2337 warnMsg
   where
+    -- Contains "L", even though BSD grep does not exit early with this flag,
+    -- but GNU grep does. This is consistent with the linter practice of warning
+    -- about potential problems, while also allowing users to disable specific
+    -- linter checks locally.
+    earlyExitFlags = ["q", "quiet", "m", "max-count", "L"]
+    isEarlyExitFlag name = name `elem` earlyExitFlags
     parseGrepOpts = getOpts (True, True)
         "cilLnoqsvwxhHrRbaEFGPe:f:m:A:B:C:d:D:"
         (map (\name -> (name, True)) longOptionsConsumingParameter)
