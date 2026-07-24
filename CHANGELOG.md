@@ -1,5 +1,9 @@
 ## Git
 ### Added
+- `extended-analysis=local`: a new value for the `--extended-analysis` flag and
+  directive that performs dataflow analysis per file, treating sourced files as
+  opaque boundaries. This bounds memory when many checked files source a shared
+  tree of libraries, while keeping per-file dataflow checks (unlike `false`).
 
 ### Changed
 

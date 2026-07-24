@@ -153,8 +153,19 @@ data Annotation =
     | ShellOverride String
     | SourcePath String
     | ExternalSources Bool
-    | ExtendedAnalysis Bool
+    | ExtendedAnalysis ExtendedAnalysisMode
     deriving (Show, Eq)
+
+-- The scope of the data-flow ("extended") analysis, set via the
+-- `extended-analysis` directive/flag. Wire values: true=EAFull (default),
+-- false=EAOff, local=EALocal.
+data ExtendedAnalysisMode =
+    EAOff       -- No data-flow analysis.
+    | EALocal   -- Data-flow analysis within each file; sourced files are
+                -- treated as opaque boundaries (not inlined into the CFG).
+    | EAFull    -- Whole-program: data flow is followed into sourced files.
+    deriving (Show, Eq)
+
 data ConditionType = DoubleBracket | SingleBracket deriving (Show, Eq)
 
 pattern T_AND_IF id = OuterToken id Inner_T_AND_IF

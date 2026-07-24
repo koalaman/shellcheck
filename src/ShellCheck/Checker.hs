@@ -21,6 +21,7 @@
 module ShellCheck.Checker (checkScript, ShellCheck.Checker.runTests) where
 
 import ShellCheck.Analyzer
+import ShellCheck.AST (ExtendedAnalysisMode(..))
 import ShellCheck.ASTLib
 import ShellCheck.Interface
 import ShellCheck.Parser
@@ -561,14 +562,40 @@ prop_flagWinsWhenSuppressingDfa1 = result == [2317]
   where
     result = checkWithRc "extended-analysis=false" emptyCheckSpec {
         csScript = "#!/bin/sh\n# shellcheck extended-analysis=false\nexit; foo;",
-        csExtendedAnalysis = Just True
+        csExtendedAnalysis = Just EAFull
     }
 
 prop_flagWinsWhenSuppressingDfa2 = null result
   where
     result = checkWithRc "extended-analysis=true" emptyCheckSpec {
         csScript = "#!/bin/sh\n# shellcheck extended-analysis=true\nexit; foo;",
-        csExtendedAnalysis = Just False
+        csExtendedAnalysis = Just EAOff
+    }
+
+-- 'local' still does data-flow analysis within a file...
+prop_localKeepsIntraFileDfa = 2317 `elem` result
+  where
+    result = getErrors (mockedSystemInterface []) emptyCheckSpec {
+        csScript = "#!/bin/sh\nexit; foo;",
+        csExtendedAnalysis = Just EALocal
+    }
+
+-- ...but treats sourced files as boundaries, so it does not use data flow
+-- from a sourced file (here: that f() always exits) the way 'full' does.
+prop_localTreatsSourcesAsBoundary = 2317 `notElem` result
+  where
+    result = getErrors (mockedSystemInterface [("lib", "f() { exit 1; }")]) emptyCheckSpec {
+        csScript = "#!/bin/sh\nsource lib\nf\nfoo",
+        csCheckSourced = True,
+        csExtendedAnalysis = Just EALocal
+    }
+
+prop_fullFollowsDataFlowIntoSources = 2317 `elem` result
+  where
+    result = getErrors (mockedSystemInterface [("lib", "f() { exit 1; }")]) emptyCheckSpec {
+        csScript = "#!/bin/sh\nsource lib\nf\nfoo",
+        csCheckSourced = True,
+        csExtendedAnalysis = Just EAFull
     }
 
 return []

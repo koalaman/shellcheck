@@ -56,12 +56,17 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
     options are cumulative, but all the codes can be specified at once,
     comma-separated as a single argument.
 
-**--extended-analysis=true/false**
+**--extended-analysis=true/local/false**
 
-:   Enable/disable Dataflow Analysis to identify more issues (default true). If
-    ShellCheck uses too much CPU/RAM when checking scripts with several
-    thousand lines of code, extended analysis can be disabled with this flag
-    or a directive. This flag overrides directives and rc files.
+:   Set the scope of Dataflow Analysis, which identifies more issues (default
+    true). `true` performs whole-program analysis, following data flow into
+    sourced files. `local` performs the analysis per file, treating sourced
+    files as opaque boundaries; this bounds memory when many checked files
+    source a shared tree of libraries (each includer would otherwise re-analyze
+    the whole tree), at the cost of data flow that crosses `source` boundaries.
+    `false` disables Dataflow Analysis entirely. Use `local` or `false` if
+    ShellCheck uses too much CPU/RAM. This flag overrides directives and rc
+    files.
 
 **-f** *FORMAT*, **--format=***FORMAT*
 
@@ -264,10 +269,13 @@ Valid keys are:
     Only file-wide `enable` directives are considered.
 
 **extended-analysis**
-:   Set to true/false to enable/disable dataflow analysis. Specifying
+:   Set to true/local/false to control dataflow analysis. `true` (default)
+    performs whole-program analysis; `local` performs it per file, treating
+    sourced files as opaque boundaries; `false` disables it. Specifying
     `# shellcheck extended-analysis=false` in particularly large (2000+ line)
     auto-generated scripts will reduce ShellCheck's resource usage at the
-    expense of certain checks. Extended analysis is enabled by default.
+    expense of certain checks. `local` bounds memory when many checked files
+    source a shared tree of libraries, while keeping per-file dataflow checks.
 
 **external-sources**
 :   Set to `true` in `.shellcheckrc` to always allow ShellCheck to open

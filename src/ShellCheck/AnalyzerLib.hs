@@ -204,7 +204,7 @@ makeCommentWithFix severity id code str fix =
 -- makeParameters :: CheckSpec -> Parameters
 makeParameters spec = params
   where
-    extendedAnalysis = fromMaybe True $ msum [asExtendedAnalysis spec, getExtendedAnalysisDirective root]
+    extendedAnalysisMode = fromMaybe EAFull $ msum [asExtendedAnalysis spec, getExtendedAnalysisDirective root]
     params = Parameters {
         rootNode = root,
         shellType = fromMaybe (determineShell (asFallbackShell spec) root) $ asShellType spec,
@@ -241,12 +241,16 @@ makeParameters spec = params
         variableFlow = getVariableFlow params root,
         tokenPositions = asTokenPositions spec,
         cfgAnalysis = do
-            guard extendedAnalysis
+            guard $ extendedAnalysisMode /= EAOff
             return $ CF.analyzeControlFlow cfParams root
     }
     cfParams = CF.CFGParameters {
         CF.cfLastpipe = hasLastpipe params,
-        CF.cfPipefail = hasPipefail params
+        CF.cfPipefail = hasPipefail params,
+        -- In 'local' mode, sourced files are data-flow boundaries: their
+        -- bodies are not inlined into the CFG (bounds memory on large
+        -- mutually-sourcing trees). See CFG.cfSourceAsBoundary.
+        CF.cfSourceAsBoundary = extendedAnalysisMode == EALocal
     }
     root = asScript spec
 
