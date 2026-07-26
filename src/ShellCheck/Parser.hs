@@ -482,13 +482,18 @@ called s p = do
 withAnnotations anns p =
     if null anns then p else withContext (ContextAnnotation anns) p
 
-readConditionContents single =
-    readCondContents `attempting` lookAhead (do
+readConditionContents single = do
+    zsh <- isZshDialect
+    term <- readCondContents `attempting` lookAhead (do
                                 pos <- getPosition
                                 s <- readVariableName
                                 spacing1
                                 when (s `elem` commonCommands) $
                                     parseProblemAt pos WarningC 1014 "Use 'if cmd; then ..' to check exit code, or 'if [[ $(cmd) == .. ]]' to check output.")
+    when (zsh && single) $ void $ many $ try $ do
+        readCondWord
+        condSpacing False
+    return term
 
   where
     spacingOrLf = condSpacing True
@@ -596,11 +601,34 @@ readConditionContents single =
             notArrayIndex _ = True
             containsLiteral x s = s `isInfixOf` onlyLiteralString x
 
-    readCondAndOp = readAndOrOp TC_And "&&" False <|> readAndOrOp TC_And "-a" True
+    readZshBracketDashOp op = do
+        zsh <- isZshDialect
+        guard (zsh && single)
+        trailing <- isFollowedBy (try (spacingOrLf >> string op >> spacingOrLf >> char ']'))
+        when trailing $ fail "trailing dash op"
+
+    readCondDashAndOp = try $ do
+        zsh <- isZshDialect
+        when (zsh && single) $ do
+            trailing <- isFollowedBy (try (spacingOrLf >> string "-a" >> spacingOrLf >> char ']'))
+            when trailing $ fail "trailing dash op"
+        readAndOrOp TC_And "-a" True
+
+    readCondDashOrOp = try $ do
+        zsh <- isZshDialect
+        when (zsh && single) $ do
+            trailing <- isFollowedBy (try (spacingOrLf >> string "-o" >> spacingOrLf >> char ']'))
+            when trailing $ fail "trailing dash op"
+        readAndOrOp TC_Or "-o" True
+
+    readCondAndOp =
+        readAndOrOp TC_And "&&" False
+        <|> readCondDashAndOp
 
     readCondOrOp = do
         optional guardArithmetic
-        readAndOrOp TC_Or "||" False <|> readAndOrOp TC_Or "-o" True
+        readAndOrOp TC_Or "||" False
+        <|> readCondDashOrOp
 
     readAndOrOp node op requiresSpacing = do
         optional $ lookAhead weirdDash
@@ -640,20 +668,25 @@ readConditionContents single =
             "You need a space before and after the " ++ trailingOp ++ " ."
 
     readCondGroup = do
+        zsh <- isZshDialect
         start <- startSpan
         pos <- getPosition
-        lparen <- try $ readRegularOrEscaped (string "(")
-        when (single && lparen == "(") $
+        lparen <- if zsh && single
+            then try (readEscaped (string "("))
+            else try (readRegularOrEscaped (string "("))
+        when (single && not zsh && lparen == "(") $
             singleWarning pos
         when (not single && lparen == "\\(") $
             doubleWarning pos
         condSpacing single
         x <- readCondContents
         cpos <- getPosition
-        rparen <- readRegularOrEscaped (string ")")
+        rparen <- if zsh && single
+            then readEscaped (string ")")
+            else readRegularOrEscaped (string ")")
         id <- endSpan start
         condSpacing single
-        when (single && rparen == ")") $
+        when (single && not zsh && rparen == ")") $
             singleWarning cpos
         when (not single && rparen == "\\)") $
             doubleWarning cpos
@@ -1230,10 +1263,21 @@ checkPossibleTermination pos [T_Literal _ x] terminators =
         parseProblemAt pos WarningC 1010 $ "Use semicolon or linefeed before '" ++ x ++ "' (or quote to make it literal)."
 checkPossibleTermination _ _ _ = return ()
 
+readZshBareWordExtglobGroup = try $ do
+    zsh <- isZshDialect
+    unless zsh mzero
+    char '('
+    start <- startSpan
+    contents <- readExtglobPart `sepBy` char '|'
+    id <- endSpan start
+    char ')'
+    return $ T_Extglob id "" contents
+
 readNormalWordPart end = do
     notFollowedBy2 $ oneOf end
     checkForParenthesis
     choice [
+        readZshBareWordExtglobGroup,
         readSingleQuoted,
         readDoubleQuoted,
         readGlob,
@@ -3055,11 +3099,14 @@ readBraceGroup = called "brace group" $ do
     void allspacingOrFail <|> optional (do
         lookAhead $ noneOf "(" -- {( is legal
         parseProblem ErrorC 1054 "You need a space after the '{'.")
-    optional $ do
+    zsh <- isZshDialect
+    unless zsh $ optional $ do
         pos <- getPosition
         lookAhead $ char '}'
         parseProblemAt pos ErrorC 1055 "You need at least one command here. Use 'true;' as a no-op."
-    list <- readTerm
+    list <- if zsh
+        then option [] readTerm
+        else readTerm
     char '}' <|> do
         parseProblem ErrorC 1056 "Expected a '}'. If you have one, try a ; or \\n in front of it."
         fail "Missing '}'"
@@ -3108,6 +3155,28 @@ readUntilClause = called "until loop" $ do
     statements <- readBracedLoopBody <|> readDoGroup kwId
     id <- endSpan start
     return $ T_UntilExpression id condition statements
+
+prop_readRepeatClause = isOk readScript "#!/usr/bin/env zsh\nrepeat 3; do print hi; done\n"
+prop_readCondition40 = isWarning readScript "#!/usr/bin/env zsh\n[ -o \\> -a ]\n"
+readRepeatClause = called "repeat loop" $ try $ do
+    zsh <- isZshDialect
+    unless zsh mzero
+    start <- startSpan
+    string "repeat"
+    spacing
+    void readNormalWord
+    optional (try (g_Semi >> allspacing))
+    kwId <- getId <$> g_Do
+    acceptButWarn g_Semi ErrorC 1059 "Semicolons directly after 'do' are not allowed. Just remove it."
+    allspacing
+    commands <- readCompoundList
+    g_Done `orFail` do
+            parseProblemAtId kwId ErrorC 1061 "Couldn't find 'done' for this 'do'."
+            parseProblem ErrorC 1062 "Expected 'done' matching previously mentioned 'do'."
+            return "Expected 'done'"
+    let body = commands
+    id <- endSpan start
+    return $ T_BraceGroup id body
 
 readDoGroup kwId = do
     optional (do
@@ -3428,6 +3497,15 @@ prop_readFunctionDefinition13 = isOk readFunctionDefinition "@require(){ true; }
 prop_readFunctionDefinition14 = isOk readFunctionDefinition "foo#bar(){ :; }"
 prop_readFunctionDefinition15 = isNotOk readFunctionDefinition "#bar(){ :; }"
 prop_readFunctionDefinition16 = isOk readScript "#!/usr/bin/env zsh\nfunction name1 name2 () { print $0; }\n"
+prop_readFunctionDefinition17 = isOk readScript "#!/usr/bin/env zsh\nfnz() { }\n"
+prop_readFunctionDefinition18 = isOk readScript "#!/usr/bin/env zsh\nfunction f$$ () { print hi; }\n"
+prop_readFunctionDefinition19 = isOk readScript "#!/usr/bin/env zsh\nfunction foo () print bar\n"
+prop_readFunctionDefinition20 = isOk readScript "#!/usr/bin/env zsh\nfn1 fn2 fn3() { print $0; }\n"
+prop_readZshAnonFunction8 = isOk readScript "#!/usr/bin/env zsh\nprint foo | () cat\n"
+prop_readCondition37 = isWarning readScript "#!/usr/bin/env zsh\n[ -n foo scrimble ]\n"
+prop_readCondition38 = isWarning readScript "#!/usr/bin/env zsh\n[ '(' = ')' ]\n"
+prop_readCondition39 = isWarning readScript "#!/usr/bin/env zsh\nfind /dev(|ices)/ -type b\n"
+prop_readZshDoubleBraceNofork2 = isOk readScript "#!/usr/bin/env zsh\nreply=({ INNER })\n"
 
 -- Zsh anonymous functions. Both spellings from zsh Doc/Zsh/func.yo apply:
 -- a '()' with no preceding name, or 'function' with an immediately following
@@ -3439,12 +3517,18 @@ prop_readZshAnonFunction4 = isOk readZshAnonFunction "function { echo hi; } arg1
 prop_readZshAnonFunction5 = isNotOk readZshAnonFunction "function foo { echo hi; }"
 prop_readZshAnonFunction6 = isOk readScript "#!/usr/bin/env zsh\n() { echo hi; }\necho after\n"
 prop_readZshAnonFunction7 = isOk readScript "#!/usr/bin/env zsh\nfunction { echo a } x\nfunction { echo b }\n"
+readZshAnonSingleCommand = do
+    start <- startSpan
+    cmd <- readAndOr
+    id <- endSpan start
+    return $ T_BraceGroup id [cmd]
+
 readZshAnonFunction :: Monad m => SCParser m Token
 readZshAnonFunction = called "zsh anonymous function" $ try $ do
     start <- startSpan
     readAnonymousIntroducer
     allspacing
-    body <- readBraceGroup <|> readSubshell
+    body <- readZshAnonBody
     -- Arguments are words on the same line after the closing brace; a newline
     -- ends them (zsh Doc/Zsh/func.yo, Anonymous Functions).
     args <- option [] $ try $ do
@@ -3454,6 +3538,10 @@ readZshAnonFunction = called "zsh anonymous function" $ try $ do
     spacing
     return $ T_AnonFunction id body args
   where
+    readZshAnonBody = choice [
+        try (readBraceGroup <|> readSubshell),
+        readZshAnonSingleCommand
+        ]
     readAnonymousIntroducer =
         void (g_Lparen >> g_Rparen)
             <|> try (do
@@ -3462,22 +3550,46 @@ readZshAnonFunction = called "zsh anonymous function" $ try $ do
                     spacing
                     void . lookAhead $ char '{')
 
+
+readZshFunctionSingleCommand = do
+    start <- startSpan
+    cmd <- readAndOr
+    id <- endSpan start
+    return $ T_BraceGroup id [cmd]
+
 readFunctionDefinition = called "function" $ do
     start <- startSpan
+    zsh <- isZshDialect
     functionSignature <- try readFunctionSignature
     allspacing
-    void (lookAhead $ oneOf "{(") <|> parseProblem ErrorC 1064 "Expected a { to open the function definition."
-    group <- readBraceGroup <|> readSubshell
+    unless zsh $ void (lookAhead $ oneOf "{(") <|> parseProblem ErrorC 1064 "Expected a { to open the function definition."
+    group <- if zsh
+        then readZshFunctionBody
+        else readBraceGroup <|> readSubshell
     id <- endSpan start
     return $ functionSignature id group
   where
+    readZshFunctionBody = choice [
+        try (readBraceGroup <|> readSubshell),
+        readZshFunctionSingleCommand
+        ]
+
     readFunctionSignature =
         readWithFunction <|> readWithoutFunction
       where
+        readQuotedFunctionNameWord = try $ do
+            (T_SingleQuoted _ str) <- readSingleQuoted
+            return str
+
         readFunctionNameWord = do
-            f <- extendedFunctionStartChars
-            r <- many extendedFunctionChars
-            return (f:r)
+            zsh <- isZshDialect
+            readQuotedFunctionNameWord
+                <|> do
+                    f <- extendedFunctionStartChars
+                    r <- many $ if zsh
+                        then extendedFunctionChars <|> char '$'
+                        else extendedFunctionChars
+                    return (f:r)
 
         readWithFunction = do
             try $ do
@@ -3495,9 +3607,18 @@ readFunctionDefinition = called "function" $ do
             return $ \id -> T_Function id (FunctionKeyword True) (FunctionParentheses hasParens) name
 
         readWithoutFunction = try $ do
-            name <- (:) <$> functionStartChars <*> many functionChars
-            guard $ name /= "time"  -- Interferes with time ( foo )
-            spacing
+            zsh <- isZshDialect
+            first <- (:) <$> functionStartChars <*> many functionChars
+            guard $ first `notElem` ["time", "for", "while", "until", "if", "print", "coproc", "let", "integer", "local", "typeset", "export", "readonly"]
+            rest <- if zsh
+                then many (try (spacing1 >> ((:) <$> functionStartChars <*> many functionChars)))
+                else return []
+            let name = if zsh then unwords (first:rest) else first
+            guard $ name /= "time"
+            allspacing
+            when zsh $ try $ lookAhead $ do
+                char '('
+                notFollowedBy2 (oneOf ":#+-")
             readParens
             return $ \id -> T_Function id (FunctionKeyword False) (FunctionParentheses True) name
 
@@ -3607,12 +3728,13 @@ prop_readCompoundCommand = isOk readCompoundCommand "{ echo foo; }>/dev/null"
 readCompoundCommand = do
     cmd <- choice [
         readBraceGroupMaybeAlways,
+        readZshAnonFunction,  -- Zsh anonymous functions (before readSubshell)
         readAmbiguous "((" readArithmeticExpression readSubshell (\pos ->
             parseNoteAt pos ErrorC 1105 "Shells disambiguate (( differently or not at all. For subshell, add spaces around ( . For ((, fix parsing errors."),
-        readZshAnonFunction,  -- Zsh anonymous functions
         readSubshell,
         readWhileClause,
         readUntilClause,
+        readRepeatClause,
         readIfClause,
         readForClause,
         readForEachClause,
@@ -3811,7 +3933,19 @@ readArray = called "array assignment" $ do
         value <- readRegular <|> nothing
         id <- endSpan start
         return $ T_IndexedElement id index value
-    readRegular = readArray <|> readNormalWord
+    readZshArrayBracedElement = try $ do
+        zsh <- isZshDialect
+        unless zsh mzero
+        start <- startSpan
+        char '{'
+        allspacing
+        word <- readNormalWord
+        allspacing
+        char '}'
+        id <- endSpan start
+        return word
+
+    readRegular = readArray <|> readZshArrayBracedElement <|> readNormalWord
 
     nothing = do
         start <- startSpan

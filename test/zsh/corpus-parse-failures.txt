@@ -1,10 +1,11 @@
 # Chunks of zsh's own test suite that ShellCheck cannot parse.
 # Regenerate with test/zsh/corpus-report.sh --update after running
 # test/zsh/extract-ztst.sh against a zsh checkout.
-# 60 of 2914 chunks, extracted from:
+# 49 of 2914 chunks, extracted from:
 #   source: git@github.com:zsh-users/zsh.git
 #   version: 5.9.999.3-test
 #   revision: c0fe1189905e6bd6ef227068478638cfb52b1255
+A01grammar_108.zsh
 A03quoting_005.zsh
 A03quoting_009.zsh
 A04redirect_008.zsh
@@ -12,37 +13,23 @@ A04redirect_011.zsh
 A04redirect_012.zsh
 A04redirect_030.zsh
 A04redirect_064.zsh
-A05execution_035.zsh
 A07control_016.zsh
 B02typeset_023.zsh
-B08shift_003.zsh
+C01arith_005.zsh
 C01arith_037.zsh
 C01arith_044.zsh
 C01arith_045.zsh
-C02cond_014.zsh
-C02cond_049.zsh
-C02cond_051.zsh
-C02cond_053.zsh
-C02cond_055.zsh
+C01arith_068.zsh
+C01arith_072.zsh
 C02cond_071.zsh
-C03traps_037.zsh
+C03traps_035.zsh
 C03traps_038.zsh
-C03traps_061.zsh
-C03traps_062.zsh
-C03traps_073.zsh
 C03traps_082.zsh
-C04funcdef_003.zsh
-C04funcdef_005.zsh
-C04funcdef_006.zsh
-C04funcdef_008.zsh
-C04funcdef_027.zsh
-C04funcdef_043.zsh
-D02glob_028.zsh
-D03procsubst_010.zsh
+D04parameter_105.zsh
 D04parameter_199.zsh
 D06subscript_012.zsh
+D07multibyte_013.zsh
 D07multibyte_040.zsh
-D10nofork_005.zsh
 D10nofork_021.zsh
 D10nofork_023.zsh
 D10nofork_024.zsh
@@ -53,15 +40,17 @@ D10nofork_029.zsh
 D10nofork_030.zsh
 D10nofork_031.zsh
 E01options_016.zsh
-E02xtrace_014.zsh
-E02xtrace_015.zsh
-E02xtrace_016.zsh
+E01options_058.zsh
 E03posix_013.zsh
+K01nameref_013.zsh
 P01privileged_004.zsh
-V03mathfunc_010.zsh
+V01zmodload_023.zsh
+V01zmodload_029.zsh
+V01zmodload_038.zsh
+V03mathfunc_002.zsh
+V03mathfunc_003.zsh
+V03mathfunc_007.zsh
 V04features_012.zsh
 V07pcre_010.zsh
 V07pcre_011.zsh
-V15nearcolor_003.zsh
-V15nearcolor_004.zsh
 X04zlehighlight_001.zsh
