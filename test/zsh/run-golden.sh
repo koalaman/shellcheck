@@ -17,19 +17,22 @@ readonly REPO_ROOT
 
 UPDATE=0
 CORPUS_ONLY=0
+BUILD=1
 declare -a EXPLICIT_FIXTURES=()
 
 usage() {
     cat <<'EOF'
-Usage: run-golden.sh [--update] [--corpus-only] [fixture ...]
+Usage: run-golden.sh [--update] [--corpus-only] [--no-build] [fixture ...]
 
   --update        Rewrite golden files from current shellcheck output.
   --corpus-only   Only run the extracted zsh corpus under test/zsh/corpus/.
+  --no-build      Skip the "cabal build exe:shellcheck" freshness step.
   fixture ...     Run only the named fixture paths.
 
 Environment:
   SHELLCHECK      Path to the shellcheck binary. Defaults to `cabal list-bin`,
                   then any binary found under dist-newstyle/, then $PATH.
+                  Setting it also skips the build step.
 EOF
 }
 
@@ -41,6 +44,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --corpus-only)
             CORPUS_ONLY=1
+            shift
+            ;;
+        --no-build)
+            BUILD=0
             shift
             ;;
         -h|--help)
@@ -58,6 +65,15 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# "cabal test" does not relink the executable, so a golden run right after it
+# would otherwise compare against a stale binary.
+if [[ -z "${SHELLCHECK:-}" && $BUILD -eq 1 ]] && command -v cabal >/dev/null 2>&1; then
+    (cd "$REPO_ROOT" && cabal build --allow-newer exe:shellcheck) >/dev/null || {
+        printf 'run-golden: cabal build exe:shellcheck failed\n' >&2
+        exit 1
+    }
+fi
 
 find_shellcheck() {
     if [[ -n "${SHELLCHECK:-}" ]]; then

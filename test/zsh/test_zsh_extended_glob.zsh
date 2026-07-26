@@ -1,18 +1,18 @@
 #!/usr/bin/env zsh
-# Test: Extended glob requires setopt (SC2406)
+# Test: unquoted leading ^ under extended_glob (SC2406)
 
-# Using ** recursive glob without setopt
-for file in **/*.txt; do  # SC2406: Consider adding setopt extended_glob
-    echo "$file"
-done
-
-# Using ^ negation without setopt
-ls ^*.txt  # SC2406: Consider adding setopt extended_glob
-
-# Correct: with setopt
 setopt extended_glob
+
+# Recursive ** works without extended_glob, so it is never reported.
 for file in **/*.txt; do
     echo "$file"
 done
 
-ls ^*.txt  # Now okay
+# ^ is a negation pattern here, not a literal caret.
+ls ^*.txt  # SC2406
+
+# Passing a regex unquoted hits the same trap.
+grep ^root /etc/passwd  # SC2406
+
+# Quoting keeps the caret literal.
+grep '^root' /etc/passwd

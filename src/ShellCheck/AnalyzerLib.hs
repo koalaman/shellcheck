@@ -108,7 +108,9 @@ data Parameters = Parameters {
     -- map from token id to start and end position
     tokenPositions     :: Map.Map Id (Position, Position),
     -- Result from Control Flow Graph analysis (including data flow analysis)
-    cfgAnalysis :: Maybe CF.CFGAnalysis
+    cfgAnalysis :: Maybe CF.CFGAnalysis,
+    -- Normalized zsh option directives from setopt/unsetopt/set -o anywhere.
+    zshOptions         :: [String]
     } deriving (Show)
 
 -- TODO: Cache results of common AST ops here
@@ -217,7 +219,7 @@ makeParameters spec = params
                 BusyboxSh -> False
                 Sh   -> False
                 Ksh  -> True
-                Zsh  -> False,
+                Zsh  -> True,
         hasInheritErrexit =
             case shellType params of
                 Bash -> isOptionSet "inherit_errexit" root
@@ -245,7 +247,8 @@ makeParameters spec = params
         tokenPositions = asTokenPositions spec,
         cfgAnalysis = do
             guard extendedAnalysis
-            return $ CF.analyzeControlFlow cfParams root
+            return $ CF.analyzeControlFlow cfParams root,
+        zshOptions = getZshOptions root
     }
     cfParams = CF.CFGParameters {
         CF.cfLastpipe = hasLastpipe params,
@@ -302,6 +305,78 @@ containsShopt shopt root =
 
 -- Does this script mention 'shopt -s $opt' or 'set -o $opt' anywhere?
 isOptionSet opt root = containsShopt opt root || containsSetOption opt root
+
+{-
+   zsh option handling.
+
+   zsh option names ignore case and underscores, and a leading 'no' inverts
+   the sense, so SH_WORD_SPLIT, shwordsplit and sh_word_split are the same
+   option and 'setopt noshwordsplit' is 'unsetopt shwordsplit'
+   (zsh manual, Specifying Options).
+
+   Like the other option helpers here, this is a flat scan with no flow
+   analysis: an option counts as set if it is switched on anywhere and never
+   switched off anywhere.
+-}
+normalizeZshOption :: String -> String
+normalizeZshOption = map toLower . filter (/= '_')
+
+-- Collect normalized option directives. 'unsetopt x' is recorded as 'nox'.
+getZshOptions :: Token -> [String]
+getZshOptions root = nub $ concatMap fromToken $ Map.elems $ getTokenMap root
+  where
+    fromToken t =
+        case t of
+            T_SimpleCommand {}
+                | t `isUnqualifiedCommand` "setopt" ->
+                    map normalizeZshOption $ optionWords t
+                | t `isUnqualifiedCommand` "unsetopt" ->
+                    map (invert . normalizeZshOption) $ optionWords t
+                | t `isUnqualifiedCommand` "set" -> setBuiltinOptions t
+            _ -> []
+
+    -- setopt/unsetopt take bare option names plus single letter flags.
+    optionWords t = filter (not . isFlag) . drop 1 $ oversimplify t
+    isFlag word =
+        case word of
+            '-':_ -> True
+            '+':_ -> True
+            _ -> False
+
+    -- 'set -o name' enables and 'set +o name' disables.
+    setBuiltinOptions t = go . drop 1 $ oversimplify t
+      where
+        go ("-o":name:rest) = normalizeZshOption name : go rest
+        go ("+o":name:rest) = invert (normalizeZshOption name) : go rest
+        go (_:rest) = go rest
+        go [] = []
+
+    invert opt =
+        if "no" `isPrefixOf` opt
+        then drop 2 opt
+        else "no" ++ opt
+
+prop_hasZshOption1 = hasZshOptionTest "extended_glob" "setopt extended_glob"
+prop_hasZshOption2 = hasZshOptionTest "extended_glob" "setopt EXTENDED_GLOB"
+prop_hasZshOption3 = hasZshOptionTest "extended_glob" "setopt extendedglob"
+prop_hasZshOption4 = hasZshOptionTest "extended_glob" "setopt -x extended_glob"
+prop_hasZshOption5 = hasZshOptionTest "sh_word_split" "set -o shwordsplit"
+prop_hasZshOption6 = not $ hasZshOptionTest "extended_glob" "unsetopt extended_glob"
+prop_hasZshOption7 = not $ hasZshOptionTest "extended_glob" "setopt noextendedglob"
+prop_hasZshOption8 = not $ hasZshOptionTest "extended_glob" "setopt extended_glob; unsetopt extended_glob"
+prop_hasZshOption9 = not $ hasZshOptionTest "sh_word_split" "set +o shwordsplit"
+prop_hasZshOption10 = not $ hasZshOptionTest "extended_glob" "echo setopt extended_glob"
+prop_hasZshOption11 = not $ hasZshOptionTest "ksh_arrays" "setopt extended_glob"
+
+hasZshOptionTest opt script =
+    hasZshOption opt . getZshOptions . fromJust . prRoot $ pScript script
+
+-- Is this zsh option switched on, and never off, per getZshOptions?
+hasZshOption :: String -> [String] -> Bool
+hasZshOption opt directives =
+    normalized `elem` directives && notElem ("no" ++ normalized) directives
+  where
+    normalized = normalizeZshOption opt
 
 
 prop_determineShell0 = determineShellTest "#!/bin/sh" == Sh
@@ -933,6 +1008,7 @@ isQuotedAlternativeReference t =
 
 supportsArrays Bash = True
 supportsArrays Ksh = True
+supportsArrays Zsh = True
 supportsArrays _ = False
 
 isTrueAssignmentSource c =

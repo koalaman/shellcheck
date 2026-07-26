@@ -1016,13 +1016,26 @@ prop_checkArrayWithoutIndex8 = verifyTree checkArrayWithoutIndex "declare -a foo
 prop_checkArrayWithoutIndex9 = verifyTree checkArrayWithoutIndex "read -r -a arr <<< 'foo bar'; echo \"$arr\""
 prop_checkArrayWithoutIndex10 = verifyTree checkArrayWithoutIndex "read -ra arr <<< 'foo bar'; echo \"$arr\""
 prop_checkArrayWithoutIndex11 = verifyNotTree checkArrayWithoutIndex "read -rpfoobar r; r=42"
+prop_checkArrayWithoutIndex12 = verifyNotTree checkArrayWithoutIndex "#!/usr/bin/env zsh\nfoo=(a b); echo $foo"
+prop_checkArrayWithoutIndex13 = verifyTree checkArrayWithoutIndex "#!/usr/bin/env zsh\nsetopt ksh_arrays\nfoo=(a b); echo $foo"
 checkArrayWithoutIndex params _ =
     doVariableFlowAnalysis readF writeF defaultSet (variableFlow params)
   where
     defaultSet = S.fromList arrayVariables
+
+    {-
+       zsh expands an unindexed array to all its elements, so only the ksh
+       compatibility mode makes this a bug there
+       (zsh manual, Array Parameters and the KSH_ARRAYS option).
+    -}
+    takesFirstElementOnly =
+        shellType params /= Zsh
+        || hasZshOption "ksh_arrays" (zshOptions params)
+
     readF _ (T_DollarBraced id _ token) _ = do
         s <- get
         return . maybeToList $ do
+            guard takesFirstElementOnly
             name <- getLiteralString token
             guard $ S.member name s
             return $ makeComment WarningC id 2128
@@ -2242,13 +2255,28 @@ checkSpacefulnessCfg' dirtyPass params token@(T_DollarBraced id _ list) =
                     info (getId token) 2223
                              "This default assignment may cause DoS due to globbing. Quote it."
                 else
-                    infoWithFix id 2086 "Double quote to prevent globbing and word splitting." $
+                    infoWithFix id 2086 sc2086Message $
                         addDoubleQuotesAround params token
             else
                 styleWithFix id 2248 "Prefer double quoting even when variables don't contain special characters." $
                     addDoubleQuotesAround params token
 
   where
+    {-
+       zsh does not word split or glob unquoted scalar expansions unless
+       SH_WORD_SPLIT or GLOB_SUBST is set (zsh manual, Parameter Expansion),
+       so the bash wording would be wrong. Quoting still matters there:
+       an empty value disappears instead of becoming an empty argument, and
+       an unquoted array expands to one word per element.
+    -}
+    sc2086Message =
+        if shellType params == Zsh && not splitsLikeBash
+        then "Double quote to prevent empty removal and array splitting. In zsh, scalars are not word split or globbed by default."
+        else "Double quote to prevent globbing and word splitting."
+    splitsLikeBash =
+        hasZshOption "sh_word_split" (zshOptions params)
+        || hasZshOption "glob_subst" (zshOptions params)
+
     bracedString = concat $ oversimplify list
     name = getBracedReference bracedString
     parents = parentMap params
@@ -5360,15 +5388,23 @@ checkZshForShort params t =
                 err id 2403 "Zsh short for loop syntax for i (list) cmd is only supported in zsh scripts."
         _ -> return ()
 
--- Check for incorrect ZSH array indexing (ZSH uses 1-based indexing)
+{-
+   zsh arrays start at 1, so ${arr[0]} is empty, but KSH_ARRAYS switches them
+   to 0-based indexing (zsh manual, Array Subscripts and the KSH_ARRAYS
+   option), which makes ${arr[0]} the intended first element.
+-}
 prop_checkZshArrayIndex1 = verify checkZshArrayIndex "#!/usr/bin/env zsh\narr=(a b c); echo ${arr[0]}"
 prop_checkZshArrayIndex2 = verifyNot checkZshArrayIndex "#!/usr/bin/env zsh\narr=(a b c); echo ${arr[1]}"
 prop_checkZshArrayIndex3 = verify checkZshArrayIndex "# shellcheck shell=zsh\narr=(a b c); echo ${arr[0]}"
-checkZshArrayIndex params t@(T_DollarBraced id _ word) = do
-    when (shellType params == Zsh) $ do
-        let str = concat $ oversimplify word
-        when ("[0]" `isInfixOf` str && not ("[-" `isInfixOf` str)) $
-            style id 2404 "In zsh, arrays are 1-indexed. Did you mean ${arr[1]}?"
+prop_checkZshArrayIndex4 = verifyNot checkZshArrayIndex "#!/usr/bin/env zsh\nsetopt ksh_arrays\narr=(a b c); echo ${arr[0]}"
+prop_checkZshArrayIndex5 = verifyNot checkZshArrayIndex "#!/bin/bash\narr=(a b c); echo ${arr[0]}"
+checkZshArrayIndex params (T_DollarBraced id _ word) =
+    when (shellType params == Zsh) $
+        unless (hasZshOption "ksh_arrays" (zshOptions params)) $
+            when ("[0]" `isInfixOf` str && not ("[-" `isInfixOf` str)) $
+                style id 2404 "In zsh, arrays are 1-indexed, so this is empty. Did you mean ${arr[1]}?"
+  where
+    str = concat $ oversimplify word
 checkZshArrayIndex _ _ = return ()
 
 -- Check for bash-style [[ ]] test with ZSH-incompatible operators
@@ -5379,15 +5415,24 @@ checkZshTestCompat params (TC_Binary id typ op lhs rhs) = do
         warn id 2405 "In zsh, use [[ $var == pattern ]] or =~ in a condition. The =~ operator works differently than in bash."
 checkZshTestCompat _ _ = return ()
 
--- Check for missing setopt in ZSH when using extended glob features
-checkZshExtGlob params t@(T_Glob id str) = do
-    when (shellType params == Zsh) $ do
-        when (("**" `isInfixOf` str || "^" `isPrefixOf` str) && not (hasSetopt "extended_glob" params)) $
-            info id 2406 "Using extended glob syntax. Consider adding 'setopt extended_glob' if it's not already set."
+{-
+   Under EXTENDED_GLOB, a leading '^' makes a pattern match everything except
+   what follows (zsh manual, Filename Generation), so an unquoted regex-style
+   '^foo' argument becomes a glob. Recursive '**' works without the option, so
+   it is not reported. Without the option '^' is an ordinary character, and
+   guessing that the script meant to set it would be a false positive.
+-}
+prop_checkZshExtGlob1 = verify checkZshExtGlob "#!/usr/bin/env zsh\nsetopt extended_glob\ngrep ^foo file"
+prop_checkZshExtGlob2 = verifyNot checkZshExtGlob "#!/usr/bin/env zsh\ngrep ^foo file"
+prop_checkZshExtGlob3 = verifyNot checkZshExtGlob "#!/bin/bash\nsetopt extended_glob\ngrep ^foo file"
+prop_checkZshExtGlob4 = verifyNot checkZshExtGlob "#!/usr/bin/env zsh\nsetopt extended_glob\ngrep '^foo' file"
+prop_checkZshExtGlob5 = verifyNot checkZshExtGlob "#!/usr/bin/env zsh\nsetopt extended_glob\nls **/*.txt"
+prop_checkZshExtGlob6 = verifyNot checkZshExtGlob "#!/usr/bin/env zsh\nsetopt extended_glob\nunsetopt extended_glob\ngrep ^foo file"
+prop_checkZshExtGlob7 = verify checkZshExtGlob "#!/usr/bin/env zsh\nsetopt EXTENDED_GLOB\ngrep ^foo file"
+checkZshExtGlob params (T_NormalWord id (T_Literal _ ('^':_) : _)) =
+    when (shellType params == Zsh && hasZshOption "extended_glob" (zshOptions params)) $
+        info id 2406 "extended_glob is set, so a leading ^ negates this pattern. Quote it to match a literal ^."
 checkZshExtGlob _ _ = return ()
-
-hasSetopt :: String -> Parameters -> Bool
-hasSetopt opt params = False  -- Simplified for now; would need to track setopt calls
 
 -- Check for zsh always blocks used in non-zsh scripts. The parser accepts
 -- '{ ... } always { ... }' everywhere so that this reports a portability
