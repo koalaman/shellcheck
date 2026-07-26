@@ -5389,17 +5389,19 @@ checkZshExtGlob _ _ = return ()
 hasSetopt :: String -> Parameters -> Bool
 hasSetopt opt params = False  -- Simplified for now; would need to track setopt calls
 
--- Check for ZSH always blocks used in non-ZSH scripts
--- Note: Always blocks cause parse errors, so this check has limited practical use
-prop_checkZshAlways1 = verify checkZshAlways "#!/bin/bash\nalways cleanup"
-checkZshAlways params t@(T_Annotation _ _ (T_Script _ _ body)) = mapM_ (checkAlwaysInList params) body
-checkZshAlways params t = checkAlwaysInList params t
-
-checkAlwaysInList params t = do
-    case getLiteralString t of
-        Just str | str == "always" && shellType params /= Zsh ->
-            err (getId t) 2407 "ZSH always blocks { cmd } always { cleanup } are only supported in zsh."
-        _ -> return ()
+-- Check for zsh always blocks used in non-zsh scripts. The parser accepts
+-- '{ ... } always { ... }' everywhere so that this reports a portability
+-- problem instead of a parse error. A bare 'always' command is reported too,
+-- since that is what a mistyped always block degrades into.
+prop_checkZshAlways1 = verifyNot checkZshAlways "#!/bin/bash\nalways cleanup"
+prop_checkZshAlways2 = verify checkZshAlways "#!/bin/bash\n{ echo try; } always { echo cleanup; }"
+prop_checkZshAlways3 = verifyNot checkZshAlways "#!/usr/bin/env zsh\n{ echo try; } always { echo cleanup; }"
+prop_checkZshAlways4 = verifyNot checkZshAlways "#!/bin/bash\necho always"
+prop_checkZshAlways5 = verifyNot checkZshAlways "#!/usr/bin/env zsh\nalways cleanup"
+checkZshAlways params (T_Always id _ _) =
+    when (shellType params /= Zsh) $
+        err id 2407 "Zsh always blocks, { list } always { list }, are only supported in zsh."
+checkZshAlways _ _ = return ()
 
 -- Check for ZSH select loops  
 prop_checkZshSelect1 = verify checkZshSelect "#!/bin/bash\nselect i in a b c; do echo $i; done"

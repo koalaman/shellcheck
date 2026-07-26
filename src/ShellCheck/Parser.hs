@@ -169,15 +169,27 @@ data UserState = UserState {
     positionMap :: Map.Map Id (SourcePos, SourcePos),
     parseNotes :: [ParseNote],
     hereDocMap :: Map.Map Id [Token],
-    pendingHereDocs :: [HereDocContext]
+    pendingHereDocs :: [HereDocContext],
+    -- Dialect resolved from -s, a shell= directive or the shebang. A few
+    -- constructs are grammatically zsh-only, so the parser needs to know.
+    parsedShell :: Shell
 }
 initialUserState = UserState {
     lastId = Id $ -1,
     positionMap = Map.empty,
     parseNotes = [],
     hereDocMap = Map.empty,
-    pendingHereDocs = []
+    pendingHereDocs = [],
+    parsedShell = Bash
 }
+
+setParsedShell :: Monad m => Shell -> SCParser m ()
+setParsedShell shell = do
+    state <- getState
+    putState $ state { parsedShell = shell }
+
+isZshDialect :: Monad m => SCParser m Bool
+isZshDialect = (== Zsh) . parsedShell <$> getState
 
 codeForParseNote (ParseNote _ _ _ code _) = code
 
@@ -1125,6 +1137,11 @@ readNormalWord = readNormalishWord "" ["do", "done", "then", "fi", "esac"]
 readPatternWord = readNormalishWord "" ["esac"]
 
 readNormalishWord end terms = do
+    -- zsh recognizes '}' in any position unless IGNORE_BRACES or
+    -- IGNORE_CLOSE_BRACES is set (zsh Doc/Zsh/grammar.yo, Reserved Words), so
+    -- it closes a brace group without a preceding ';' or newline.
+    zsh <- isZshDialect
+    when zsh $ notFollowedBy2 (char '}')
     start <- startSpan
     pos <- getPosition
     first <- readNormalWordPart end
@@ -2926,21 +2943,38 @@ prop_readFunctionDefinition13 = isOk readFunctionDefinition "@require(){ true; }
 prop_readFunctionDefinition14 = isOk readFunctionDefinition "foo#bar(){ :; }"
 prop_readFunctionDefinition15 = isNotOk readFunctionDefinition "#bar(){ :; }"
 
--- Zsh anonymous functions: () { body } args
+-- Zsh anonymous functions. Both spellings from zsh Doc/Zsh/func.yo apply:
+-- a '()' with no preceding name, or 'function' with an immediately following
+-- open brace. Arguments are the words after the closing brace.
 prop_readZshAnonFunction1 = isOk readZshAnonFunction "() { echo hi; }"
 prop_readZshAnonFunction2 = isOk readZshAnonFunction "() { echo hi; } arg1 arg2"
+prop_readZshAnonFunction3 = isOk readZshAnonFunction "function { echo hi; }"
+prop_readZshAnonFunction4 = isOk readZshAnonFunction "function { echo hi; } arg1 arg2"
+prop_readZshAnonFunction5 = isNotOk readZshAnonFunction "function foo { echo hi; }"
+prop_readZshAnonFunction6 = isOk readScript "#!/usr/bin/env zsh\n() { echo hi; }\necho after\n"
+prop_readZshAnonFunction7 = isOk readScript "#!/usr/bin/env zsh\nfunction { echo a } x\nfunction { echo b }\n"
 readZshAnonFunction :: Monad m => SCParser m Token
 readZshAnonFunction = called "zsh anonymous function" $ try $ do
     start <- startSpan
-    g_Lparen
-    g_Rparen
+    readAnonymousIntroducer
     allspacing
     body <- readBraceGroup <|> readSubshell
-    allspacing
-    args <- many (readNormalWord `thenSkip` allspacing)
+    -- Arguments are words on the same line after the closing brace; a newline
+    -- ends them (zsh Doc/Zsh/func.yo, Anonymous Functions).
+    args <- option [] $ try $ do
+        notFollowedBy (char '\n')
+        many1 (readNormalWord `thenSkip` spacing1)
     id <- endSpan start
     spacing
     return $ T_AnonFunction id body args
+  where
+    readAnonymousIntroducer =
+        void (g_Lparen >> g_Rparen)
+            <|> try (do
+                    string "function"
+                    void whitespace
+                    spacing
+                    void . lookAhead $ char '{')
 
 readFunctionDefinition = called "function" $ do
     start <- startSpan
@@ -3053,10 +3087,33 @@ readConditionCommand = do
     alt "-a" = "&&"
     alt _ = "|| or &&"
 
+-- zsh's '{ try } always { cleanup }'. Per zsh Doc/Zsh/grammar.yo, newlines
+-- and semicolons may follow 'always' but may not appear between the closing
+-- brace and it. It is parsed in every dialect so that SC2407 can report a
+-- portability problem rather than leaving an unhelpful parse error.
+prop_readAlwaysBlock1 = isOk readScript "#!/usr/bin/env zsh\n{ echo try; } always { echo cleanup; }\n"
+prop_readAlwaysBlock2 = isOk readScript "#!/usr/bin/env zsh\n{ echo try } always { echo cleanup }\n"
+prop_readAlwaysBlock3 = isOk readScript "#!/usr/bin/env zsh\n{\n  echo try\n} always {\n  echo cleanup\n}\n"
+prop_readAlwaysBlock4 = isOk readScript "#!/bin/bash\n{ echo try; } always { echo cleanup; }\n"
+readBraceGroupMaybeAlways = do
+    start <- startSpan
+    group <- readBraceGroup
+    alwaysBlock <- optionMaybe $ try $ do
+        string "always"
+        notFollowedBy2 variableChars
+        allspacing
+        optional $ g_Semi >> allspacing
+        readBraceGroup
+    case alwaysBlock of
+        Nothing -> return group
+        Just body -> do
+            id <- endSpan start
+            return $ T_Always id group body
+
 prop_readCompoundCommand = isOk readCompoundCommand "{ echo foo; }>/dev/null"
 readCompoundCommand = do
     cmd <- choice [
-        readBraceGroup,
+        readBraceGroupMaybeAlways,
         readAmbiguous "((" readArithmeticExpression readSubshell (\pos ->
             parseNoteAt pos ErrorC 1105 "Shells disambiguate (( differently or not at all. For subshell, add spaces around ( . For ((, fix parsing errors."),
         readZshAnonFunction,  -- Zsh anonymous functions
@@ -3548,6 +3605,15 @@ readScriptFile sourced = do
                     any (\x -> case x of ShellOverride {} -> True; _ -> False) annotations
             shellFlagSpecified <- isJust <$> Mr.asks shellTypeOverride
             let ignoreShebang = shellAnnotationSpecified || shellFlagSpecified
+
+            -- Mirrors ShellCheck.AnalyzerLib.determineShell so that parser and
+            -- analyzer agree on the dialect.
+            shellOverride <- Mr.asks shellTypeOverride
+            let annotationShell =
+                    listToMaybe [s | ShellOverride s <- annotations] >>= shellForExecutable
+            let shebangShell = shellForExecutable $ executableFromShebang shebangString
+            setParsedShell $ fromMaybe Bash $
+                shellOverride `mplus` annotationShell `mplus` shebangShell
 
             unless ignoreShebang $
                 verifyShebang pos (executableFromShebang shebangString)

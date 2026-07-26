@@ -908,6 +908,12 @@ build t = do
             linkRange argExpansions bodyRange
             linkRange bodyRange exec
         T_ForShort id name words body -> forInHelper id name words body
+        T_Always id tryBlock alwaysBlock -> do
+            -- The always block runs whether or not the try block succeeded, so
+            -- both are on the only path through this construct.
+            body <- sequentially [tryBlock, alwaysBlock]
+            status <- newNodeRange (CFSetExitCode id)
+            linkRange body status
 
         x -> do
             error ("Unimplemented: " ++ show x) -- STRIP
