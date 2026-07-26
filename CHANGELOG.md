@@ -1,5 +1,9 @@
 ## Git
 ### Added
+- Zsh dialect support (`-s zsh`, `#!/usr/bin/env zsh`, `# shellcheck shell=zsh`, `.zsh` extension).
+- Zsh-specific checks SC2400 through SC2422 for portability and dialect semantics (subset retained after audit; duplicates merged into existing SC3xxx codes).
+- Golden fixture harness under `test/zsh/` and CI job `zsh_golden`.
+- Optional zsh test corpus extractor (`test/zsh/extract-ztst.sh`) with parse baseline (`test/zsh/corpus-report.sh`).
 
 ### Changed
 

@@ -10,7 +10,7 @@ shellcheck - Shell script analysis tool
 
 # DESCRIPTION
 
-ShellCheck is a static analysis and linting tool for sh/bash scripts. It's
+ShellCheck is a static analysis and linting tool for sh/bash/zsh scripts. It's
 mainly focused on handling typical beginner and intermediate level syntax
 errors and pitfalls where the shell just gives a cryptic error message or
 strange behavior, but it also reports on a few more advanced issues where
@@ -97,10 +97,9 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 
 **-s**\ *shell*,\ **--shell=***shell*
 
-:   Specify Bourne shell dialect. Valid values are *sh*, *bash*, *dash*, *ksh*,
-    and *busybox*.
+:   Specify Bourne shell dialect.     Valid values are *sh*, *bash*, *dash*, *ksh*, *zsh*, and *busybox*.
     The default is to deduce the shell from the file's `shell` directive,
-    shebang, or `.bash/.bats/.dash/.ksh` extension, in that order. *sh* refers to
+    shebang, or `.bash/.bats/.dash/.ksh/.zsh` extension, in that order. *sh* refers to
     POSIX `sh` (not the system's), and will warn of portability issues.
 
 **-S**\ *SEVERITY*,\ **--severity=***severity*
