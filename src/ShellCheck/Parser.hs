@@ -986,6 +986,10 @@ prop_readCondition29 = isOk readCondition "[[ x = [*] ]]"
 prop_readCondition30 = isOk readCondition "[[ foo = (#c0)foo ]]"
 prop_readCondition31 = isOk readCondition "[[ a(#q.) == a ]]"
 prop_readCondition32 = isOk readCondition "[[ z == *(#q.) ]]"
+prop_readCondition33 = isOk readCondition "[[ ab = (|a*)~^(*b) ]]"
+prop_readCondition34 = isOk readCondition "[[ 1_2_ = (*_)(#c1) ]]"
+prop_readCondition35 = isOk readCondition "[[ fob = 'f'('o'|'a')('o'|'b') ]]"
+prop_readCondition36 = isOk readCondition "[[ $OSTYPE == (darwin|linux)* ]]"
 
 readCondition = called "test expression" $ do
     opos <- getPosition
@@ -1614,7 +1618,55 @@ readZshCondWord = do
             T_Extglob {} -> True
             _ -> False
 
+readZshBareCondGlobGroup = try $ do
+    char '('
+    start <- startSpan
+    contents <- readZshBareCondGlobAlt `sepBy` char '|'
+    id <- endSpan start
+    char ')'
+    return $ T_Extglob id "" contents
+
+readZshBareCondGlobAlt = do
+    start <- startSpan
+    parts <- many (readZshBareCondGlobGroup <|> readZshBareCondGlobAtom)
+    id <- endSpan start
+    return $ T_NormalWord id parts
+
+readZshBareCondGlobAtom = choice [
+    readZshExtendedGlobQualifierPart,
+    readSingleQuoted,
+    readDoubleQuoted,
+    readGlob,
+    readNormalDollar,
+    readBraced,
+    readUnquotedBackTicked,
+    readProcSub,
+    readUnicodeQuote,
+    readZshBareCondGlobLiteral,
+    readLiteralCurlyBraces
+  ]
+  where
+    readZshBareCondGlobLiteral = do
+        start <- startSpan
+        str <- many1 (noneOf "|)")
+        id <- endSpan start
+        return $ T_Literal id str
+
+    readLiteralCurlyBraces = do
+        start <- startSpan
+        str <- findParam <|> literalBraces
+        id <- endSpan start
+        return $ T_Literal id str
+    findParam = try $ string "{}"
+    literalBraces = do
+        pos <- getPosition
+        c <- oneOf "{}"
+        parseProblemAt pos WarningC 1083 $
+            "This " ++ [c] ++ " is literal. Check expression (missing ;/\n?) or quote it."
+        return [c]
+
 readZshCondWordPart end = choice [
+    readZshBareCondGlobGroup,
     readZshExtendedGlobQualifierPart,
     readSingleQuoted,
     readDoubleQuoted,
@@ -1958,6 +2010,9 @@ prop_readDollarBraced3 = isOk readDollarBraced "${foo%%$(echo cow\\})}"
 prop_readDollarBraced4 = isOk readDollarBraced "${foo#\\}}"
 prop_readDollarBraced5 = isOk readDollarBraced "${(o)array}"  -- zsh
 prop_readDollarBraced6 = isOk readDollarBraced "${(U)var}"     -- zsh
+prop_readDollarBraced7 = isOk readDollarBraced "${(s.:.)foo}"
+prop_readDollarBraced8 = isOk readDollarBraced "${(g:o:)foo}"
+prop_readDollarBraced9 = isOk readDollarBraced "${(SI:1:)string}"
 
 readZshParamFlags :: Monad m => SCParser m [ZshParamFlag]
 readZshParamFlags = do
@@ -1966,40 +2021,80 @@ readZshParamFlags = do
     char ')'
     return flags
   where
+    readZshColonSection = do
+        char ':'
+        body <- many (noneOf ":)")
+        char ':'
+        return (':' : body ++ ":")
+
+    readZshFlagWithColon tail = do
+        sections <- many readZshColonSection
+        if null sections
+          then return tail
+          else return $ ZshFlag_Other (zshFlagLabel tail ++ concat sections)
+
+    zshFlagLabel flag = case flag of
+        ZshFlag_Sort -> "o"
+        ZshFlag_SortReverse -> "O"
+        ZshFlag_Unique -> "u"
+        ZshFlag_SortNumeric -> "n"
+        ZshFlag_SortNumericReverse -> "N"
+        ZshFlag_Upper -> "U"
+        ZshFlag_Lower -> "L"
+        ZshFlag_Capitalize -> "C"
+        ZshFlag_Quote -> "q"
+        ZshFlag_DoubleQuote -> "Q"
+        ZshFlag_Expand -> "e"
+        ZshFlag_EscapeBackslash -> "b"
+        ZshFlag_SplitNewline -> "f"
+        ZshFlag_Print -> "P"
+        ZshFlag_Prompt -> "%"
+        ZshFlag_Type -> "t"
+        ZshFlag_Length -> "#"
+        ZshFlag_Array -> "@"
+        ZshFlag_Keys -> "k"
+        ZshFlag_Values -> "v"
+        ZshFlag_Glob -> "g"
+        ZshFlag_Join s -> "j:" ++ s ++ ":"
+        ZshFlag_Split s -> "s:" ++ s ++ ":"
+        ZshFlag_Other s -> s
+
     readZshFlag = choice [
+        -- Join and split: (s:.:) and zsh shorthand (s.:.)
+        try (char 'j' >> char ':' >> many1 (noneOf ":)") >>= \s -> char ':' >> return (ZshFlag_Join s)) >>= readZshFlagWithColon,
+        try (char 's' >> char ':' >> many1 (noneOf ":)") >>= \s -> char ':' >> return (ZshFlag_Split s)) >>= readZshFlagWithColon,
+        try (char 'j' >> char '.' >> char ':' >> return (ZshFlag_Join ".")) >>= readZshFlagWithColon,
+        try (char 's' >> char '.' >> char ':' >> return (ZshFlag_Split ".")) >>= readZshFlagWithColon,
+
         -- Sorting and uniqueness
-        char 'o' >> return ZshFlag_Sort,
-        char 'O' >> return ZshFlag_SortReverse,
-        char 'u' >> return ZshFlag_Unique,
-        char 'n' >> return ZshFlag_SortNumeric,
-        char 'N' >> return ZshFlag_SortNumericReverse,
-        
+        char 'o' >> return ZshFlag_Sort >>= readZshFlagWithColon,
+        char 'O' >> return ZshFlag_SortReverse >>= readZshFlagWithColon,
+        char 'u' >> return ZshFlag_Unique >>= readZshFlagWithColon,
+        char 'n' >> return ZshFlag_SortNumeric >>= readZshFlagWithColon,
+        char 'N' >> return ZshFlag_SortNumericReverse >>= readZshFlagWithColon,
+
         -- Case modification
-        char 'U' >> return ZshFlag_Upper,
-        char 'L' >> return ZshFlag_Lower,
-        char 'C' >> return ZshFlag_Capitalize,
-        
+        char 'U' >> return ZshFlag_Upper >>= readZshFlagWithColon,
+        char 'L' >> return ZshFlag_Lower >>= readZshFlagWithColon,
+        char 'C' >> return ZshFlag_Capitalize >>= readZshFlagWithColon,
+
         -- String modification and quoting
-        char 'q' >> return ZshFlag_Quote,
-        char 'Q' >> return ZshFlag_DoubleQuote,
-        char 'e' >> return ZshFlag_Expand,
-        char 'b' >> return ZshFlag_EscapeBackslash,
-        char 'f' >> return ZshFlag_SplitNewline,
-        char 'P' >> return ZshFlag_Print,
-        char '%' >> return ZshFlag_Prompt,
-        char 't' >> return ZshFlag_Type,
-        char '#' >> return ZshFlag_Length,
-        char '@' >> return ZshFlag_Array,
-        char 'k' >> return ZshFlag_Keys,
-        char 'v' >> return ZshFlag_Values,
-        char 'g' >> return ZshFlag_Glob,
-        
-        -- Join and split with delimiters
-        try (char 'j' >> char ':' >> many1 (noneOf ":)") >>= \s -> char ':' >> return (ZshFlag_Join s)),
-        try (char 's' >> char ':' >> many1 (noneOf ":)") >>= \s -> char ':' >> return (ZshFlag_Split s)),
-        
+        char 'q' >> return ZshFlag_Quote >>= readZshFlagWithColon,
+        char 'Q' >> return ZshFlag_DoubleQuote >>= readZshFlagWithColon,
+        char 'e' >> return ZshFlag_Expand >>= readZshFlagWithColon,
+        char 'b' >> return ZshFlag_EscapeBackslash >>= readZshFlagWithColon,
+        char 'f' >> return ZshFlag_SplitNewline >>= readZshFlagWithColon,
+        char 'P' >> return ZshFlag_Print >>= readZshFlagWithColon,
+        char '%' >> return ZshFlag_Prompt >>= readZshFlagWithColon,
+        char 't' >> return ZshFlag_Type >>= readZshFlagWithColon,
+        char '#' >> return ZshFlag_Length >>= readZshFlagWithColon,
+        char '@' >> return ZshFlag_Array >>= readZshFlagWithColon,
+        char 'k' >> return ZshFlag_Keys >>= readZshFlagWithColon,
+        char 'v' >> return ZshFlag_Values >>= readZshFlagWithColon,
+        char 'g' >> return ZshFlag_Glob >>= readZshFlagWithColon,
+
         -- Catch-all for single characters we don't recognize
-        try (satisfy (\c -> c /= ')' && c /= ':') >>= \c -> return (ZshFlag_Other [c]))
+        try (satisfy (\c -> c /= ')' && c /= ':') >>= \c -> return (ZshFlag_Other [c])) >>= readZshFlagWithColon
       ]
 
 readDollarBraced = called "parameter expansion" $ do
@@ -2810,7 +2905,9 @@ prop_readIfClause5 = isOk readIfClause "if false; then true; else\nif true; then
 prop_readIfClause6 = isWarning readIfClause "if true\nthen\nDo the thing\nfi"
 prop_readIfClause7 = isOk readScript "#!/usr/bin/env zsh\nif (true) { print true-1 } elif (true) { print true-2 } else { print false }\n"
 prop_readIfClause8 = isOk readScript "#!/usr/bin/env zsh\nif { true } print true\n"
-readZshIfThenLookahead = optional (try (g_Semi >> allspacing)) >> g_Then
+readZshIfThenLookahead = allspacing >> optional (try (g_Semi >> allspacing)) >> g_Then
+
+prop_readIfClause9 = isOk readScript "#!/usr/bin/env zsh\nif [[ x = y ]]\nthen echo yes; fi\n"
 
 readZshIfSingleCommand = do
     allspacing
@@ -2841,8 +2938,11 @@ readZshIfBody = do
         hasThen <- isFollowedBy readZshIfThenLookahead
         if hasThen
           then do
-            optional (try (g_Semi >> allspacing))
-            readStandardIfBody
+            readZshIfThenLookahead
+            acceptButWarn g_Semi ErrorC 1051 "Semicolons directly after 'then' are not allowed. Just remove it."
+            allspacing
+            verifyNotEmptyIf "then"
+            readTerm
           else choice [
                 try $ do
                     allspacing

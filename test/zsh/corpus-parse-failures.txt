@@ -1,7 +1,7 @@
 # Chunks of zsh's own test suite that ShellCheck cannot parse.
 # Regenerate with test/zsh/corpus-report.sh --update after running
 # test/zsh/extract-ztst.sh against a zsh checkout.
-# 107 of 2914 chunks, extracted from:
+# 60 of 2914 chunks, extracted from:
 #   source: git@github.com:zsh-users/zsh.git
 #   version: 5.9.999.3-test
 #   revision: c0fe1189905e6bd6ef227068478638cfb52b1255
@@ -15,10 +15,7 @@ A04redirect_064.zsh
 A05execution_035.zsh
 A07control_016.zsh
 B02typeset_023.zsh
-B04read_017.zsh
-B04read_018.zsh
 B08shift_003.zsh
-B12limit_001.zsh
 C01arith_037.zsh
 C01arith_044.zsh
 C01arith_045.zsh
@@ -27,9 +24,6 @@ C02cond_049.zsh
 C02cond_051.zsh
 C02cond_053.zsh
 C02cond_055.zsh
-C02cond_059.zsh
-C02cond_060.zsh
-C02cond_067.zsh
 C02cond_071.zsh
 C03traps_037.zsh
 C03traps_038.zsh
@@ -43,46 +37,11 @@ C04funcdef_006.zsh
 C04funcdef_008.zsh
 C04funcdef_027.zsh
 C04funcdef_043.zsh
-C04funcdef_045.zsh
-C04funcdef_046.zsh
-D01prompt_010.zsh
-D01prompt_011.zsh
-D01prompt_012.zsh
-D01prompt_016.zsh
-D01prompt_017.zsh
 D02glob_028.zsh
-D02glob_034.zsh
-D02glob_036.zsh
-D02glob_038.zsh
-D02glob_039.zsh
-D02glob_040.zsh
-D02glob_041.zsh
-D02glob_058.zsh
-D02glob_070.zsh
-D02glob_071.zsh
-D02glob_072.zsh
-D02glob_073.zsh
-D02glob_074.zsh
-D02glob_075.zsh
 D03procsubst_010.zsh
-D04parameter_046.zsh
-D04parameter_070.zsh
-D04parameter_082.zsh
-D04parameter_083.zsh
-D04parameter_091.zsh
-D04parameter_129.zsh
-D04parameter_130.zsh
-D04parameter_131.zsh
-D04parameter_139.zsh
-D04parameter_183.zsh
-D04parameter_184.zsh
-D04parameter_185.zsh
 D04parameter_199.zsh
-D04parameter_258.zsh
 D06subscript_012.zsh
-D07multibyte_009.zsh
 D07multibyte_040.zsh
-D07multibyte_045.zsh
 D10nofork_005.zsh
 D10nofork_021.zsh
 D10nofork_023.zsh
@@ -98,17 +57,11 @@ E02xtrace_014.zsh
 E02xtrace_015.zsh
 E02xtrace_016.zsh
 E03posix_013.zsh
-K01nameref_081.zsh
 P01privileged_004.zsh
-V01zmodload_002.zsh
 V03mathfunc_010.zsh
 V04features_012.zsh
-V07pcre_001.zsh
 V07pcre_010.zsh
 V07pcre_011.zsh
-V08zpty_001.zsh
-V09datetime_007.zsh
-V09datetime_018.zsh
 V15nearcolor_003.zsh
 V15nearcolor_004.zsh
 X04zlehighlight_001.zsh
