@@ -1960,6 +1960,15 @@ readVariableName = do
     return (f:rest)
 
 {-
+   zsh allows numeric parameter names in for/foreach loops (parse.c par_for
+   uses isident, which accepts digit-leading names in this position).
+-}
+readZshLoopVariableName = do
+    f <- variableStart <|> digit
+    rest <- many variableChars
+    return (f:rest)
+
+{-
    zsh subscripts a bare expansion, so $arr[2] means the same as ${arr[2]}
    (zsh manual, Array Subscripts). Reading the subscript into the name keeps
    SC1087 quiet and lets the subscript checks see it.
@@ -2820,6 +2829,7 @@ prop_readForClause10 = isOk readForClause "for ((;;)) { true; }"
 prop_readForClause12 = isWarning readForClause "for $a in *; do echo \"$a\"; done"
 prop_readForClause13 = isOk readForClause "for foo\nin\\\n  bar\\\n  baz\ndo true; done"
 prop_readForClause14 = isOk readForClause "for i (a b c) echo $i"  -- zsh short form
+prop_readForClause15 = isOk readScript "#!/usr/bin/env zsh\nfor 1 in a b; do print $1; done"  -- zsh numeric name
 readForClause = called "for loop" $ do
     pos <- getPosition
     (T_For id) <- g_For
@@ -2827,7 +2837,7 @@ readForClause = called "for loop" $ do
     readArithmetic id <|> readZshShort id <|> readRegular id
   where
     readZshShort id = try $ called "zsh short for loop" $ do
-        name <- readVariableName `thenSkip` spacing
+        name <- readZshLoopVariableName `thenSkip` spacing
         g_Lparen
         spacing
         values <- many (readCmdWord `thenSkip` spacing)
@@ -2873,7 +2883,9 @@ readForClause = called "for loop" $ do
     readRegular id = do
         acceptButWarn (char '$') ErrorC 1086
             "Don't use $ on the iterator name in for loops."
-        name <- readVariableName `thenSkip` allspacing
+        zsh <- isZshDialect
+        name <- (if zsh then readZshLoopVariableName else readVariableName)
+            `thenSkip` allspacing
         values <- readInClause <|> (optional readSequentialSep >> return [])
         group <- readBraced <|> readDoGroup id
         return $ T_ForIn id name values group
@@ -2894,7 +2906,7 @@ readForEachClause = called "zsh foreach loop" $ do
         void $ string "foreach"
         void whitespace
     spacing
-    name <- readVariableName `thenSkip` spacing
+    name <- readZshLoopVariableName `thenSkip` spacing
     g_Lparen
     spacing
     values <- many (readCmdWord `thenSkip` spacing)
