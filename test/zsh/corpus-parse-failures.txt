@@ -2,9 +2,9 @@
 # Regenerate with test/zsh/corpus-report.sh --update after running
 # test/zsh/extract-ztst.sh against a zsh checkout.
 # 204 of 2914 chunks, extracted from:
-#   source: /Users/agoodkind/Sites/zsh
+#   source: git@github.com:zsh-users/zsh.git
 #   version: 5.9.999.3-test
-#   revision: c0fe11899
+#   revision: c0fe1189905e6bd6ef227068478638cfb52b1255
 A01grammar_015.zsh
 A01grammar_016.zsh
 A01grammar_017.zsh

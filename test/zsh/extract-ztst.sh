@@ -125,11 +125,14 @@ while IFS= read -r ztst; do
     extract_file "$ztst"
 done < <(find "$ZTST_DIR" -maxdepth 1 -type f -name '*.ztst' -print | sort)
 
-# Record where the corpus came from so the parse baseline can name it.
-zsh_revision=$(git -C "$ZSH_SOURCE" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+# Record where the corpus came from so the parse baseline can name it. The
+# remote and revision are recorded rather than the local path, since the
+# baseline is committed and the path differs on every machine.
+zsh_revision=$(git -C "$ZSH_SOURCE" rev-parse HEAD 2>/dev/null || echo "unknown")
+zsh_remote=$(git -C "$ZSH_SOURCE" remote get-url origin 2>/dev/null || echo "local checkout")
 zsh_declared_version=$(sed -n 's/^VERSION=//p' "$ZSH_SOURCE/Config/version.mk" 2>/dev/null || echo "unknown")
 printf 'source: %s\nversion: %s\nrevision: %s\n' \
-    "$ZSH_SOURCE" "$zsh_declared_version" "$zsh_revision" > "$CORPUS_DIR/.source"
+    "$zsh_remote" "$zsh_declared_version" "$zsh_revision" > "$CORPUS_DIR/.source"
 
 printf 'extract-ztst: wrote %d chunk file(s) to %s from %s (zsh %s)\n' \
     "$file_count" "${CORPUS_DIR#"$SCRIPT_DIR"/}" "$ZTST_DIR" "$zsh_declared_version"
