@@ -320,6 +320,11 @@ willConcatInAssignment token =
         (T_NormalWord _ parts) -> any willConcatInAssignment parts
         _ -> False
 
+-- Raw backtick body when the inner command list did not parse.
+getBacktickRaw :: Token -> Maybe String
+getBacktickRaw (OuterToken _ (Inner_T_Backticked _ raw)) = raw
+getBacktickRaw _ = Nothing
+
 -- Maybe get the literal string corresponding to this token
 getLiteralString :: Token -> Maybe String
 getLiteralString = getLiteralStringExt (const Nothing)

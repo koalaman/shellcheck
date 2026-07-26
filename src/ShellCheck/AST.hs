@@ -143,7 +143,7 @@ data InnerToken t =
     | Inner_T_UnparsedIndex SourcePos String
     | Inner_T_Assignment AssignmentMode String [t] t
     | Inner_T_Backgrounded t
-    | Inner_T_Backticked [t]
+    | Inner_T_Backticked [t] (Maybe String)
     | Inner_T_Bang
     | Inner_T_Banged t
     | Inner_T_BraceExpansion [t]
@@ -297,7 +297,8 @@ pattern TA_Trinary id t1 t2 t3 = OuterToken id (Inner_TA_Trinary t1 t2 t3)
 pattern TA_Unary id op t1 = OuterToken id (Inner_TA_Unary op t1)
 pattern TA_Variable id str t = OuterToken id (Inner_TA_Variable str t)
 pattern T_Backgrounded id l = OuterToken id (Inner_T_Backgrounded l)
-pattern T_Backticked id list = OuterToken id (Inner_T_Backticked list)
+pattern T_Backticked id list <- OuterToken id (Inner_T_Backticked list _)
+  where T_Backticked id list = OuterToken id (Inner_T_Backticked list Nothing)
 pattern T_Banged id l = OuterToken id (Inner_T_Banged l)
 pattern T_BatsTest id name t = OuterToken id (Inner_T_BatsTest name t)
 pattern T_BraceExpansion id list = OuterToken id (Inner_T_BraceExpansion list)

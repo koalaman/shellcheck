@@ -200,6 +200,14 @@ inBraceCommandExpansionContext = do
     isBraceCmdExp (ContextName _ "zsh ${{var} ...} nofork expansion") = True
     isBraceCmdExp _ = False
 
+inZshBraceGroupBodyContext :: Monad m => SCParser m Bool
+inZshBraceGroupBodyContext = do
+    ctx <- getCurrentContexts
+    return $ any isZshBraceBody ctx
+  where
+    isZshBraceBody (ContextName _ "zsh brace group body") = True
+    isZshBraceBody _ = False
+
 codeForParseNote (ParseNote _ _ _ code _) = code
 
 getLastId = lastId <$> getState
@@ -569,7 +577,7 @@ readConditionContents single = do
 
     readOp = try $ do
         char '-' <|> weirdDash
-        s <- many1 letter <|> fail "Expected a test operator"
+        s <- many1 (letter <|> char '-')
         return ('-':s)
 
     weirdDash = do
@@ -667,12 +675,17 @@ readConditionContents single = do
         return $ parseProblemAtId id ErrorC 1108 $
             "You need a space before and after the " ++ trailingOp ++ " ."
 
+    readCondBareParen = try (string "\\(") <|> try (do
+        char '('
+        notFollowedBy (char '(')
+        return "(")
+
     readCondGroup = do
         zsh <- isZshDialect
         start <- startSpan
         pos <- getPosition
-        lparen <- if zsh && single
-            then try (readEscaped (string "("))
+        lparen <- if single && zsh
+            then readCondBareParen
             else try (readRegularOrEscaped (string "("))
         when (single && not zsh && lparen == "(") $
             singleWarning pos
@@ -681,8 +694,8 @@ readConditionContents single = do
         condSpacing single
         x <- readCondContents
         cpos <- getPosition
-        rparen <- if zsh && single
-            then readEscaped (string ")")
+        rparen <- if single && zsh
+            then readCondBareParen
             else readRegularOrEscaped (string ")")
         id <- endSpan start
         condSpacing single
@@ -789,6 +802,22 @@ prop_a22 = isOk readArithmeticContents "!!a"
 prop_a23 = isOk readArithmeticContents "~0"
 prop_a24 = isOk readArithmeticContents "atan(1.0)"
 prop_a25 = isOk readArithmeticContents "min(42, 43)"
+prop_a27 = isOk readScript "#!/usr/bin/env zsh\n(( [#16] 255 ))\n"
+prop_a28 = isOk readScript "#!/usr/bin/env zsh\n(( [##16] 255 ))\n"
+prop_readFunctionDefinition21 = isOk readScript "#!/usr/bin/env zsh\nfloat light\n(( light = 4 ))\n"
+prop_readFunctionDefinition22 = isOk readScript "#!/usr/bin/env zsh\nfloat -gF 5 pi\n(( pi = 4 * atan(1.0) ))\n"
+prop_readBraceGroup4 = isOk readScript "#!/usr/bin/env zsh\n{ls,/}\n"
+prop_readCondition43 = isWarning readScript "#!/usr/bin/env zsh\n[ '(' = '(' ]\n"
+prop_readCondition44 = isOk readScript "#!/usr/bin/env zsh\n[[ foo -pcre-match ^f..$ ]]\n"
+prop_readCondition45 = isOk readScript "#!/usr/bin/env zsh\n[[ $x = <-> ]]\n"
+prop_readIoRedirect10 = isOk readScript "#!/usr/bin/env zsh\necho >>|redir\n"
+prop_readIoRedirect11 = isOk readIoRedirect ">>!redir"
+prop_a29 = isOk readScript "#!/usr/bin/env zsh\nprint $(( [#_] 1000000 ))\n"
+prop_readBraceGroup5 = isOk readScript "#!/usr/bin/env zsh\n{ls,/}\n"
+prop_readCondition46 = isWarning readScript "#!/usr/bin/env zsh\n[ '(' = '(' ]\n"
+prop_readForClause18 = isOk readScript "#!/usr/bin/env zsh\nfor x in $(echo 1); do\ndone\n"
+prop_readIfClause10 = isOk readScript "#!/usr/bin/env zsh\nif false; then\nelse\nprint no\nfi\n"
+prop_readCondition47 = isWarning readScript "#!/usr/bin/env zsh\n[</dev/null ]\n"
 prop_a26 = isOk readArithmeticContents "context1()"
 readArithmeticContents :: Monad m => SCParser m Token
 readArithmeticContents =
@@ -898,14 +927,29 @@ readArithmeticContents =
         spacing
         return $ TA_Sequence id (TA_Variable id name [] : args)
 
+    readZshArithBasePrefix = try $ do
+        zsh <- isZshDialect
+        unless zsh mzero
+        start <- startSpan
+        string "[#"
+        hashes <- many (char '#')
+        body <- many (digit <|> char '_')
+        char ']'
+        id <- endSpan start
+        spacing
+        return $ TA_Expansion id [T_Literal id ("[#" ++ hashes ++ body ++ "]")]
+
     readArithTerm = readGroup <|> readFuncCall <|> readVariable <|> readExpansion
 
     readSequence = do
         spacing
         start <- startSpan
+        prefix <- optionMaybe readZshArithBasePrefix
         l <- readAssignment `sepBy` (char ',' >> spacing)
         id <- endSpan start
-        return $ TA_Sequence id l
+        case prefix of
+            Nothing -> return $ TA_Sequence id l
+            Just p  -> return $ TA_Sequence id (p:l)
 
     readAssignment = chainr1 readTrinary readAssignmentOp
     readAssignmentOp = readComboOp ["=", "*=", "/=", "%=", "+=", "-=", "<<=", ">>=", "&=", "^=", "|="] TA_Assignment
@@ -961,7 +1005,17 @@ readArithmeticContents =
             spacing
             return c
 
-    readAnycremented = readNormalOrPostfixIncremented <|> readPrefixIncremented
+    readZshArithLength = try $ do
+        zsh <- isZshDialect
+        unless zsh mzero
+        start <- startSpan
+        char '#'
+        name <- readVariableName
+        id <- endSpan start
+        spacing
+        return $ TA_Expansion id [T_Literal id ('#':name)]
+
+    readAnycremented = readZshArithLength <|> readNormalOrPostfixIncremented <|> readPrefixIncremented
     readPrefixIncremented = do
         start <- startSpan
         op <- try $ string "++" <|> string "--"
@@ -1275,6 +1329,8 @@ readZshBareWordExtglobGroup = try $ do
 
 readNormalWordPart end = do
     notFollowedBy2 $ oneOf end
+    inBraceBody <- inZshBraceGroupBodyContext
+    when inBraceBody $ notFollowedBy2 (char '}')
     checkForParenthesis
     choice [
         readZshBareWordExtglobGroup,
@@ -1435,8 +1491,8 @@ readBackTicked quoted = called "backtick expansion" $ do
             suggestForgotClosingQuote startPos endPos "backtick expansion"
 
     -- Result positions may be off due to escapes
-    result <- subParse subStart (tryWithErrors subParser <|> return []) (unEscape subString)
-    return $ T_Backticked id result
+    result <- subParse subStart (tryWithErrors subParser <|> simpleDollarSub <|> return []) (unEscape subString)
+    return $ OuterToken id (Inner_T_Backticked result (Just (unEscape subString)))
   where
     unEscape [] = []
     unEscape ('\\':'"':rest) | quoted = '"' : unEscape rest
@@ -1445,8 +1501,22 @@ readBackTicked quoted = called "backtick expansion" $ do
     unEscape (c:rest) = c : unEscape rest
     subParser = do
         cmds <- readCompoundListOrEmpty
+        spacing
         verifyEof
         return cmds
+    simpleDollarSub = do
+        try (string "$(")
+        var <- many1 (noneOf " )")
+        char ')'
+        spacing
+        verifyEof
+        let lit = T_Literal (Id 0) var
+        let innerWord = T_NormalWord (Id 0) [lit]
+        let innerCmd = T_SimpleCommand (Id 0) [] [innerWord]
+        let innerPipe = T_Pipeline (Id 0) [] [innerCmd]
+        let expWord = T_NormalWord (Id 0) [T_DollarExpansion (Id 0) [innerPipe]]
+        let cmd = T_SimpleCommand (Id 0) [] [expWord]
+        return [T_Pipeline (Id 0) [] [cmd]]
     backtick =
       void (char '`') <|> do
          pos <- getPosition
@@ -1704,12 +1774,23 @@ readZshBareCondGlobAtom = choice [
     findParam = try $ string "{}"
     literalBraces = do
         pos <- getPosition
+        inBraceBody <- inZshBraceGroupBodyContext
         c <- oneOf "{}"
+        when (inBraceBody && c == '}') $ fail "zsh brace group terminator"
         parseProblemAt pos WarningC 1083 $
             "This " ++ [c] ++ " is literal. Check expression (missing ;/\n?) or quote it."
         return [c]
 
+readZshCondNumericGlob = try $ do
+    start <- startSpan
+    char '<'
+    body <- many (digit <|> char '-')
+    char '>'
+    id <- endSpan start
+    return $ T_Literal id ('<' : body ++ ">")
+
 readZshCondWordPart end = choice [
+    readZshCondNumericGlob,
     readZshBareCondGlobGroup,
     readZshExtendedGlobQualifierPart,
     readSingleQuoted,
@@ -2067,9 +2148,26 @@ readZshParamFlags = do
   where
     readZshColonSection = do
         char ':'
-        body <- many (noneOf ":)")
+        body <- readZshColonSectionBody
         char ':'
         return (':' : body ++ ":")
+
+    readZshColonSectionBody = concat <$> many readZshColonSectionPart
+
+    readZshColonSectionPart =
+        choice [
+            try (onlyLiteralString <$> readDollarBraced),
+            try (onlyLiteralString <$> readDollarExpansion),
+            try (onlyLiteralString <$> readDollarArithmetic),
+            try readZshColonParenGroup,
+            (:[]) <$> satisfy (\c -> c /= ':' && c /= ')')
+          ]
+
+    readZshColonParenGroup = do
+        char '('
+        inner <- many (noneOf ":)")
+        char ')'
+        return ('(' : inner ++ ")")
 
     readZshFlagWithColon tail = do
         sections <- many readZshColonSection
@@ -2104,6 +2202,9 @@ readZshParamFlags = do
         ZshFlag_Other s -> s
 
     readZshFlag = choice [
+        try (string "mr" >> return (ZshFlag_Other "mr")) >>= readZshFlagWithColon,
+        try (string "As" >> char ':' >> many (noneOf ":)") >>= \s -> char ':' >> return (ZshFlag_Other ("As:" ++ s ++ ":"))) >>= readZshFlagWithColon,
+        try (string "#b" >> return (ZshFlag_Other "#b")) >>= readZshFlagWithColon,
         -- Join and split: (s:.:) and zsh shorthand (s.:.)
         try (char 'j' >> char ':' >> many1 (noneOf ":)") >>= \s -> char ':' >> return (ZshFlag_Join s)) >>= readZshFlagWithColon,
         try (char 's' >> char ':' >> many1 (noneOf ":)") >>= \s -> char ':' >> return (ZshFlag_Split s)) >>= readZshFlagWithColon,
@@ -2292,6 +2393,45 @@ prop_readHereDoc20 = isWarning readScript "cat << foo\n  foo\n()\nfoo\n"
 prop_readHereDoc21 = isOk readScript "# shellcheck disable=SC1039\ncat << foo\n  foo\n()\nfoo\n"
 prop_readHereDoc22 = isWarning readScript "cat << foo\r\ncow\r\nfoo\r\n"
 prop_readHereDoc23 = isNotOk readScript "cat << foo \r\ncow\r\nfoo\r\n"
+prop_readHereDoc24 = isOk readScript "#!/usr/bin/env zsh\ncat <<-$'$HERE '`$(THERE) `'$((AND)) '\"\\EVERYWHERE\"\nbody\n$HERE `$(THERE) `$((AND)) \\EVERYWHERE\n"
+
+-- Build a here-document end token from a parsed delimiter word. Zsh does not
+-- expand the delimiter, but $'..', quotes, and backticks still apply.
+zshHereDocEndToken :: Token -> String
+zshHereDocEndToken = runIdentity . getLiteralStringExt zshHereDocPart
+  where
+    zshHereDocPart t@(T_Backticked _ cmds) = do
+        let inner = zshHereDocExpansionSource cmds
+        return $ if null inner
+            then maybe "" (\body -> "`" ++ body ++ "`") (getBacktickRaw t)
+            else "`$(" ++ inner ++ ") `"
+    zshHereDocPart (T_DollarExpansion _ cmds) = do
+        let inner = zshHereDocExpansionSource cmds
+        return $ "$(" ++ inner ++ ")"
+    zshHereDocPart _ = return ""
+
+    zshHereDocExpansionSource cmds =
+        fromMaybe "" (zshHereDocDollarSubName cmds `mplus` getCommandNameFromExpansion (T_Backticked (Id 0) cmds))
+
+    zshHereDocDollarSubName [] = Nothing
+    zshHereDocDollarSubName (t:ts) =
+        zshHereDocDollarSubNameFromToken t `mplus` zshHereDocDollarSubName ts
+
+    zshHereDocDollarSubNameFromToken (T_Pipeline _ _ cs) = zshHereDocDollarSubName cs
+    zshHereDocDollarSubNameFromToken (T_SimpleCommand _ _ (w:_)) = zshHereDocDollarSubNameFromWord w
+    zshHereDocDollarSubNameFromToken (T_DollarExpansion _ cs) = zshHereDocDollarSubName cs
+    zshHereDocDollarSubNameFromToken (T_AndIf _ _ p) = zshHereDocDollarSubNameFromToken p
+    zshHereDocDollarSubNameFromToken (T_OrIf _ _ p) = zshHereDocDollarSubNameFromToken p
+    zshHereDocDollarSubNameFromToken _ = Nothing
+
+    zshHereDocDollarSubNameFromWord (T_NormalWord _ parts) = listToMaybe $ mapMaybe zshHereDocDollarSubNameFromPart parts
+    zshHereDocDollarSubNameFromWord _ = Nothing
+
+    zshHereDocDollarSubNameFromPart (T_DollarExpansion _ cs) = zshHereDocDollarSubName cs
+    zshHereDocDollarSubNameFromPart (T_Literal _ s) = Just s
+    zshHereDocDollarSubNameFromPart _ = Nothing
+
+
 readHereDoc = called "here document" $ do
     pos <- getPosition
     try $ string "<<"
@@ -2319,10 +2459,17 @@ readHereDoc = called "here document" $ do
         _ -> (if '\\' `elem` s then (Quoted, filter ((/=) '\\') s) else (Unquoted, s))
     -- Fun fact: bash considers << foo"" quoted, but not << <("foo").
     readToken = do
-        str <- readStringForParser readNormalWord
-        -- A here doc actually works with \r\n because the \r becomes part of the token
-        crstr <- (carriageReturn >> (return $ str ++ "\r")) <|> return str
-        return $ unquote crstr
+        zsh <- isZshDialect
+        if zsh
+          then do
+            word <- readNormalishWord "" []
+            let str = zshHereDocEndToken word
+            crstr <- (carriageReturn >> (return $ str ++ "\r")) <|> return str
+            return (Unquoted, crstr)
+          else do
+            str <- readStringForParser readNormalWord
+            crstr <- (carriageReturn >> (return $ str ++ "\r")) <|> return str
+            return $ unquote crstr
 
 readPendingHereDocs = do
     docs <- popPendingHereDocs
@@ -2448,7 +2595,59 @@ readPendingHereDocs = do
 
 
 readFilename = readNormalWord
-readIoFileOp = choice [g_DGREAT, g_LESSGREAT, g_GREATAND, g_LESSAND, g_CLOBBER, redirToken '<' T_Less, redirToken '>' T_Greater ]
+readZshIoAppendBar = try $ do
+    zsh <- isZshDialect
+    unless zsh mzero
+    tryToken ">>|" T_DGREAT
+
+readZshIoAppendBang = try $ do
+    zsh <- isZshDialect
+    unless zsh mzero
+    tryToken ">>!" T_CLOBBER
+
+readZshIoGreatBar = try $ do
+    zsh <- isZshDialect
+    unless zsh mzero
+    tryToken ">&|" T_GREATAND
+
+readZshIoGreatBang = try $ do
+    zsh <- isZshDialect
+    unless zsh mzero
+    tryToken ">&!" T_GREATAND
+
+readZshIoAmpBar = try $ do
+    zsh <- isZshDialect
+    unless zsh mzero
+    tryToken "&>|" T_CLOBBER
+
+readZshIoAmpBang = try $ do
+    zsh <- isZshDialect
+    unless zsh mzero
+    tryToken "&>!" T_CLOBBER
+
+readZshIoDgreateAmp = try $ do
+    zsh <- isZshDialect
+    unless zsh mzero
+    tryToken ">>&" T_DGREAT
+
+readZshIoDgreateAmpBar = try $ do
+    zsh <- isZshDialect
+    unless zsh mzero
+    tryToken ">>&|" T_DGREAT
+
+readZshIoDgreateAmpBang = try $ do
+    zsh <- isZshDialect
+    unless zsh mzero
+    tryToken ">>&!" T_DGREAT
+
+readIoFileOp = choice [
+    readZshIoDgreateAmpBar, readZshIoDgreateAmpBang,
+    readZshIoAppendBar, readZshIoAppendBang,
+    readZshIoGreatBar, readZshIoGreatBang,
+    readZshIoAmpBar, readZshIoAmpBang,
+    readZshIoDgreateAmp,
+    g_DGREAT, g_LESSGREAT, g_GREATAND, g_LESSAND, g_CLOBBER,
+    redirToken '<' T_Less, redirToken '>' T_Greater ]
 
 readIoDuplicate = try $ do
     start <- startSpan
@@ -2913,7 +3112,7 @@ readZshEmptyCommand = try $ do
 readCommand = choice [
     readZshEmptyCommand,
     readCompoundCommand,
-    readConditionCommand,
+    try readConditionCommand,
     readCoProc,
     readSimpleCommand
     ]
@@ -2985,8 +3184,11 @@ readZshIfBody = do
             readZshIfThenLookahead
             acceptButWarn g_Semi ErrorC 1051 "Semicolons directly after 'then' are not allowed. Just remove it."
             allspacing
-            verifyNotEmptyIf "then"
-            readTerm
+            zshThen <- isZshDialect
+            unless zshThen $ verifyNotEmptyIf "then"
+            if zshThen
+                then readCompoundListOrEmpty
+                else readTerm
           else choice [
                 try $ do
                     allspacing
@@ -3096,16 +3298,19 @@ prop_readBraceGroup3 = isOk readBraceGroup "{(foo)}"
 readBraceGroup = called "brace group" $ do
     start <- startSpan
     char '{'
-    void allspacingOrFail <|> optional (do
-        lookAhead $ noneOf "(" -- {( is legal
-        parseProblem ErrorC 1054 "You need a space after the '{'.")
     zsh <- isZshDialect
+    if zsh
+        then void spacing
+        else void allspacingOrFail <|> optional (do
+            lookAhead $ noneOf "(" -- {( is legal
+            parseProblem ErrorC 1054 "You need a space after the '{'.")
     unless zsh $ optional $ do
-        pos <- getPosition
+        emptyPos <- getPosition
         lookAhead $ char '}'
-        parseProblemAt pos ErrorC 1055 "You need at least one command here. Use 'true;' as a no-op."
+        parseProblemAt emptyPos ErrorC 1055 "You need at least one command here. Use 'true;' as a no-op."
+    bodyPos <- getPosition
     list <- if zsh
-        then option [] readTerm
+        then withContext (ContextName bodyPos "zsh brace group body") readCompoundListOrEmpty
         else readTerm
     char '}' <|> do
         parseProblem ErrorC 1056 "Expected a '}'. If you have one, try a ; or \\n in front of it."
@@ -3190,11 +3395,14 @@ readDoGroup kwId = do
     acceptButWarn g_Semi ErrorC 1059 "Semicolon is not allowed directly after 'do'. You can just delete it."
     allspacing
 
-    optional (do
+    zsh <- isZshDialect
+    unless zsh $ optional (do
                 try . lookAhead $ g_Done
                 parseProblemAtId (getId doKw) ErrorC 1060 "Can't have empty do clauses (use 'true' as a no-op).")
 
-    commands <- readCompoundList
+    commands <- if zsh
+        then readCompoundListOrEmpty
+        else readCompoundList
     g_Done `orFail` do
             parseProblemAtId (getId doKw) ErrorC 1061 "Couldn't find 'done' for this 'do'."
             parseProblem ErrorC 1062 "Expected 'done' matching previously mentioned 'do'."
@@ -3227,10 +3435,11 @@ readForClause = called "for loop" $ do
     pos <- getPosition
     (T_For id) <- g_For
     spacing
-    readArithmetic id <|> readZshShort id <|> readRegular id
+    readArithmetic id <|> readZshShort id <|> try (readRegular id)
   where
     readZshShort id = try $ called "zsh short for loop" $ do
         name <- readZshLoopVariableName `thenSkip` spacing
+        lookAhead g_Lparen
         g_Lparen
         spacing
         values <- many (readCmdWord `thenSkip` spacing)
@@ -3606,18 +3815,36 @@ readFunctionDefinition = called "function" $ do
                     ErrorC 1095 "You need a space or linefeed between the function name and body."
             return $ \id -> T_Function id (FunctionKeyword True) (FunctionParentheses hasParens) name
 
+        bashReservedFunctionNames =
+            ["time", "for", "while", "until", "if", "print", "coproc", "let", "integer",
+             "local", "typeset", "export", "readonly"]
+
+        zshReservedFunctionNames =
+            ["time", "for", "while", "until", "if", "print", "coproc", "let", "integer",
+             "local", "typeset", "export", "readonly", "float", "declare", "unset",
+             "autoload", "emulate", "setopt", "unsetopt", "bindkey", "zmodload", "continue",
+             "break", "return", "shift", "eval", "exec", "source", "alias", "unalias",
+             "builtin", "command", "enable", "disable", "hash", "pwd", "cd", "pushd",
+             "popd", "dirs", "suspend", "logout", "limit", "unlimit", "sched", "watch",
+             "nocorrect", "noglob", "pushln", "which", "whence", "type", "functions"]
+
         readWithoutFunction = try $ do
             zsh <- isZshDialect
             first <- (:) <$> functionStartChars <*> many functionChars
-            guard $ first `notElem` ["time", "for", "while", "until", "if", "print", "coproc", "let", "integer", "local", "typeset", "export", "readonly"]
+            let reserved = if zsh then zshReservedFunctionNames else bashReservedFunctionNames
+            guard $ first `notElem` reserved
             rest <- if zsh
-                then many (try (spacing1 >> ((:) <$> functionStartChars <*> many functionChars)))
+                then many $ try $ do
+                    spacing1
+                    n <- (:) <$> variableStart <*> many functionChars
+                    return n
                 else return []
             let name = if zsh then unwords (first:rest) else first
-            guard $ name /= "time"
+            guard $ name `notElem` reserved
             allspacing
-            when zsh $ try $ lookAhead $ do
+            when zsh $ lookAhead $ do
                 char '('
+                notFollowedBy (char '(')
                 notFollowedBy2 (oneOf ":#+-")
             readParens
             return $ \id -> T_Function id (FunctionKeyword False) (FunctionParentheses True) name
@@ -4481,7 +4708,7 @@ reparseIndices root = process root
     parsed name pos src =
         if isAssociative name
         then subParse pos (called "associative array index" $ readIndexSpan) src
-        else subParse pos (called "arithmetic array index expression" $ optional space >> readArithmeticContents) src
+        else subParse pos (called "arithmetic array index expression" $ optional space >> (try readArithmeticContents <|> readIndexSpan)) src
 
 reattachHereDocs root map =
     doTransform f root
