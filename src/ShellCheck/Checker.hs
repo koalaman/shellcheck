@@ -513,8 +513,11 @@ prop_fileCannotEnableExternalSources2 = result == [1144]
 prop_rcCanSuppressEarlyProblems1 = null result
   where
     result = checkWithRc "disable=1071" emptyCheckSpec {
-        csScript = "#!/usr/bin/env zsh\necho $1"
+        csScript = "#!/usr/bin/env csh\necho $1"
     }
+
+prop_rcZshShebangAccepted = 1071 `notElem` check "#!/usr/bin/env zsh\necho $1"
+
 
 prop_rcCanSuppressEarlyProblems2 = null result
   where
