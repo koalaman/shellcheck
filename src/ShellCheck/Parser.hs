@@ -745,6 +745,9 @@ prop_a20 = isOk readArithmeticContents "a ? b ? c : d : e"
 prop_a21 = isOk readArithmeticContents "a ? b : c ? d : e"
 prop_a22 = isOk readArithmeticContents "!!a"
 prop_a23 = isOk readArithmeticContents "~0"
+prop_a24 = isOk readArithmeticContents "atan(1.0)"
+prop_a25 = isOk readArithmeticContents "min(42, 43)"
+prop_a26 = isOk readArithmeticContents "context1()"
 readArithmeticContents :: Monad m => SCParser m Token
 readArithmeticContents =
     readSequence
@@ -841,7 +844,19 @@ readArithmeticContents =
         spacing
         return $ TA_Parenthesis id s
 
-    readArithTerm = readGroup <|> readVariable <|> readExpansion
+    readFuncCall = try $ do
+        start <- startSpan
+        name <- readVariableName
+        char '('
+        spacing
+        args <- option [] $ readTrinary `sepBy` (char ',' >> spacing)
+        spacing
+        char ')'
+        id <- endSpan start
+        spacing
+        return $ TA_Sequence id (TA_Variable id name [] : args)
+
+    readArithTerm = readGroup <|> readFuncCall <|> readVariable <|> readExpansion
 
     readSequence = do
         spacing
