@@ -2096,6 +2096,8 @@ prop_subshellAssignmentCheck20 = verifyTree subshellAssignmentCheck "@test 'foo'
 prop_subshellAssignmentCheck21 = verifyNotTree subshellAssignmentCheck "test1() { echo foo | if [[ $var ]]; then echo $var; fi; }; test2() { echo $var; }"
 prop_subshellAssignmentCheck22 = verifyNotTree subshellAssignmentCheck "( [[ -n $foo || -z $bar ]] ); echo $foo $bar"
 prop_subshellAssignmentCheck23 = verifyNotTree subshellAssignmentCheck "( export foo ); echo $foo"
+prop_subshellAssignmentCheck24 = verifyNotTree subshellAssignmentCheck "( read -r a _ c <<< 'x y z'; ); echo $_"
+prop_subshellAssignmentCheck25 = verifyNotTree subshellAssignmentCheck "( _=discard; ); echo $_"
 subshellAssignmentCheck params t =
     let flow = variableFlow params
         check = findSubshelled flow [("oops",[])] Map.empty
@@ -2117,7 +2119,7 @@ findSubshelled (Reference (_, readToken, str):rest) scopes deadVars = do
     findSubshelled rest scopes deadVars
   where
     shouldIgnore str =
-        str `elem` ["@", "*", "IFS"]
+        str `elem` ["@", "*", "_", "IFS"]
 
 findSubshelled (StackScope (SubshellScope reason):rest) scopes deadVars =
     findSubshelled rest ((reason,[]):scopes) deadVars
@@ -2652,8 +2654,10 @@ prop_checkGlobsAsOptions3 = verifyNot checkGlobsAsOptions "rm -- *.txt"
 prop_checkGlobsAsOptions4 = verifyNot checkGlobsAsOptions "*.txt"
 prop_checkGlobsAsOptions5 = verifyNot checkGlobsAsOptions "echo 'Files:' *.txt"
 prop_checkGlobsAsOptions6 = verifyNot checkGlobsAsOptions "printf '%s\\n' *"
-checkGlobsAsOptions _ cmd@(T_SimpleCommand _ _ args) =
-    unless ((fromMaybe "" $ getCommandBasename cmd) `elem` ["echo", "printf"]) $
+prop_checkGlobsAsOptions7 = verifyNot checkGlobsAsOptions "set -f; ls *"
+prop_checkGlobsAsOptions8 = verifyNot checkGlobsAsOptions "set -o noglob\nrm *"
+checkGlobsAsOptions params cmd@(T_SimpleCommand _ _ args) =
+    unless (((fromMaybe "" $ getCommandBasename cmd) `elem` ["echo", "printf"]) || hasNoglob params) $
         mapM_ check $ takeWhile (not . isEndOfArgs) (drop 1 args)
   where
     check v@(T_NormalWord _ (T_Glob id s:_)) | s == "*" || s == "?" =
@@ -3322,6 +3326,7 @@ prop_checkUncheckedPopd10 = verifyNotTree checkUncheckedCdPushdPopd "cd ../.."
 prop_checkUncheckedPopd11 = verifyNotTree checkUncheckedCdPushdPopd "cd ../.././.."
 prop_checkUncheckedPopd12 = verifyNotTree checkUncheckedCdPushdPopd "cd /"
 prop_checkUncheckedPopd13 = verifyTree checkUncheckedCdPushdPopd "cd ../../.../.."
+prop_checkUncheckedCdInFunction1 = verifyNotTree checkUncheckedCdPushdPopd "#!/bin/bash\nfoo() {\n  cd /abc\n}"
 
 checkUncheckedCdPushdPopd params root =
     if hasSetE params then
@@ -3332,6 +3337,7 @@ checkUncheckedCdPushdPopd params root =
         | name `elem` ["cd", "pushd", "popd"]
             && not (isSafeDir t)
             && not (name `elem` ["pushd", "popd"] && ("n" `elem` map snd (getAllFlags t)))
+            && not (isLastCommandInFunction t)
             && not (isCondition $ getPath (parentMap params) t) =
                 warnWithFix (getId t) 2164
                     ("Use '" ++ name ++ " ... || exit' or '" ++ name ++ " ... || return' in case " ++ name ++ " fails.")
@@ -3339,6 +3345,13 @@ checkUncheckedCdPushdPopd params root =
         where name = getName t
     checkElement _ = return ()
     getName t = fromMaybe "" $ getCommandName t
+    isLastCommandInFunction t =
+        go $ NE.tail $ getPath (parentMap params) t
+      where
+        go (child:T_BraceGroup _ commands:T_Function {}:_) =
+            not (null commands) && getId (last commands) == getId child
+        go (_:rest) = go rest
+        go [] = False
     isSafeDir t = case oversimplify t of
           [_, str] -> str `matches` regex
           _ -> False

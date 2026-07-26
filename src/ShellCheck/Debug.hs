@@ -74,7 +74,7 @@ Afterwards, you can run the ShellCheck tool, as if from the shell, with:
 
 -}
 
-module ShellCheck.Debug () where
+module ShellCheck.Debug where
 
 import ShellCheck.Analyzer
 import ShellCheck.AST

@@ -6,7 +6,7 @@ shellcheck - Shell script analysis tool
 
 # SYNOPSIS
 
-**shellcheck** [*OPTIONS*...] *FILES*...
+**shellcheck** [*OPTIONS*...] [--files-from=FILE] *FILES*...
 
 # DESCRIPTION
 
@@ -131,6 +131,13 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 **FILES...**
 
 :   One or more script files to check, or "-" for standard input.
+
+**--files-from** *FILE*
+
+:   Read a list of files to check from *FILE*. Each line should contain one
+    file path. Lines starting with `#` or empty lines are ignored. Use `-` to
+    read the list from standard input. This option is processed in addition to
+    any files specified on the command line.
 
 
 # FORMATS

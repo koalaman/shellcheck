@@ -1,7 +1,7 @@
 name: Build ShellCheck
 
 # Run this workflow every time a new commit pushed to your repository
-on: push
+on: [push, pull_request]
 
 jobs:
   package_source:
@@ -37,7 +37,7 @@ jobs:
           mv dist-newstyle/sdist/*.tar.gz source/source.tar.gz
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: source
           path: source/
@@ -48,10 +48,15 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        ghc: ['8.0', '8.10', '9.0.1', 'latest']
+        ghc: ['8.0', '8.10', '9.0.1', '9.4.7', '9.6.6', 'latest']
+        include:
+          - ghc: 'latest'
+            cabal_flags: '--allow-newer'
+      # If one version fails, we still want the status of the others
+      fail-fast: false
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v8
         with:
           name: source
           path: source/
@@ -69,7 +74,7 @@ jobs:
       - name: Build and run tests
         run: |
           cd source
-          cabal test
+          cabal test ${{ matrix.cabal_flags }}
 
   build_source:
     name: Build
@@ -83,7 +88,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Download artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v8
         with:
           name: source
           path: source/
@@ -95,7 +100,7 @@ jobs:
           ( cd bin && ../builders/run_builder ../source/source.tar.gz ../builders/${{matrix.build}} )
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: ${{matrix.build}}.bin
           path: bin/
@@ -109,7 +114,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Download artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v8
 
       - name: List files for debugging
         run: find .
@@ -127,12 +132,13 @@ jobs:
           rm -rf */ README* LICENSE*
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: deploy
           path: deploy/
 
   deploy:
+    if: github.event_name == 'push'
     name: Deploy binaries
     needs: package_binary
     runs-on: ubuntu-latest
@@ -147,13 +153,13 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Download artifacts (source)
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v8
         with:
           name: source
           path: source/
 
       - name: Download artifacts (binaries)
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v8
         with:
           name: deploy
           path: deploy/

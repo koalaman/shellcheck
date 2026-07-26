@@ -197,6 +197,8 @@ flagsForMapfile = "d:n:O:s:u:C:c:t"
 
 declaringCommands = ["local", "declare", "export", "readonly", "typeset", "let"]
 
+privilegeElevationCommands = ["sudo", "doas", "run0"]
+
 -- Zsh-specific builtins (in addition to POSIX/common ones)
 zshBuiltins = [
     "autoload", "bindkey", "builtin", "bye", "cap", "chdir", "clone",

@@ -120,7 +120,7 @@ collectResult ref cr sys = mapM_ f groups
         let filename = sourceFile (NE.head group)
         result <- siReadFile sys (Just True) filename
         let contents = either (const "") id result
-        let comments' = makeNonVirtual comments contents
+        let comments' = makeNonVirtual (NE.toList group) contents
         deepseq comments' $ modifyIORef ref (\x -> comments' ++ x)
 
 finish ref = do

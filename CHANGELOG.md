@@ -6,6 +6,7 @@
 ### Fixed
 
 ### Removed
+- SC3003: removed since ANSI C string is specified in POSIX.1-2024
 
 
 ## v0.11.0 - 2025-08-03
