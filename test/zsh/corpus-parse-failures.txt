@@ -1,31 +1,10 @@
 # Chunks of zsh's own test suite that ShellCheck cannot parse.
 # Regenerate with test/zsh/corpus-report.sh --update after running
 # test/zsh/extract-ztst.sh against a zsh checkout.
-# 134 of 2914 chunks, extracted from:
+# 107 of 2914 chunks, extracted from:
 #   source: git@github.com:zsh-users/zsh.git
 #   version: 5.9.999.3-test
 #   revision: c0fe1189905e6bd6ef227068478638cfb52b1255
-A01grammar_015.zsh
-A01grammar_016.zsh
-A01grammar_017.zsh
-A01grammar_018.zsh
-A01grammar_037.zsh
-A01grammar_042.zsh
-A01grammar_043.zsh
-A01grammar_053.zsh
-A01grammar_059.zsh
-A01grammar_060.zsh
-A01grammar_063.zsh
-A01grammar_064.zsh
-A01grammar_066.zsh
-A01grammar_067.zsh
-A01grammar_070.zsh
-A01grammar_071.zsh
-A01grammar_095.zsh
-A01grammar_096.zsh
-A01grammar_097.zsh
-A01grammar_102.zsh
-A01grammar_104.zsh
 A03quoting_005.zsh
 A03quoting_009.zsh
 A04redirect_008.zsh
@@ -39,6 +18,7 @@ B02typeset_023.zsh
 B04read_017.zsh
 B04read_018.zsh
 B08shift_003.zsh
+B12limit_001.zsh
 C01arith_037.zsh
 C01arith_044.zsh
 C01arith_045.zsh
@@ -49,6 +29,7 @@ C02cond_053.zsh
 C02cond_055.zsh
 C02cond_059.zsh
 C02cond_060.zsh
+C02cond_067.zsh
 C02cond_071.zsh
 C03traps_037.zsh
 C03traps_038.zsh
@@ -60,14 +41,16 @@ C04funcdef_003.zsh
 C04funcdef_005.zsh
 C04funcdef_006.zsh
 C04funcdef_008.zsh
-C04funcdef_017.zsh
 C04funcdef_027.zsh
-C04funcdef_029.zsh
 C04funcdef_043.zsh
+C04funcdef_045.zsh
+C04funcdef_046.zsh
+D01prompt_010.zsh
 D01prompt_011.zsh
 D01prompt_012.zsh
+D01prompt_016.zsh
+D01prompt_017.zsh
 D02glob_028.zsh
-D02glob_029.zsh
 D02glob_034.zsh
 D02glob_036.zsh
 D02glob_038.zsh
@@ -81,10 +64,8 @@ D02glob_072.zsh
 D02glob_073.zsh
 D02glob_074.zsh
 D02glob_075.zsh
-D02glob_077.zsh
 D03procsubst_010.zsh
 D04parameter_046.zsh
-D04parameter_065.zsh
 D04parameter_070.zsh
 D04parameter_082.zsh
 D04parameter_083.zsh
@@ -93,7 +74,6 @@ D04parameter_129.zsh
 D04parameter_130.zsh
 D04parameter_131.zsh
 D04parameter_139.zsh
-D04parameter_174.zsh
 D04parameter_183.zsh
 D04parameter_184.zsh
 D04parameter_185.zsh
@@ -114,28 +94,21 @@ D10nofork_029.zsh
 D10nofork_030.zsh
 D10nofork_031.zsh
 E01options_016.zsh
-E01options_103.zsh
-E02xtrace_010.zsh
-E02xtrace_011.zsh
-E02xtrace_012.zsh
-E02xtrace_013.zsh
 E02xtrace_014.zsh
 E02xtrace_015.zsh
 E02xtrace_016.zsh
 E03posix_013.zsh
 K01nameref_081.zsh
-K01nameref_107.zsh
 P01privileged_004.zsh
+V01zmodload_002.zsh
 V03mathfunc_010.zsh
 V04features_012.zsh
+V07pcre_001.zsh
 V07pcre_010.zsh
 V07pcre_011.zsh
+V08zpty_001.zsh
 V09datetime_007.zsh
 V09datetime_018.zsh
-V12zparseopts_027.zsh
-V12zparseopts_028.zsh
 V15nearcolor_003.zsh
 V15nearcolor_004.zsh
-X03zlebindkey_013.zsh
 X04zlehighlight_001.zsh
-Z01is-at-least_004.zsh

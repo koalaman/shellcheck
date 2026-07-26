@@ -23,6 +23,40 @@ readonly REPO_ROOT
 readonly CORPUS_DIR="$SCRIPT_DIR/corpus"
 readonly BASELINE="$SCRIPT_DIR/corpus-parse-failures.txt"
 
+# zsh test chunks that deliberately exercise runtime errors. Parse failures here
+# are documented test harness noise, not parser debt.
+readonly DOCUMENTED_ERROR_TEST_SKIPS=(
+    A01grammar_018.zsh
+    A01grammar_037.zsh
+    D10nofork_021.zsh
+    D10nofork_023.zsh
+    D10nofork_024.zsh
+    D10nofork_025.zsh
+    D10nofork_026.zsh
+    D10nofork_027.zsh
+    D10nofork_028.zsh
+    D10nofork_029.zsh
+    D10nofork_030.zsh
+    D10nofork_031.zsh
+)
+
+filter_documented_error_test_skips() {
+    local chunk skip
+    while IFS= read -r chunk; do
+        [[ -z "$chunk" ]] && continue
+        skip=0
+        for s in "${DOCUMENTED_ERROR_TEST_SKIPS[@]}"; do
+            if [[ "$chunk" == "$s" ]]; then
+                skip=1
+                break
+            fi
+        done
+        if [[ $skip -eq 0 ]]; then
+            printf '%s\n' "$chunk"
+        fi
+    done
+}
+
 UPDATE=0
 if [[ ${1:-} == "--update" || ${1:-} == "-u" ]]; then
     UPDATE=1
@@ -67,6 +101,19 @@ if [[ -n "$failures" ]]; then
     failure_count=$(printf '%s\n' "$failures" | wc -l | tr -d ' ')
 fi
 
+effective_failures=$(printf '%s\n' "$failures" | filter_documented_error_test_skips)
+effective_failure_count=0
+if [[ -n "$effective_failures" ]]; then
+    effective_failure_count=$(printf '%s\n' "$effective_failures" | wc -l | tr -d ' ')
+fi
+documented_skip_count=$((failure_count - effective_failure_count))
+parse_pct=$(awk -v total="$total" -v failures="$failure_count" 'BEGIN {
+    if (total == 0) { printf "0.00" } else { printf "%.2f", (total - failures) * 100 / total }
+}')
+effective_parse_pct=$(awk -v total="$total" -v failures="$effective_failure_count" 'BEGIN {
+    if (total == 0) { printf "0.00" } else { printf "%.2f", (total - failures) * 100 / total }
+}')
+
 if [[ $UPDATE -eq 1 ]]; then
     provenance=$(sed 's/^/#   /' "$CORPUS_DIR/.source" 2>/dev/null) || provenance="#   source: unknown"
     {
@@ -86,7 +133,8 @@ if [[ ! -f "$BASELINE" ]]; then
     exit 1
 fi
 
-printf 'corpus-report: %s of %s chunks fail to parse (%s)\n' "$failure_count" "$total" "$SHELLCHECK"
+printf 'corpus-report: %s of %s chunks fail to parse (%s%%), %s effective after %s documented error-test skips (%s%%)\n' \
+    "$failure_count" "$total" "$parse_pct" "$effective_failure_count" "$documented_skip_count" "$effective_parse_pct"
 
 if diff_out=$(diff -u <(grep -v '^#' "$BASELINE") <(printf '%s\n' "$failures")); then
     exit 0

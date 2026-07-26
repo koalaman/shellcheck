@@ -2633,16 +2633,55 @@ prop_readPipeline2 = isWarning readPipeline "!cat /etc/issue | grep -i ubuntu"
 prop_readPipeline3 = isOk readPipeline "for f; do :; done|cat"
 prop_readPipeline4 = isOk readPipeline "! ! true"
 prop_readPipeline5 = isOk readPipeline "true | ! true"
+prop_readPipeline6 = isOk readScript "#!/usr/bin/env zsh\nfn() { : && ! ; : }\n"
+prop_readPipeline7 = isOk readScript "#!/usr/bin/env zsh\necho pipe | ; sed s/x/y/\n"
 readPipeline = do
     unexpecting "keyword/token" readKeyword
     readBanged readPipeSequence
 
-readBanged parser = do
-    pos <- getPosition
-    (T_Bang id) <- g_Bang
-    next <- readBanged parser
-    return $ T_Banged id next
- <|> parser
+readZshNullBangAfterBang = do
+    zsh <- isZshDialect
+    if zsh
+      then option False $ try $ do
+            lookAhead $ do
+                many linewhitespace
+                void $ choice [
+                        void (char ';'),
+                        void linefeed,
+                        void (char ')'),
+                        void (char '}'),
+                        void g_Fi,
+                        void g_Elif,
+                        void g_Else,
+                        void g_Then,
+                        void g_Done,
+                        void g_Esac,
+                        void eof
+                    ]
+            many linewhitespace
+            return True
+      else return False
+
+readBanged parser =
+    try (do
+        (T_Bang bangId) <- g_Bang
+        zsh <- isZshDialect
+        isNull <- readZshNullBangAfterBang
+        when (not isNull && zsh) $
+            void spacing1 <|> do
+                pos <- getPosition
+                parseProblemAt pos ErrorC 1035
+                    "You are missing a required space after the !."
+        if isNull
+          then do
+            start <- startSpan
+            id <- endSpan start
+            let nullCmd = T_SimpleCommand id [] [T_NormalWord id [T_Literal id "!"]]
+            return $ T_Banged bangId (T_Pipeline id [] [nullCmd])
+          else do
+            next <- readBanged parser
+            return $ T_Banged bangId next
+    ) <|> parser
 
 prop_readAndOr = isOk readAndOr "grep -i lol foo || exit 1"
 prop_readAndOr1 = isOk readAndOr "# shellcheck disable=1\nfoo"
@@ -2720,7 +2759,20 @@ readPipe = do
     spacing
     return $ T_Pipe id ('|':qualifier)
 
+readZshEmptyCommand = try $ do
+    zsh <- isZshDialect
+    unless zsh $ fail "not zsh"
+    _ <- try $ lookAhead $ choice [
+            do allspacing >> readSeparatorOp >> return (),
+            do allspacing >> char '|' >> return (),
+            do allspacing >> char ')' >> return ()
+        ]
+    start <- startSpan
+    id <- endSpan start
+    return $ T_SimpleCommand id [] []
+
 readCommand = choice [
+    readZshEmptyCommand,
     readCompoundCommand,
     readConditionCommand,
     readCoProc,
@@ -2756,6 +2808,54 @@ prop_readIfClause3 = isWarning readIfClause "if false; then true; else; echo lol
 prop_readIfClause4 = isWarning readIfClause "if false; then true; else if true; then echo lol; fi; fi"
 prop_readIfClause5 = isOk readIfClause "if false; then true; else\nif true; then echo lol; fi; fi"
 prop_readIfClause6 = isWarning readIfClause "if true\nthen\nDo the thing\nfi"
+prop_readIfClause7 = isOk readScript "#!/usr/bin/env zsh\nif (true) { print true-1 } elif (true) { print true-2 } else { print false }\n"
+prop_readIfClause8 = isOk readScript "#!/usr/bin/env zsh\nif { true } print true\n"
+readZshIfThenLookahead = optional (try (g_Semi >> allspacing)) >> g_Then
+
+readZshIfSingleCommand = do
+    allspacing
+    m <- readAndOr
+    return [m]
+
+readZshIfCondition = choice [
+    try $ do
+        allspacing
+        (T_BraceGroup _ list) <- readBraceGroup
+        return list,
+    readZshIfSingleCommand
+    ]
+
+readZshIfBody = do
+    zsh <- isZshDialect
+    if zsh then readZshIfBody' else readStandardIfBody
+  where
+    readStandardIfBody = do
+        g_Then `orFail` do
+            parseProblem ErrorC 1050 "Expected 'then'."
+            return "Expected 'then'"
+        acceptButWarn g_Semi ErrorC 1051 "Semicolons directly after 'then' are not allowed. Just remove it."
+        allspacing
+        verifyNotEmptyIf "then"
+        readTerm
+    readZshIfBody' = do
+        hasThen <- isFollowedBy readZshIfThenLookahead
+        if hasThen
+          then do
+            optional (try (g_Semi >> allspacing))
+            readStandardIfBody
+          else choice [
+                try $ do
+                    allspacing
+                    lookAhead (char '{')
+                    readBracedLoopBody
+                ,
+                readZshIfSingleCommand
+                ]
+
+readBracedLoopBody = do
+    (T_BraceGroup _ list) <- readBraceGroup
+    return list
+
 readIfClause = called "if expression" $ do
     start <- startSpan
     pos <- getPosition
@@ -2763,10 +2863,12 @@ readIfClause = called "if expression" $ do
     elifs <- many readElifPart
     elses <- option [] readElsePart
 
-    g_Fi `orFail` do
+    zsh <- isZshDialect
+    when (not zsh) $ void $ g_Fi `orFail` do
         parseProblemAt pos ErrorC 1046 "Couldn't find 'fi' for this 'if'."
         parseProblem ErrorC 1047 "Expected 'fi' matching previously mentioned 'if'."
         return "Expected 'fi'"
+    when zsh $ optional g_Fi >> return ()
     id <- endSpan start
 
     return $ T_IfExpression id ((condition, action):elifs) elses
@@ -2781,36 +2883,26 @@ readIfPart = do
     pos <- getPosition
     g_If
     allspacing
-    condition <- readTerm
+    zsh <- isZshDialect
+    condition <- if zsh then readZshIfCondition else readTerm
 
     ifNextToken (g_Fi <|> g_Elif <|> g_Else) $
         parseProblemAt pos ErrorC 1049 "Did you forget the 'then' for this 'if'?"
 
     called "then clause" $ do
-        g_Then `orFail` do
-            parseProblem ErrorC 1050 "Expected 'then'."
-            return "Expected 'then'"
-
-        acceptButWarn g_Semi ErrorC 1051 "Semicolons directly after 'then' are not allowed. Just remove it."
-        allspacing
-        verifyNotEmptyIf "then"
-
-        action <- readTerm
+        action <- readZshIfBody
         return (condition, action)
 
 readElifPart = called "elif clause" $ do
     pos <- getPosition
     g_Elif
     allspacing
-    condition <- readTerm
+    zsh <- isZshDialect
+    condition <- if zsh then readZshIfCondition else readTerm
     ifNextToken (g_Fi <|> g_Elif <|> g_Else) $
         parseProblemAt pos ErrorC 1049 "Did you forget the 'then' for this 'elif'?"
 
-    g_Then
-    acceptButWarn g_Semi ErrorC 1052 "Semicolons directly after 'then' are not allowed. Just remove it."
-    allspacing
-    verifyNotEmptyIf "then"
-    action <- readTerm
+    action <- readZshIfBody
     return (condition, action)
 
 readElsePart = called "else clause" $ do
@@ -2823,7 +2915,19 @@ readElsePart = called "else clause" $ do
     acceptButWarn g_Semi ErrorC 1053 "Semicolons directly after 'else' are not allowed. Just remove it."
     allspacing
     verifyNotEmptyIf "else"
-    readTerm
+    readZshElseBody
+
+readZshElseBody = do
+    zsh <- isZshDialect
+    if zsh then readZshElseBody' else readTerm
+  where
+    readZshElseBody' = choice [
+        try $ do
+            lookAhead $ char '{'
+            readBracedLoopBody
+        ,
+        readTerm
+        ]
 
 ifNextToken parser action =
     optional $ do
@@ -2892,7 +2996,7 @@ readWhileClause = called "while loop" $ do
     start <- startSpan
     kwId <- getId <$> g_While
     condition <- readTerm
-    statements <- readDoGroup kwId
+    statements <- readBracedLoopBody <|> readDoGroup kwId
     id <- endSpan start
     return $ T_WhileExpression id condition statements
 
@@ -2901,7 +3005,7 @@ readUntilClause = called "until loop" $ do
     start <- startSpan
     kwId <- getId <$> g_Until
     condition <- readTerm
-    statements <- readDoGroup kwId
+    statements <- readBracedLoopBody <|> readDoGroup kwId
     id <- endSpan start
     return $ T_UntilExpression id condition statements
 
@@ -2948,6 +3052,8 @@ prop_readForClause12 = isWarning readForClause "for $a in *; do echo \"$a\"; don
 prop_readForClause13 = isOk readForClause "for foo\nin\\\n  bar\\\n  baz\ndo true; done"
 prop_readForClause14 = isOk readForClause "for i (a b c) echo $i"  -- zsh short form
 prop_readForClause15 = isOk readScript "#!/usr/bin/env zsh\nfor 1 in a b; do print $1; done"  -- zsh numeric name
+prop_readForClause16 = isOk readScript "#!/usr/bin/env zsh\nfor keyvar valvar in k1 v1 k2 v2; do print $keyvar $valvar; done\n"
+prop_readForClause17 = isOk readScript "#!/usr/bin/env zsh\nfor name in alpha beta gamma; print $name\n"
 readForClause = called "for loop" $ do
     pos <- getPosition
     (T_For id) <- g_For
@@ -2979,7 +3085,7 @@ readForClause = called "for loop" $ do
         readArithmeticDelimiter ')' "Missing second ')' to terminate 'for ((;;))' loop condition"
         spacing
         optional $ readSequentialSep >> spacing
-        group <- readBraced <|> readDoGroup id
+        group <- readBraced <|> readShortForBody <|> readDoGroup id
         return $ T_ForArithmetic id x y z group
 
     -- For c='(' read "((" and be lenient about spaces
@@ -2998,14 +3104,26 @@ readForClause = called "for loop" $ do
         (T_BraceGroup _ list) <- readBraceGroup
         return list
 
+    readShortForBody = try $ do
+        notFollowedBy2 g_Do
+        allspacing
+        readCompoundList
+
     readRegular id = do
         acceptButWarn (char '$') ErrorC 1086
             "Don't use $ on the iterator name in for loops."
         zsh <- isZshDialect
-        name <- (if zsh then readZshLoopVariableName else readVariableName)
-            `thenSkip` allspacing
+        names <- if zsh
+            then do
+                first <- readZshLoopVariableName `thenSkip` spacing
+                rest <- many $ try $ do
+                    notFollowedBy2 g_In
+                    readZshLoopVariableName `thenSkip` spacing
+                return (first:rest)
+            else (:[]) <$> readVariableName `thenSkip` allspacing
+        let name = unwords names
         values <- readInClause <|> (optional readSequentialSep >> return [])
-        group <- readBraced <|> readDoGroup id
+        group <- readBraced <|> readShortForBody <|> readDoGroup id
         return $ T_ForIn id name values group
 
 prop_readForEachClause1 = isOk readScript "#!/usr/bin/env zsh\nforeach f (a b c)\nprint $f\nend\n"
@@ -3075,32 +3193,108 @@ prop_readCaseClause3 = isOk readCaseClause "case foo\n in * ) echo bar & ;; esac
 prop_readCaseClause4 = isOk readCaseClause "case foo\n in *) echo bar ;& bar) foo; esac"
 prop_readCaseClause5 = isOk readCaseClause "case foo\n in *) echo bar;;& foo) baz;; esac"
 prop_readCaseClause6 = isOk readCaseClause "case foo\n in if) :;; done) :;; esac"
+prop_readCaseClause7 = isOk readScript "#!/usr/bin/env zsh\ncase bravo { (alpha) print a ;; }\n"
+prop_readCaseClause8 = isOk readScript "#!/usr/bin/env zsh\ncase x in (a) echo ;; (b) echo ;| (c) echo ;; esac\n"
+prop_readCaseClause9 = isOk readScript "#!/usr/bin/env zsh\ncase g in ( no | (grumph) ) print ok ;; esac\n"
 readCaseClause = called "case expression" $ do
     start <- startSpan
     g_Case
     word <- readNormalWord
     allspacing
-    g_In <|> fail "Expected 'in'"
-    readLineBreak
-    list <- readCaseList
-    g_Esac <|> fail "Expected 'esac' to close the case statement"
+    zsh <- isZshDialect
+    list <- if zsh
+      then choice [
+            do
+                g_In
+                readLineBreak
+                readCaseList,
+            do
+                char '{'
+                readLineBreak
+                readCaseList <* (char '}' <|> fail "Expected '}' to close the case statement")
+           ]
+      else do
+        g_In <|> fail "Expected 'in'"
+        readLineBreak
+        readCaseList
+    unless zsh $ void g_Esac <|> fail "Expected 'esac' to close the case statement"
+    when zsh $ optional $ try $ g_Esac
     id <- endSpan start
     return $ T_CaseExpression id word list
 
 readCaseList = many readCaseItem
+
+readZshCasePatternString depth = do
+    atEnd <- lookAhead $ if depth == 0
+        then (try (void linefeed) >> return True) <|> (try (void g_Rparen) >> return True) <|> return False
+        else (try (void (char ')')) >> return True) <|> return False
+    if atEnd
+      then return ""
+      else do
+        c <- anyChar
+        if c == '('
+          then do
+            inner <- readZshCasePatternString (depth + 1)
+            void (char ')')
+            rest <- readZshCasePatternString depth
+            return $ '(' : inner ++ ")" ++ rest
+          else do
+            rest <- readZshCasePatternString depth
+            return (c:rest)
+
+readZshCasePatternLine = do
+    start <- startSpan
+    str <- manyTill anyChar (lookAhead linefeed)
+    id <- endSpan start
+    return str
+
+readZshCaseBashStylePattern = do
+    start <- startSpan
+    str <- manyTill anyChar (lookAhead g_Rparen)
+    guard (not (null str))
+    void g_Rparen
+    id <- endSpan start
+    return str
+
+readZshCaseWrappedPattern = do
+    char '('
+    inner <- readZshCasePatternString 1
+    char ')'
+    allspacing
+    notFollowedBy2 (char '(')
+    notFollowedBy2 linefeed
+    return $ '(' : inner ++ ")"
+
+readZshCaseItemPattern = do
+    spacing
+    str <- choice [
+            try $ lookAhead (char '(') >> readZshCaseWrappedPattern,
+            try $ notFollowedBy2 (char '(') >> readZshCaseBashStylePattern,
+            readZshCasePatternLine
+        ]
+    optional $ try g_Rparen
+    start <- startSpan
+    id <- endSpan start
+    return [T_NormalWord id [T_Literal id str]]
 
 readCaseItem = called "case item" $ do
     notFollowedBy2 g_Esac
     optional $ do
         try . lookAhead $ readAnnotationPrefix
         parseProblem ErrorC 1124 "ShellCheck directives are only valid in front of complete commands like 'case' statements, not individual case branches."
-    optional g_Lparen
-    spacing
-    pattern' <- readPattern
-    void g_Rparen <|> do
-        parseProblem ErrorC 1085
-            "Did you forget to move the ;; after extending this case item?"
-        fail "Expected ) to open a new case item"
+    zsh <- isZshDialect
+    when zsh $ notFollowedBy2 (char '}')
+    pattern' <- if zsh
+        then readZshCaseItemPattern
+        else do
+            optional g_Lparen
+            spacing
+            p <- readPattern
+            void g_Rparen <|> do
+                parseProblem ErrorC 1085
+                    "Did you forget to move the ;; after extending this case item?"
+                fail "Expected ) to open a new case item"
+            return p
     readLineBreak
     list <- (lookAhead readCaseSeparator >> return []) <|> readCompoundList
     separator <- readCaseSeparator `attempting` do
@@ -3112,6 +3306,7 @@ readCaseItem = called "case item" $ do
     return (separator, pattern', list)
 
 readCaseSeparator = choice [
+    tryToken ";|" (const ()) >> return CaseFallThrough,
     tryToken ";;&" (const ()) >> return CaseContinue,
     tryToken ";&" (const ()) >> return CaseFallThrough,
     g_DSEMI >> return CaseBreak,
@@ -3132,6 +3327,7 @@ prop_readFunctionDefinition12 = isOk readFunctionDefinition "function []!() { tr
 prop_readFunctionDefinition13 = isOk readFunctionDefinition "@require(){ true; }"
 prop_readFunctionDefinition14 = isOk readFunctionDefinition "foo#bar(){ :; }"
 prop_readFunctionDefinition15 = isNotOk readFunctionDefinition "#bar(){ :; }"
+prop_readFunctionDefinition16 = isOk readScript "#!/usr/bin/env zsh\nfunction name1 name2 () { print $0; }\n"
 
 -- Zsh anonymous functions. Both spellings from zsh Doc/Zsh/func.yo apply:
 -- a '()' with no preceding name, or 'function' with an immediately following
@@ -3178,12 +3374,19 @@ readFunctionDefinition = called "function" $ do
     readFunctionSignature =
         readWithFunction <|> readWithoutFunction
       where
+        readFunctionNameWord = do
+            f <- extendedFunctionStartChars
+            r <- many extendedFunctionChars
+            return (f:r)
+
         readWithFunction = do
             try $ do
                 string "function"
                 whitespace
             spacing
-            name <- (:) <$> extendedFunctionStartChars <*> many extendedFunctionChars
+            first <- readFunctionNameWord
+            rest <- many (try (spacing1 >> readFunctionNameWord))
+            let name = unwords (first:rest)
             spaces <- spacing
             hasParens <- wasIncluded readParens
             when (not hasParens && null spaces) $
@@ -3603,7 +3806,8 @@ g_Bang = do
     start <- startSpan
     char '!'
     id <- endSpan start
-    void spacing1 <|> do
+    zsh <- isZshDialect
+    unless zsh $ void spacing1 <|> do
         pos <- getPosition
         parseProblemAt pos ErrorC 1035
             "You are missing a required space after the !."
