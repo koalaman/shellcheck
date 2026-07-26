@@ -1116,6 +1116,10 @@ prop_readNormalWord9 = isOk readSubshell "(foo\\ ;\nbar)"
 prop_readNormalWord10 = isWarning readNormalWord "\x201Chello\x201D"
 prop_readNormalWord11 = isWarning readNormalWord "\x2018hello\x2019"
 prop_readNormalWord12 = isWarning readNormalWord "hello\x2018"
+prop_readNormalWord13 = isOk readNormalWord "*.txt(.)"
+prop_readNormalWord14 = isOk readNormalWord "*.log(.om)"
+prop_readNormalWord15 = isOk readNormalWord "*.sh(.-^Lk+0)"
+prop_readNormalWord16 = isOk readNormalWord "*(.)"
 readNormalWord = readNormalishWord "" ["do", "done", "then", "fi", "esac"]
 
 readPatternWord = readNormalishWord "" ["esac"]
@@ -1123,10 +1127,35 @@ readPatternWord = readNormalishWord "" ["esac"]
 readNormalishWord end terms = do
     start <- startSpan
     pos <- getPosition
-    x <- many1 (readNormalWordPart end)
+    first <- readNormalWordPart end
+    x <- readRemainingParts [first]
     id <- endSpan start
     checkPossibleTermination pos x terms
     return $ T_NormalWord id x
+  where
+    -- Zsh allows glob qualifiers after an arbitrary pattern, as in *.txt(.).
+    -- They are consumed here rather than in readNormalWordPart so that the
+    -- '(' never reaches that function's bash-oriented SC1036 report. The bare
+    -- *(...) form is deliberately left to readExtglob, since bash reads it as
+    -- an extglob and warning about it would be a false positive.
+    readRemainingParts acc = do
+        qualifier <-
+            if any isGlobbyPart acc
+            then optionMaybe readZshGlobQualifierPart
+            else return Nothing
+        case qualifier of
+            Just qual -> readRemainingParts (qual:acc)
+            Nothing -> do
+                next <- optionMaybe (readNormalWordPart end)
+                case next of
+                    Just part -> readRemainingParts (part:acc)
+                    Nothing -> return $ reverse acc
+
+    isGlobbyPart t =
+        case t of
+            T_Glob {} -> True
+            T_Extglob {} -> True
+            _ -> False
 
 readIndexSpan = do
     start <- startSpan
@@ -1422,16 +1451,21 @@ prop_readGlob7 = isOk readGlob "[^[]"
 prop_readGlob8 = isOk readGlob "[*?]"
 prop_readGlob9 = isOk readGlob "[!]^]"
 prop_readGlob10 = isOk readGlob "[]]"
-prop_readGlob11 = isOk readGlob "*(.)"      -- zsh glob qualifier
-prop_readGlob12 = isOk readGlob "*(om[1,3])" -- zsh glob qualifier
+prop_readGlob11 = isOk readGlob "*(.)"       -- bash extglob, and a zsh glob qualifier
+prop_readGlob12 = isOk readGlob "*(om[1,3])"
 
 readZshGlobQualifier :: Monad m => SCParser m [GlobQual]
 readZshGlobQualifier = do
     char '('
-    quals <- many readQual
+    quals <- many1 readQual
     char ')'
     return quals
   where
+    -- Whitespace and nested parens are excluded so that ordinary shell
+    -- constructs such as (a b c) are never mistaken for a qualifier list.
+    isQualifierChar c = c `notElem` "()" && not (isSpace c)
+    qualifierChar = satisfy isQualifierChar
+
     readQual = choice [
         -- File type qualifiers
         char '.' >> return GlobQual_Regular,
@@ -1455,13 +1489,13 @@ readZshGlobQualifier = do
         try (char 'O' >> return GlobQual_SortDesc),
         
         -- Time qualifiers
-        try (char 'a' >> many1 (noneOf "()") >>= \s -> return (GlobQual_Access s)),
-        try (char 'm' >> many1 (noneOf "()") >>= \s -> return (GlobQual_Modify s)),
-        try (char 'c' >> many1 (noneOf "()") >>= \s -> return (GlobQual_Change s)),
-        try (char 'B' >> many1 (noneOf "()") >>= \s -> return (GlobQual_Birth s)),
+        try (char 'a' >> many1 qualifierChar >>= \s -> return (GlobQual_Access s)),
+        try (char 'm' >> many1 qualifierChar >>= \s -> return (GlobQual_Modify s)),
+        try (char 'c' >> many1 qualifierChar >>= \s -> return (GlobQual_Change s)),
+        try (char 'B' >> many1 qualifierChar >>= \s -> return (GlobQual_Birth s)),
         
         -- Size qualifiers
-        try (char 'L' >> many1 (noneOf "()") >>= \s -> return (GlobQual_Size s)),
+        try (char 'L' >> many1 qualifierChar >>= \s -> return (GlobQual_Size s)),
         
         -- Limit qualifiers
         try (char '[' >> many1 (noneOf "]") >>= \s -> char ']' >> return (GlobQual_Limit s)),
@@ -1470,17 +1504,23 @@ readZshGlobQualifier = do
         char '^' >> return GlobQual_Negate,
         
         -- Catch-all for other qualifiers
-        anyChar >>= \c -> return (GlobQual_Other [c])
+        qualifierChar >>= \c -> return (GlobQual_Other [c])
       ]
 
-readGlob = readExtglob <|> readSimpleWithQualifier <|> readSimple <|> readClass <|> readGlobbyLiteral
+prop_readZshGlobQualifierPart1 = isOk readZshGlobQualifierPart "(.)"
+prop_readZshGlobQualifierPart2 = isOk readZshGlobQualifierPart "(.om)"
+prop_readZshGlobQualifierPart3 = isOk readZshGlobQualifierPart "(om[1,3])"
+prop_readZshGlobQualifierPart4 = isNotOk readZshGlobQualifierPart "()"
+prop_readZshGlobQualifierPart5 = isNotOk readZshGlobQualifierPart "(a b c)"
+readZshGlobQualifierPart :: Monad m => SCParser m Token
+readZshGlobQualifierPart = try $ do
+    start <- startSpan
+    quals <- readZshGlobQualifier
+    id <- endSpan start
+    return $ T_GlobQualifier id quals
+
+readGlob = readExtglob <|> readSimple <|> readClass <|> readGlobbyLiteral
     where
-        readSimpleWithQualifier = try $ do
-            start <- startSpan
-            c <- oneOf "*?"
-            quals <- readZshGlobQualifier
-            id <- endSpan start
-            return $ T_GlobQualifier id quals
         readSimple = do
             start <- startSpan
             c <- oneOf "*?"
@@ -3475,6 +3515,10 @@ prop_readScript_zsh3 = isOk readScript "#!/usr/bin/env zsh\n() { echo hi; }\n"
 prop_readScript_zsh4 = isOk readScript "#!/usr/bin/env zsh\nfor i (a b c) echo $i\n"
 prop_readScript_zsh5 = isOk readScript "#!/usr/bin/env zsh\necho ${(o)array}\n"
 prop_readScript_zsh6 = isOk readScript "#!/usr/bin/env zsh\nls *(om[1,3])\n"
+prop_readScript_zsh7 = isOk readScript "#!/usr/bin/env zsh\nls *.txt(.)\n"
+prop_readScript_zsh8 = isOk readScript "#!/usr/bin/env zsh\nfor f in *.log(.om); do echo $f; done\n"
+prop_readScript_zsh9 = isOk readScript "#!/bin/bash\narr=(abc)\necho ${arr[0]}\n"
+prop_readScript_zsh10 = isOk readScript "#!/bin/bash\nshopt -s extglob\nls *(a b)\n"
 readScriptFile sourced = do
     start <- startSpan
     pos <- getPosition

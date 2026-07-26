@@ -5323,15 +5323,19 @@ checkZshParamFlags params t =
                 err id 2400 "Zsh parameter expansion flags ${(...)...} are only supported in zsh scripts."
         _ -> return ()
 
--- Check for zsh glob qualifiers: *(.)
-prop_checkZshGlobQualifiers1 = verify checkZshGlobQualifiers "#!/bin/bash\nls *(.)"
-prop_checkZshGlobQualifiers2 = verifyNot checkZshGlobQualifiers "#!/usr/bin/env zsh\nls *(.)"
-prop_checkZshGlobQualifiers3 = verifyNot checkZshGlobQualifiers "# shellcheck shell=zsh\nls *(.)"
+-- Check for zsh glob qualifiers attached to a pattern, as in *.txt(.).
+-- The bare *(...) spelling is a valid bash extglob, so the parser reports it
+-- as T_Extglob and this check never sees it.
+prop_checkZshGlobQualifiers1 = verify checkZshGlobQualifiers "#!/bin/bash\nls *.txt(.)"
+prop_checkZshGlobQualifiers2 = verifyNot checkZshGlobQualifiers "#!/usr/bin/env zsh\nls *.txt(.)"
+prop_checkZshGlobQualifiers3 = verifyNot checkZshGlobQualifiers "# shellcheck shell=zsh\nls *.txt(.)"
+prop_checkZshGlobQualifiers4 = verifyNot checkZshGlobQualifiers "#!/bin/bash\nshopt -s extglob\nls *(.)"
+prop_checkZshGlobQualifiers5 = verify checkZshGlobQualifiers "#!/bin/sh\nls *.log(.om)"
 checkZshGlobQualifiers params t =
     case t of
         T_GlobQualifier id quals ->
             when (shellType params /= Zsh) $
-                err id 2401 "Zsh glob qualifiers like *(...) are only supported in zsh scripts."
+                err id 2401 "Zsh glob qualifiers like *.txt(.) are only supported in zsh scripts."
         _ -> return ()
 
 -- Check for zsh anonymous functions: () { body } args
@@ -5509,11 +5513,11 @@ checkZshSetopt params t@(T_SimpleCommand id _ _) = do
 checkZshSetopt _ _ = return ()
 
 -- Check for ZSH typeset -A (associative arrays)
-prop_checkZshAssocArray1 = verify checkZshAssocArray "#!/bin/bash\ntypeset -A hash"
+prop_checkZshAssocArray1 = verify checkZshAssocArray "#!/bin/sh\ntypeset -A hash"
 prop_checkZshAssocArray2 = verifyNot checkZshAssocArray "#!/bin/bash\ndeclare -A hash"
 prop_checkZshAssocArray3 = verifyNot checkZshAssocArray "#!/usr/bin/env zsh\ntypeset -A hash"
 checkZshAssocArray params t@(T_SimpleCommand id _ (_:args)) = do
-    when (shellType params /= Zsh && t `isCommand` "typeset") $ do
+    when (shellType params /= Zsh && shellType params /= Bash && t `isCommand` "typeset") $ do
         let argStrs = map onlyLiteralString args
         when ("-A" `elem` argStrs) $
             warn id 2419 "Associative arrays (typeset -A) require bash 4+ or zsh."

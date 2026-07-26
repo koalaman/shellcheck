@@ -58,6 +58,7 @@ willSplit x =
     T_BraceExpansion {} -> True
     T_Glob {} -> True
     T_Extglob {} -> True
+    T_GlobQualifier {} -> True
     T_DoubleQuoted _ l -> any willBecomeMultipleArgs l
     T_NormalWord _ l -> any willSplit l
     _ -> False
@@ -65,6 +66,7 @@ willSplit x =
 isGlob t = case t of
     T_Extglob {} -> True
     T_Glob {} -> True
+    T_GlobQualifier {} -> True
     T_NormalWord _ l -> any isGlob l || hasSplitRange l
     _ -> False
   where
@@ -305,6 +307,7 @@ willBecomeMultipleArgs t = willConcatInAssignment t || f t
   where
     f T_Extglob {} = True
     f T_Glob {} = True
+    f T_GlobQualifier {} = True
     f T_BraceExpansion {} = True
     f (T_NormalWord _ parts) = any f parts
     f _ = False
