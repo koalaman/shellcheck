@@ -3850,9 +3850,19 @@ checkPipeToNowhere params t =
             _ | name `elem` interactiveFlagCmds -> hasInteractiveFlag cmd
             _ -> False
 
+    {-
+       zsh's MULTIOS is on by default and makes repeated redirections tee to
+       every target instead of competing (zsh manual, Redirection), so this is
+       only a mistake once the option is off.
+    -}
+    hasMultios =
+        shellType params == Zsh
+        && not (hasZshOption "no_multios" (zshOptions params))
+
     warnAboutDupes (n, list@(_:_:_)) =
-        forM_ list $ \c -> err (getOpId c) 2261 $
-            "Multiple redirections compete for " ++ str n ++ ". Use cat, tee, or pass filenames instead."
+        unless hasMultios $
+            forM_ list $ \c -> err (getOpId c) 2261 $
+                "Multiple redirections compete for " ++ str n ++ ". Use cat, tee, or pass filenames instead."
     warnAboutDupes _ = return ()
 
     alternative =

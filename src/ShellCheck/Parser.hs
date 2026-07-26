@@ -1264,10 +1264,17 @@ readParamSubSpecialChar = do
 prop_readProcSub1 = isOk readProcSub "<(echo test | wc -l)"
 prop_readProcSub2 = isOk readProcSub "<(  if true; then true; fi )"
 prop_readProcSub3 = isOk readProcSub "<( # nothing here \n)"
+prop_readProcSub4 = isOk readScript "#!/usr/bin/env zsh\ndiff =(echo a) =(echo b)\n"
+prop_readProcSub5 = isNotOk readScript "#!/bin/bash\ndiff =(echo a) =(echo b)\n"
 readProcSub = called "process substitution" $ do
     start <- startSpan
+    zsh <- isZshDialect
+    -- zsh also has =(...), which writes the output to a temp file rather than
+    -- a fifo so that the command can seek in it (zsh manual, Process
+    -- Substitution).
+    let directions = if zsh then "<>=" else "<>"
     dir <- try $ do
-                    x <- oneOf "<>"
+                    x <- oneOf directions
                     char '('
                     return [x]
     list <- readCompoundListOrEmpty
@@ -1926,11 +1933,15 @@ readDollarVariable = do
     let special = singleCharred specialVariable
 
     let regular = do
-        value <- wrapString readVariableName
+        zsh <- isZshDialect
+        value <- wrapString (if zsh then readZshSubscriptedName else readVariableName)
         id <- endSpan start
-        return (T_DollarBraced id False value) `attempting` do
-            lookAhead $ char '['
-            parseNoteAt pos ErrorC 1087 "Use braces when expanding arrays, e.g. ${array[idx]} (or ${var}[.. to quiet)."
+        let expansion = T_DollarBraced id False value
+        if zsh
+            then return expansion
+            else return expansion `attempting` do
+                lookAhead $ char '['
+                parseNoteAt pos ErrorC 1087 "Use braces when expanding arrays, e.g. ${array[idx]} (or ${var}[.. to quiet)."
 
     try $ char '$' >> (positional <|> special <|> regular)
 
@@ -1947,6 +1958,24 @@ readVariableName = do
     f <- variableStart
     rest <- many variableChars
     return (f:rest)
+
+{-
+   zsh subscripts a bare expansion, so $arr[2] means the same as ${arr[2]}
+   (zsh manual, Array Subscripts). Reading the subscript into the name keeps
+   SC1087 quiet and lets the subscript checks see it.
+-}
+readZshSubscriptedName = do
+    name <- readVariableName
+    subscript <- option "" readZshSubscript
+    return $ name ++ subscript
+
+readZshSubscript = try $ do
+    char '['
+    content <- concat <$> many part
+    char ']'
+    return $ "[" ++ content ++ "]"
+  where
+    part = ((:[]) <$> noneOf "[]") <|> readZshSubscript
 
 
 prop_readDollarLonely1 = isWarning readNormalWord "\"$\"var"
@@ -2849,6 +2878,37 @@ readForClause = called "for loop" $ do
         group <- readBraced <|> readDoGroup id
         return $ T_ForIn id name values group
 
+prop_readForEachClause1 = isOk readScript "#!/usr/bin/env zsh\nforeach f (a b c)\nprint $f\nend\n"
+prop_readForEachClause2 = isOk readScript "#!/usr/bin/env zsh\nforeach f (a b); print $f; end\n"
+prop_readForEachClause3 = isNotOk readScript "#!/bin/bash\nforeach f (a b c)\nprint $f\nend\n"
+{-
+   zsh keeps the csh style 'foreach name (words) list end' loop, and both
+   foreach and end are reserved words there (zsh manual, Complex Commands).
+   It behaves like for..in, so it reuses T_ForIn.
+-}
+readForEachClause = called "zsh foreach loop" $ do
+    start <- startSpan
+    try $ do
+        zsh <- isZshDialect
+        unless zsh $ fail "not zsh"
+        void $ string "foreach"
+        void whitespace
+    spacing
+    name <- readVariableName `thenSkip` spacing
+    g_Lparen
+    spacing
+    values <- many (readCmdWord `thenSkip` spacing)
+    g_Rparen
+    allspacing
+    optional (g_Semi >> allspacing)
+    body <- readCompoundListOrEmpty
+    allspacing
+    g_ZshEnd `orFail` do
+        parseProblem ErrorC 1061 "Couldn't find 'end' for this 'foreach'."
+        return "Expected 'end'"
+    id <- endSpan start
+    return $ T_ForIn id name values body
+
 prop_readSelectClause1 = isOk readSelectClause "select foo in *; do echo $foo; done"
 prop_readSelectClause2 = isOk readSelectClause "select foo; do echo $foo; done"
 readSelectClause = called "select loop" $ do
@@ -3122,6 +3182,7 @@ readCompoundCommand = do
         readUntilClause,
         readIfClause,
         readForClause,
+        readForEachClause,
         readSelectClause,
         readCaseClause,
         readBatsTest,
@@ -3391,6 +3452,12 @@ g_Esac = tryWordToken "esac" T_Esac
 g_While = tryWordToken "while" T_While
 g_Until = tryWordToken "until" T_Until
 g_For = tryWordToken "for" T_For
+-- zsh's 'end' closes a foreach loop and is reserved there, so it is only a
+-- keyword in zsh scripts.
+g_ZshEnd = do
+    zsh <- isZshDialect
+    unless zsh $ fail "not zsh"
+    tryWordToken "end" T_Done
 g_Select = tryWordToken "select" T_Select
 g_In = tryWordToken "in" T_In <* skipAnnotationAndWarn
 g_Lbrace = tryWordToken "{" T_Lbrace
@@ -3419,7 +3486,7 @@ g_Semi = do
 keywordSeparator =
     eof <|> void (try allspacingOrFail) <|> void (oneOf ";()[<>&|")
 
-readKeyword = choice [ g_Then, g_Else, g_Elif, g_Fi, g_Do, g_Done, g_Esac, g_Rbrace, g_Rparen, g_DSEMI ]
+readKeyword = choice [ g_Then, g_Else, g_Elif, g_Fi, g_Do, g_Done, g_ZshEnd, g_Esac, g_Rbrace, g_Rparen, g_DSEMI ]
 
 ifParse p t f =
     (lookAhead (try p) >> t) <|> f
