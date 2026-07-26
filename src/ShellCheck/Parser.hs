@@ -567,7 +567,7 @@ readConditionContents single =
 
     readCondWord = do
         notFollowedBy2 (try (spacing >> string "]"))
-        x <- readNormalWord
+        x <- if not single then readZshCondWord else readNormalWord
         pos <- getPosition
         when (notArrayIndex x && endedWith "]" x && not (x `containsLiteral` "[")) $ do
             parseProblemAt pos ErrorC 1020 $
@@ -974,6 +974,9 @@ prop_readCondition26 = isOk readScript "[[ foo ]]\\\n && bar"
 prop_readCondition27 = not $ isOk readConditionCommand "[[ x ]] foo"
 prop_readCondition28 = isOk readCondition "[[ x = [\"$1\"] ]]"
 prop_readCondition29 = isOk readCondition "[[ x = [*] ]]"
+prop_readCondition30 = isOk readCondition "[[ foo = (#c0)foo ]]"
+prop_readCondition31 = isOk readCondition "[[ a(#q.) == a ]]"
+prop_readCondition32 = isOk readCondition "[[ z == *(#q.) ]]"
 
 readCondition = called "test expression" $ do
     opos <- getPosition
@@ -1557,6 +1560,74 @@ readZshGlobQualifierPart = try $ do
     quals <- readZshGlobQualifier
     id <- endSpan start
     return $ T_GlobQualifier id quals
+
+{-
+   zsh extended glob prefixes like (#c0) and (#q.) appear inside [[ ]]
+   patterns (zsh Doc/Zsh/expn.yo, Approximate Globbing). They are not
+   grouping parentheses, so condition words need a dedicated lexer path.
+-}
+readZshExtendedGlobQualifierPart = try $ do
+    start <- startSpan
+    string "(#"
+    body <- many (noneOf ")")
+    char ')'
+    id <- endSpan start
+    return $ T_Literal id ("(#" ++ body ++ ")")
+
+readZshCondWord = do
+    start <- startSpan
+    first <- readZshCondWordPart ""
+    parts <- readZshCondRemainingParts [first]
+    id <- endSpan start
+    return $ T_NormalWord id parts
+  where
+    readZshCondRemainingParts acc = do
+        qualifier <-
+            if any isGlobbyPart acc
+            then optionMaybe readZshGlobQualifierPart
+            else return Nothing
+        extglob <- optionMaybe readZshExtendedGlobQualifierPart
+        case (qualifier, extglob) of
+            (Just qual, _) -> readZshCondRemainingParts (qual : acc)
+            (_, Just ext) -> readZshCondRemainingParts (ext : acc)
+            (Nothing, Nothing) -> do
+                next <- optionMaybe (readZshCondWordPart "")
+                case next of
+                    Just part -> readZshCondRemainingParts (part : acc)
+                    Nothing -> return $ reverse acc
+
+    isGlobbyPart t =
+        case t of
+            T_Glob {} -> True
+            T_Extglob {} -> True
+            _ -> False
+
+readZshCondWordPart end = choice [
+    readZshExtendedGlobQualifierPart,
+    readSingleQuoted,
+    readDoubleQuoted,
+    readGlob,
+    readNormalDollar,
+    readBraced,
+    readUnquotedBackTicked,
+    readProcSub,
+    readUnicodeQuote,
+    readNormalLiteral end,
+    readLiteralCurlyBraces
+  ]
+  where
+    readLiteralCurlyBraces = do
+        start <- startSpan
+        str <- findParam <|> literalBraces
+        id <- endSpan start
+        return $ T_Literal id str
+    findParam = try $ string "{}"
+    literalBraces = do
+        pos <- getPosition
+        c <- oneOf "{}"
+        parseProblemAt pos WarningC 1083 $
+            "This " ++ [c] ++ " is literal. Check expression (missing ;/\n?) or quote it."
+        return [c]
 
 readGlob = readExtglob <|> readSimple <|> readClass <|> readGlobbyLiteral
     where
