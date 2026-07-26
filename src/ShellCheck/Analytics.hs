@@ -213,13 +213,10 @@ nodeChecks = [
     ,checkZshAnonFunction
     ,checkZshForShort
     ,checkZshArrayIndex
-    ,checkZshTestCompat
+    ,checkZshRematch
     ,checkZshExtGlob
     ,checkZshAlways
     ,checkZshSelect
-    ,checkZshBraceExpansion
-    ,checkZshGlobExclude
-    ,checkZshApproxMatch
     ,checkZshNullCommand
     ,checkZshCoprocess
     ,checkZshDirStack
@@ -229,8 +226,6 @@ nodeChecks = [
     ,checkZshSetopt
     ,checkZshAssocArray
     ,checkZshSubscriptFlags
-    ,checkZshPowerOperator
-    ,checkZshMathCommand
     ]
 
 optionalChecks = map fst optionalTreeChecks
@@ -3538,11 +3533,14 @@ prop_checkRedirectedNowhere5 = verifyNot checkRedirectedNowhere "foo | grep bar 
 prop_checkRedirectedNowhere6 = verifyNot checkRedirectedNowhere "var=$(value) 2> /dev/null"
 prop_checkRedirectedNowhere7 = verifyNot checkRedirectedNowhere "var=$(< file)"
 prop_checkRedirectedNowhere8 = verifyNot checkRedirectedNowhere "var=`< file`"
+prop_checkRedirectedNowhere9 = verifyNot checkRedirectedNowhere "#!/usr/bin/env zsh\n> file"
 checkRedirectedNowhere params token =
     case token of
         T_Pipeline _ _ [single] -> sequence_ $ do
             redir <- getDanglingRedirect single
             guard . not $ isInExpansion token
+            -- In zsh this runs $NULLCMD instead of nothing, which SC2412 covers.
+            guard $ shellType params /= Zsh
             return $ warn (getId redir) 2188 "This redirection doesn't have a command. Move to its command (or use 'true' as no-op)."
 
         T_Pipeline _ _ list -> forM_ list $ \x -> sequence_ $ do
@@ -5407,13 +5405,22 @@ checkZshArrayIndex params (T_DollarBraced id _ word) =
     str = concat $ oversimplify word
 checkZshArrayIndex _ _ = return ()
 
--- Check for bash-style [[ ]] test with ZSH-incompatible operators
-prop_checkZshTestCompat1 = verify checkZshTestCompat "#!/usr/bin/env zsh\n[[ $var =~ regex ]]"
-prop_checkZshTestCompat2 = verifyNot checkZshTestCompat "#!/bin/bash\n[[ $var =~ regex ]]"
-checkZshTestCompat params (TC_Binary id typ op lhs rhs) = do
-    when (shellType params == Zsh && op == "=~") $
-        warn id 2405 "In zsh, use [[ $var == pattern ]] or =~ in a condition. The =~ operator works differently than in bash."
-checkZshTestCompat _ _ = return ()
+{-
+   zsh supports =~ but reports the result in $MATCH, $MATCH_END and the
+   $match array rather than in BASH_REMATCH (zsh manual, Conditional
+   Expressions), so BASH_REMATCH is always empty there.
+-}
+prop_checkZshRematch1 = verify checkZshRematch "#!/usr/bin/env zsh\n[[ a =~ b ]] && echo $BASH_REMATCH"
+prop_checkZshRematch2 = verify checkZshRematch "#!/usr/bin/env zsh\necho ${BASH_REMATCH[1]}"
+prop_checkZshRematch3 = verifyNot checkZshRematch "#!/bin/bash\n[[ a =~ b ]] && echo $BASH_REMATCH"
+prop_checkZshRematch4 = verifyNot checkZshRematch "#!/usr/bin/env zsh\n[[ a =~ b ]] && echo $MATCH"
+prop_checkZshRematch5 = verifyNot checkZshRematch "#!/usr/bin/env zsh\n[[ $var =~ regex ]]"
+checkZshRematch params (T_DollarBraced id _ list) =
+    when (shellType params == Zsh && name == "BASH_REMATCH") $
+        warn id 2405 "zsh does not set BASH_REMATCH. Use $MATCH for the whole match and $match[n] for groups."
+  where
+    name = getBracedReference $ concat $ oversimplify list
+checkZshRematch _ _ = return ()
 
 {-
    Under EXTENDED_GLOB, a leading '^' makes a pattern match everything except
@@ -5448,42 +5455,28 @@ checkZshAlways params (T_Always id _ _) =
         err id 2407 "Zsh always blocks, { list } always { list }, are only supported in zsh."
 checkZshAlways _ _ = return ()
 
--- Check for ZSH select loops  
-prop_checkZshSelect1 = verify checkZshSelect "#!/bin/bash\nselect i in a b c; do echo $i; done"
+{-
+   bash, ksh and zsh all have select; POSIX sh does not
+   (POSIX.1-2017 Shell Command Language has no select keyword).
+-}
+prop_checkZshSelect1 = verify checkZshSelect "#!/bin/sh\nselect i in a b c; do echo $i; done"
 prop_checkZshSelect2 = verifyNot checkZshSelect "#!/usr/bin/env zsh\nselect i in a b c; do echo $i; done"
-checkZshSelect params (T_SelectIn id _ _ _) = do
-    when (shellType params /= Zsh && shellType params /= Ksh) $
-        warn id 2408 "select loops are a zsh/ksh feature, not supported in POSIX sh/bash."
+prop_checkZshSelect3 = verifyNot checkZshSelect "#!/bin/bash\nselect i in a b c; do echo $i; done"
+prop_checkZshSelect4 = verifyNot checkZshSelect "#!/bin/ksh\nselect i in a b c; do echo $i; done"
+checkZshSelect params (T_SelectIn id _ _ _) =
+    when (shellType params `elem` [Sh, Dash, BusyboxSh]) $
+        warn id 2408 "select is not POSIX. It needs bash, ksh or zsh."
 checkZshSelect _ _ = return ()
 
--- Check for ZSH numeric brace expansion {1..10}
-prop_checkZshBraceNum2 = verifyNot checkZshBraceExpansion "#!/bin/bash\necho {1..10}"
-prop_checkZshBraceNum3 = verifyNot checkZshBraceExpansion "#!/usr/bin/env zsh\necho {1..10}"
-checkZshBraceExpansion params t = do
-    when (shellType params /= Zsh && shellType params /= Bash && shellType params /= Ksh) $ do
-        case getLiteralString t of
-            Just str | "{" `isPrefixOf` str && ".." `isInfixOf` str ->
-                warn (getId t) 2409 "Brace expansion {1..10} is not available in POSIX sh."
-            _ -> return ()
+{-
+   SC2409, SC2410 and SC2411 used to live here and were removed:
 
--- Check for ZSH glob exclusion pattern ~
-prop_checkZshGlobExclude1 = verify checkZshGlobExclude "#!/bin/bash\nls *.c~lex.c"
-prop_checkZshGlobExclude2 = verifyNot checkZshGlobExclude "#!/usr/bin/env zsh\nls *.c~lex.c"
-checkZshGlobExclude params t = do
-    when (shellType params /= Zsh) $ do
-        case getLiteralString t of
-            Just str | '~' `elem` str && not ("~/" `isPrefixOf` str) ->
-                info (getId t) 2410 "ZSH-style glob exclusion *.c~lex.c is only supported in zsh."
-            _ -> return ()
-    return ()
-
--- Check for ZSH approximate matching  
--- Note: Approx matching causes parse errors, so this check has limited practical use
-checkZshApproxMatch params t = do
-    let str = onlyLiteralString t
-    when (shellType params /= Zsh && "(#" `isInfixOf` str) $
-        err (getId t) 2411 "ZSH approximate matching (#a1) is only supported in zsh."
-    return ()
+   SC2409 duplicated SC3009, which already reports brace expansion in sh.
+   SC2410 matched any literal tilde, so 'cd ~user' and 'x=~' were reported as
+   glob exclusions, and the real '*.c~lex.c' form needs EXTENDED_GLOB anyway.
+   SC2411 looked for '(#' in a literal, which the parser never produces
+   because zsh glob flags are not parsed yet.
+-}
 
 -- Check for ZSH null command shorthands
 prop_checkZshNullCmd1 = verify checkZshNullCommand "#!/usr/bin/env zsh\n< file"
@@ -5494,29 +5487,41 @@ checkZshNullCommand params (T_Redirecting id [T_FdRedirect _ _ (T_IoFile _ op _)
         info id 2412 "In zsh, a redirection-only command runs $NULLCMD (default cat) or $READNULLCMD (default more)."
 checkZshNullCommand _ _ = return ()
 
--- Check for ZSH coprocess syntax
-prop_checkZshCoproc1 = verify checkZshCoprocess "#!/bin/bash\ncoproc name { cmd; }"
-prop_checkZshCoproc2 = verifyNot checkZshCoprocess "#!/bin/bash\ncoproc { cmd; }"
-checkZshCoprocess params (T_CoProc id name _) = do
-    when (shellType params == Bash && isJust name) $
-        info id 2413 "Named coprocesses are a zsh feature. In bash, use 'coproc { cmd; }' without a name."
+{-
+   This used to claim named coprocesses were a zsh feature, which is backwards:
+   bash accepts 'coproc NAME { cmd; }' (bash manual, Coprocesses) while zsh's
+   coproc takes no name and only speaks through >&p and <&p
+   (zsh manual, Coprocesses).
+-}
+prop_checkZshCoproc1 = verify checkZshCoprocess "#!/usr/bin/env zsh\ncoproc name { cmd; }"
+prop_checkZshCoproc2 = verifyNot checkZshCoprocess "#!/bin/bash\ncoproc name { cmd; }"
+prop_checkZshCoproc3 = verifyNot checkZshCoprocess "#!/bin/bash\ncoproc { cmd; }"
+checkZshCoprocess params (T_CoProc id name _) =
+    when (shellType params == Zsh && isJust name) $
+        err id 2413 "zsh's coproc takes no name. Use 'coproc command' with the >&p and <&p redirections."
 checkZshCoprocess _ _ = return ()
 
--- Check for ZSH directory stack references ~num
-prop_checkZshDirStack1 = verify checkZshDirStack "#!/bin/bash\ncd ~1"
-prop_checkZshDirStack2 = verifyNot checkZshDirStack "#!/usr/bin/env zsh\ncd ~1"
-checkZshDirStack params t = do
-    let str = onlyLiteralString t
-    when (shellType params /= Zsh) $ do
-        when ("~" `isPrefixOf` str && length str > 1) $ do
-            let rest = drop 1 str
-            case rest of
-                (c:cs) | isDigit c && all isDigit cs ->
-                    info (getId t) 2414 "ZSH directory stack references ~num, ~+num, ~-num are zsh-specific."
-                (c:cs) | c `elem` "+-" && all isDigit cs && not (null cs) ->
-                    info (getId t) 2414 "ZSH directory stack references ~num, ~+num, ~-num are zsh-specific."
-                _ -> return ()
-    return ()
+{-
+   bash expands ~N against the dirstack too (bash manual, Tilde Expansion),
+   so this is only a portability problem for POSIX sh.
+-}
+prop_checkZshDirStack1 = verify checkZshDirStack "#!/bin/sh\ncd ~1"
+prop_checkZshDirStack2 = verify checkZshDirStack "#!/bin/sh\ncd ~-2"
+prop_checkZshDirStack3 = verifyNot checkZshDirStack "#!/usr/bin/env zsh\ncd ~1"
+prop_checkZshDirStack4 = verifyNot checkZshDirStack "#!/bin/bash\ncd ~1"
+prop_checkZshDirStack5 = verifyNot checkZshDirStack "#!/bin/sh\ncd ~/dir"
+checkZshDirStack params t =
+    when (shellType params `elem` [Sh, Dash, BusyboxSh] && isDirStackRef) $
+        info (getId t) 2414 "Directory stack references like ~1 are not POSIX. They need bash or zsh."
+  where
+    isDirStackRef =
+        case onlyLiteralString t of
+            '~':rest@(_:_) -> isNumbered rest
+            _ -> False
+    isNumbered s =
+        case s of
+            c:cs | c `elem` "+-" -> not (null cs) && all isDigit cs
+            cs -> all isDigit cs
 
 -- Check for ZSH global aliases
 prop_checkZshGlobalAlias1 = verify checkZshGlobalAlias "#!/bin/bash\nalias -g L='| less'"
@@ -5538,16 +5543,35 @@ checkZshSuffixAlias params t@(T_SimpleCommand id _ (_:args)) = do
             err id 2416 "Suffix aliases (alias -s) are a zsh-only feature."
 checkZshSuffixAlias _ _ = return ()
 
--- Check for ZSH-specific builtins
+{-
+   'which' is dropped from the old list because it is an ordinary external
+   command everywhere, and 'autoload' and 'whence' are ksh builtins as well
+   as zsh ones (ksh93 man page, Builtins), so they are only reported outside
+   both shells.
+-}
 prop_checkZshBuiltin1 = verify checkZshBuiltins "#!/bin/bash\nautoload -U compinit"
 prop_checkZshBuiltin2 = verify checkZshBuiltins "#!/bin/bash\nzmodload zsh/complist"
 prop_checkZshBuiltin3 = verifyNot checkZshBuiltins "#!/usr/bin/env zsh\nautoload -U compinit"
+prop_checkZshBuiltin4 = verifyNot checkZshBuiltins "#!/bin/ksh\nautoload foo"
+prop_checkZshBuiltin5 = verifyNot checkZshBuiltins "#!/bin/bash\nwhich ls"
+prop_checkZshBuiltin6 = verify checkZshBuiltins "#!/bin/bash\nbindkey -e"
 checkZshBuiltins params t@(T_SimpleCommand id _ _) = do
-    when (shellType params /= Zsh) $ do
-        let zshBuiltins = ["autoload", "zmodload", "compinit", "compdef", "compctl", "zcompile", "zstyle", "bindkey", "vared", "zle", "limit", "unlimit", "sched", "which", "whence", "zcalc", "zstat"]
-        forM_ zshBuiltins $ \builtin ->
-            when (t `isCommand` builtin) $
-                warn id 2417 $ builtin ++ " is a zsh-specific builtin."
+    when (shellType params /= Zsh) $
+        forM_ zshOnly $ \name ->
+            when (t `isCommand` name) $
+                warn id 2417 $ name ++ " is a zsh command that other shells do not have."
+    when (shellType params `notElem` [Zsh, Ksh]) $
+        forM_ zshAndKsh $ \name ->
+            when (t `isCommand` name) $
+                warn id 2417 $ name ++ " is a zsh and ksh command that bash and POSIX sh do not have."
+  where
+    zshOnly = [
+        "zmodload", "zcompile", "zstyle", "bindkey", "vared", "zle",
+        "compctl", "compdef", "compinit", "zparseopts", "zregexparse",
+        "zpty", "zsocket", "ztcp", "zselect", "zcalc", "zstat",
+        "limit", "unlimit", "sched"
+        ]
+    zshAndKsh = ["autoload", "whence"]
 checkZshBuiltins _ _ = return ()
 
 -- Check for ZSH setopt/unsetopt
@@ -5559,15 +5583,19 @@ checkZshSetopt params t@(T_SimpleCommand id _ _) = do
             err id 2418 "setopt/unsetopt are zsh-specific builtins."
 checkZshSetopt _ _ = return ()
 
--- Check for ZSH typeset -A (associative arrays)
+{-
+   ksh93 has had 'typeset -A' since long before bash 4, so only POSIX sh is
+   reported here (ksh93 man page, typeset).
+-}
 prop_checkZshAssocArray1 = verify checkZshAssocArray "#!/bin/sh\ntypeset -A hash"
 prop_checkZshAssocArray2 = verifyNot checkZshAssocArray "#!/bin/bash\ndeclare -A hash"
 prop_checkZshAssocArray3 = verifyNot checkZshAssocArray "#!/usr/bin/env zsh\ntypeset -A hash"
-checkZshAssocArray params t@(T_SimpleCommand id _ (_:args)) = do
-    when (shellType params /= Zsh && shellType params /= Bash && t `isCommand` "typeset") $ do
-        let argStrs = map onlyLiteralString args
-        when ("-A" `elem` argStrs) $
-            warn id 2419 "Associative arrays (typeset -A) require bash 4+ or zsh."
+prop_checkZshAssocArray4 = verifyNot checkZshAssocArray "#!/bin/ksh\ntypeset -A hash"
+prop_checkZshAssocArray5 = verifyNot checkZshAssocArray "#!/bin/sh\ntypeset -i n"
+checkZshAssocArray params t@(T_SimpleCommand id _ (_:args)) =
+    when (shellType params `elem` [Sh, Dash, BusyboxSh] && t `isCommand` "typeset") $
+        when ("-A" `elem` map onlyLiteralString args) $
+            warn id 2419 "Associative arrays are not POSIX. typeset -A needs bash 4+, ksh or zsh."
 checkZshAssocArray _ _ = return ()
 
 -- Check for ZSH array subscript flags
@@ -5580,22 +5608,10 @@ checkZshSubscriptFlags params t@(T_DollarBraced id _ word) = do
             err id 2420 "ZSH array subscript flags like [(r)pattern] are zsh-only."
 checkZshSubscriptFlags _ _ = return ()
 
--- Check for ZSH math operator **
-prop_checkZshPower1 = verify checkZshPowerOperator "#!/bin/sh\necho $((2**8))"
-prop_checkZshPower2 = verifyNot checkZshPowerOperator "#!/bin/bash\necho $((2**8))"
-prop_checkZshPower3 = verifyNot checkZshPowerOperator "#!/usr/bin/env zsh\necho $((2**8))"
-checkZshPowerOperator params (TA_Binary id "**" _ _) = do
-    when (shellType params /= Zsh && shellType params /= Bash && shellType params /= Ksh) $
-        warn id 2421 "The ** exponentiation operator requires bash, zsh, or ksh."
-checkZshPowerOperator _ _ = return ()
-
--- Check for ZSH (( )) without $
-prop_checkZshMathCommand1 = verify checkZshMathCommand "#!/bin/sh\n(( i++ ))"
-prop_checkZshMathCommand2 = verifyNot checkZshMathCommand "#!/bin/bash\n(( i++ ))"
-checkZshMathCommand params (T_Arithmetic id _) = do
-    when (shellType params /= Zsh && shellType params /= Bash && shellType params /= Ksh) $
-        warn id 2422 "Standalone (( )) arithmetic commands require bash, zsh, or ksh."
-checkZshMathCommand _ _ = return ()
+{-
+   SC2421 and SC2422 were removed as duplicates: checkBashisms already reports
+   '**' as SC3019 and standalone '(( ))' as SC3006 in POSIX sh.
+-}
 
 -- Tests for zsh short for loop variable tracking
 prop_zshForShortVar1 = verifyNotTree checkUnassignedReferences "#!/usr/bin/env zsh\nfor i (a b c) echo $i"
