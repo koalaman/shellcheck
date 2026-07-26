@@ -72,24 +72,35 @@ This directory contains comprehensive test files for ShellCheck's ZSH support. E
 **Total issues detected**: 40+ ShellCheck warnings/errors across all files
 **Valid ZSH syntax tested**: Parameter flags, glob qualifiers, short for loops, anonymous functions
 
-## Running Tests
+## Golden harness
 
-To run ShellCheck on all test files:
-
-```bash
-cd /path/to/shellcheck
-shellcheck test/zsh/*.zsh
-```
-
-To check specific issue codes:
+`run-golden.sh` is the e2e gate for zsh support. For each fixture it records the
+shellcheck exit code plus the sorted set of emitted SC codes and diffs that
+against a committed `<fixture>.golden` file.
 
 ```bash
-shellcheck test/zsh/test_unused_variables.zsh  # Should show SC2034
-shellcheck test/zsh/test_redirect_issues.zsh   # Should show SC2094, SC2069, SC2261
+cabal build --allow-newer exe:shellcheck
+./test/zsh/run-golden.sh                    # verify
+./test/zsh/run-golden.sh --update           # regenerate after an intentional change
+./test/zsh/run-golden.sh --corpus-only      # only test/zsh/corpus/
+SHELLCHECK=/usr/bin/shellcheck ./test/zsh/run-golden.sh
 ```
+
+Fixtures covered: everything in `test/zsh/` plus the `test/sc24*.sh` portability
+fixtures plus the extracted zsh corpus in `test/zsh/corpus/`.
+
+The goldens are a snapshot, not an assertion of correctness. A golden containing
+`SC1xxx` records a parse failure that is still outstanding, so regenerating after
+a parser fix should shrink those files. The full gate is:
+
+```bash
+cabal test --allow-newer && ./test/zsh/run-golden.sh
+```
+
+CI runs the harness in the `zsh_golden` job, which builds the real binary rather
+than using the sdist tarball (`test/zsh/` is not shipped in the tarball).
 
 ## Notes
 
-- Some files contain valid ZSH syntax that ShellCheck currently has difficulty parsing (anonymous functions with arguments, glob qualifiers in traditional for loops)
 - Test files are designed to trigger specific warnings while demonstrating both problematic and correct code
 - Pattern match failures in AnalyzerLib.hs and Analytics.hs have been fixed to handle Zsh shell type

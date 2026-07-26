@@ -76,6 +76,26 @@ jobs:
           cd source
           cabal test ${{ matrix.cabal_flags }}
 
+  zsh_golden:
+    name: Zsh golden fixtures
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Haskell
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: 'latest'
+
+      # The golden harness runs the real binary, so it is not covered by the
+      # sdist-based run_tests job (test/zsh/ is not shipped in the tarball).
+      - name: Build shellcheck
+        run: cabal build --allow-newer exe:shellcheck
+
+      - name: Run zsh golden fixtures
+        run: ./test/zsh/run-golden.sh
+
   build_source:
     name: Build
     needs: package_source
