@@ -191,6 +191,15 @@ setParsedShell shell = do
 isZshDialect :: Monad m => SCParser m Bool
 isZshDialect = (== Zsh) . parsedShell <$> getState
 
+inBraceCommandExpansionContext :: Monad m => SCParser m Bool
+inBraceCommandExpansionContext = do
+    ctx <- getCurrentContexts
+    return $ any isBraceCmdExp ctx
+  where
+    isBraceCmdExp (ContextName _ "ksh-style ${ ..; } command expansion") = True
+    isBraceCmdExp (ContextName _ "zsh ${{var} ...} nofork expansion") = True
+    isBraceCmdExp _ = False
+
 codeForParseNote (ParseNote _ _ _ code _) = code
 
 getLastId = lastId <$> getState
@@ -1150,7 +1159,10 @@ prop_readNormalWord13 = isOk readNormalWord "*.txt(.)"
 prop_readNormalWord14 = isOk readNormalWord "*.log(.om)"
 prop_readNormalWord15 = isOk readNormalWord "*.sh(.-^Lk+0)"
 prop_readNormalWord16 = isOk readNormalWord "*(.)"
-readNormalWord = readNormalishWord "" ["do", "done", "then", "fi", "esac"]
+readNormalWord = do
+    inBraceExp <- inBraceCommandExpansionContext
+    let end = if inBraceExp then "}" else ""
+    readNormalishWord end ["do", "done", "then", "fi", "esac"]
 
 readPatternWord = readNormalishWord "" ["esac"]
 
@@ -1837,7 +1849,7 @@ readDollarExpression = do
     ensureDollar
     readDollarExp
 
-readDollarExp = arithmetic <|> readDollarExpansion <|> readDollarBracket <|> readDollarBraceCommandExpansion <|> readDollarBraced <|> readDollarVariable
+readDollarExp = arithmetic <|> readDollarExpansion <|> readDollarBracket <|> readZshDoubleBraceNofork <|> readDollarBraceCommandExpansion <|> readDollarBraced <|> readDollarVariable
   where
     arithmetic = readAmbiguous "$((" readDollarArithmetic readDollarExpansion (\pos ->
         parseNoteAt pos ErrorC 1102 "Shells disambiguate $(( differently or not at all. For $(command substitution), add space after $( . For $((arithmetics)), fix parsing errors.")
@@ -1909,6 +1921,9 @@ readAmbiguous prefix expected alternative warner = do
 prop_readDollarBraceCommandExpansion1 = isOk readDollarBraceCommandExpansion "${ ls; }"
 prop_readDollarBraceCommandExpansion2 = isOk readDollarBraceCommandExpansion "${\nls\n}"
 prop_readDollarBraceCommandExpansion3 = isOk readDollarBraceCommandExpansion "${|  REPLY=42; }"
+prop_readDollarBraceCommandExpansion4 = isOk readScript "#!/usr/bin/env zsh\npurr ${| REPLY=foo}\n"
+prop_readDollarBraceCommandExpansion5 = isOk readScript "#!/usr/bin/env zsh\npurr ${| REPLY=first}:${| REPLY=second}:$REPLY\n"
+prop_readDollarBraceCommandExpansion6 = isOk readScript "#!/usr/bin/env zsh\npurr ${:-${| REPLY=buried}}\n"
 readDollarBraceCommandExpansion = called "ksh-style ${ ..; } command expansion" $ do
     start <- startSpan
     c <- try $ do
@@ -1916,9 +1931,26 @@ readDollarBraceCommandExpansion = called "ksh-style ${ ..; } command expansion" 
             char '|' <|> whitespace
     allspacing
     term <- readTerm
+    allspacing
     char '}' <|> fail "Expected } to end the ksh-style ${ ..; } command expansion"
     id <- endSpan start
     return $ T_DollarBraceCommandExpansion id (if c == '|' then Piped else Unpiped) term
+
+prop_readZshDoubleBraceNofork1 = isOk readScript "#!/usr/bin/env zsh\npurl ${{reply} reply=(x)} $reply\n"
+prop_readZshDoubleBraceNofork3 = isOk readScript "#!/usr/bin/env zsh\npurr \"${{zz}\n local x=1\n}\"\n"
+readZshDoubleBraceNofork = called "zsh ${{var} ...} nofork expansion" $ do
+    zsh <- isZshDialect
+    unless zsh $ fail "not zsh"
+    start <- startSpan
+    try $ string "${{"
+    _ <- readZshSubscriptedName
+    optional (try $ char '}')
+    void $ spacing1 <|> (char '\n' >> return "\n")
+    term <- readCompoundListOrEmpty
+    allspacing
+    char '}' <|> fail "Expected } to end zsh ${{var} ...} nofork expansion"
+    id <- endSpan start
+    return $ T_DollarBraceCommandExpansion id Piped term
 
 prop_readDollarBraced1 = isOk readDollarBraced "${foo//bar/baz}"
 prop_readDollarBraced2 = isOk readDollarBraced "${foo/'{cow}'}"

@@ -1,7 +1,7 @@
 # Chunks of zsh's own test suite that ShellCheck cannot parse.
 # Regenerate with test/zsh/corpus-report.sh --update after running
 # test/zsh/extract-ztst.sh against a zsh checkout.
-# 151 of 2914 chunks, extracted from:
+# 134 of 2914 chunks, extracted from:
 #   source: git@github.com:zsh-users/zsh.git
 #   version: 5.9.999.3-test
 #   revision: c0fe1189905e6bd6ef227068478638cfb52b1255
@@ -36,10 +36,6 @@ A04redirect_064.zsh
 A05execution_035.zsh
 A07control_016.zsh
 B02typeset_023.zsh
-B02typeset_092.zsh
-B02typeset_093.zsh
-B02typeset_094.zsh
-B02typeset_095.zsh
 B04read_017.zsh
 B04read_018.zsh
 B08shift_003.zsh
@@ -108,25 +104,15 @@ D07multibyte_009.zsh
 D07multibyte_040.zsh
 D07multibyte_045.zsh
 D10nofork_005.zsh
-D10nofork_006.zsh
-D10nofork_019.zsh
 D10nofork_021.zsh
-D10nofork_022.zsh
 D10nofork_023.zsh
 D10nofork_024.zsh
 D10nofork_025.zsh
 D10nofork_026.zsh
-D10nofork_027.zsh
 D10nofork_028.zsh
 D10nofork_029.zsh
 D10nofork_030.zsh
 D10nofork_031.zsh
-D10nofork_033.zsh
-D10nofork_034.zsh
-D10nofork_038.zsh
-D10nofork_046.zsh
-D10nofork_058.zsh
-D10nofork_059.zsh
 E01options_016.zsh
 E01options_103.zsh
 E02xtrace_010.zsh
@@ -139,8 +125,6 @@ E02xtrace_016.zsh
 E03posix_013.zsh
 K01nameref_081.zsh
 K01nameref_107.zsh
-K01nameref_115.zsh
-K01nameref_116.zsh
 P01privileged_004.zsh
 V03mathfunc_010.zsh
 V04features_012.zsh
@@ -148,7 +132,6 @@ V07pcre_010.zsh
 V07pcre_011.zsh
 V09datetime_007.zsh
 V09datetime_018.zsh
-V10private_041.zsh
 V12zparseopts_027.zsh
 V12zparseopts_028.zsh
 V15nearcolor_003.zsh
