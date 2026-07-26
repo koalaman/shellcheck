@@ -26,3 +26,6 @@ stack.yaml.lock
 
 ### misc ###
 /shellcheck.1
+
+# Extracted from a zsh checkout by test/zsh/extract-ztst.sh, not vendored.
+/test/zsh/corpus/

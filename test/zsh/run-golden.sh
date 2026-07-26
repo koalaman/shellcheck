@@ -16,18 +16,19 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 readonly REPO_ROOT
 
 UPDATE=0
-CORPUS_ONLY=0
 BUILD=1
 declare -a EXPLICIT_FIXTURES=()
 
 usage() {
     cat <<'EOF'
-Usage: run-golden.sh [--update] [--corpus-only] [--no-build] [fixture ...]
+Usage: run-golden.sh [--update] [--no-build] [fixture ...]
 
   --update        Rewrite golden files from current shellcheck output.
-  --corpus-only   Only run the extracted zsh corpus under test/zsh/corpus/.
   --no-build      Skip the "cabal build exe:shellcheck" freshness step.
   fixture ...     Run only the named fixture paths.
+
+The extracted zsh corpus has its own harness in test/zsh/corpus-report.sh,
+since it is too large to keep golden files for.
 
 Environment:
   SHELLCHECK      Path to the shellcheck binary. Defaults to `cabal list-bin`,
@@ -40,10 +41,6 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --update|-u)
             UPDATE=1
-            shift
-            ;;
-        --corpus-only)
-            CORPUS_ONLY=1
             shift
             ;;
         --no-build)
@@ -136,15 +133,10 @@ collect_fixtures() {
         return 0
     fi
 
-    if [[ $CORPUS_ONLY -eq 0 ]]; then
-        find "$SCRIPT_DIR" -maxdepth 1 -type f \( -name '*.zsh' -o -name '*.sh' \) \
-            -not -name 'run-golden.sh' -not -name 'extract-ztst.sh' -print | sort
-        find "$REPO_ROOT/test" -maxdepth 1 -type f -name 'sc24*.sh' -print | sort
-    fi
-
-    if [[ -d "$SCRIPT_DIR/corpus" ]]; then
-        find "$SCRIPT_DIR/corpus" -type f -name '*.zsh' -print | sort
-    fi
+    find "$SCRIPT_DIR" -maxdepth 1 -type f \( -name '*.zsh' -o -name '*.sh' \) \
+        -not -name 'run-golden.sh' -not -name 'extract-ztst.sh' \
+        -not -name 'corpus-report.sh' -print | sort
+    find "$REPO_ROOT/test" -maxdepth 1 -type f -name 'sc24*.sh' -print | sort
 }
 
 pass=0

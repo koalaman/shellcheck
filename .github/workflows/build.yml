@@ -94,7 +94,24 @@ jobs:
         run: cabal build --allow-newer exe:shellcheck
 
       - name: Run zsh golden fixtures
-        run: ./test/zsh/run-golden.sh
+        run: ./test/zsh/run-golden.sh --no-build
+
+      # zsh's own test suite is the widest sample of real zsh syntax available,
+      # so a change in how much of it parses should be deliberate.
+      # Pinned because the chunk numbering, and therefore the baseline, moves
+      # whenever zsh edits its tests. Bump this and the baseline together.
+      - name: Check out zsh
+        uses: actions/checkout@v6
+        with:
+          repository: zsh-users/zsh
+          ref: c0fe1189905e6bd6ef227068478638cfb52b1255
+          path: zsh-source
+
+      - name: Extract the zsh corpus
+        run: ./test/zsh/extract-ztst.sh "$GITHUB_WORKSPACE/zsh-source"
+
+      - name: Report corpus parse coverage
+        run: ./test/zsh/corpus-report.sh
 
   build_source:
     name: Build
