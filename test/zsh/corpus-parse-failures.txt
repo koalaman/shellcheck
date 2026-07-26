@@ -1,0 +1,16 @@
+# Chunks of zsh's own test suite that ShellCheck cannot parse.
+# Regenerate with test/zsh/corpus-report.sh --update after running
+# test/zsh/extract-ztst.sh against a zsh checkout.
+# 9 of 2914 chunks, extracted from:
+#   source: git@github.com:zsh-users/zsh.git
+#   version: 5.9.999.3-test
+#   revision: c0fe1189905e6bd6ef227068478638cfb52b1255
+D10nofork_021.zsh
+D10nofork_023.zsh
+D10nofork_024.zsh
+D10nofork_025.zsh
+D10nofork_026.zsh
+D10nofork_028.zsh
+D10nofork_029.zsh
+D10nofork_030.zsh
+D10nofork_031.zsh

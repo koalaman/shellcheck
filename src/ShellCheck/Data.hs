@@ -117,6 +117,45 @@ arrayVariables = [
     "fpath", "path", "manpath", "cdpath", "mailpath"
   ]
 
+{-
+   zsh names are kept separate because most of them mean nothing elsewhere.
+   Folding them into the shared lists would hide a real '$status' typo in a
+   bash script and would claim bash's '$path' is an array.
+-}
+zshInternalVariables = [
+    "ZSH_VERSION", "ZSH_NAME", "VENDOR", "MACHTYPE", "OSTYPE",
+    "MATCH", "match", "MBEGIN", "MEND", "mbegin", "mend",
+    "REPLY", "reply", "status", "pipestatus",
+    "ARGC", "argv", "signals", "widgets", "aliases", "options",
+    "parameters", "commands", "functions", "dis_functions",
+    "dis_aliases", "dis_reswords", "dis_builtins", "zsh_eval_context",
+    "ZSH_ARGZERO", "ZSH_SUBSHELL", "ZSH_SCRIPT", "ZSH_EXECUTION_STRING",
+    "HISTCMD", "FIGNORE", "READNULLCMD", "MODULE_PATH", "fpath",
+    "DIRSTACKSIZE", "ERRNO", "GID", "EGID", "HOST", "TTY", "USERNAME",
+    "UID", "EUID", "histchars", "WORDCHARS", "CORRECT_IGNORE",
+    "CORRECT_IGNORE_FILE", "KEYBOARD_HACK", "NULLCMD",
+    "path", "manpath", "cdpath", "mailpath", "psvar"
+  ]
+
+zshArrayVariables = [
+    "match", "mbegin", "mend", "reply", "pipestatus",
+    "argv", "signals", "widgets", "aliases", "options",
+    "parameters", "commands", "functions", "dis_functions",
+    "dis_aliases", "dis_reswords", "dis_builtins", "zsh_eval_context",
+    "fpath", "path", "manpath", "cdpath", "mailpath"
+  ]
+
+-- Names that are predefined in the given shell and need no assignment.
+internalVariablesFor shell =
+    case shell of
+        Zsh -> internalVariables ++ zshInternalVariables
+        _ -> internalVariables
+
+arrayVariablesFor shell =
+    case shell of
+        Zsh -> arrayVariables ++ zshArrayVariables
+        _ -> arrayVariables
+
 commonCommands = [
     "admin", "alias", "ar", "asa", "at", "awk", "basename", "batch",
     "bc", "bg", "break", "c99", "cal", "cat", "cd", "cflow", "chgrp",
@@ -196,6 +235,8 @@ flagsForRead = "sreu:n:N:i:p:a:t:"
 flagsForMapfile = "d:n:O:s:u:C:c:t"
 
 declaringCommands = ["local", "declare", "export", "readonly", "typeset", "let"]
+
+privilegeElevationCommands = ["sudo", "doas", "run0"]
 
 -- Zsh-specific builtins (in addition to POSIX/common ones)
 zshBuiltins = [

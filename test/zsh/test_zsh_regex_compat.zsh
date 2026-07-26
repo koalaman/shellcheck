@@ -1,19 +1,15 @@
 #!/usr/bin/env zsh
-# Test: ZSH regex matching works differently than bash (SC2405)
+# Test: zsh's =~ reports matches in $MATCH and $match, not BASH_REMATCH (SC2405)
 
 text="hello123world"
 
-# Wrong: using =~ like in bash
-if [[ $text =~ [0-9]+ ]]; then  # SC2405: ZSH =~ works differently
-    echo "has numbers"
+if [[ $text =~ [0-9]+ ]]; then
+    echo "bash spelling: $BASH_REMATCH"     # SC2405
+    echo "group: ${BASH_REMATCH[1]}"        # SC2405
 fi
 
-# Correct in ZSH: use == with glob pattern or match condition
-if [[ $text == *[0-9]* ]]; then
-    echo "has numbers"
-fi
-
-# Or use regex in a different way
-if [[ $text =~ "[0-9]+" ]]; then
-    echo "has numbers"
+# The zsh spelling.
+if [[ $text =~ ([0-9]+) ]]; then
+    echo "whole match: $MATCH"
+    echo "group: $match[1]"
 fi

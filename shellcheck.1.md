@@ -6,11 +6,11 @@ shellcheck - Shell script analysis tool
 
 # SYNOPSIS
 
-**shellcheck** [*OPTIONS*...] *FILES*...
+**shellcheck** [*OPTIONS*...] [--files-from=FILE] *FILES*...
 
 # DESCRIPTION
 
-ShellCheck is a static analysis and linting tool for sh/bash scripts. It's
+ShellCheck is a static analysis and linting tool for sh/bash/zsh scripts. It's
 mainly focused on handling typical beginner and intermediate level syntax
 errors and pitfalls where the shell just gives a cryptic error message or
 strange behavior, but it also reports on a few more advanced issues where
@@ -98,10 +98,11 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 **-s**\ *shell*,\ **--shell=***shell*
 
 :   Specify Bourne shell dialect. Valid values are *sh*, *bash*, *dash*, *ksh*,
-    and *busybox*.
+    *zsh*, and *busybox*.
     The default is to deduce the shell from the file's `shell` directive,
-    shebang, or `.bash/.bats/.dash/.ksh` extension, in that order. *sh* refers to
-    POSIX `sh` (not the system's), and will warn of portability issues.
+    shebang, or `.bash/.bats/.dash/.ksh/.zsh` extension, in that order. *sh*
+    refers to POSIX `sh` (not the system's), and will warn of portability
+    issues.
 
 **-S**\ *SEVERITY*,\ **--severity=***severity*
 
@@ -131,6 +132,13 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 **FILES...**
 
 :   One or more script files to check, or "-" for standard input.
+
+**--files-from** *FILE*
+
+:   Read a list of files to check from *FILE*. Each line should contain one
+    file path. Lines starting with `#` or empty lines are ignored. Use `-` to
+    read the list from standard input. This option is processed in addition to
+    any files specified on the command line.
 
 
 # FORMATS

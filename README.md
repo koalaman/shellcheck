@@ -3,7 +3,7 @@
 
 # ShellCheck - A shell script static analysis tool
 
-ShellCheck is a GPLv3 tool that gives warnings and suggestions for bash/sh shell scripts:
+ShellCheck is a GPLv3 tool that gives warnings and suggestions for bash/sh/zsh shell scripts:
 
 ![Screenshot of a terminal showing problematic shell script lines highlighted](doc/terminal.png)
 
@@ -264,7 +264,7 @@ To run ShellCheck via [pre-commit](https://pre-commit.com/), add the hook to you
 ```
 repos:
 -   repo: https://github.com/koalaman/shellcheck-precommit
-    rev: v0.7.2
+    rev: v0.11.0
     hooks:
     -   id: shellcheck
 #       args: ["--severity=warning"]  # Optionally only show errors and warnings
