@@ -1,0 +1,112 @@
+# Sync fork default branch (master) from koalaman/shellcheck upstream.
+#
+# Operator notes:
+# - Merge this workflow to master on the fork (agoodkind/shellcheck) to enable it.
+# - Runs on workflow_dispatch and weekly (Monday 06:00 UTC).
+# - Updates ONLY the fork default branch (master). Feature branches are never touched.
+# - Strategy: try fast-forward merge first; if that fails, try a regular merge.
+#   On merge conflicts the job aborts without pushing. Force-push is never used.
+# - GITHUB_TOKEN (contents: write) is sufficient to push back to the same fork repo.
+# - Failed runs mean master was left unchanged; resolve conflicts locally if needed.
+
+name: Sync upstream
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    name: Sync master from upstream
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fork master
+        uses: actions/checkout@v6
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Fetch upstream master
+        run: |
+          git remote add upstream https://github.com/koalaman/shellcheck.git
+          git fetch upstream master
+
+      - name: Merge upstream into master
+        id: merge
+        run: |
+          set -euo pipefail
+
+          before_head="$(git rev-parse HEAD)"
+          before_upstream="$(git rev-parse upstream/master)"
+
+          if git merge-base --is-ancestor HEAD upstream/master; then
+            echo "Fork master is behind or equal to upstream; attempting fast-forward."
+            if git merge --ff-only upstream/master; then
+              echo "result=fast-forward" >> "$GITHUB_OUTPUT"
+              echo "pushed=true" >> "$GITHUB_OUTPUT"
+              echo "before_head=${before_head}" >> "$GITHUB_OUTPUT"
+              echo "after_head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+              echo "upstream_head=${before_upstream}" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          echo "Fast-forward not possible; attempting regular merge."
+          if git merge upstream/master --no-edit; then
+            echo "result=merge" >> "$GITHUB_OUTPUT"
+            echo "pushed=true" >> "$GITHUB_OUTPUT"
+            echo "before_head=${before_head}" >> "$GITHUB_OUTPUT"
+            echo "after_head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            echo "upstream_head=${before_upstream}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Merge failed; aborting without push."
+          git merge --abort || true
+          echo "result=conflict" >> "$GITHUB_OUTPUT"
+          echo "pushed=false" >> "$GITHUB_OUTPUT"
+          echo "before_head=${before_head}" >> "$GITHUB_OUTPUT"
+          echo "upstream_head=${before_upstream}" >> "$GITHUB_OUTPUT"
+          exit 1
+
+      - name: Push updated master
+        if: steps.merge.outputs.pushed == 'true'
+        run: git push origin master
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## Upstream sync"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Fork branch | \`master\` |"
+            echo "| Upstream | \`koalaman/shellcheck\` @ \`master\` |"
+            echo "| Upstream HEAD | \`${{ steps.merge.outputs.upstream_head || 'n/a' }}\` |"
+            echo "| Fork HEAD before | \`${{ steps.merge.outputs.before_head || 'n/a' }}\` |"
+            echo "| Fork HEAD after | \`${{ steps.merge.outputs.after_head || 'unchanged' }}\` |"
+            echo "| Result | \`${{ steps.merge.outputs.result || 'fetch/checkout failed' }}\` |"
+            echo ""
+            case "${{ steps.merge.outputs.result }}" in
+              fast-forward)
+                echo "Master was fast-forwarded to upstream and pushed."
+                ;;
+              merge)
+                echo "Master was merged with upstream (merge commit) and pushed."
+                ;;
+              conflict)
+                echo "Merge conflict. Master was **not** pushed and remains unchanged on the fork."
+                echo "Resolve locally on \`master\`, then push normally (no force-push)."
+                ;;
+              *)
+                echo "Sync did not complete. Check the job log."
+                ;;
+            esac
+            echo ""
+            echo "Feature branches (for example \`feature/zsh-rebased\`) are never modified by this workflow."
+          } >> "$GITHUB_STEP_SUMMARY"
