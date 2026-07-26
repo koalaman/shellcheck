@@ -1016,7 +1016,7 @@ prop_checkArrayWithoutIndex13 = verifyTree checkArrayWithoutIndex "#!/usr/bin/en
 checkArrayWithoutIndex params _ =
     doVariableFlowAnalysis readF writeF defaultSet (variableFlow params)
   where
-    defaultSet = S.fromList arrayVariables
+    defaultSet = S.fromList $ arrayVariablesFor $ shellType params
 
     {-
        zsh expands an unindexed array to all its elements, so only the ksh
@@ -2529,7 +2529,7 @@ checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
                 name ++ " appears unused. Verify use (or export if used externally)."
 
     stripSuffix = takeWhile isVariableChar
-    defaultMap = Map.fromList $ zip internalVariables $ repeat ()
+    defaultMap = Map.fromList $ zip (internalVariablesFor $ shellType params) $ repeat ()
 
 prop_checkUnassignedReferences1 = verifyTree checkUnassignedReferences "echo $foo"
 prop_checkUnassignedReferences2 = verifyNotTree checkUnassignedReferences "foo=hello; echo $foo"
@@ -2589,7 +2589,7 @@ checkUnassignedReferences = checkUnassignedReferences' False
 checkUnassignedReferences' includeGlobals params t = warnings
   where
     (readMap, writeMap) = execState (mapM tally $ variableFlow params) (Map.empty, Map.empty)
-    defaultAssigned = Map.fromList $ map (\a -> (a, ())) $ filter (not . null) internalVariables
+    defaultAssigned = Map.fromList $ map (\a -> (a, ())) $ filter (not . null) $ internalVariablesFor (shellType params)
 
     tally (Assignment (_, _, name, _))  =
         modify (\(read, written) -> (read, Map.insert name () written))

@@ -60,19 +60,6 @@ internalVariables = [
     -- Ksh
     , ".sh.version"
 
-    -- Zsh
-    , "ZSH_VERSION", "ZSH_NAME", "VENDOR", "MACHTYPE", "OSTYPE", 
-    "MATCH", "match", "MBEGIN", "MEND", "mbegin", "mend",
-    "REPLY", "reply", "status", "pipestatus",
-    "ARGC", "argv", "signals", "widgets", "aliases", "options",
-    "parameters", "commands", "functions", "dis_functions",
-    "dis_aliases", "dis_reswords", "dis_builtins", "zsh_eval_context",
-    "ZSH_ARGZERO", "ZSH_SUBSHELL", "ZSH_SCRIPT", "ZSH_EXECUTION_STRING",
-    "HISTCMD", "FIGNORE", "READNULLCMD", "MODULE_PATH", "fpath",
-    "DIRSTACKSIZE", "ERRNO", "GID", "EGID", "HOST", "TTY", "USERNAME",
-    "UID", "EUID", "histchars", "WORDCHARS", "CORRECT_IGNORE",
-    "CORRECT_IGNORE_FILE", "KEYBOARD_HACK", "NULLCMD"
-
     -- shflags
     , "FLAGS_ARGC", "FLAGS_ARGV", "FLAGS_ERROR", "FLAGS_FALSE", "FLAGS_HELP",
     "FLAGS_PARENT", "FLAGS_RESERVED", "FLAGS_TRUE", "FLAGS_VERSION",
@@ -109,13 +96,46 @@ arrayVariables = [
     "BASH_ALIASES", "BASH_ARGC", "BASH_ARGV", "BASH_CMDS", "BASH_LINENO",
     "BASH_REMATCH", "BASH_SOURCE", "BASH_VERSINFO", "COMP_WORDS", "COPROC",
     "DIRSTACK", "FUNCNAME", "GROUPS", "MAPFILE", "PIPESTATUS", "COMPREPLY"
-    -- Zsh array variables
-    , "match", "mbegin", "mend", "reply", "pipestatus",
+  ]
+
+{-
+   zsh names are kept separate because most of them mean nothing elsewhere.
+   Folding them into the shared lists would hide a real '$status' typo in a
+   bash script and would claim bash's '$path' is an array.
+-}
+zshInternalVariables = [
+    "ZSH_VERSION", "ZSH_NAME", "VENDOR", "MACHTYPE", "OSTYPE",
+    "MATCH", "match", "MBEGIN", "MEND", "mbegin", "mend",
+    "REPLY", "reply", "status", "pipestatus",
+    "ARGC", "argv", "signals", "widgets", "aliases", "options",
+    "parameters", "commands", "functions", "dis_functions",
+    "dis_aliases", "dis_reswords", "dis_builtins", "zsh_eval_context",
+    "ZSH_ARGZERO", "ZSH_SUBSHELL", "ZSH_SCRIPT", "ZSH_EXECUTION_STRING",
+    "HISTCMD", "FIGNORE", "READNULLCMD", "MODULE_PATH", "fpath",
+    "DIRSTACKSIZE", "ERRNO", "GID", "EGID", "HOST", "TTY", "USERNAME",
+    "UID", "EUID", "histchars", "WORDCHARS", "CORRECT_IGNORE",
+    "CORRECT_IGNORE_FILE", "KEYBOARD_HACK", "NULLCMD",
+    "path", "manpath", "cdpath", "mailpath", "psvar"
+  ]
+
+zshArrayVariables = [
+    "match", "mbegin", "mend", "reply", "pipestatus",
     "argv", "signals", "widgets", "aliases", "options",
     "parameters", "commands", "functions", "dis_functions",
     "dis_aliases", "dis_reswords", "dis_builtins", "zsh_eval_context",
     "fpath", "path", "manpath", "cdpath", "mailpath"
   ]
+
+-- Names that are predefined in the given shell and need no assignment.
+internalVariablesFor shell =
+    case shell of
+        Zsh -> internalVariables ++ zshInternalVariables
+        _ -> internalVariables
+
+arrayVariablesFor shell =
+    case shell of
+        Zsh -> arrayVariables ++ zshArrayVariables
+        _ -> arrayVariables
 
 commonCommands = [
     "admin", "alias", "ar", "asa", "at", "awk", "basename", "batch",
@@ -198,18 +218,3 @@ flagsForMapfile = "d:n:O:s:u:C:c:t"
 declaringCommands = ["local", "declare", "export", "readonly", "typeset", "let"]
 
 privilegeElevationCommands = ["sudo", "doas", "run0"]
-
--- Zsh-specific builtins (in addition to POSIX/common ones)
-zshBuiltins = [
-    "autoload", "bindkey", "builtin", "bye", "cap", "chdir", "clone",
-    "comparguments", "compcall", "compctl", "compdescribe", "compfiles",
-    "compgroups", "compquote", "comptags", "comptry", "compvalues",
-    "disable", "disown", "echotc", "echoti", "emulate", "enable",
-    "functions", "getcap", "getln", "getopts", "hash", "history",
-    "limit", "log", "noglob", "popd", "print", "printenv", "printf",
-    "pushd", "pushln", "r", "rehash", "sched", "setcap", "setopt",
-    "source", "stat", "suspend", "ttyctl", "unfunction", "unhash",
-    "unlimit", "unsetopt", "vared", "wait", "whence", "where", "which",
-    "zcompile", "zformat", "zftp", "zle", "zmodload", "zparseopts",
-    "zprof", "zpty", "zregexparse", "zsocket", "zstyle", "ztcp"
-  ]
