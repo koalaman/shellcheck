@@ -23,8 +23,9 @@ readonly REPO_ROOT
 readonly CORPUS_DIR="$SCRIPT_DIR/corpus"
 readonly BASELINE="$SCRIPT_DIR/corpus-parse-failures.txt"
 
-# zsh test chunks that deliberately exercise runtime errors. Parse failures here
-# are documented test harness noise, not parser debt.
+# zsh test chunks that deliberately exercise runtime errors, or known-broken
+# upstream Test/*.ztst lines. Parse failures here are documented harness noise,
+# not parser debt.
 readonly DOCUMENTED_ERROR_TEST_SKIPS=(
     A01grammar_018.zsh
     A01grammar_037.zsh
@@ -38,6 +39,9 @@ readonly DOCUMENTED_ERROR_TEST_SKIPS=(
     D10nofork_029.zsh
     D10nofork_030.zsh
     D10nofork_031.zsh
+    # E03posix.ztst %test chunk 13 is missing the closing quote on
+    # `ARGV0=sh ... -c 'end() { true; }` (present on the foreach sibling line).
+    E03posix_013.zsh
 )
 
 filter_documented_error_test_skips() {
