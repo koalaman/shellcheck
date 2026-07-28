@@ -104,6 +104,9 @@ commandChecks = [
     ,checkXargsDashi
     ,checkUnquotedEchoSpaces
     ,checkEvalArray
+    ,checkGrepSendsPipefail
+    ,checkEgrepSendsPipefail
+    ,checkFgrepSendsPipefail
     ]
     ++ map checkArgComparison ("alias" : declaringCommands)
     ++ map checkMaskedReturns declaringCommands
@@ -398,6 +401,65 @@ checkGrepRe = CommandCheck (Basename "grep") check where
         _ -> fail "looks good"
     suspicious = mkRegex "([A-Za-z1-9])\\*"
     contra = mkRegex "[^a-zA-Z1-9]\\*|[][^$+\\\\]"
+
+
+prop_checkGrepSendsPipefail1 = verify checkGrepSendsPipefail "set -o pipefail; cat file | grep -q pattern"
+prop_checkGrepSendsPipefail2 = verify checkGrepSendsPipefail "set -o pipefail; cat file | grep --quiet pattern"
+prop_checkGrepSendsPipefail3 = verify checkGrepSendsPipefail "set -o pipefail; cat file | grep -iq pattern"
+prop_checkGrepSendsPipefail4 = verify checkGrepSendsPipefail "set -o pipefail; cmd1 | cmd2 | grep -q pattern"
+prop_checkGrepSendsPipefail5 = verify checkGrepSendsPipefail "set -euo pipefail; cmd | grep -q foo"
+prop_checkGrepSendsPipefail6 = verify checkGrepSendsPipefail "set -o pipefail; cmd | grep -m 2 foo | cmd2"
+prop_checkGrepSendsPipefail7 = verify checkGrepSendsPipefail "set -o pipefail; cmd | grep -L foo | cmd2"
+
+prop_checkGrepSendsPipefailN1 = verifyNot checkGrepSendsPipefail "cat file | grep -q pattern"
+prop_checkGrepSendsPipefailN2 = verifyNot checkGrepSendsPipefail "set -o pipefail; grep -q pattern file"
+prop_checkGrepSendsPipefailN3 = verifyNot checkGrepSendsPipefail "set -o pipefail; cat file | grep pattern"
+prop_checkGrepSendsPipefailN4 = verifyNot checkGrepSendsPipefail "set -o pipefail; grep -q pattern | cat"
+prop_checkGrepSendsPipefailN5 = verifyNot checkGrepSendsPipefail "grep -q pattern file"
+prop_checkGrepSendsPipefailN6 = verifyNot checkGrepSendsPipefail "set -o pipefail; cmd1 | bash -c 'grep -q pattern file'"
+prop_checkGrepSendsPipefailN7 = verifyNot checkGrepSendsPipefail "set -o pipefail; cmd1 | grep -e -q"
+prop_checkGrepSendsPipefailN8 = verifyNot checkGrepSendsPipefail "set -o pipefail; cmd1 | grep -eq pattern"
+prop_checkGrepSendsPipefailN9 = verifyNot checkGrepSendsPipefail "set -o pipefail; cmd1 | grep --regexp -q"
+prop_checkGrepSendsPipefailN10 = verifyNot checkGrepSendsPipefail "set -o pipefail; cmd1 | grep -- -q"
+
+checkGrepSendsPipefail = CommandCheck (Basename "grep") checkGrepSendsPipefailImpl
+
+prop_checkEgrepSendsPipefail1 = verify checkEgrepSendsPipefail "set -o pipefail; cat file | egrep -q pattern"
+checkEgrepSendsPipefail = CommandCheck (Basename "egrep") checkGrepSendsPipefailImpl
+
+prop_checkFgrepSendsPipefail1 = verify checkFgrepSendsPipefail "set -o pipefail; cat file | fgrep -q pattern"
+checkFgrepSendsPipefail = CommandCheck (Basename "fgrep") checkGrepSendsPipefailImpl
+
+-- Catches occurrences of "grep -q" and variants, such as "-m" or "-L", inside of pipes under pipefail.
+checkGrepSendsPipefailImpl cmd = do
+    pipefail <- asks hasPipefail
+    astPath <- getPathM cmd
+    sequence_ $ do
+        guard pipefail
+        opts <- map fst <$> parseGrepOpts (arguments cmd)
+        guard $ any isEarlyExitFlag opts
+        _simpleCmd:grepRedirectingCmd:parentNodes <- Just $ NE.toList astPath
+        T_Pipeline _ _ (_first:redirectingCmds) <- listToMaybe parentNodes
+        guard $ any (\node -> getId node == getId grepRedirectingCmd) redirectingCmds
+        return $ warn (getId cmd) 2337 warnMsg
+  where
+    -- Contains "L", even though BSD grep does not exit early with this flag,
+    -- but GNU grep does. This is consistent with the linter practice of warning
+    -- about potential problems, while also allowing users to disable specific
+    -- linter checks locally.
+    earlyExitFlags = ["q", "quiet", "--silent", "m", "max-count", "L"]
+    isEarlyExitFlag name = name `elem` earlyExitFlags
+    parseGrepOpts = getOpts (True, True)
+        "cilLnoqsvwxhHrRbaEFGPe:f:m:A:B:C:d:D:"
+        (map (\name -> (name, True)) longOptionsConsumingParameter)
+    longOptionsConsumingParameter =
+        ["regexp", "file", "max-count", "after-context", "before-context",
+            "context", "directories", "devices"]
+    warnMsg = unwords $
+      [
+        "In pipefail mode, flags like -q, -m, or -L can cause grep to exit early, aborting the pipeline with SIGPIPE.",
+        "Use a non-pipe input like '< <(cmd)' or '<<<' instead."
+      ]
 
 
 prop_checkTrapQuotes1 = verify checkTrapQuotes "trap \"echo $num\" INT"
