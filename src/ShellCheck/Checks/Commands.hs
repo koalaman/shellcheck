@@ -447,7 +447,7 @@ checkGrepSendsPipefailImpl cmd = do
     -- but GNU grep does. This is consistent with the linter practice of warning
     -- about potential problems, while also allowing users to disable specific
     -- linter checks locally.
-    earlyExitFlags = ["q", "quiet", "m", "max-count", "L"]
+    earlyExitFlags = ["q", "quiet", "--silent", "m", "max-count", "L"]
     isEarlyExitFlag name = name `elem` earlyExitFlags
     parseGrepOpts = getOpts (True, True)
         "cilLnoqsvwxhHrRbaEFGPe:f:m:A:B:C:d:D:"
