@@ -104,9 +104,9 @@ commandChecks = [
     ,checkXargsDashi
     ,checkUnquotedEchoSpaces
     ,checkEvalArray
-    ,checkGrepQPipefail
-    ,checkEgrepQPipefail
-    ,checkFgrepQPipefail
+    ,checkGrepSendsPipefail
+    ,checkEgrepSendsPipefail
+    ,checkFgrepSendsPipefail
     ]
     ++ map checkArgComparison ("alias" : declaringCommands)
     ++ map checkMaskedReturns declaringCommands
@@ -403,35 +403,35 @@ checkGrepRe = CommandCheck (Basename "grep") check where
     contra = mkRegex "[^a-zA-Z1-9]\\*|[][^$+\\\\]"
 
 
-prop_checkGrepQPipefail1 = verify checkGrepQPipefail "set -o pipefail; cat file | grep -q pattern"
-prop_checkGrepQPipefail2 = verify checkGrepQPipefail "set -o pipefail; cat file | grep --quiet pattern"
-prop_checkGrepQPipefail3 = verify checkGrepQPipefail "set -o pipefail; cat file | grep -iq pattern"
-prop_checkGrepQPipefail4 = verify checkGrepQPipefail "set -o pipefail; cmd1 | cmd2 | grep -q pattern"
-prop_checkGrepQPipefail5 = verify checkGrepQPipefail "set -euo pipefail; cmd | grep -q foo"
-prop_checkGrepQPipefail6 = verify checkGrepQPipefail "set -o pipefail; cmd | grep -m 2 foo | cmd2"
-prop_checkGrepQPipefail7 = verify checkGrepQPipefail "set -o pipefail; cmd | grep -L foo | cmd2"
+prop_checkGrepSendsPipefail1 = verify checkGrepSendsPipefail "set -o pipefail; cat file | grep -q pattern"
+prop_checkGrepSendsPipefail2 = verify checkGrepSendsPipefail "set -o pipefail; cat file | grep --quiet pattern"
+prop_checkGrepSendsPipefail3 = verify checkGrepSendsPipefail "set -o pipefail; cat file | grep -iq pattern"
+prop_checkGrepSendsPipefail4 = verify checkGrepSendsPipefail "set -o pipefail; cmd1 | cmd2 | grep -q pattern"
+prop_checkGrepSendsPipefail5 = verify checkGrepSendsPipefail "set -euo pipefail; cmd | grep -q foo"
+prop_checkGrepSendsPipefail6 = verify checkGrepSendsPipefail "set -o pipefail; cmd | grep -m 2 foo | cmd2"
+prop_checkGrepSendsPipefail7 = verify checkGrepSendsPipefail "set -o pipefail; cmd | grep -L foo | cmd2"
 
-prop_checkGrepQPipefailN1 = verifyNot checkGrepQPipefail "cat file | grep -q pattern"
-prop_checkGrepQPipefailN2 = verifyNot checkGrepQPipefail "set -o pipefail; grep -q pattern file"
-prop_checkGrepQPipefailN3 = verifyNot checkGrepQPipefail "set -o pipefail; cat file | grep pattern"
-prop_checkGrepQPipefailN4 = verifyNot checkGrepQPipefail "set -o pipefail; grep -q pattern | cat"
-prop_checkGrepQPipefailN5 = verifyNot checkGrepQPipefail "grep -q pattern file"
-prop_checkGrepQPipefailN6 = verifyNot checkGrepQPipefail "set -o pipefail; cmd1 | bash -c 'grep -q pattern file'"
-prop_checkGrepQPipefailN7 = verifyNot checkGrepQPipefail "set -o pipefail; cmd1 | grep -e -q"
-prop_checkGrepQPipefailN8 = verifyNot checkGrepQPipefail "set -o pipefail; cmd1 | grep -eq pattern"
-prop_checkGrepQPipefailN9 = verifyNot checkGrepQPipefail "set -o pipefail; cmd1 | grep --regexp -q"
-prop_checkGrepQPipefailN10 = verifyNot checkGrepQPipefail "set -o pipefail; cmd1 | grep -- -q"
+prop_checkGrepSendsPipefailN1 = verifyNot checkGrepSendsPipefail "cat file | grep -q pattern"
+prop_checkGrepSendsPipefailN2 = verifyNot checkGrepSendsPipefail "set -o pipefail; grep -q pattern file"
+prop_checkGrepSendsPipefailN3 = verifyNot checkGrepSendsPipefail "set -o pipefail; cat file | grep pattern"
+prop_checkGrepSendsPipefailN4 = verifyNot checkGrepSendsPipefail "set -o pipefail; grep -q pattern | cat"
+prop_checkGrepSendsPipefailN5 = verifyNot checkGrepSendsPipefail "grep -q pattern file"
+prop_checkGrepSendsPipefailN6 = verifyNot checkGrepSendsPipefail "set -o pipefail; cmd1 | bash -c 'grep -q pattern file'"
+prop_checkGrepSendsPipefailN7 = verifyNot checkGrepSendsPipefail "set -o pipefail; cmd1 | grep -e -q"
+prop_checkGrepSendsPipefailN8 = verifyNot checkGrepSendsPipefail "set -o pipefail; cmd1 | grep -eq pattern"
+prop_checkGrepSendsPipefailN9 = verifyNot checkGrepSendsPipefail "set -o pipefail; cmd1 | grep --regexp -q"
+prop_checkGrepSendsPipefailN10 = verifyNot checkGrepSendsPipefail "set -o pipefail; cmd1 | grep -- -q"
 
-checkGrepQPipefail = CommandCheck (Basename "grep") checkQuietGrepInPipefailImpl
+checkGrepSendsPipefail = CommandCheck (Basename "grep") checkGrepSendsPipefailImpl
 
-prop_checkEgrepQPipefail1 = verify checkEgrepQPipefail "set -o pipefail; cat file | egrep -q pattern"
-checkEgrepQPipefail = CommandCheck (Basename "egrep") checkQuietGrepInPipefailImpl
+prop_checkEgrepSendsPipefail1 = verify checkEgrepSendsPipefail "set -o pipefail; cat file | egrep -q pattern"
+checkEgrepSendsPipefail = CommandCheck (Basename "egrep") checkGrepSendsPipefailImpl
 
-prop_checkFgrepQPipefail1 = verify checkFgrepQPipefail "set -o pipefail; cat file | fgrep -q pattern"
-checkFgrepQPipefail = CommandCheck (Basename "fgrep") checkQuietGrepInPipefailImpl
+prop_checkFgrepSendsPipefail1 = verify checkFgrepSendsPipefail "set -o pipefail; cat file | fgrep -q pattern"
+checkFgrepSendsPipefail = CommandCheck (Basename "fgrep") checkGrepSendsPipefailImpl
 
--- Catches occurrences of "grep -q" and variants inside of pipes under pipefail.
-checkQuietGrepInPipefailImpl cmd = do
+-- Catches occurrences of "grep -q" and variants, such as "-m" or "-L", inside of pipes under pipefail.
+checkGrepSendsPipefailImpl cmd = do
     pipefail <- asks hasPipefail
     astPath <- getPathM cmd
     sequence_ $ do
