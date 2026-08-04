@@ -62,7 +62,7 @@ jobs:
           path: source/
 
       - name: Setup Haskell
-        uses: haskell-actions/setup@v2
+        uses: haskell-actions/setup@v2.11.0
         with:
           ghc-version: ${{ matrix.ghc }}
 
