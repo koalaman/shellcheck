@@ -84,6 +84,7 @@ library
       ShellCheck.Checks.Custom
       ShellCheck.Checks.ShellSupport
       ShellCheck.Data
+      ShellCheck.EditorConfig
       ShellCheck.Fixer
       ShellCheck.Formatter.Format
       ShellCheck.Formatter.CheckStyle

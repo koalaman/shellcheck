@@ -334,6 +334,31 @@ Use `shellcheckrc` without the dot instead.
 Note for Docker users: ShellCheck will only be able to look for files that
 are mounted in the container, so `~/.shellcheckrc` will not be read.
 
+# EDITORCONFIG
+
+Unless `--norc` is used, ShellCheck will also look for a file `.editorconfig`
+in the script's directory and each parent directory. Any section whose glob
+pattern matches the checked file will have its `shellcheck.*` keys read as
+directives, with the `shellcheck.` prefix stripped. This uses the same
+`key=value` syntax as `.shellcheckrc`.
+
+For example:
+
+    [*.{ebuild,eclass}]
+    shellcheck.shell=bash
+    shellcheck.disable=SC2034
+
+    [{PKGBUILD,APKBUILD}]
+    shellcheck.shell=bash
+    shellcheck.disable=SC2034
+
+If no matching directives are found in any `.editorconfig` in the parent
+directories, ShellCheck will look in the global default
+`$XDG_CONFIG_HOME/editorconfig.ini` (usually `~/.config/editorconfig.ini`).
+
+Directives from `.shellcheckrc`/`shellcheckrc` and from `.editorconfig` are
+both applied, with `.shellcheckrc` taking precedence in case of conflicts.
+
 
 # ENVIRONMENT VARIABLES
 

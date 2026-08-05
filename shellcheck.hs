@@ -20,6 +20,7 @@
 import qualified ShellCheck.Analyzer
 import           ShellCheck.Checker
 import           ShellCheck.Data
+import           ShellCheck.EditorConfig
 import           ShellCheck.Interface
 import           ShellCheck.Regex
 
@@ -110,7 +111,7 @@ options = [
     Option "" ["list-optional"]
         (NoArg $ Flag "list-optional" "true") "List checks disabled by default",
     Option "" ["norc"]
-        (NoArg $ Flag "norc" "true") "Don't look for .shellcheckrc files",
+        (NoArg $ Flag "norc" "true") "Don't look for .shellcheckrc and .editorconfig files",
     Option "" ["rcfile"]
         (ReqArg (Flag "rcfile") "RCFILE")
         "Prefer the specified configuration file over searching for one",
@@ -514,8 +515,22 @@ ioInterface options files = do
         fallback path _ = return path
 
 
-    -- Returns the name and contents of .shellcheckrc for the given file
-    getConfig cache filename =
+    -- Returns the name and contents of .shellcheckrc for the given file,
+    -- merged with any shellcheck.* directives found in applicable
+    -- EditorConfig files.
+    getConfig cache filename = do
+        rcResult <- getRcConfig cache filename
+        ecResult <- getEditorConfig filename
+        return $ mergeConfigs filename rcResult ecResult
+
+    mergeConfigs filename rcResult ecResult =
+        case (rcResult, ecResult) of
+            (Nothing, Nothing) -> Nothing
+            (Just (rcPath, rc), Nothing) -> Just (rcPath, rc)
+            (Nothing, Just (ecPath, ec)) -> Just (ecPath, ec)
+            (Just (rcPath, rc), Just (_, ec)) -> Just (rcPath, rc ++ "\n" ++ ec)
+
+    getRcConfig cache filename =
         case rcfile options of
             Just file -> do
                 -- We have a specified rcfile. Ignore normal rcfile resolution.
@@ -540,6 +555,63 @@ ioInterface options files = do
                     result <- findConfig paths
                     writeIORef cache (dir, result)
                     return result
+
+    -- Look for .editorconfig files in the target file's directory and
+    -- all its parents (as per the EditorConfig spec), plus the global
+    -- ${XDG_CONFIG_HOME}/editorconfig.ini default. shellcheck.* keys in
+    -- matching sections are turned into directives.
+    getEditorConfig filename = do
+        -- Resolve the directory (to find .editorconfig files) but keep
+        -- the leaf filename as-is so that globs match the symlink name
+        -- rather than the resolved target.
+        let name = takeFileName filename
+        dir <- normalize (takeDirectory filename)
+        let path = dir </> name
+        dirConfigs <- collectDirConfigs dir
+        globalConfig <- readGlobalEditorConfig
+        let allConfigs = dirConfigs ++ globalConfig
+            contributions = concatMap (directivesFor path) allConfigs
+        return $ case contributions of
+            [] -> Nothing
+            ((sourceFile, _):_) -> Just (sourceFile, concatMap snd contributions)
+      where
+        -- For each EditorConfig file: either report an invalid 'root'
+        -- declaration at its line, or yield the matching shellcheck.*
+        -- directives. Invalid roots take priority over directives.
+        directivesFor path (file, contents) =
+            case invalidRootLines contents of
+                (badLine:_) ->
+                    [(file, replicate (badLine - 1) '\n' ++ "invalid editorconfig value\n")]
+                [] ->
+                    let relative = makeRelativeTo (takeDirectory file) path
+                        result = parseEditorConfig contents relative
+                    in if null result then [] else [(file, result)]
+
+        makeRelativeTo dir path =
+            case stripPrefix (addTrailingSlash dir) path of
+                Just rest -> rest
+                Nothing -> takeFileName path
+
+        addTrailingSlash dir
+            | null dir = dir
+            | last dir == '/' = dir
+            | otherwise = dir ++ "/"
+
+        collectDirConfigs dir = do
+            current <- readConfig (dir </> ".editorconfig")
+            let isRoot = maybe False (isEditorConfigRoot . snd) current
+                next = takeDirectory dir
+            rest <- if next /= dir && not isRoot
+                    then collectDirConfigs next
+                    else return []
+            return $ maybeToList current ++ rest
+
+        readGlobalEditorConfig = do
+            path <- (getXdgDirectory XdgConfig "editorconfig.ini")
+                        `catch` ((const $ return "") :: IOException -> IO FilePath)
+            if null path
+              then return []
+              else maybeToList <$> readConfig path
 
     findConfig paths =
         case paths of
