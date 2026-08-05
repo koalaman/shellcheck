@@ -77,7 +77,8 @@ data Options = Options {
     sourcePaths      :: [FilePath],
     formatterOptions :: FormatterOptions,
     minSeverity      :: Severity,
-    rcfile           :: Maybe FilePath
+    rcfile           :: Maybe FilePath,
+    fileNameOverride :: Maybe FilePath
 }
 
 defaultOptions = Options {
@@ -88,7 +89,8 @@ defaultOptions = Options {
         foColorOption = ColorAuto
     },
     minSeverity = StyleC,
-    rcfile = Nothing
+    rcfile = Nothing,
+    fileNameOverride = Nothing
 }
 
 usageHeader = "Usage: shellcheck [OPTIONS...] FILES..."
@@ -137,7 +139,10 @@ options = [
         (NoArg $ Flag "help" "true") "Show this usage summary and exit",
     Option "" ["files-from"]
         (ReqArg (Flag "files-from") "FILE")
-        "Read input files from FILE (one per line, or '-' for stdin)"
+        "Read input files from FILE (one per line, or '-' for stdin)",
+    Option "" ["file-name"]
+        (ReqArg (Flag "file-name") "FILE")
+        "Use FILE as the filename when input is stdin"
     ]
 getUsageInfo = usageInfo usageHeader options
 
@@ -420,6 +425,11 @@ parseOption flag options =
                 rcfile = Just str
             }
 
+        Flag "file-name" str -> do
+            return options {
+                fileNameOverride = Just str
+            }
+
         Flag "enable" value ->
             let cs = checkSpec options in return options {
                 checkSpec = cs {
@@ -515,7 +525,14 @@ ioInterface options files = do
 
 
     -- Returns the name and contents of .shellcheckrc for the given file
-    getConfig cache filename =
+    getConfig cache filename = do
+        let configFilename =
+                if filename == "-"
+                then fromMaybe filename (fileNameOverride options)
+                else filename
+        getRcConfig cache configFilename
+
+    getRcConfig cache filename =
         case rcfile options of
             Just file -> do
                 -- We have a specified rcfile. Ignore normal rcfile resolution.
