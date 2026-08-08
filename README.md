@@ -535,6 +535,14 @@ Issues can be ignored via environmental variable, command line, individually or 
 
 <https://github.com/koalaman/shellcheck/wiki/Ignore>
 
+`SHELLCHECK_OPTS` still works in current versions (including those that support
+`.shellcheckrc`). You can set it in your `.bashrc`, `/etc/profile`, or equivalent
+to pass default flags on every invocation, for example:
+
+```sh
+export SHELLCHECK_OPTS='--shell=bash --exclude=SC2016'
+```
+
 ## Reporting bugs
 
 Please use the GitHub issue tracker for any bugs or feature suggestions:
