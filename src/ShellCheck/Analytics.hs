@@ -5097,6 +5097,8 @@ prop_checkOverwrittenExitCode5 = verify checkOverwrittenExitCode "x; if [ $? -eq
 prop_checkOverwrittenExitCode6 = verify checkOverwrittenExitCode "x; [ $? -gt 0 ] && fail=$?"
 prop_checkOverwrittenExitCode7 = verifyNot checkOverwrittenExitCode "[ 1 -eq 2 ]; status=$?"
 prop_checkOverwrittenExitCode8 = verifyNot checkOverwrittenExitCode "[ 1 -eq 2 ]; exit $?"
+prop_checkOverwrittenExitCode9 = verify checkOverwrittenExitCode "x; printf '%d' $?; [ $? -eq 0 ]"
+prop_checkOverwrittenExitCode10 = verifyNot checkOverwrittenExitCode "read -r x; [ $? -eq 0 ]"
 checkOverwrittenExitCode params t =
     case t of
         T_DollarBraced id _ val | getLiteralString val == Just "?" -> check id
