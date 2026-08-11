@@ -923,7 +923,7 @@ getEnableDirectives root =
         T_Annotation _ list _ -> [s | EnableComment s <- list]
         _ -> []
 
-getExtendedAnalysisDirective :: Token -> Maybe Bool
+getExtendedAnalysisDirective :: Token -> Maybe ExtendedAnalysisMode
 getExtendedAnalysisDirective root =
     case root of
         T_Annotation _ list _ -> listToMaybe $ [s | ExtendedAnalysis s <- list]
