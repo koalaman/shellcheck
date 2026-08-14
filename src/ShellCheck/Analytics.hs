@@ -3901,6 +3901,8 @@ prop_checkUseBeforeDefinition3 = verifyNotTree checkUseBeforeDefinition "if ! my
 prop_checkUseBeforeDefinition4 = verifyNotTree checkUseBeforeDefinition "mycmd || mycmd() { f; }"
 prop_checkUseBeforeDefinition5 = verifyTree checkUseBeforeDefinition "false || mycmd; mycmd() { f; }"
 prop_checkUseBeforeDefinition6 = verifyNotTree checkUseBeforeDefinition "f() { one; }; f; f() { two; }; f"
+prop_checkUseBeforeDefinition7 = verifyNotTree checkUseBeforeDefinition "setup() { f() { true; }; }; f; f() { true; }"
+prop_checkUseBeforeDefinition8 = verifyNotTree checkUseBeforeDefinition "#!/usr/bin/env bats\nsetup() { f() { true; }; }\n@test \"a\" {\n  f\n}\n@test \"b\" {\n  f() { true; }\n}"
 checkUseBeforeDefinition :: Parameters -> Token -> [TokenComment]
 checkUseBeforeDefinition params t = fromMaybe [] $ do
     cfga <- cfgAnalysis params
@@ -3920,7 +3922,10 @@ checkUseBeforeDefinition params t = fromMaybe [] $ do
                 name <- getLiteralString cmd
                 invocations <- Map.lookup name funcs
                 -- Is the function definitely being defined later?
-                guard $ any (\c -> CF.doesPostDominate cfga c id) invocations
+                -- Every definition has to be later: one whose order we can't
+                -- determine, such as in a function nothing visibly invokes,
+                -- may already have run.
+                guard $ all (\c -> CF.doesPostDominate cfga c id) invocations
                 -- Was one already defined, so it's actually a re-definition?
                 guard . not $ any (\c -> CF.doesPostDominate cfga id c) invocations
                 return $ err id 2218 "This function is only defined later. Move the definition up."
