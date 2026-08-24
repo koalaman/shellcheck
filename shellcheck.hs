@@ -300,10 +300,19 @@ runFormatter sys format options files = do
             }
             result <- checkScript sys checkspec
             onResult format result sys
+            -- A malformed EditorConfig (invalid 'root' or 'shellcheck.*'
+            -- directive) means shellcheck cannot apply the requested
+            -- configuration, so it fails rather than silently proceeding.
             return $
-                if null (crComments result)
-                then NoProblems
-                else SomeProblems
+                if any editorConfigError (crComments result)
+                    then SupportFailure
+                    else if null (crComments result)
+                        then NoProblems
+                        else SomeProblems
+
+        editorConfigError pc =
+            cCode (pcComment pc) == 1134 &&
+                ".editorconfig" `isSuffixOf` posFile (pcStartPos pc)
 
 parseEnum name value list =
     case lookup value list of
@@ -535,6 +544,10 @@ ioInterface options files = do
                 else filename
         rcResult <- getRcConfig cache configFilename
         ecResult <- getEditorConfig configFilename
+        -- A rejected EditorConfig blob (one that only contains invalid
+        -- 'root'/'shellcheck.*' rejections) is surfaced with the
+        -- EditorConfig source so its SC1134 is attributable to it; this
+        -- also lets the formatter treat it as a fatal config error.
         return $ mergeConfigs filename rcResult ecResult
 
     mergeConfigs filename rcResult ecResult =
@@ -542,7 +555,14 @@ ioInterface options files = do
             (Nothing, Nothing) -> Nothing
             (Just (rcPath, rc), Nothing) -> Just (rcPath, rc)
             (Nothing, Just (ecPath, ec)) -> Just (ecPath, ec)
-            (Just (rcPath, rc), Just (_, ec)) -> Just (rcPath, rc ++ "\n" ++ ec)
+            (Just (rcPath, rc), Just (ecPath, ec)) ->
+                if isEditorConfigRejection ec
+                    then Just (ecPath, ec)
+                    else Just (rcPath, rc ++ "\n" ++ ec)
+
+    isEditorConfigRejection ec =
+        all (\l -> null (trim l) || l == "invalid editorconfig value") (lines ec)
+
 
     getRcConfig cache filename =
         case rcfile options of
@@ -589,17 +609,20 @@ ioInterface options files = do
             [] -> Nothing
             ((sourceFile, _):_) -> Just (sourceFile, concatMap snd contributions)
       where
-        -- For each EditorConfig file: either report an invalid 'root'
-        -- declaration at its line, or yield the matching shellcheck.*
-        -- directives. Invalid roots take priority over directives.
+        -- For each EditorConfig file: report any invalid 'root'
+        -- declaration (which takes priority) as a rejected config blob,
+        -- otherwise yield the matching shellcheck.* directives
+        -- (invalid directives are reported by editorConfigDirectives as a
+        -- rejected blob so the .shellcheckrc parser emits SC1134).
         directivesFor path (file, contents) =
-            case invalidRootLines contents of
+            let relative = makeRelativeTo (takeDirectory file) path
+            in case invalidRootLines contents of
                 (badLine:_) ->
                     [(file, replicate (badLine - 1) '\n' ++ "invalid editorconfig value\n")]
                 [] ->
-                    let relative = makeRelativeTo (takeDirectory file) path
-                        result = parseEditorConfig contents relative
-                    in if null result then [] else [(file, result)]
+                    case editorConfigDirectives contents relative of
+                        Nothing -> []
+                        Just blob -> [(file, blob)]
 
         makeRelativeTo dir path =
             case stripPrefix (addTrailingSlash dir) path of

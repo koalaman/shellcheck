@@ -24,10 +24,11 @@
 -- of sections whose glob matches the file being checked are extracted,
 -- and turned into the same "key=value" directive syntax that is used in
 -- .shellcheckrc files.
-module ShellCheck.EditorConfig (parseEditorConfig, isEditorConfigRoot, invalidRootLines, globToRegexString, runTests) where
+module ShellCheck.EditorConfig (parseEditorConfig, isEditorConfigRoot, invalidRootLines, invalidDirectiveLines, editorConfigDirectives, globToRegexString, runTests) where
 
 import Data.Char
 import Data.List
+import Data.List.NonEmpty (NonEmpty(..), nonEmpty)
 import Data.Maybe
 
 import ShellCheck.Data (shellForExecutable)
@@ -45,7 +46,7 @@ import Test.QuickCheck
 -- (for the same key), so on conflicts the last matching section wins.
 parseEditorConfig :: String -> FilePath -> String
 parseEditorConfig contents name =
-    renderDirectives . lastWins . concatMap sectionDirectives $ sections
+    renderDirectives . lastWins . mapMaybe usable $ allDirectives name sections
   where
     -- Render each directive at its original line in the config file, so
     -- that any parse error (SC1134) is reported at the correct line.
@@ -58,6 +59,11 @@ parseEditorConfig contents name =
     lastWins = reverse . nubBy (\a b -> keyOf a == keyOf b) . reverse
       where
         keyOf (_, key, _) = key
+
+    usable (line, key, value) =
+        if isUsableDirective key value
+            then Just (line, key, value)
+            else Nothing
 
     ls = lines contents
     sections = splitSections 1 ls
@@ -76,33 +82,109 @@ parseEditorConfig contents name =
             ('[':cs@(_:_)) | last cs == ']' -> Just (init cs)
             _ -> Nothing
 
-    sectionDirectives (pat, body) =
+    -- All 'shellcheck.*' directives (as (line, key, value) tuples) found
+    -- in sections whose glob matches the file being checked.
+    allDirectives name = concatMap (sectionDirectives name)
+
+    sectionDirectives name (pat, body) =
         if matchesGlob pat name
-        then mapMaybe toDirective body
+        then mapMaybe toDirectivePair body
         else []
 
-    toDirective (line, l) =
-        let t = dropLineComment l
-        in case break (== '=') (trim t) of
+    toDirectivePair (line, l) =
+        case break (== '=') (trim (dropLineComment l)) of
             (key, '=':value) ->
                 let key' = trim key
                     value' = trim value
                 in if "shellcheck." `isPrefixOf` key'
-                    then
-                        let directive = drop (length "shellcheck.") key'
-                        in if isUsableDirective directive value'
-                            then Just (line, directive, value')
-                            else Nothing
+                    then Just (line, drop (length "shellcheck.") key', value')
                     else Nothing
             _ -> Nothing
 
     -- Only emit directives that the .shellcheckrc parser can handle.
     -- Unknown shells (e.g. 'shellcheck.shell=zsh') would otherwise
     -- silently suppress the SC2148 "unknown shell" warning, so they are
-    -- dropped here. Empty values are kept: the rc parser rejects them,
-    -- producing an SC1134 error at the right file and line.
+    -- dropped here and reported via invalidDirectiveLines. Values that
+    -- start with '#' or ';' are also dropped and reported: EditorConfig
+    -- has no inline comments, so such values are otherwise silently
+    -- eaten by the .shellcheckrc parser's trailing-comment handling
+    -- (e.g. 'disable=#abc'). Empty values for other keys are dropped
+    -- too: the rc parser would silently accept them.
     isUsableDirective "shell" value = null value || isJust (shellForExecutable value)
-    isUsableDirective _ value = not (null value)
+    isUsableDirective _ value =
+      case nonEmpty value of
+        Nothing   -> False
+        Just (x :| _) -> x `notElem` "#;"
+
+-- Returns the 1-based line numbers of invalid 'shellcheck.*' directives,
+-- i.e.:
+--   * 'shellcheck.shell=<x>' where <x> is a non-empty, unknown shell
+--     (e.g. 'zsh'), which would otherwise silently suppress the SC2148
+--     "unknown shell" warning;
+--   * any 'shellcheck.<key>=<value>' whose (trimmed) value starts with
+--     '#' or ';', since EditorConfig does not allow inline comments and
+--     such values are otherwise silently eaten by the .shellcheckrc
+--     parser's trailing-comment handling (e.g. 'disable=#abc').
+-- Only directives in sections whose glob matches the file are reported.
+invalidDirectiveLines :: String -> FilePath -> [Int]
+invalidDirectiveLines contents name =
+    [ line | (line, key, value) <- allDirectives name sections
+           , not (isUsableDirective key value) ]
+  where
+    isUsableDirective "shell" value = null value || isJust (shellForExecutable value)
+    isUsableDirective _ value =
+      case nonEmpty value of
+        Nothing   -> False
+        Just (x :| _) -> x `notElem` "#;"
+
+    sections = splitSections 1 (lines contents)
+
+    splitSections _ [] = []
+    splitSections n (l:rest) =
+        case parseHeader l of
+            Just pat ->
+                let (body, rest') = break (isJust . parseHeader) rest
+                in (pat, zip [n+1..] body) : splitSections (n + 1 + length body) rest'
+            Nothing -> splitSections (n+1) rest
+
+    parseHeader l =
+        let t = trim (dropLineComment l)
+        in case t of
+            ('[':cs@(_:_)) | last cs == ']' -> Just (init cs)
+            _ -> Nothing
+
+    allDirectives name = concatMap (sectionDirectives name)
+
+    sectionDirectives name (pat, body) =
+        if matchesGlob pat name
+        then mapMaybe toDirectivePair body
+        else []
+
+    toDirectivePair (line, l) =
+        case break (== '=') (trim (dropLineComment l)) of
+            (key, '=':value) ->
+                let key' = trim key
+                    value' = trim value
+                in if "shellcheck." `isPrefixOf` key'
+                    then Just (line, drop (length "shellcheck.") key', value')
+                    else Nothing
+            _ -> Nothing
+
+-- Build the directive blob contributed by a single EditorConfig file for
+-- the given file being checked. Returns Nothing if the file contributes
+-- nothing (no matching section, or only empty values). Returns a blob of
+-- "key=value\n" directives when the matching sections are valid, or a
+-- single rejected line at the position of any invalid 'shellcheck.*'
+-- directive so that the .shellcheckrc parser reports it as SC1134.
+editorConfigDirectives :: String -> FilePath -> Maybe String
+editorConfigDirectives contents name =
+    let badLines = invalidDirectiveLines contents name
+    in if not (null badLines)
+        then Just . unlines $ map rejectedLine (nub (sort badLines))
+        else let result = parseEditorConfig contents name
+             in if null result then Nothing else Just result
+  where
+    rejectedLine n = replicate (n - 1) '\n' ++ "invalid editorconfig value"
 
 -- Does the top-level (pre-section) part of an EditorConfig file
 -- declare "root = true"? Per the spec, this stops the search for
@@ -301,17 +383,18 @@ prop_parseEditorConfig5 =
 prop_parseEditorConfig6 =
     parseEditorConfig "[*]\nshellcheck.shell=sh\n\n[foo]\nshellcheck.disable=SC2034\n" "foo"
         == "\nshell=sh\n\n\ndisable=SC2034\n"
--- An unsupported shell must not suppress the SC2148 warning, so the
--- directive is not emitted.
+-- An unsupported shell is not emitted as a usable directive; instead its
+-- line is reported via invalidDirectiveLines so the caller can reject it.
 prop_parseEditorConfigUnknownShell =
     parseEditorConfig "[*]\nshellcheck.shell=zsh\n" "foo" == ""
 prop_parseEditorConfigEmptyShell =
     parseEditorConfig "[*]\nshellcheck.shell=\n" "foo" == "\nshell=\n"
 prop_parseEditorConfigEmptyDisable =
     parseEditorConfig "[*]\nshellcheck.disable=\n" "foo" == ""
--- EditorConfig does not allow inline comments; the whole line after
--- the value is kept (including '# ...'), making the shell value
--- invalid, so no usable directive is emitted.
+-- EditorConfig does not allow inline comments, so a trailing '# ...'
+-- makes the value invalid (the .shellcheckrc parser's
+-- shellForExecutable lookup fails on the embedded text), and the
+-- directive is dropped. It is reported via invalidDirectiveLines.
 prop_parseEditorConfigInlineComment =
     parseEditorConfig "[*]\nshellcheck.shell=bash # inline\n" "foo" == ""
 -- Full-line comments starting on first non-ws char are stripped.
@@ -335,6 +418,31 @@ prop_invalidRootLinesTrue = invalidRootLines "root = true\n" == []
 prop_invalidRootLinesFalse = invalidRootLines "root = false\n" == []
 prop_invalidRootLinesInSection =
     invalidRootLines "[*]\nroot = true\n" == []
+-- An unsupported non-empty shell is reported at its line.
+prop_invalidDirectiveLinesUnknownShell =
+    invalidDirectiveLines "[*]\nshellcheck.shell=zsh\n" "foo" == [2]
+-- An empty shell is valid (the rc parser rejects it), so no error.
+prop_invalidDirectiveLinesEmptyShell =
+    invalidDirectiveLines "[*]\nshellcheck.shell=\n" "foo" == []
+-- A known shell is fine.
+prop_invalidDirectiveLinesKnownShell =
+    invalidDirectiveLines "[*]\nshellcheck.shell=bash\n" "foo" == []
+-- A '#'-prefixed value is reported (EditorConfig has no inline comments).
+prop_invalidDirectiveLinesHashValue =
+    invalidDirectiveLines "[foo]\nshellcheck.disable = #abc\n" "foo" == [2]
+-- A ';'-prefixed value is reported too.
+prop_invalidDirectiveLinesSemicolonValue =
+    invalidDirectiveLines "[foo]\nshellcheck.disable = ;abc\n" "foo" == [2]
+-- A plain invalid value (no comment marker) is not reported here; it is
+-- rejected by the .shellcheckrc parser as SC1134 instead.
+prop_invalidDirectiveLinesPlainValue =
+    invalidDirectiveLines "[foo]\nshellcheck.disable = abc\n" "foo" == []
+-- Directives in non-matching sections are ignored.
+prop_invalidDirectiveLinesNoMatch =
+    invalidDirectiveLines "[*.txt]\nshellcheck.shell=zsh\n" "foo" == []
+-- Only the matching section's invalid directive is reported.
+prop_invalidDirectiveLinesMatchingSection =
+    invalidDirectiveLines "[*.txt]\nshellcheck.shell=zsh\n[foo]\nshellcheck.shell=bash\n" "foo" == []
 
 return []
 runTests = $quickCheckAll
