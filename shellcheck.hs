@@ -20,6 +20,7 @@
 import qualified ShellCheck.Analyzer
 import           ShellCheck.Checker
 import           ShellCheck.Data
+import           ShellCheck.EditorConfig
 import           ShellCheck.Interface
 import           ShellCheck.Regex
 
@@ -77,7 +78,8 @@ data Options = Options {
     sourcePaths      :: [FilePath],
     formatterOptions :: FormatterOptions,
     minSeverity      :: Severity,
-    rcfile           :: Maybe FilePath
+    rcfile           :: Maybe FilePath,
+    fileNameOverride :: Maybe FilePath
 }
 
 defaultOptions = Options {
@@ -88,7 +90,8 @@ defaultOptions = Options {
         foColorOption = ColorAuto
     },
     minSeverity = StyleC,
-    rcfile = Nothing
+    rcfile = Nothing,
+    fileNameOverride = Nothing
 }
 
 usageHeader = "Usage: shellcheck [OPTIONS...] FILES..."
@@ -110,7 +113,7 @@ options = [
     Option "" ["list-optional"]
         (NoArg $ Flag "list-optional" "true") "List checks disabled by default",
     Option "" ["norc"]
-        (NoArg $ Flag "norc" "true") "Don't look for .shellcheckrc files",
+        (NoArg $ Flag "norc" "true") "Don't look for .shellcheckrc and .editorconfig files",
     Option "" ["rcfile"]
         (ReqArg (Flag "rcfile") "RCFILE")
         "Prefer the specified configuration file over searching for one",
@@ -137,7 +140,10 @@ options = [
         (NoArg $ Flag "help" "true") "Show this usage summary and exit",
     Option "" ["files-from"]
         (ReqArg (Flag "files-from") "FILE")
-        "Read input files from FILE (one per line, or '-' for stdin)"
+        "Read input files from FILE (one per line, or '-' for stdin)",
+    Option "" ["file-name"]
+        (ReqArg (Flag "file-name") "FILE")
+        "Use FILE as the filename for parsing EditorConfig configuration when input is stdin"
     ]
 getUsageInfo = usageInfo usageHeader options
 
@@ -294,10 +300,19 @@ runFormatter sys format options files = do
             }
             result <- checkScript sys checkspec
             onResult format result sys
+            -- A malformed EditorConfig (invalid 'root' or 'shellcheck.*'
+            -- directive) means shellcheck cannot apply the requested
+            -- configuration, so it fails rather than silently proceeding.
             return $
-                if null (crComments result)
-                then NoProblems
-                else SomeProblems
+                if any editorConfigError (crComments result)
+                    then SupportFailure
+                    else if null (crComments result)
+                        then NoProblems
+                        else SomeProblems
+
+        editorConfigError pc =
+            cCode (pcComment pc) == 1134 &&
+                ".editorconfig" `isSuffixOf` posFile (pcStartPos pc)
 
 parseEnum name value list =
     case lookup value list of
@@ -420,6 +435,11 @@ parseOption flag options =
                 rcfile = Just str
             }
 
+        Flag "file-name" str -> do
+            return options {
+                fileNameOverride = Just str
+            }
+
         Flag "enable" value ->
             let cs = checkSpec options in return options {
                 checkSpec = cs {
@@ -514,8 +534,37 @@ ioInterface options files = do
         fallback path _ = return path
 
 
-    -- Returns the name and contents of .shellcheckrc for the given file
-    getConfig cache filename =
+    -- Returns the name and contents of .shellcheckrc for the given file,
+    -- merged with any shellcheck.* directives found in applicable
+    -- EditorConfig files.
+    getConfig cache filename = do
+        let configFilename =
+                if filename == "-"
+                then fromMaybe filename (fileNameOverride options)
+                else filename
+        rcResult <- getRcConfig cache configFilename
+        ecResult <- getEditorConfig configFilename
+        -- A rejected EditorConfig blob (one that only contains invalid
+        -- 'root'/'shellcheck.*' rejections) is surfaced with the
+        -- EditorConfig source so its SC1134 is attributable to it; this
+        -- also lets the formatter treat it as a fatal config error.
+        return $ mergeConfigs filename rcResult ecResult
+
+    mergeConfigs filename rcResult ecResult =
+        case (rcResult, ecResult) of
+            (Nothing, Nothing) -> Nothing
+            (Just (rcPath, rc), Nothing) -> Just (rcPath, rc)
+            (Nothing, Just (ecPath, ec)) -> Just (ecPath, ec)
+            (Just (rcPath, rc), Just (ecPath, ec)) ->
+                if isEditorConfigRejection ec
+                    then Just (ecPath, ec)
+                    else Just (rcPath, rc ++ "\n" ++ ec)
+
+    isEditorConfigRejection ec =
+        all (\l -> null (trim l) || l == "invalid editorconfig value") (lines ec)
+
+
+    getRcConfig cache filename =
         case rcfile options of
             Just file -> do
                 -- We have a specified rcfile. Ignore normal rcfile resolution.
@@ -540,6 +589,66 @@ ioInterface options files = do
                     result <- findConfig paths
                     writeIORef cache (dir, result)
                     return result
+
+    -- Look for .editorconfig files in the target file's directory and
+    -- all its parents (as per the EditorConfig spec), plus the global
+    -- ${XDG_CONFIG_HOME}/editorconfig.ini default. shellcheck.* keys in
+    -- matching sections are turned into directives.
+    getEditorConfig filename = do
+        -- Resolve the directory (to find .editorconfig files) but keep
+        -- the leaf filename as-is so that globs match the symlink name
+        -- rather than the resolved target.
+        let name = takeFileName filename
+        dir <- normalize (takeDirectory filename)
+        let path = dir </> name
+        dirConfigs <- collectDirConfigs dir
+        globalConfig <- readGlobalEditorConfig
+        let allConfigs = dirConfigs ++ globalConfig
+            contributions = concatMap (directivesFor path) allConfigs
+        return $ case contributions of
+            [] -> Nothing
+            ((sourceFile, _):_) -> Just (sourceFile, concatMap snd contributions)
+      where
+        -- For each EditorConfig file: report any invalid 'root'
+        -- declaration (which takes priority) as a rejected config blob,
+        -- otherwise yield the matching shellcheck.* directives
+        -- (invalid directives are reported by editorConfigDirectives as a
+        -- rejected blob so the .shellcheckrc parser emits SC1134).
+        directivesFor path (file, contents) =
+            let relative = makeRelativeTo (takeDirectory file) path
+            in case invalidRootLines contents of
+                (badLine:_) ->
+                    [(file, replicate (badLine - 1) '\n' ++ "invalid editorconfig value\n")]
+                [] ->
+                    case editorConfigDirectives contents relative of
+                        Nothing -> []
+                        Just blob -> [(file, blob)]
+
+        makeRelativeTo dir path =
+            case stripPrefix (addTrailingSlash dir) path of
+                Just rest -> rest
+                Nothing -> takeFileName path
+
+        addTrailingSlash dir
+            | null dir = dir
+            | last dir == '/' = dir
+            | otherwise = dir ++ "/"
+
+        collectDirConfigs dir = do
+            current <- readConfig (dir </> ".editorconfig")
+            let isRoot = maybe False (isEditorConfigRoot . snd) current
+                next = takeDirectory dir
+            rest <- if next /= dir && not isRoot
+                    then collectDirConfigs next
+                    else return []
+            return $ maybeToList current ++ rest
+
+        readGlobalEditorConfig = do
+            path <- (getXdgDirectory XdgConfig "editorconfig.ini")
+                        `catch` ((const $ return "") :: IOException -> IO FilePath)
+            if null path
+              then return []
+              else maybeToList <$> readConfig path
 
     findConfig paths =
         case paths of

@@ -3297,7 +3297,10 @@ readConfigFile filename = do
                 return result
 
             Left err -> do
-                parseProblem ErrorC 1134 $ errorFor filename err
+                -- Report the error at its location in the config file
+                -- (e.g. .shellcheckrc or .editorconfig), not at the
+                -- current position in the script being checked.
+                parseProblemAt (errorPos err) ErrorC 1134 $ errorFor filename err
                 return []
 
     errorFor filename err =
