@@ -139,7 +139,6 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
     read the list from standard input. This option is processed in addition to
     any files specified on the command line.
 
-
 # FORMATS
 
 **tty**
@@ -191,7 +190,6 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
              && echo -e 'Playlist $f contains a HQ file in mp3 format'
          done
 
-
 **json1**
 
 :   Json is a popular serialization format that is more suitable for web
@@ -221,7 +219,6 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 
 :   Suppress all normal output. Exit with zero if no issues are found,
     otherwise exit with one. Stops processing after the first issue.
-
 
 # DIRECTIVES
 
@@ -324,16 +321,20 @@ Here is an example `.shellcheckrc`:
     disable=SC2236
 
 If no `.shellcheckrc` is found in any of the parent directories, ShellCheck
-will look in `~/.shellcheckrc` followed by the `$XDG_CONFIG_HOME`
-(usually `~/.config/shellcheckrc`) on Unix, or `%APPDATA%/shellcheckrc` on
-Windows. Only the first file found will be used.
+checks the following additional paths and uses the first file found:
+
++ On Unix-like systems, checks for `~/.shellcheckrc` followed by
+  `$XDG_CONFIG_HOME/shellcheckrc` (no leading dot). If `$XDG_CONFIG_HOME` is
+  unset it defaults to `~/.config`.
++ On Windows systems, checks for `%APPDATA%\shellcheckrc` followed by
+  `%XDG_CONFIG_HOME%\shellcheckrc`. If `%XDG_CONFIG_HOME%` is unset it defaults
+  to `%APPDATA%`, making this path equal to the previous path and a no-op.
 
 Note for Snap users: the Snap sandbox disallows access to hidden files.
 Use `shellcheckrc` without the dot instead.
 
 Note for Docker users: ShellCheck will only be able to look for files that
 are mounted in the container, so `~/.shellcheckrc` will not be read.
-
 
 # ENVIRONMENT VARIABLES
 
