@@ -4737,7 +4737,7 @@ checkRequireDoubleEquals params =
   where
     check _ t = case t of
         TC_Binary id _ "=" _ _ ->
-            style id 2337 "Prefer == over = for string comparisons in Bash tests."
+            style id 2338 "Prefer == over = for string comparisons in Bash tests."
         _ -> return ()
 
 
