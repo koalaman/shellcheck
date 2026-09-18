@@ -2534,6 +2534,8 @@ prop_checkUnassignedReferences50 = verifyNotTree checkUnassignedReferences "echo
 prop_checkUnassignedReferences51 = verifyNotTree checkUnassignedReferences "echo ${foo:+$foo}"
 prop_checkUnassignedReferences52 = verifyNotTree checkUnassignedReferences "wait -p pid; echo $pid"
 prop_checkUnassignedReferences53 = verifyTree checkUnassignedReferences "x=($foo)"
+prop_checkUnassignedReferences54 = verifyNotTree checkUnassignedReferences "compgen -V files -G '*'; echo \"${files[@]}\""
+prop_checkUnassignedReferences55 = verifyNotTree checkUnassignedReferences "compgen -A function -V funcs; echo \"${funcs[@]}\""
 
 checkUnassignedReferences = checkUnassignedReferences' False
 checkUnassignedReferences' includeGlobals params t = warnings
