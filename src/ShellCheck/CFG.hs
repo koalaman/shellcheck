@@ -1196,7 +1196,7 @@ handleCommand cmd vars args literalCmd = do
 
             linkRanges $ [args] ++ assignments ++ [exe] ++ dropAssignments
 
-    regularExpansionWithStatus vars args@(cmd NE.:| _) p = do
+    regularExpansionWithStatus vars args p = do
         initial <- regularExpansion vars (NE.toList args) p
         status <- newNodeRange $ CFSetExitCode (getId cmd)
         linkRange initial status
