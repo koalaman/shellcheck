@@ -1710,6 +1710,7 @@ prop_checkValidCondOps2 = verify checkValidCondOps "[ -M a ]"
 prop_checkValidCondOps2a = verifyNot checkValidCondOps "[ 3 \\> 2 ]"
 prop_checkValidCondOps3 = verifyNot checkValidCondOps "[ 1 = 2 -a 3 -ge 4 ]"
 prop_checkValidCondOps4 = verifyNot checkValidCondOps "[[ ! -v foo ]]"
+prop_checkValidCondOps5 = verifyNot checkValidCondOps "[ \\! -e foo ]"
 checkValidCondOps _ (TC_Binary id _ s _ _)
     | s `notElem` binaryTestOps =
         warn id 2057 "Unknown binary operator."
