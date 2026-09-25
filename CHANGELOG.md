@@ -1,5 +1,7 @@
 ## Git
 ### Added
+- `--exclude-from` flag and default `.shellcheckignore` file to exclude files
+  matching glob patterns
 
 ### Changed
 

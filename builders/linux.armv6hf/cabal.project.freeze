@@ -1,5 +1,6 @@
 active-repositories: hackage.haskell.org:merge
 constraints: any.Diff ==1.0.2,
+             any.Glob ==0.10.2,
              any.OneTuple ==0.4.2,
              any.QuickCheck ==2.16.0.0,
              QuickCheck -old-random +templatehaskell,
