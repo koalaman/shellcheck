@@ -1093,6 +1093,7 @@ prop_checkSingleQuotedVariables22 = verifyNot checkSingleQuotedVariables "jq '$_
 prop_checkSingleQuotedVariables23 = verifyNot checkSingleQuotedVariables "command jq '$__loc__'"
 prop_checkSingleQuotedVariables24 = verifyNot checkSingleQuotedVariables "exec jq '$__loc__'"
 prop_checkSingleQuotedVariables25 = verifyNot checkSingleQuotedVariables "exec -c -a foo jq '$__loc__'"
+prop_checkSingleQuotedVariables26 = verifyNot checkSingleQuotedVariables "yq '.a as $x | $x'"
 
 
 checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
@@ -1129,6 +1130,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
                 ,"oc"
                 ,"dpkg-query"
                 ,"jq"  -- could also check that user provides --arg
+                ,"yq"
                 ,"rename"
                 ,"rg"
                 ,"unset"
