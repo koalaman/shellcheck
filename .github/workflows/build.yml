@@ -116,17 +116,23 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v8
 
+      - name: Install dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install pandoc
+
       - name: List files for debugging
         run: find .
 
       - name: Work around GitHub permissions bug
         run: chmod +x *.bin/*/shellcheck*
 
-      - name: Package binaries
+      - name: Package binaries and man
         run: |
           export TAGS="$(cat source/tags)"
           mkdir -p deploy
           cp -r *.bin/* deploy
+          ./manpage
           cd deploy
           ../.prepare_deploy
           rm -rf */ README* LICENSE*
