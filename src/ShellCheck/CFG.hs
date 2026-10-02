@@ -168,7 +168,11 @@ data CFGParameters = CFGParameters {
     -- Whether the last element in a pipeline runs in the current shell
     cfLastpipe :: Bool,
     -- Whether all elements in a pipeline count towards the exit status
-    cfPipefail :: Bool
+    cfPipefail :: Bool,
+    -- Treat 'source'd files as data-flow boundaries: don't inline their
+    -- bodies into the CFG. Bounds memory when many inputs source a shared
+    -- tree (each includer would otherwise re-analyze the whole tree).
+    cfSourceAsBoundary :: Bool
 }
 
 data CFGResult = CFGResult {
@@ -871,11 +875,19 @@ build t = do
 
         T_SourceCommand _ originalCommand inlinedSource -> do
             cmd <- build originalCommand
-            end <- newStructuralNode
-            inline <- withReturn end $ build inlinedSource
-            linkRange cmd inline
-            linkRange inline end
-            return $ spanRange cmd inline
+            sourceAsBoundary <- reader $ cfSourceAsBoundary . cfParameters
+            if sourceAsBoundary
+              then
+                -- Data-flow boundary: do not inline the sourced body into the CFG.
+                -- Functions/vars it defines become opaque here; the file is
+                -- analyzed on its own when it is itself an input.
+                return cmd
+              else do
+                end <- newStructuralNode
+                inline <- withReturn end $ build inlinedSource
+                linkRange cmd inline
+                linkRange inline end
+                return $ spanRange cmd inline
 
         T_Subshell id body -> do
             main <- subshell id "explicit (..) subshell" $ sequentially body

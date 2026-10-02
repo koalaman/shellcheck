@@ -100,7 +100,7 @@ data CheckSpec = CheckSpec {
     csIncludedWarnings :: Maybe [Integer],
     csShellTypeOverride :: Maybe Shell,
     csMinSeverity :: Severity,
-    csExtendedAnalysis :: Maybe Bool,
+    csExtendedAnalysis :: Maybe ExtendedAnalysisMode,
     csOptionalChecks :: [String]
 } deriving (Show, Eq)
 
@@ -176,7 +176,7 @@ data AnalysisSpec = AnalysisSpec {
     asExecutionMode :: ExecutionMode,
     asCheckSourced :: Bool,
     asOptionalChecks :: [String],
-    asExtendedAnalysis :: Maybe Bool,
+    asExtendedAnalysis :: Maybe ExtendedAnalysisMode,
     asTokenPositions :: Map.Map Id (Position, Position)
 }
 
