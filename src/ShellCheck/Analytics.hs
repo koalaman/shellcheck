@@ -2471,6 +2471,7 @@ prop_checkUnused48 = verifyNotTree checkUnusedAssignments "_a=1"
 prop_checkUnused49 = verifyNotTree checkUnusedAssignments "declare -A array; key=a; [[ -v array[$key] ]]"
 prop_checkUnused50 = verifyNotTree checkUnusedAssignments "foofunc() { :; }; typeset -fx foofunc"
 prop_checkUnused51 = verifyTree checkUnusedAssignments "x[y[z=1]]=1; echo ${x[@]}"
+prop_checkUnused52 = verifyNotTree checkUnusedAssignments "set -o allexport\nfoo=bar"
 
 checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
@@ -2482,7 +2483,7 @@ checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
     unused = Map.assocs $ Map.difference assignments references
 
     warnFor (name, token) =
-        unless ("_" `isPrefixOf` name) $
+        unless ("_" `isPrefixOf` name || hasAllexport params) $
             warn (getId token) 2034 $
                 name ++ " appears unused. Verify use (or export if used externally)."
 

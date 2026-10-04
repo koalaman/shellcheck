@@ -81,6 +81,8 @@ composeAnalyzers :: (a -> Analysis) -> (a -> Analysis) -> a -> Analysis
 composeAnalyzers f g x = f x >> g x
 
 data Parameters = Parameters {
+    -- Whether this script has 'set -a' or 'set -o allexport' anywhere.
+    hasAllexport       :: Bool,
     -- Whether this script has the 'lastpipe' option set/default.
     hasLastpipe        :: Bool,
     -- Whether this script has the 'inherit_errexit' option set/default.
@@ -208,6 +210,7 @@ makeParameters spec = params
     params = Parameters {
         rootNode = root,
         shellType = fromMaybe (determineShell (asFallbackShell spec) root) $ asShellType spec,
+        hasAllexport = containsAllexport root,
         hasErrexit = containsErrexit root,
         hasNoglob = containsNoglob root,
         hasLastpipe =
@@ -265,6 +268,7 @@ isOptionSet' longOpt shortOpt root = isNothing $ doAnalysis (guard . not . isSet
             _ -> False
     re = mkRegex $ "[[:space:]]-[^-]*" ++ [shortOpt]
 
+containsAllexport = isOptionSet' "allexport" 'a'
 -- Does this script mention 'set -e' anywhere?
 -- Used as a hack to disable certain warnings.
 containsErrexit = isOptionSet' "errexit" 'e'
