@@ -139,6 +139,12 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
     read the list from standard input. This option is processed in addition to
     any files specified on the command line.
 
+**--file-name** *FILE*
+
+:   When checking standard input (`-`), use *FILE* as the filename to resolve
+    `.shellcheckrc` and EditorConfig configuration, instead of `-`. This has no
+    effect when checking regular files.
+
 
 # FORMATS
 
