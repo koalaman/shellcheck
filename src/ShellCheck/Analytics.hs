@@ -3937,6 +3937,10 @@ prop_checkUseBeforeDefinition3 = verifyNotTree checkUseBeforeDefinition "if ! my
 prop_checkUseBeforeDefinition4 = verifyNotTree checkUseBeforeDefinition "mycmd || mycmd() { f; }"
 prop_checkUseBeforeDefinition5 = verifyTree checkUseBeforeDefinition "false || mycmd; mycmd() { f; }"
 prop_checkUseBeforeDefinition6 = verifyNotTree checkUseBeforeDefinition "f() { one; }; f; f() { two; }; f"
+prop_checkUseBeforeDefinition7 = verifyNotTree checkUseBeforeDefinition "#!/usr/bin/env bats\n@test 'foo' { f; }\nf() { true; }"
+prop_checkUseBeforeDefinition8 = verifyNotTree checkUseBeforeDefinition "#!/usr/bin/env bats\n@test 'foo' { f; }\nsetup() { f() { true; }; }"
+prop_checkUseBeforeDefinition9 = verifyTree checkUseBeforeDefinition "#!/usr/bin/env bats\n@test 'foo' {\n f\n f() { true; }\n}"
+prop_checkUseBeforeDefinition10 = verifyTree checkUseBeforeDefinition "#!/usr/bin/env bats\nf\n@test 'foo' { true; }\nf() { true; }"
 checkUseBeforeDefinition :: Parameters -> Token -> [TokenComment]
 checkUseBeforeDefinition params t = fromMaybe [] $ do
     cfga <- cfgAnalysis params
@@ -3947,14 +3951,21 @@ checkUseBeforeDefinition params t = fromMaybe [] $ do
   where
     findFunction t =
         case t of
-            T_Function id _ _ name _ -> modify (Map.insertWith (++) name [id])
+            T_Function id _ _ name _ -> modify (Map.insertWith (++) name [(id, isInBatsTest t)])
             _ -> return ()
+
+    isInBatsTest t = any isBatsTest $ getPath (parentMap params) t
+    isBatsTest t = case t of T_BatsTest {} -> True; _ -> False
 
     findInvocation cfga funcs t =
         case t of
             T_SimpleCommand id _ (cmd:_) -> sequence_ $ do
                 name <- getLiteralString cmd
-                invocations <- Map.lookup name funcs
+                definitions <- Map.lookup name funcs
+                let invocations = map fst definitions
+                -- Bats loads the whole file before running a test, so functions
+                -- defined outside of tests are available in all of them.
+                guard . not $ isInBatsTest t && any (not . snd) definitions
                 -- Is the function definitely being defined later?
                 guard $ any (\c -> CF.doesPostDominate cfga c id) invocations
                 -- Was one already defined, so it's actually a re-definition?
