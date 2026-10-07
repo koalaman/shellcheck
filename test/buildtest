@@ -2,7 +2,10 @@
 # This script configures, builds and runs tests.
 # It's meant for automatic cross-distro testing.
 
+
 die() { echo "$*" >&2; exit 1; }
+[[ "$1" == "--do-invoke" ]] || die "Don't invoke. See test/distrotest."
+set -x
 
 [ -e "ShellCheck.cabal" ] ||
   die "ShellCheck.cabal not in current dir"
@@ -21,7 +24,19 @@ fi
 if [ -e /etc/arch-release ]
 then
   # Arch has an unconventional packaging setup
-  flags=(--disable-library-vanilla --enable-shared --enable-executable-dynamic --ghc-options=-dynamic)
+  flags=()
+  # That we need to do in a set in cabal config file since flags
+  # aren't doing it anymore.
+  # See https://wiki.archlinux.org/title/Haskell
+  mkdir -p ~/.config/cabal/ || die "creating config dir"
+  printf '%s\n' >> ~/.config/cabal/config '
+library-vanilla: False
+shared: True
+executable-dynamic: True
+program-default-options
+  ghc-options: -dynamic
+  ' || die "writing config"
+
 else
   flags=()
 fi
