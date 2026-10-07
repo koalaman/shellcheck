@@ -601,6 +601,20 @@ getModifiedVariables t =
             _ -> Nothing
 
 
+-- Variables set by bats' run command
+getBatsRunVariables args =
+    [
+        ("status", DataString SourceInteger),
+        ("output", DataString SourceExternal),
+        ("lines", DataArray SourceExternal)
+    ] ++ if "--separate-stderr" `elem` opts then [
+        ("stderr", DataString SourceExternal),
+        ("stderr_lines", DataArray SourceExternal)
+    ] else []
+  where
+    opts = takeWhile (\s -> s /= "--" && (s == "!" || "-" `isPrefixOf` s)) $
+        map (fromMaybe "" . getLiteralString) args
+
 -- Consider 'export/declare -x' a reference, since it makes the var available
 getReferencedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal _ x:_):rest)) =
     case x of
@@ -688,6 +702,8 @@ getModifiedVariableCommand base@(T_SimpleCommand id cmdPrefix (T_NormalWord _ (T
         "DEFINE_float" -> maybeToList $ getFlagVariable rest
         "DEFINE_integer" -> maybeToList $ getFlagVariable rest
         "DEFINE_string" -> maybeToList $ getFlagVariable rest
+
+        "run" -> [(base, base, name, value) | (name, value) <- getBatsRunVariables rest]
 
         _ -> []
   where
@@ -815,12 +831,6 @@ getReferencedVariables parents t =
             if isDereferencingBinaryOp op
             then concatMap (getIfReference t) [lhs, rhs]
             else []
-
-        T_BatsTest {} -> [ -- pretend @test references vars to avoid warnings
-            (t, t, "lines"),
-            (t, t, "status"),
-            (t, t, "output")
-            ]
 
         T_FdRedirect _ ('{':var) op -> -- {foo}>&- references and closes foo
             [(t, t, takeWhile (/= '}') var) | isClosingFileOp op]

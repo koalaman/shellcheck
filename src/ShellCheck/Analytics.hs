@@ -2079,6 +2079,9 @@ prop_subshellAssignmentCheck22 = verifyNotTree subshellAssignmentCheck "( [[ -n 
 prop_subshellAssignmentCheck23 = verifyNotTree subshellAssignmentCheck "( export foo ); echo $foo"
 prop_subshellAssignmentCheck24 = verifyNotTree subshellAssignmentCheck "( read -r a _ c <<< 'x y z'; ); echo $_"
 prop_subshellAssignmentCheck25 = verifyNotTree subshellAssignmentCheck "( _=discard; ); echo $_"
+prop_subshellAssignmentCheck40 = verifyNotTree subshellAssignmentCheck "#!/usr/bin/env bats\n@test 'foo' { ( run true; ) & run true; echo $status; }"
+prop_subshellAssignmentCheck41 = verifyTree subshellAssignmentCheck "( run true; ); echo $status"
+prop_subshellAssignmentCheck42 = verifyNotTree subshellAssignmentCheck "#!/usr/bin/env bats\n@test 'foo' { run true | cat; }\n@test 'bar' { true; }"
 subshellAssignmentCheck params t =
     let flow = variableFlow params
         check = findSubshelled flow [("oops",[])] Map.empty
@@ -2471,13 +2474,24 @@ prop_checkUnused48 = verifyNotTree checkUnusedAssignments "_a=1"
 prop_checkUnused49 = verifyNotTree checkUnusedAssignments "declare -A array; key=a; [[ -v array[$key] ]]"
 prop_checkUnused50 = verifyNotTree checkUnusedAssignments "foofunc() { :; }; typeset -fx foofunc"
 prop_checkUnused51 = verifyTree checkUnusedAssignments "x[y[z=1]]=1; echo ${x[@]}"
+prop_checkUnused52 = verifyNotTree checkUnusedAssignments "run --separate-stderr true"
+prop_checkUnused53 = verifyNotTree checkUnusedAssignments "#!/usr/bin/env bats\n@test 'foo' { true; }"
+prop_checkUnused54 = verifyTree checkUnusedAssignments "run=1"
+prop_checkUnused55 = verifyNotTree checkUnusedAssignments "run foo bar"
+prop_checkUnused56 = verifyTree checkUnusedAssignments "#!/usr/bin/env bats\n@test 'foo' { output=$(true); }"
 
 checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
     flow = variableFlow params
     references = Map.union (Map.fromList [(stripSuffix name, ()) | Reference (base, token, name) <- flow]) defaultMap
 
-    assignments = Map.fromList [(name, token) | Assignment (_, token, name, _) <- flow, isVariableName name]
+    assignments = Map.fromList [(name, token) | Assignment (base, token, name, _) <- flow, isVariableName name, not $ isBats base]
+    -- Variables set by bats' run (or pretended to be set by @test)
+    -- are for the caller to check, if needed
+    isBats t = case t of
+        T_SimpleCommand _ _ (cmd:_) -> getLiteralString cmd == Just "run"
+        T_BatsTest {} -> True
+        _ -> False
 
     unused = Map.assocs $ Map.difference assignments references
 
@@ -2542,6 +2556,11 @@ prop_checkUnassignedReferences50 = verifyNotTree checkUnassignedReferences "echo
 prop_checkUnassignedReferences51 = verifyNotTree checkUnassignedReferences "echo ${foo:+$foo}"
 prop_checkUnassignedReferences52 = verifyNotTree checkUnassignedReferences "wait -p pid; echo $pid"
 prop_checkUnassignedReferences53 = verifyTree checkUnassignedReferences "x=($foo)"
+prop_checkUnassignedReferences54 = verifyNotTree checkUnassignedReferences "f() { run true; echo \"$status $output ${lines[0]}\"; }"
+prop_checkUnassignedReferences55 = verifyNotTree checkUnassignedReferences "#!/usr/bin/env bats\n@test 'foo' { run_wrapper; echo \"$status $stderr\"; }"
+prop_checkUnassignedReferences56 = verifyTree checkUnassignedReferences "f() { run true; echo $stderr; }"
+prop_checkUnassignedReferences57 = verifyNotTree checkUnassignedReferences "f() { run -1 --separate-stderr false; echo \"$stderr ${stderr_lines[0]}\"; }"
+prop_checkUnassignedReferences58 = verifyTree checkUnassignedReferences "echo $stderr"
 
 checkUnassignedReferences = checkUnassignedReferences' False
 checkUnassignedReferences' includeGlobals params t = warnings
