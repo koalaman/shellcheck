@@ -222,6 +222,7 @@ optionalTreeChecks :: [(CheckDescription, (Parameters -> Token -> [TokenComment]
 optionalTreeChecks = [
     (newCheckDescription {
         cdName = "quote-safe-variables",
+        cdId = [2248],
         cdDescription = "Suggest quoting variables without metacharacters",
         cdPositive = "var=hello; echo $var",
         cdNegative = "var=hello; echo \"$var\""
@@ -229,6 +230,7 @@ optionalTreeChecks = [
 
     ,(newCheckDescription {
         cdName = "avoid-nullary-conditions",
+        cdId = [2243],
         cdDescription = "Suggest explicitly using -n in `[ $var ]`",
         cdPositive = "[ \"$var\" ]",
         cdNegative = "[ -n \"$var\" ]"
@@ -236,6 +238,7 @@ optionalTreeChecks = [
 
     ,(newCheckDescription {
         cdName = "avoid-negated-conditions",
+        cdId = [2335],
         cdDescription = "Suggest removing unnecessary comparison negations",
         cdPositive = "[ ! \"$var\" -eq 1 ]",
         cdNegative = "[ \"$var\" -ne 1 ]"
@@ -243,6 +246,7 @@ optionalTreeChecks = [
 
     ,(newCheckDescription {
         cdName = "add-default-case",
+        cdId = [2249],
         cdDescription = "Suggest adding a default case in `case` statements",
         cdPositive = "case $? in 0) echo 'Success';; esac",
         cdNegative = "case $? in 0) echo 'Success';; *) echo 'Fail' ;; esac"
@@ -250,6 +254,7 @@ optionalTreeChecks = [
 
     ,(newCheckDescription {
         cdName = "require-variable-braces",
+        cdId = [2250],
         cdDescription = "Suggest putting braces around all variable references",
         cdPositive = "var=hello; echo $var",
         cdNegative = "var=hello; echo ${var}"
@@ -257,6 +262,7 @@ optionalTreeChecks = [
 
     ,(newCheckDescription {
         cdName = "check-unassigned-uppercase",
+        cdId = [2154],
         cdDescription = "Warn when uppercase variables are unassigned",
         cdPositive = "echo $VAR",
         cdNegative = "VAR=hello; echo $VAR"
@@ -264,6 +270,7 @@ optionalTreeChecks = [
 
     ,(newCheckDescription {
         cdName = "require-double-brackets",
+        cdId = [2292],
         cdDescription = "Require [[ and warn about [ in Bash/Ksh",
         cdPositive = "[ -e /etc/issue ]",
         cdNegative = "[[ -e /etc/issue ]]"
@@ -271,6 +278,7 @@ optionalTreeChecks = [
 
     ,(newCheckDescription {
         cdName = "require-double-equals",
+        cdId = [2338],
         cdDescription = "Require == and warn about = in Bash tests",
         cdPositive = "[[ \"$x\" = \"$y\" ]]",
         cdNegative = "[[ \"$x\" == \"$y\" ]]"
@@ -278,6 +286,7 @@ optionalTreeChecks = [
 
     ,(newCheckDescription {
         cdName = "check-set-e-suppressed",
+        cdId = [2310, 2311],
         cdDescription = "Notify when set -e is suppressed during function invocation",
         cdPositive = "set -e; func() { cp *.txt ~/backup; rm *.txt; }; func && echo ok",
         cdNegative = "set -e; func() { cp *.txt ~/backup; rm *.txt; }; func; echo ok"
@@ -285,6 +294,7 @@ optionalTreeChecks = [
 
     ,(newCheckDescription {
         cdName = "check-extra-masked-returns",
+        cdId = [2312],
         cdDescription = "Check for additional cases where exit codes are masked",
         cdPositive = "rm -r \"$(get_chroot_dir)/home\"",
         cdNegative = "set -e; dir=\"$(get_chroot_dir)\"; rm -r \"$dir/home\""
@@ -292,6 +302,7 @@ optionalTreeChecks = [
 
     ,(newCheckDescription {
         cdName = "useless-use-of-cat",
+        cdId = [2002],
         cdDescription = "Check for Useless Use Of Cat (UUOC)",
         cdPositive = "cat foo | grep bar",
         cdNegative = "grep bar foo"
