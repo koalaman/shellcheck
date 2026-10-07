@@ -114,7 +114,7 @@ data Parameters = Parameters {
 -- TODO: Cache results of common AST ops here
 data Cache = Cache {}
 
-data Scope = SubshellScope String | NoneScope deriving (Show, Eq)
+data Scope = SubshellScope String | FunctionScope | NoneScope deriving (Show, Eq)
 data StackData =
     StackScope Scope
     | StackScopeEnd
@@ -521,6 +521,7 @@ leadType params t =
         T_Subshell _ _  -> SubshellScope "(..) group"
         T_BatsTest {} -> SubshellScope "@bats test"
         T_CoProcBody _ _  -> SubshellScope "coproc"
+        T_Function {} -> FunctionScope
         T_Redirecting {}  ->
             if causesSubshell == Just True
             then SubshellScope "pipeline"

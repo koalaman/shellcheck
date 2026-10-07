@@ -2079,20 +2079,34 @@ prop_subshellAssignmentCheck22 = verifyNotTree subshellAssignmentCheck "( [[ -n 
 prop_subshellAssignmentCheck23 = verifyNotTree subshellAssignmentCheck "( export foo ); echo $foo"
 prop_subshellAssignmentCheck24 = verifyNotTree subshellAssignmentCheck "( read -r a _ c <<< 'x y z'; ); echo $_"
 prop_subshellAssignmentCheck25 = verifyNotTree subshellAssignmentCheck "( _=discard; ); echo $_"
+prop_subshellAssignmentCheck26 = verifyNotTree subshellAssignmentCheck "( a=1; ); f() { echo $a; }"
+prop_subshellAssignmentCheck27 = verifyNotTree subshellAssignmentCheck "#!/usr/bin/env bats\n@test 'foo' { run true; [ \"$status\" -eq 0 ]; }\nf() { run true; [ \"$status\" -eq 0 ]; }\n@test 'bar' { f; }"
+prop_subshellAssignmentCheck28 = verifyTree subshellAssignmentCheck "f() { ( a=1; ); }; echo $a"
+prop_subshellAssignmentCheck29 = verifyTree subshellAssignmentCheck "f() { ( a=1; ); echo $a; }"
+prop_subshellAssignmentCheck30 = verifyNotTree subshellAssignmentCheck "( f() { a=1; }; ); echo $a"
+prop_subshellAssignmentCheck31 = verifyNotTree subshellAssignmentCheck "#!/usr/bin/env bats\n@test 'foo' { export a=1; }\n@test 'bar' { export a=2; }"
+prop_subshellAssignmentCheck32 = verifyNotTree subshellAssignmentCheck "( a=1; ); declare -x a=2; echo $a"
+prop_subshellAssignmentCheck33 = verifyTree subshellAssignmentCheck "( a=1; ); export a+=2"
+prop_subshellAssignmentCheck34 = verifyTree subshellAssignmentCheck "f() { cmd | while read x; do n=1; done; }; f; echo $n"
+prop_subshellAssignmentCheck35 = verifyNotTree subshellAssignmentCheck "#!/usr/bin/env bats\n@test 'foo' { f() { a=1; }; }\n@test 'bar' { f; echo $a; }"
 subshellAssignmentCheck params t =
     let flow = variableFlow params
-        check = findSubshelled flow [("oops",[])] Map.empty
+        check = findSubshelled flow [(InSubshell "oops",[])] Map.empty
     in execWriter check
+
+data SubshellCheckScope =
+    InSubshell String -- The reason for the subshell
+    | InFunction (Map.Map String VariableState) -- Variable states outside the function
 
 
 findSubshelled [] _ _ = return ()
-findSubshelled (Assignment x@(_, _, str, data_):rest) scopes@((reason,scope):restscope) deadVars =
+findSubshelled (Assignment x@(_, _, str, data_):rest) scopes@((kind,scope):restscope) deadVars =
     if isTrueAssignmentSource data_
-    then findSubshelled rest ((reason, x:scope):restscope) $ Map.insert str Alive deadVars
+    then findSubshelled rest ((kind, x:scope):restscope) $ Map.insert str Alive deadVars
     else findSubshelled rest scopes deadVars
 
 findSubshelled (Reference (_, readToken, str):rest) scopes deadVars = do
-    unless (shouldIgnore str) $ case Map.findWithDefault Alive str deadVars of
+    unless (shouldIgnore str || isAssignedBy readToken) $ case Map.findWithDefault Alive str deadVars of
         Alive -> return ()
         Dead writeToken reason -> do
                     info (getId writeToken) 2030 $ "Modification of " ++ str ++ " is local (to subshell caused by "++ reason ++")."
@@ -2101,14 +2115,28 @@ findSubshelled (Reference (_, readToken, str):rest) scopes deadVars = do
   where
     shouldIgnore str =
         str `elem` ["@", "*", "_", "IFS"]
+    -- `export foo=bar` references foo, but does not read its old value
+    isAssignedBy (T_Assignment _ Assign name _ _) = name == str
+    isAssignedBy _ = False
 
 findSubshelled (StackScope (SubshellScope reason):rest) scopes deadVars =
-    findSubshelled rest ((reason,[]):scopes) deadVars
+    findSubshelled rest ((InSubshell reason,[]):scopes) deadVars
 
-findSubshelled (StackScopeEnd:rest) ((reason, scope):oldScopes) deadVars =
+-- A function body runs where the function is called, not where it is defined,
+-- so subshells preceding the definition don't affect the variables it reads.
+findSubshelled (StackScope FunctionScope:rest) scopes deadVars =
+    findSubshelled rest ((InFunction deadVars,[]):scopes) Map.empty
+
+findSubshelled (StackScopeEnd:rest) ((InSubshell reason, scope):oldScopes) deadVars =
     findSubshelled rest oldScopes $
         foldl (\m (_, token, var, _) ->
             Map.insert var (Dead token reason) m) deadVars scope
+
+-- Likewise, assignments in a function body are not made where the function is
+-- defined, so don't add them to the enclosing scope. Keep the effects of
+-- subshells inside the function though.
+findSubshelled (StackScopeEnd:rest) ((InFunction outerVars, _):oldScopes) deadVars =
+    findSubshelled rest oldScopes $ Map.union deadVars outerVars
 
 
 -- FIXME: This is a very strange way of doing it.
@@ -2860,8 +2888,8 @@ checkLoopKeywordScope params t |
   where
     path = let p = getPath (parentMap params) t in NE.filter relevant p
     subshellType t = case leadType params t of
-        NoneScope -> Nothing
         SubshellScope str -> return str
+        _ -> Nothing
     relevant t = isLoop t || isFunction t || isJust (subshellType t)
 checkLoopKeywordScope _ _ = return ()
 
