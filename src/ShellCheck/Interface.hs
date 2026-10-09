@@ -57,7 +57,7 @@ module ShellCheck.Interface
     , InsertionPoint(InsertBefore, InsertAfter)
     , Replacement(repStartPos, repEndPos, repString, repPrecedence, repInsertionPoint)
     , newReplacement
-    , CheckDescription(cdName, cdDescription, cdPositive, cdNegative)
+    , CheckDescription(cdName, cdId, cdDescription, cdPositive, cdNegative)
     , newCheckDescription
     ) where
 
@@ -212,6 +212,7 @@ newFormatterOptions = FormatterOptions {
 
 data CheckDescription = CheckDescription {
     cdName :: String,
+    cdId :: [Integer],
     cdDescription :: String,
     cdPositive :: String,
     cdNegative :: String
@@ -219,6 +220,7 @@ data CheckDescription = CheckDescription {
 
 newCheckDescription = CheckDescription {
     cdName = "",
+    cdId = [],
     cdDescription = "",
     cdPositive = "",
     cdNegative = ""
