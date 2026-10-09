@@ -1097,6 +1097,14 @@ prop_checkSingleQuotedVariables22 = verifyNot checkSingleQuotedVariables "jq '$_
 prop_checkSingleQuotedVariables23 = verifyNot checkSingleQuotedVariables "command jq '$__loc__'"
 prop_checkSingleQuotedVariables24 = verifyNot checkSingleQuotedVariables "exec jq '$__loc__'"
 prop_checkSingleQuotedVariables25 = verifyNot checkSingleQuotedVariables "exec -c -a foo jq '$__loc__'"
+prop_checkSingleQuotedVariables26 = verifyNot checkSingleQuotedVariables "runc exec ctr sh -c 'echo $HOME'"
+prop_checkSingleQuotedVariables27 = verifyNot checkSingleQuotedVariables "run -0 nsenter -t 1 -m /bin/bash -eu -o pipefail -c 'echo $HOME'"
+prop_checkSingleQuotedVariables28 = verifyNot checkSingleQuotedVariables "kubectl exec pod -- sh -euc 'echo $HOME'"
+prop_checkSingleQuotedVariables29 = verify checkSingleQuotedVariables "runc exec ctr sh -c 'echo $HOME' 'echo $HOME'"
+prop_checkSingleQuotedVariables30 = verify checkSingleQuotedVariables "runc exec ctr sh -x 'echo $HOME'"
+prop_checkSingleQuotedVariables31 = verify checkSingleQuotedVariables "runc exec ctr sh script -c 'echo $HOME'"
+prop_checkSingleQuotedVariables32 = verify checkSingleQuotedVariables "echo sh --rcfile 'echo $HOME'"
+prop_checkSingleQuotedVariables33 = verifyNot checkSingleQuotedVariables "chroot /mnt /bin/ksh93 -c 'echo $HOME'"
 
 
 checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
@@ -1142,6 +1150,23 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
                 ]
             || "awk" `isSuffixOf` commandName
             || "perl" `isPrefixOf` commandName
+            || isShellScriptArgument
+
+    -- Like `runc exec ctr sh -c 'echo $HOME'`
+    isShellScriptArgument = fromMaybe False $ do
+        T_Redirecting _ _ (T_SimpleCommand _ _ words) <- getClosestCommand parents t
+        let pathIds = map getId $ NE.toList $ getPath parents t
+        let before = takeWhile (\w -> getId w `notElem` pathIds) words
+        return $ any isShellInvocation $ tails $ map (fromMaybe "" . getLiteralString) before
+    isShellInvocation (cmd:opts) =
+        basename cmd `elem` ["sh", "bash", "dash", "ash", "ksh", "ksh88", "ksh93", "mksh", "oksh", "zsh"] && endsWithDashC opts
+    isShellInvocation _ = False
+    endsWithDashC opts =
+        case opts of
+            [flag] -> "-" `isPrefixOf` flag && not ("--" `isPrefixOf` flag) && 'c' `elem` flag
+            flag:_:rest | flag `elem` ["-o", "+o", "-O", "+O"] -> endsWithDashC rest
+            flag:rest | take 1 flag `elem` ["-", "+"] -> endsWithDashC rest
+            _ -> False
 
     commonlyQuoted = ["PS1", "PS2", "PS3", "PS4", "PROMPT_COMMAND"]
     isOkAssignment t =
