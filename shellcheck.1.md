@@ -6,7 +6,7 @@ shellcheck - Shell script analysis tool
 
 # SYNOPSIS
 
-**shellcheck** [*OPTIONS*...] [--files-from=FILE] *FILES*...
+**shellcheck** [*OPTIONS*...] [--files-from=FILE] [--exclude-from=FILE] *FILES*...
 
 # DESCRIPTION
 
@@ -76,7 +76,8 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 
 **--norc**
 
-:   Don't try to look for .shellcheckrc configuration files.
+:   Don't try to look for .shellcheckrc, .editorconfig or .shellcheckignore
+    files. An ignore file given with **--exclude-from** is still used.
 
 **--rcfile** *RCFILE*
 
@@ -138,6 +139,14 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
     file path. Lines starting with `#` or empty lines are ignored. Use `-` to
     read the list from standard input. This option is processed in addition to
     any files specified on the command line.
+
+**--exclude-from** *FILE*
+
+:   Skip input files matching the patterns in *FILE*, instead of looking for
+    a `.shellcheckignore` in the current directory. The patterns are relative
+    to the directory of *FILE*, which can't be `-` for standard input. Use
+    `/dev/null` to not skip any files. If specified more than once, the last
+    one is used. See **IGNORE FILES** below for more information.
 
 
 # FORMATS
@@ -358,6 +367,44 @@ directories, ShellCheck will look in the global default
 
 Directives from `.shellcheckrc`/`shellcheckrc` and from `.editorconfig` are
 both applied, with `.shellcheckrc` taking precedence in case of conflicts.
+
+
+# IGNORE FILES
+
+Unless `--norc` is used, ShellCheck will look for a file `.shellcheckignore`
+in the current directory. Input files matching its patterns are skipped,
+whether they were given on the command line or via `--files-from`.
+
+Only the current directory is searched, not the directories of the input
+files or their parents. When running ShellCheck from elsewhere than the
+project root, such as from an editor, use `--exclude-from` to specify the
+file.
+
+The syntax is that of `.gitignore`: one pattern per line, relative to the
+directory of the `.shellcheckignore` itself. Files outside that directory
+are never ignored. Patterns are always case sensitive, including on file
+systems that aren't.
+
+    # Skip everything under any directory named 'vendor'
+    vendor/
+
+    # Skip generated completion scripts in this directory only
+    /completions/*.bash
+
+    # Skip all .env files at any depth, except this one
+    *.env
+    !/example.env
+
+Unlike in Git, a `!` pattern can re-include a file or directory from an
+ignored directory, provided it comes after the pattern ignoring that
+directory.
+
+Ignoring a file does not affect the scripts that `source` it: it is still
+followed as if it had been given as input. With `--check-sourced`, its
+warnings are therefore still reported.
+
+Standard input is never ignored. If all input files are ignored, ShellCheck
+exits with 0.
 
 
 # ENVIRONMENT VARIABLES

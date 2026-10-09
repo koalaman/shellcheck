@@ -36,6 +36,7 @@ Extra-Source-Files:
     striptests
     -- tests
     test/shellcheck.hs
+    test/ignoretest
 
 source-repository head
     type: git
@@ -94,6 +95,7 @@ library
       ShellCheck.Formatter.JSON1
       ShellCheck.Formatter.TTY
       ShellCheck.Formatter.Quiet
+      ShellCheck.IgnoreFile
       ShellCheck.Interface
       ShellCheck.Parser
       ShellCheck.Prelude
