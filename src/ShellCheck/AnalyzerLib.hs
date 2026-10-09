@@ -81,12 +81,14 @@ composeAnalyzers :: (a -> Analysis) -> (a -> Analysis) -> a -> Analysis
 composeAnalyzers f g x = f x >> g x
 
 data Parameters = Parameters {
+    -- Whether this script has 'set -a' or 'set -o allexport' anywhere.
+    hasAllexport       :: Bool,
     -- Whether this script has the 'lastpipe' option set/default.
     hasLastpipe        :: Bool,
     -- Whether this script has the 'inherit_errexit' option set/default.
     hasInheritErrexit  :: Bool,
-    -- Whether this script has 'set -e' anywhere.
-    hasSetE            :: Bool,
+    -- Whether this script has 'set -e' or 'set -o errexit' anywhere.
+    hasErrexit         :: Bool,
     -- Whether this script has 'set -f' or 'set -o noglob' anywhere.
     hasNoglob          :: Bool,
     -- Whether this script has 'set -o pipefail' anywhere.
@@ -208,7 +210,8 @@ makeParameters spec = params
     params = Parameters {
         rootNode = root,
         shellType = fromMaybe (determineShell (asFallbackShell spec) root) $ asShellType spec,
-        hasSetE = containsSetE root,
+        hasAllexport = containsAllexport root,
+        hasErrexit = containsErrexit root,
         hasNoglob = containsNoglob root,
         hasLastpipe =
             case shellType params of
@@ -251,31 +254,25 @@ makeParameters spec = params
     root = asScript spec
 
 
+-- | detect e.g. 'set -o errexit' or 'set -e'
+isOptionSet' :: [Char] -> Char -> Token -> Bool
+isOptionSet' longOpt shortOpt root = isNothing $ doAnalysis (guard . not . isSetOption) root
+  where
+    isSetOption t =
+        case t of
+            T_Script _ (T_Literal _ str) _ -> str `matches` re
+            T_SimpleCommand {}  ->
+                t `isUnqualifiedCommand` "set" &&
+                    (longOpt `elem` oversimplify t ||
+                        [shortOpt] `elem` map snd (getAllFlags t))
+            _ -> False
+    re = mkRegex $ "[[:space:]]-[^-]*" ++ [shortOpt]
+
+containsAllexport = isOptionSet' "allexport" 'a'
 -- Does this script mention 'set -e' anywhere?
 -- Used as a hack to disable certain warnings.
-containsSetE root = isNothing $ doAnalysis (guard . not . isSetE) root
-  where
-    isSetE t =
-        case t of
-            T_Script _ (T_Literal _ str) _ -> str `matches` re
-            T_SimpleCommand {}  ->
-                t `isUnqualifiedCommand` "set" &&
-                    ("errexit" `elem` oversimplify t ||
-                        "e" `elem` map snd (getAllFlags t))
-            _ -> False
-    re = mkRegex "[[:space:]]-[^-]*e"
-
-containsNoglob root = isNothing $ doAnalysis (guard . not . isNoglob) root
-  where
-    isNoglob t =
-        case t of
-            T_Script _ (T_Literal _ str) _ -> str `matches` re
-            T_SimpleCommand {}  ->
-                t `isUnqualifiedCommand` "set" &&
-                    ("noglob" `elem` oversimplify t ||
-                        "f" `elem` map snd (getAllFlags t))
-            _ -> False
-    re = mkRegex "[[:space:]]-[^-]*f"
+containsErrexit = isOptionSet' "errexit" 'e'
+containsNoglob = isOptionSet' "noglob" 'f'
 
 containsSetOption opt root = isNothing $ doAnalysis (guard . not . isPipefail) root
   where
