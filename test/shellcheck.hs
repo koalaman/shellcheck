@@ -15,6 +15,7 @@ import qualified ShellCheck.Checks.ShellSupport
 import qualified ShellCheck.EditorConfig
 import qualified ShellCheck.Fixer
 import qualified ShellCheck.Formatter.Diff
+import qualified ShellCheck.IgnoreFile
 import qualified ShellCheck.Parser
 
 main = do
@@ -39,5 +40,6 @@ main = do
       , ("EditorConfig"       , ShellCheck.EditorConfig.runTests)
       , ("Fixer"              , ShellCheck.Fixer.runTests)
       , ("Formatter.Diff"     , ShellCheck.Formatter.Diff.runTests)
+      , ("IgnoreFile"         , ShellCheck.IgnoreFile.runTests)
       , ("Parser"             , ShellCheck.Parser.runTests)
       ]

@@ -76,6 +76,13 @@ jobs:
           cd source
           cabal test ${{ matrix.cabal_flags }}
 
+      - name: Test .shellcheckignore handling
+        run: |
+          cd source
+          cabal build ${{ matrix.cabal_flags }} exe:shellcheck
+          # sdist doesn't reliably keep the executable bit
+          bash test/ignoretest "$(find dist-newstyle -name shellcheck -type f -perm -111)"
+
   build_source:
     name: Build
     needs: package_source

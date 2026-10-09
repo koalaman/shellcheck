@@ -21,6 +21,7 @@ import qualified ShellCheck.Analyzer
 import           ShellCheck.Checker
 import           ShellCheck.Data
 import           ShellCheck.EditorConfig
+import           ShellCheck.IgnoreFile
 import           ShellCheck.Interface
 import           ShellCheck.Regex
 
@@ -111,7 +112,7 @@ options = [
     Option "" ["list-optional"]
         (NoArg $ Flag "list-optional" "true") "List checks disabled by default",
     Option "" ["norc"]
-        (NoArg $ Flag "norc" "true") "Don't look for .shellcheckrc and .editorconfig files",
+        (NoArg $ Flag "norc" "true") "Don't look for .shellcheckrc, .editorconfig and .shellcheckignore files",
     Option "" ["rcfile"]
         (ReqArg (Flag "rcfile") "RCFILE")
         "Prefer the specified configuration file over searching for one",
@@ -138,7 +139,10 @@ options = [
         (NoArg $ Flag "help" "true") "Show this usage summary and exit",
     Option "" ["files-from"]
         (ReqArg (Flag "files-from") "FILE")
-        "Read input files from FILE (one per line, or '-' for stdin)"
+        "Read input files from FILE (one per line, or '-' for stdin)",
+    Option "" ["exclude-from"]
+        (ReqArg (Flag "exclude-from") "FILE")
+        "Skip input files matching the patterns in FILE instead of .shellcheckignore"
     ]
 getUsageInfo = usageInfo usageHeader options
 
@@ -228,11 +232,18 @@ process flags files = do
 
     let filesFrom = getOptions flags "files-from"
     extra <- fmap concat $ mapM readFilesFrom filesFrom
-    let allFiles = extra ++ files
+    let requestedFiles = extra ++ files
 
     -- It shouldn't be an error to do --files-from=/dev/null
     when (null filesFrom) $
-        verifyFiles allFiles
+        verifyFiles requestedFiles
+
+    -- Filtered after verifyFiles, since ignoring every file is not a usage error
+    ignoreRules <- case getOptions flags "exclude-from" of
+        [] -> lift $ defaultIgnoreRules options
+        given -> Just <$> givenIgnoreRules (last given)
+    cwd <- lift getCurrentDirectory
+    let allFiles = maybe id (dropIgnored cwd) ignoreRules requestedFiles
 
     let format = fromMaybe "tty" $ getOption flags "format"
     let formatters = formats $ formatterOptions options
@@ -244,7 +255,8 @@ process flags files = do
             throwError SupportFailure
         Just f -> ExceptT $ fmap Right f
 
-    sys <- lift $ ioInterface options allFiles
+    -- Ignored files remain valid 'source' targets for the files being checked
+    sys <- lift $ ioInterface options requestedFiles
 
     lift $ runFormatter sys formatter options allFiles
 
@@ -263,6 +275,51 @@ process flags files = do
             Right contents ->
                 return (parseFileListLines contents)
 
+-- Not consulted for an explicit --exclude-from, which --norc doesn't disable.
+defaultIgnoreRules :: Options -> IO (Maybe IgnoreRules)
+defaultIgnoreRules options = do
+    exists <- doesFileExist file
+    if exists && not (csIgnoreRC (checkSpec options))
+      then either unreadable (return . Just) =<< readIgnoreRules file
+      else return Nothing
+  where
+    file = ".shellcheckignore"
+    -- Not fatal, like an unreadable .shellcheckrc: nobody asked for this file
+    unreadable e = do
+        hPutStrLn stderr $ "Could not read ignore file: " ++ show e
+        return Nothing
+
+givenIgnoreRules :: FilePath -> ExceptT Status IO IgnoreRules
+givenIgnoreRules "-" = do
+    printErr "--exclude-from can't read from standard input."
+    throwError SyntaxFailure
+givenIgnoreRules file = do
+    result <- lift $ readIgnoreRules file
+    case result of
+        Left e -> do
+            printErr $ "Could not read ignore file: " ++ show e
+            throwError RuntimeException
+        Right rules -> return rules
+
+-- The patterns of an ignore file, and the directory they are relative to.
+type IgnoreRules = (FilePath, [IgnorePattern])
+
+readIgnoreRules :: FilePath -> IO (Either IOException IgnoreRules)
+readIgnoreRules file = try $ do
+    -- Symlinks are resolved because getCurrentDirectory resolves them too,
+    -- and relative inputs are located from there. Paths are then compared as
+    -- written, so an absolute input spelled through a symlink falls outside.
+    root <- canonicalizePath (takeDirectory file)
+    (contents, _) <- inputFile file
+    return (root, parseIgnoreFile contents)
+
+dropIgnored :: FilePath -> IgnoreRules -> [FilePath] -> [FilePath]
+dropIgnored cwd (root, patterns) = filter (not . ignored)
+  where
+    ignored "-" = False
+    ignored file =
+        maybe False ((== Just True) . isIgnored patterns) $
+            relativePath root (cwd </> file)
 
 
 runFormatter :: SystemInterface IO -> Formatter -> Options -> [FilePath]
@@ -450,6 +507,9 @@ parseOption flag options =
 
         -- This flag is handled specially in 'process'
         Flag "files-from" _ -> return options
+
+        -- This flag is handled specially in 'process'
+        Flag "exclude-from" _ -> return options
 
         Flag str _ -> do
             printErr $ "Internal error for --" ++ str ++ ". Please file a bug :("

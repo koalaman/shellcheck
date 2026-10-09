@@ -5,6 +5,8 @@
   (bash `require-double-equals`)
 - Add `--files-from` option to read input files from a file
 - Support EditorConfig `shellcheck.*` keys
+- Support `.shellcheckignore` files for skipping input files, and
+  `--exclude-from` to specify one (#2411)
 
 ### Changed
 - SC3040: Support `pipefail` as specified in POSIX.1-2024

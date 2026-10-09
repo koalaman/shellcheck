@@ -1,0 +1,275 @@
+#!/usr/bin/env bash
+# This script tests .shellcheckignore handling end to end, by running a
+# built shellcheck binary on a throwaway directory tree.
+#
+# The pattern syntax itself is covered by the unit tests in
+# src/ShellCheck/IgnoreFile.hs. This covers what they can't: which ignore
+# file is read, and how the paths given on the command line are matched
+# against it.
+
+main() {
+  [[ $# -eq 1 ]] || die "Usage: $0 path/to/shellcheck"
+  [[ -x "$1" ]] || die "$1 is not executable"
+  sc=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
+
+  tmp=$(mktemp -d) || die "Can't create temp dir"
+  trap 'rm -rf "$tmp"' EXIT
+  # Physical, since the temp dir can be behind a symlink, as on macOS, and
+  # absolute paths only match when spelled like the current directory.
+  tmp=$(cd "$tmp" && pwd -P)
+  root="$tmp/root"
+  failures=0
+
+  create_fixtures
+
+  test_patterns
+  test_path_forms
+  test_nested_ignore_files
+  test_symlinks
+  test_options
+  test_exclude_from
+  test_source
+
+  if (( failures > 0 ))
+  then
+    die "$failures .shellcheckignore test(s) failed"
+  fi
+  echo "All .shellcheckignore tests passed"
+}
+
+test_patterns() {
+  check "unmatched file is checked" "checked.sh" checked.sh
+  check "matched file is skipped" "checked.sh" checked.sh ignored.sh
+  check "unanchored pattern matches at any depth" "" sub/ignored.sh
+  check "anchored pattern matches in its own directory" "" anchored.sh
+  check "anchored pattern doesn't match deeper" "sub/anchored.sh" sub/anchored.sh
+  check "directory pattern matches at any depth" "" vendor/lib.sh sub/vendor/lib.sh
+  check "negation re-includes" "keep.gen.sh" keep.gen.sh other.gen.sh
+  check "all files ignored is a success" "" ignored.sh anchored.sh vendor/lib.sh
+}
+
+test_path_forms() {
+  check "leading ./" "" ./ignored.sh
+  check "path with .." "" sub/../ignored.sh
+  check "path leaving and re-entering" "" ../root/ignored.sh
+  check "absolute path" "" "$root/ignored.sh"
+  check "absolute path with .." "" "$root/sub/../ignored.sh"
+  check "absolute path, checked" "$root/checked.sh" "$root/checked.sh"
+  check "file outside the current directory is never ignored" \
+    "../outside/ignored.sh $tmp/outside/ignored.sh" \
+    ../outside/ignored.sh "$tmp/outside/ignored.sh"
+}
+
+test_nested_ignore_files() {
+  check "ignore file of a subdirectory is not read" \
+    "nested/local.sh" nested/ignored.sh nested/local.sh
+  check_in "$root/nested" "ignore file of a parent directory is not read" \
+    "ignored.sh other.gen.sh" ignored.sh other.gen.sh local.sh
+  check_in "$root/sub" "nothing is ignored without an ignore file here" \
+    "../ignored.sh ignored.sh vendor/lib.sh" ../ignored.sh ignored.sh vendor/lib.sh
+  check_in "$tmp" "ignore file next to the input is not read" \
+    "root/ignored.sh" root/ignored.sh
+  check_in / "absolute path from an unrelated directory" \
+    "$root/ignored.sh" "$root/ignored.sh"
+}
+
+test_symlinks() {
+  check "link is matched by its own name, not its target's" \
+    "link-to-ignored.sh" link-to-ignored.sh
+  check "link with an ignored name is skipped" "" link.gen.sh
+  check_in "$root/dangling" "dangling ignore file is not fatal" "checked.sh" checked.sh
+  check_in "$root/unreadable" "unreadable ignore file is not fatal" "checked.sh" checked.sh
+
+  # Paths are compared as written, without resolving links
+  check "linked directory is matched by its own name" "" linked/vendor/lib.sh
+  check "file reached through a link to outside is still inside" \
+    "" linked/ignored.sh
+  check_in "$tmp/outside" "file reached through a link to inside is still outside" \
+    "into-root/ignored.sh" into-root/ignored.sh
+
+  check_in "$tmp/root-link" "current directory behind a link" \
+    "checked.sh" ignored.sh checked.sh
+  check_in "$tmp/root-link" "absolute path spelled through that link is not ignored" \
+    "$tmp/root-link/ignored.sh" "$tmp/root-link/ignored.sh"
+}
+
+test_options() {
+  check "--norc disables ignore files" \
+    "anchored.sh ignored.sh vendor/lib.sh" --norc ignored.sh anchored.sh vendor/lib.sh
+
+  printf '%s\n' checked.sh ignored.sh nested/ignored.sh nested/local.sh > "$tmp/list"
+  check "--files-from is filtered" \
+    "checked.sh nested/local.sh" --files-from="$tmp/list"
+  check "--files-from and arguments are both filtered" \
+    "checked.sh nested/local.sh sub/anchored.sh" \
+    --files-from="$tmp/list" sub/anchored.sh sub/ignored.sh
+
+  check_in "$root/everything" "stdin is never ignored" "-" - < "$root/checked.sh"
+  check_in "$root/everything" "files next to stdin are still filtered" \
+    "-" - checked.sh < "$root/checked.sh"
+}
+
+test_exclude_from() {
+  check_in "$root/sub" "--exclude-from names the ignore file" \
+    "" --exclude-from=../.shellcheckignore ../ignored.sh ignored.sh vendor/lib.sh
+  check_in "$root/sub" "--exclude-from patterns are relative to that file" \
+    "anchored.sh" --exclude-from="$root/.shellcheckignore" anchored.sh ../anchored.sh
+  check_in / "--exclude-from from an unrelated directory" \
+    "$root/checked.sh" --exclude-from="$root/.shellcheckignore" \
+    "$root/ignored.sh" "$root/checked.sh"
+  check "--exclude-from replaces the default ignore file" \
+    "ignored.sh" --exclude-from=nested/.shellcheckignore ignored.sh nested/local.sh
+  check "--exclude-from=/dev/null ignores nothing" \
+    "ignored.sh" --exclude-from=/dev/null ignored.sh
+  check "--exclude-from is not disabled by --norc" \
+    "checked.sh" --norc --exclude-from=.shellcheckignore ignored.sh checked.sh
+  check "last --exclude-from is used" \
+    "ignored.sh" --exclude-from=.shellcheckignore --exclude-from=/dev/null ignored.sh
+  check "--exclude-from spelled through a link" \
+    "checked.sh" --exclude-from="$tmp/root-link/.shellcheckignore" ignored.sh checked.sh
+  check_refused "unreadable --exclude-from is fatal" \
+    2 "Could not read ignore file: " --exclude-from=nonexistent checked.sh
+  check_refused "--exclude-from can't be stdin" \
+    3 "--exclude-from can't read from standard input" --exclude-from=- checked.sh
+}
+
+test_source() {
+  check_in "$root/source" "sourced file is not found unless given" \
+    "main.sh" main.sh
+  check_in "$root/source" "sourced file is checked without ignore files" \
+    "lib.sh" --norc main.sh lib.sh
+  check_in "$root/source" "ignored file can still be sourced" \
+    "" main.sh lib.sh
+}
+
+create_fixtures() {
+  mkdir -p "$root"/{sub/vendor,vendor,nested,everything,source,dangling,unreadable} \
+    "$tmp"/outside/vendor || die "Can't create fixtures"
+
+  cat > "$root/.shellcheckignore" << 'EOF'
+# Comments and blank lines are skipped
+
+ignored.sh
+/anchored.sh
+vendor/
+*.gen.sh
+!keep.gen.sh
+EOF
+
+  cat > "$root/nested/.shellcheckignore" << 'EOF'
+!ignored.sh
+local.sh
+EOF
+
+  printf '%s\n' '-' '*' > "$root/everything/.shellcheckignore"
+  echo 'lib.sh' > "$root/source/.shellcheckignore"
+  ln -s nonexistent "$root/dangling/.shellcheckignore"
+  # Empty, in case it's readable after all, as it is for root
+  : > "$root/unreadable/.shellcheckignore"
+  chmod 000 "$root/unreadable/.shellcheckignore"
+
+  local file
+  for file in \
+    checked.sh ignored.sh anchored.sh local.sh keep.gen.sh other.gen.sh \
+    vendor/lib.sh sub/ignored.sh sub/anchored.sh sub/local.sh sub/vendor/lib.sh \
+    nested/ignored.sh nested/local.sh nested/other.gen.sh \
+    everything/checked.sh dangling/checked.sh unreadable/checked.sh
+  do
+    flawed_script > "$root/$file"
+  done
+  flawed_script > "$tmp/outside/ignored.sh"
+  flawed_script > "$tmp/outside/vendor/lib.sh"
+
+  ln -s ignored.sh "$root/link-to-ignored.sh"
+  ln -s checked.sh "$root/link.gen.sh"
+  ln -s ../outside "$root/linked"
+  ln -s ../root "$tmp/outside/into-root"
+  ln -s root "$tmp/root-link"
+
+  # main.sh is only clean if lib.sh is followed, and lib.sh is never clean
+  # when checked by itself.
+  cat > "$root/source/main.sh" << 'EOF'
+#!/bin/sh
+. ./lib.sh
+echo "$greeting"
+EOF
+  cat > "$root/source/lib.sh" << 'EOF'
+#!/bin/sh
+greeting=hello
+EOF
+}
+
+# Every fixture has the same flaw, so a file is known to have been checked
+# when it shows up in the output.
+flawed_script() {
+  cat << 'EOF'
+#!/bin/sh
+echo $1
+EOF
+}
+
+check() {
+  check_in "$root" "$@"
+}
+
+# check_in dir description expected-files shellcheck-args...
+# Runs shellcheck in dir, and verifies that it reported issues in exactly
+# the space separated expected-files.
+check_in() {
+  local dir="$1" description="$2" expected="$3"
+  shift 3
+
+  local output status=0
+  output=$(cd "$dir" && "$sc" -f gcc "$@" 2>&1) || status=$?
+
+  local actual expected_status=0
+  actual=$(printf '%s\n' "$output" | sed -n 's/^\(.*\):[0-9]*:[0-9]*: .*/\1/p' | sort -u | xargs)
+  expected=$(printf '%s\n' "$expected" | tr ' ' '\n' | sort -u | xargs)
+  [[ -z "$expected" ]] || expected_status=1
+
+  if [[ "$actual" == "$expected" && "$status" == "$expected_status" ]]
+  then
+    echo "ok: $description"
+  else
+    failures=$((failures + 1))
+    {
+      echo "FAIL: $description"
+      echo "  in $dir: shellcheck -f gcc $*"
+      echo "  expected files: ${expected:-(none)}, exit $expected_status"
+      echo "  actual files:   ${actual:-(none)}, exit $status"
+      printf '%s\n' "$output" | sed 's/^/    /'
+    } >&2
+  fi
+}
+
+# check_refused description status message shellcheck-args...
+# Verifies that shellcheck fails with that status and a complaint starting
+# with message, without checking anything.
+check_refused() {
+  local description="$1" expected_status="$2" message="$3"
+  shift 3
+
+  local output status=0
+  output=$(cd "$root" && "$sc" -f gcc "$@" 2>&1) || status=$?
+
+  if [[ "$status" == "$expected_status" && "$output" == "$message"* ]]
+  then
+    echo "ok: $description"
+  else
+    failures=$((failures + 1))
+    {
+      echo "FAIL: $description"
+      echo "  in $root: shellcheck -f gcc $*"
+      echo "  expected \"$message...\", exit $expected_status"
+      echo "  actual exit $status"
+      printf '%s\n' "$output" | sed 's/^/    /'
+    } >&2
+  fi
+}
+
+die() {
+  echo "$*" >&2
+  exit 1
+}
+
+main "$@"
