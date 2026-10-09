@@ -1075,6 +1075,9 @@ prop_checkSingleQuotedVariables4 = verifyNot checkSingleQuotedVariables "awk '{p
 prop_checkSingleQuotedVariables5 = verifyNot checkSingleQuotedVariables "trap 'echo $SECONDS' EXIT"
 prop_checkSingleQuotedVariables6 = verifyNot checkSingleQuotedVariables "sed -n '$p'"
 prop_checkSingleQuotedVariables6a = verify checkSingleQuotedVariables "sed -n '$pattern'"
+prop_checkSingleQuotedVariables6b = verifyNot checkSingleQuotedVariables "sed -n -e '/foo/h; ${ g; }'"
+prop_checkSingleQuotedVariables6c = verifyNot checkSingleQuotedVariables "sed -e '${a\\\nEOF' -e '}'"
+prop_checkSingleQuotedVariables6d = verifyNot checkSingleQuotedVariables "sed -n -e '/0$/h; 42,${' -e G -e '}'"
 prop_checkSingleQuotedVariables7 = verifyNot checkSingleQuotedVariables "PS1='$PWD \\$ '"
 prop_checkSingleQuotedVariables8 = verify checkSingleQuotedVariables "find . -exec echo '$1' {} +"
 prop_checkSingleQuotedVariables9 = verifyNot checkSingleQuotedVariables "find . -exec awk '{print $1}' {} \\;"
@@ -1148,7 +1151,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
             _ -> False
 
     re = mkRegex "\\$[{(0-9a-zA-Z_]|`[^`]+`"
-    sedContra = mkRegex "\\$[{dpsaic]($|[^a-zA-Z])"
+    sedContra = mkRegex "\\$[acdgGilpPsxy]($|[^a-zA-Z])|\\$\\{[[:space:]]*($|/|[acdgGilpPsxy]($|[^a-zA-Z]))"
 
     getFindCommand (T_SimpleCommand _ _ words) =
         let list = map getLiteralString words
