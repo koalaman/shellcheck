@@ -3909,6 +3909,7 @@ prop_checkUseBeforeDefinition3 = verifyNotTree checkUseBeforeDefinition "if ! my
 prop_checkUseBeforeDefinition4 = verifyNotTree checkUseBeforeDefinition "mycmd || mycmd() { f; }"
 prop_checkUseBeforeDefinition5 = verifyTree checkUseBeforeDefinition "false || mycmd; mycmd() { f; }"
 prop_checkUseBeforeDefinition6 = verifyNotTree checkUseBeforeDefinition "f() { one; }; f; f() { two; }; f"
+prop_checkUseBeforeDefinition7 = verifyNotTree checkUseBeforeDefinition "f() { true; }\nreturn\necho \"$(f)\"\necho \"$(f)\""
 checkUseBeforeDefinition :: Parameters -> Token -> [TokenComment]
 checkUseBeforeDefinition params t = fromMaybe [] $ do
     cfga <- cfgAnalysis params
