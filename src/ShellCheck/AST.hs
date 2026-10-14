@@ -73,7 +73,7 @@ data InnerToken t =
     | Inner_T_CLOBBER
     | Inner_T_Case
     | Inner_T_CaseExpression t [(CaseType, [t], [t])]
-    | Inner_T_Condition ConditionType t
+    | Inner_T_Condition ConditionType ConditionType t
     | Inner_T_DGREAT
     | Inner_T_DLESS
     | Inner_T_DLESSDASH
@@ -223,7 +223,7 @@ pattern T_CaseExpression id word cases = OuterToken id (Inner_T_CaseExpression w
 pattern TC_Binary id typ op lhs rhs = OuterToken id (Inner_TC_Binary typ op lhs rhs)
 pattern TC_Group id typ token = OuterToken id (Inner_TC_Group typ token)
 pattern TC_Nullary id typ token = OuterToken id (Inner_TC_Nullary typ token)
-pattern T_Condition id typ token = OuterToken id (Inner_T_Condition typ token)
+pattern T_Condition id typ close token = OuterToken id (Inner_T_Condition typ close token)
 pattern T_CoProcBody id t = OuterToken id (Inner_T_CoProcBody t)
 pattern T_CoProc id var body = OuterToken id (Inner_T_CoProc var body)
 pattern TC_Or id typ str t1 t2 = OuterToken id (Inner_TC_Or typ str t1 t2)

@@ -29,6 +29,7 @@ import ShellCheck.AnalyzerLib hiding (producesComments)
 import ShellCheck.CFG
 import qualified ShellCheck.CFGAnalysis as CF
 import ShellCheck.Data
+import ShellCheck.Fixer (applyFix)
 import ShellCheck.Parser
 import ShellCheck.Prelude
 import ShellCheck.Interface
@@ -40,6 +41,7 @@ import Control.Monad.Identity
 import Control.Monad.State
 import Control.Monad.Writer hiding ((<>))
 import Control.Monad.Reader
+import Data.Array (listArray)
 import Data.Char
 import Data.Functor
 import Data.Function (on)
@@ -316,6 +318,16 @@ verifyTree f s = producesComments f s == Just True
 
 verifyNotTree :: (Parameters -> Token -> [TokenComment]) -> String -> Bool
 verifyNotTree f s = producesComments f s == Just False
+
+-- Verify that applying all suggested fixes to the script gives the expected result
+verifyTreeFix :: (Parameters -> Token -> [TokenComment]) -> String -> String -> Bool
+verifyTreeFix f s expected = fixed == Just (lines expected)
+  where
+    fixed = do
+        comments <- runAndGetComments f s
+        let combinedFix = mconcat $ mapMaybe tcFix comments
+        let scriptLines = lines s
+        return $ applyFix combinedFix (listArray (1, length scriptLines) scriptLines)
 
 checkCommand str f t@(T_SimpleCommand id _ (cmd:rest))
     | t `isCommand` str = f cmd rest
@@ -1643,7 +1655,7 @@ checkOrNeq _ (T_OrIf id lhs rhs) = sequence_ $ do
             T_OrIf _ lhs _ -> getExpr lhs -- Fetches x and y in `T_OrIf x (T_OrIf y z)`
             T_Pipeline _ _ [x] -> getExpr x
             T_Redirecting _ _ c -> getExpr c
-            T_Condition _ _ c -> getExpr c
+            T_Condition _ _ _ c -> getExpr c
             TC_Binary _ _ op lhs rhs -> orient (lhs, op, rhs)
             _ -> Nothing
 
@@ -1701,7 +1713,7 @@ checkAndEq _ (T_AndIf id lhs rhs) = sequence_ $ do
             T_AndIf _ lhs _ -> getExpr lhs -- Fetches x and y in `T_AndIf x (T_AndIf y z)`
             T_Pipeline _ _ [x] -> getExpr x
             T_Redirecting _ _ c -> getExpr c
-            T_Condition _ _ c -> getExpr c
+            T_Condition _ _ _ c -> getExpr c
             TC_Binary _ _ op lhs rhs -> orient (lhs, op, rhs)
             _ -> Nothing
 
@@ -4059,7 +4071,7 @@ checkUnnecessarilyInvertedTest _ t =
                 "-z" -> style (getId t) 2236 "Use -n instead of ! -z."
                 _ -> return ()
         T_Banged _ (T_Pipeline _ _
-          [T_Redirecting _ _ (T_Condition _ _ (TC_Unary _ _ op _))]) ->
+          [T_Redirecting _ _ (T_Condition _ _ _ (TC_Unary _ _ op _))]) ->
             case op of
                 "-n" -> style (getId t) 2237 "Use [ -z .. ] instead of ! [ -n .. ]."
                 "-z" -> style (getId t) 2237 "Use [ -n .. ] instead of ! [ -z .. ]."
@@ -4067,7 +4079,7 @@ checkUnnecessarilyInvertedTest _ t =
         TC_Unary _ _ "!" (TC_Binary _ bracketStyle op _ _) ->
             maybeSuggestRewrite True bracketStyle (getId t) op
         T_Banged _ (T_Pipeline _ _
-          [T_Redirecting _ _ (T_Condition _ _ (TC_Binary _ bracketStyle op _ _))]) ->
+          [T_Redirecting _ _ (T_Condition _ _ _ (TC_Binary _ bracketStyle op _ _))]) ->
             maybeSuggestRewrite False bracketStyle (getId t) op
         _ -> return ()
   where
@@ -4715,29 +4727,34 @@ prop_checkRequireDoubleBracket1 = verifyTree checkRequireDoubleBracket "[ -x foo
 prop_checkRequireDoubleBracket2 = verifyTree checkRequireDoubleBracket "[ foo -o bar ]"
 prop_checkRequireDoubleBracket3 = verifyNotTree checkRequireDoubleBracket "#!/bin/sh\n[ -x foo ]"
 prop_checkRequireDoubleBracket4 = verifyNotTree checkRequireDoubleBracket "[[ -x foo ]]"
+prop_checkRequireDoubleBracket5 = verifyTreeFix checkRequireDoubleBracket "[ -x foo ]" "[[ -x foo ]]"
+prop_checkRequireDoubleBracket6 = verifyTreeFix checkRequireDoubleBracket "[ -x foo ]]" "[[ -x foo ]]"
 checkRequireDoubleBracket params =
     if (shellType params) `elem` [Bash, Ksh, BusyboxSh]
     then nodeChecksToTreeCheck [check] params
     else const []
   where
     check _ t = case t of
-        T_Condition id SingleBracket _ ->
+        T_Condition id SingleBracket _ _ ->
             styleWithFix id 2292 "Prefer [[ ]] over [ ] for tests in Bash/Ksh/Busybox." (fixFor t)
         _ -> return ()
 
     fixFor t = fixWith $
         if isSimple t
         then
-            [
-                replaceStart (getId t) params 0 "[",
-                replaceEnd (getId t) params 0 "]"
-            ]
+            replaceStart (getId t) params 0 "[" :
+                -- Don't add another ] if it was (wrongly) closed with ]] already
+                [ replaceEnd (getId t) params 0 "]" | not $ isClosedWithDouble t ]
         else []
+
+    isClosedWithDouble t = case t of
+        T_Condition _ _ DoubleBracket _ -> True
+        _ -> False
 
     -- We don't tag operators like < and -o well enough to replace them,
     -- so just handle the simple cases.
     isSimple t = case t of
-        T_Condition _ _ s -> isSimple s
+        T_Condition _ _ _ s -> isSimple s
         TC_Binary _ _ op _ _ -> not $ any (\x -> x `elem` op) "<>"
         TC_Unary {} -> True
         TC_Nullary {} -> True
@@ -4975,7 +4992,7 @@ checkExtraMaskedReturns params t =
   where
     findMaskingNodes _ (T_Arithmetic _ list) = findMaskedNodesInList [list]
     findMaskingNodes _ (T_Array _ list) = findMaskedNodesInList $ allButLastSimpleCommands list
-    findMaskingNodes _ (T_Condition _ _ condition) = findMaskedNodesInList [condition]
+    findMaskingNodes _ (T_Condition _ _ _ condition) = findMaskedNodesInList [condition]
     findMaskingNodes _ (T_DoubleQuoted _ list) = findMaskedNodesInList $ allButLastSimpleCommands list
     findMaskingNodes _ (T_HereDoc _ _ _ _ list) = findMaskedNodesInList list
     findMaskingNodes _ (T_HereString _ word) = findMaskedNodesInList [word]
@@ -5068,7 +5085,7 @@ checkBatsTestDoesNotUseNegation params t =
   where
     check commands t =
         case t of
-            T_Banged id (T_Pipeline _ _ [T_Redirecting _ _ (T_Condition idCondition _ _)]) ->
+            T_Banged id (T_Pipeline _ _ [T_Redirecting _ _ (T_Condition idCondition _ _ _)]) ->
                                 if t `isLastOf` commands
                                 then style id 2315 "In Bats, ! will not fail the test if it is not the last command anymore. Fold the `!` into the conditional!"
                                 else err   id 2315 "In Bats, ! does not cause a test failure. Fold the `!` into the conditional!"

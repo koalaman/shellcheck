@@ -269,7 +269,7 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
     bashism (T_DollarBracket id _) = warnMsg id 3007 "$[..] in place of $((..)) is"
     bashism (T_SelectIn id _ _ _) = warnMsg id 3008 "select loops are"
     bashism (T_BraceExpansion id _) = warnMsg id 3009 "brace expansion is"
-    bashism (T_Condition id DoubleBracket _) =
+    bashism (T_Condition id DoubleBracket _ _) =
         unless isBusyboxSh $ warnMsg id 3010 "[[ ]] is"
     bashism (T_HereString id _) = warnMsg id 3011 "here-strings are"
 
