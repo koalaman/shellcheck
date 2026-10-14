@@ -764,6 +764,8 @@ printOptional = do
     list = sortOn cdName ShellCheck.Analyzer.optionalChecks
     f item = do
         putStrLn $ "name:    " ++ cdName item
+        putStrLn $ "id:      " ++ "SC" ++ show (cdId item)
+        putStrLn $ "wiki:    " ++ ShellCheck.Formatter.TTY.wikiLink ++ "SC" ++ show (cdId item)
         putStrLn $ "desc:    " ++ cdDescription item
         putStrLn $ "example: " ++ cdPositive item
         putStrLn $ "fix:     " ++ cdNegative item
