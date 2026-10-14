@@ -286,6 +286,13 @@ optionalTreeChecks = [
     }, checkSetESuppressed)
 
     ,(newCheckDescription {
+        cdName = "check-set-e-suppressed",
+        cdDescription = "Notify when set -e is suppressed during function invocation",
+        cdPositive = "set -e; func() { echo 1; false; echo 2; }; x=$(func)",
+        cdNegative = "set -e; func() { echo 1; false; echo 2; }; x=$(set -e; func)"
+    }, checkSetESuppressed)
+
+    ,(newCheckDescription {
         cdName = "check-extra-masked-returns",
         cdDescription = "Check for additional cases where exit codes are masked",
         cdPositive = "rm -r \"$(get_chroot_dir)/home\"",
