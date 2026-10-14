@@ -117,15 +117,18 @@ commandChecks = [
 
 
 optionalChecks = map fst optionalCommandChecks
-optionalCommandChecks :: [(CheckDescription, CommandCheck)]
-optionalCommandChecks = [
-    (newCheckDescription {
+
+cd2230 = newCheckDescription {
         cdName = "deprecate-which",
-        cdId = [2230],
+        cdId = 2230,
         cdDescription = "Suggest 'command -v' instead of 'which'",
         cdPositive = "which javac",
         cdNegative = "command -v javac"
-    }, checkWhich)
+    }
+
+optionalCommandChecks :: [(CheckDescription, CommandCheck)]
+optionalCommandChecks = [
+    (cd2230, checkWhich)
     ]
 optionalCheckMap = M.fromList $ map (\(desc, check) -> (cdName desc, check)) optionalCommandChecks
 
@@ -1262,7 +1265,7 @@ checkFindRedirections = CommandCheck (Basename "find") f
 
 prop_checkWhich = verify checkWhich "which '.+'"
 checkWhich = CommandCheck (Basename "which") $
-    \t -> info (getId $ getCommandTokenOrThis t) 2230 "'which' is non-standard. Use builtin 'command -v' instead."
+    \t -> info (getId $ getCommandTokenOrThis t) (cdId cd2230) "'which' is non-standard. Use builtin 'command -v' instead."
 
 prop_checkSudoRedirect1 = verify (checkSudoRedirect "sudo") "sudo echo 3 > /proc/file"
 prop_checkSudoRedirect2 = verify (checkSudoRedirect "doas") "doas cmd < input"

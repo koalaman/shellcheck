@@ -220,102 +220,105 @@ prop_verifyOptionalExamples = all check optionalTreeChecks
         verifyTree check (cdPositive desc)
         && verifyNotTree check (cdNegative desc)
 
-optionalTreeChecks :: [(CheckDescription, (Parameters -> Token -> [TokenComment]))]
-optionalTreeChecks = [
-    (newCheckDescription {
+cd2248 = newCheckDescription {
         cdName = "quote-safe-variables",
-        cdId = [2248],
+        cdId = 2248,
         cdDescription = "Suggest quoting variables without metacharacters",
         cdPositive = "var=hello; echo $var",
         cdNegative = "var=hello; echo \"$var\""
-    }, nodeChecksToTreeCheck [checkVerboseSpacefulnessCfg])
-
-    ,(newCheckDescription {
+    }
+cd2243 = newCheckDescription {
         cdName = "avoid-nullary-conditions",
-        cdId = [2243],
+        cdId = 2243,
         cdDescription = "Suggest explicitly using -n in `[ $var ]`",
         cdPositive = "[ \"$var\" ]",
         cdNegative = "[ -n \"$var\" ]"
-    }, nodeChecksToTreeCheck [checkNullaryExpansionTest])
-
-    ,(newCheckDescription {
+    }
+cd2335 = newCheckDescription {
         cdName = "avoid-negated-conditions",
-        cdId = [2335],
+        cdId = 2335,
         cdDescription = "Suggest removing unnecessary comparison negations",
         cdPositive = "[ ! \"$var\" -eq 1 ]",
         cdNegative = "[ \"$var\" -ne 1 ]"
-    }, nodeChecksToTreeCheck [checkUnnecessarilyInvertedTest])
-
-    ,(newCheckDescription {
+    }
+cd2249 = newCheckDescription {
         cdName = "add-default-case",
-        cdId = [2249],
+        cdId = 2249,
         cdDescription = "Suggest adding a default case in `case` statements",
         cdPositive = "case $? in 0) echo 'Success';; esac",
         cdNegative = "case $? in 0) echo 'Success';; *) echo 'Fail' ;; esac"
-    }, nodeChecksToTreeCheck [checkDefaultCase])
-
-    ,(newCheckDescription {
+    }
+cd2250 = newCheckDescription {
         cdName = "require-variable-braces",
-        cdId = [2250],
+        cdId = 2250,
         cdDescription = "Suggest putting braces around all variable references",
         cdPositive = "var=hello; echo $var",
         cdNegative = "var=hello; echo ${var}"
-    }, nodeChecksToTreeCheck [checkVariableBraces])
-
-    ,(newCheckDescription {
+    }
+cd2154 = newCheckDescription {
         cdName = "check-unassigned-uppercase",
-        cdId = [2154],
+        cdId = 2154,
         cdDescription = "Warn when uppercase variables are unassigned",
         cdPositive = "echo $VAR",
         cdNegative = "VAR=hello; echo $VAR"
-    }, checkUnassignedReferences' True)
-
-    ,(newCheckDescription {
+    }
+cd2292 = newCheckDescription {
         cdName = "require-double-brackets",
-        cdId = [2292],
+        cdId = 2292,
         cdDescription = "Require [[ and warn about [ in Bash/Ksh",
         cdPositive = "[ -e /etc/issue ]",
         cdNegative = "[[ -e /etc/issue ]]"
-    }, checkRequireDoubleBracket)
-
-    ,(newCheckDescription {
+    }
+cd2338 = newCheckDescription {
         cdName = "require-double-equals",
-        cdId = [2338],
+        cdId = 2338,
         cdDescription = "Require == and warn about = in Bash tests",
         cdPositive = "[[ \"$x\" = \"$y\" ]]",
         cdNegative = "[[ \"$x\" == \"$y\" ]]"
-    }, checkRequireDoubleEquals)
-
-    ,(newCheckDescription {
+    }
+cd2310 = newCheckDescription {
         cdName = "check-set-e-suppressed",
-        cdId = [2310, 2311],
+        cdId = 2310,
         cdDescription = "Notify when set -e is suppressed during function invocation",
         cdPositive = "set -e; func() { cp *.txt ~/backup; rm *.txt; }; func && echo ok",
         cdNegative = "set -e; func() { cp *.txt ~/backup; rm *.txt; }; func; echo ok"
-    }, checkSetESuppressed)
-
-    ,(newCheckDescription {
+    }
+cd2311 = newCheckDescription {
         cdName = "check-set-e-suppressed",
+        cdId = 2311,
         cdDescription = "Notify when set -e is suppressed during function invocation",
         cdPositive = "set -e; func() { echo 1; false; echo 2; }; x=$(func)",
         cdNegative = "set -e; func() { echo 1; false; echo 2; }; x=$(set -e; func)"
-    }, checkSetESuppressed)
-
-    ,(newCheckDescription {
+    }
+cd2312 = newCheckDescription {
         cdName = "check-extra-masked-returns",
-        cdId = [2312],
+        cdId = 2312,
         cdDescription = "Check for additional cases where exit codes are masked",
         cdPositive = "rm -r \"$(get_chroot_dir)/home\"",
         cdNegative = "set -e; dir=\"$(get_chroot_dir)\"; rm -r \"$dir/home\""
-    }, checkExtraMaskedReturns)
-
-    ,(newCheckDescription {
+    }
+cd2002 = newCheckDescription {
         cdName = "useless-use-of-cat",
-        cdId = [2002],
+        cdId = 2002,
         cdDescription = "Check for Useless Use Of Cat (UUOC)",
         cdPositive = "cat foo | grep bar",
         cdNegative = "grep bar foo"
-    }, nodeChecksToTreeCheck [checkUuoc])
+    }
+
+optionalTreeChecks :: [(CheckDescription, (Parameters -> Token -> [TokenComment]))]
+optionalTreeChecks = [
+    (cd2248, nodeChecksToTreeCheck [checkVerboseSpacefulnessCfg])
+    ,(cd2243, nodeChecksToTreeCheck [checkNullaryExpansionTest])
+    ,(cd2335, nodeChecksToTreeCheck [checkUnnecessarilyInvertedTest])
+    ,(cd2249, nodeChecksToTreeCheck [checkDefaultCase])
+    ,(cd2250, nodeChecksToTreeCheck [checkVariableBraces])
+    ,(cd2154, checkUnassignedReferences' True)
+    ,(cd2292, checkRequireDoubleBracket)
+    ,(cd2338, checkRequireDoubleEquals)
+    ,(cd2310, checkSetESuppressed)
+    ,(cd2311, checkSetESuppressed)
+    ,(cd2312, checkExtraMaskedReturns)
+    ,(cd2002, nodeChecksToTreeCheck [checkUuoc])
     ]
 
 optionalCheckMap :: Map.Map String (Parameters -> Token -> [TokenComment])
@@ -574,7 +577,7 @@ checkUuoc _ (T_Pipeline _ _ (T_Redirecting _ _ cmd:_:_)) =
     checkCommand "cat" (const f) cmd
   where
     f [word] | not (mayBecomeMultipleArgs word || isOption word) =
-        style (getId word) 2002 "Useless cat. Consider 'cmd < file | ..' or 'cmd file | ..' instead."
+        style (getId word) (cdId cd2002) "Useless cat. Consider 'cmd < file | ..' or 'cmd file | ..' instead."
     f _ = return ()
     isOption word = "-" `isPrefixOf` onlyLiteralString word
 checkUuoc _ _ = return ()
@@ -2259,7 +2262,7 @@ checkSpacefulnessCfg' dirtyPass params token@(T_DollarBraced id _ list) =
                     infoWithFix id 2086 "Double quote to prevent globbing and word splitting." $
                         addDoubleQuotesAround params token
             else
-                styleWithFix id 2248 "Prefer double quoting even when variables don't contain special characters." $
+                styleWithFix id (cdId cd2248) "Prefer double quoting even when variables don't contain special characters." $
                     addDoubleQuotesAround params token
 
   where
@@ -2298,7 +2301,7 @@ prop_CheckVariableBraces4 = verifyNot checkVariableBraces "echo $* $1"
 prop_CheckVariableBraces5 = verifyNot checkVariableBraces "$foo=42"
 checkVariableBraces params t@(T_DollarBraced id False l)
     | name `notElem` unbracedVariables && not (quotesMayConflictWithSC2281 params t) =
-        styleWithFix id 2250
+        styleWithFix id (cdId cd2250)
             "Prefer putting braces around variable references even when not strictly required."
             (fixFor t)
   where
@@ -2612,7 +2615,7 @@ checkUnassignedReferences' includeGlobals params t = warnings
             "Possible misspelling: " ++ var ++ " may not be assigned. Did you mean " ++ match ++ "?"
 
     warningForLocals var place =
-        return $ warn (getId place) 2154 $
+        return $ warn (getId place) (cdId cd2154) $
             var ++ " is referenced but not assigned" ++ optionalTip ++ "."
       where
         optionalTip =
@@ -4119,8 +4122,8 @@ checkUnnecessarilyInvertedTest _ t =
         let bracket s = if bracketStyle == SingleBracket then "[ " ++ s ++ " ]" else "[[ " ++ s ++ " ]]"
         return $
             if bangInside
-                then style id 2335 $ "Use " ++ newExpr ++ " instead of ! " ++ oldExpr ++ "."
-                else style id 2335 $ "Use " ++ (bracket newExpr) ++ " instead of ! " ++ (bracket oldExpr) ++ "."
+                then style id (cdId cd2335) $ "Use " ++ newExpr ++ " instead of ! " ++ oldExpr ++ "."
+                else style id (cdId cd2335) $ "Use " ++ (bracket newExpr) ++ " instead of ! " ++ (bracket oldExpr) ++ "."
 
 
 prop_checkRedirectionToCommand1 = verify checkRedirectionToCommand "ls > rm"
@@ -4144,7 +4147,7 @@ checkNullaryExpansionTest params t =
         TC_Nullary _ _ word ->
             case getWordParts word of
                 [t] | isCommandSubstitution t ->
-                    styleWithFix id 2243 "Prefer explicit -n to check for output (or run command without [/[[ to check for success)." fix
+                    styleWithFix id (cdId cd2243) "Prefer explicit -n to check for output (or run command without [/[[ to check for success)." fix
 
                 -- If they're constant, you get SC2157 &co
                 x | all (not . isConstant) x ->
@@ -4190,7 +4193,7 @@ checkDefaultCase _ t =
     case t of
         T_CaseExpression id _ list ->
             unless (any canMatchAny list) $
-                info id 2249 "Consider adding a default *) case, even if it just exits with error."
+                info id (cdId cd2249) "Consider adding a default *) case, even if it just exits with error."
         _ -> return ()
   where
     canMatchAny (_, list, _) = any canMatchAny' list
@@ -4754,7 +4757,7 @@ checkRequireDoubleBracket params =
   where
     check _ t = case t of
         T_Condition id SingleBracket _ _ ->
-            styleWithFix id 2292 "Prefer [[ ]] over [ ] for tests in Bash/Ksh/Busybox." (fixFor t)
+            styleWithFix id (cdId cd2292) "Prefer [[ ]] over [ ] for tests in Bash/Ksh/Busybox." (fixFor t)
         _ -> return ()
 
     fixFor t = fixWith $
@@ -4791,7 +4794,7 @@ checkRequireDoubleEquals params =
   where
     check _ t = case t of
         TC_Binary id _ "=" _ _ ->
-            style id 2338 "Prefer == over = for string comparisons in Bash tests."
+            style id (cdId cd2338) "Prefer == over = for string comparisons in Bash tests."
         _ -> return ()
 
 
@@ -4953,12 +4956,12 @@ checkSetESuppressed params t =
         go _ = return ()
 
         informConditional condType t =
-            info (getId t) 2310 (
+            info (getId t) (cdId cd2310) (
                 "This function is invoked in " ++ condType ++ " so set -e " ++
                 "will be disabled. Invoke separately if failures should " ++
                 "cause the script to exit.")
         informUninherited t =
-            info (getId t) 2311 (
+            info (getId t) (cdId cd2311) (
                 "Bash implicitly disabled set -e for this function " ++
                 "invocation because it's inside a command substitution. " ++
                 "Add set -e; before it or enable inherit_errexit.")
@@ -5046,7 +5049,7 @@ checkExtraMaskedReturns params t =
           = T_SimpleCommand id assigns args
         go t = t
 
-    inform t = info (getId t) 2312 ("Consider invoking this command "
+    inform t = info (getId t) (cdId cd2312) ("Consider invoking this command "
         ++ "separately to avoid masking its return value (or use '|| true' "
         ++ "to ignore).")
 

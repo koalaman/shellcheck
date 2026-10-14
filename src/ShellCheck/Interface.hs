@@ -212,7 +212,7 @@ newFormatterOptions = FormatterOptions {
 
 data CheckDescription = CheckDescription {
     cdName :: String,
-    cdId :: [Integer],
+    cdId :: Integer,
     cdDescription :: String,
     cdPositive :: String,
     cdNegative :: String
@@ -220,7 +220,7 @@ data CheckDescription = CheckDescription {
 
 newCheckDescription = CheckDescription {
     cdName = "",
-    cdId = [],
+    cdId = 0,
     cdDescription = "",
     cdPositive = "",
     cdNegative = ""
