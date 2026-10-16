@@ -3041,14 +3041,17 @@ checkOverridingPath _ _ = return ()
 prop_checkTildeInPath1 = verify checkTildeInPath "PATH=\"$PATH:~/bin\""
 prop_checkTildeInPath2 = verify checkTildeInPath "PATH='~foo/bin'"
 prop_checkTildeInPath3 = verifyNot checkTildeInPath "PATH=~/bin"
-checkTildeInPath _ (T_SimpleCommand _ vars _) =
-    mapM_ checkVar vars
+prop_checkTildeInPath4 = verify checkTildeInPath "export PATH=\"$PATH:~/b\""
+prop_checkTildeInPath5 = verify checkTildeInPath "export PATH=$PATH:\"~/c\""
+prop_checkTildeInPath6 = verify checkTildeInPath "declare -x PATH=\"$PATH:~/d\""
+prop_checkTildeInPath7 = verify checkTildeInPath "typeset -x PATH=\"$PATH:~/e\""
+prop_checkTildeInPath8 = verify checkTildeInPath "f() { local PATH=\"$PATH:~/f\"; }"
+-- Match T_Assignment directly so PATH=… args of export/declare/typeset/local
+-- are covered, not only prefix assignments on a simple command.
+checkTildeInPath _ (T_Assignment id Assign "PATH" [] (T_NormalWord _ parts))
+    | any (\x -> isQuoted x && hasTilde x) parts =
+        warn id 2147 "Literal tilde in PATH works poorly across programs."
   where
-    checkVar (T_Assignment id Assign "PATH" [] (T_NormalWord _ parts))
-        | any (\x -> isQuoted x && hasTilde x) parts =
-            warn id 2147 "Literal tilde in PATH works poorly across programs."
-    checkVar _ = return ()
-
     hasTilde t = '~' `elem` onlyLiteralString t
     isQuoted T_DoubleQuoted {} = True
     isQuoted T_SingleQuoted {} = True
