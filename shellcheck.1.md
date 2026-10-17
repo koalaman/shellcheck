@@ -76,7 +76,7 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 
 **--norc**
 
-:   Don't try to look for .shellcheckrc configuration files.
+:   Don't try to look for .shellcheckrc or .editorconfig configuration files.
 
 **--rcfile** *RCFILE*
 
