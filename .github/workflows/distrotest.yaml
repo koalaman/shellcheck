@@ -1,0 +1,67 @@
+name: Distro Test
+
+on:
+  release:
+    types: [published]
+  schedule:
+    - cron: '21 13 8 * *'  # monthly
+  workflow_dispatch:       # run manually
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ matrix.image }}
+      options: --cpus 1
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [debian:stable, debian:testing, haskell:latest, opensuse/leap:latest, fedora:latest, archlinux:latest]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install dependencies (apt)
+        if: startsWith(matrix.image, 'debian')
+        run: |
+          apt-get update
+          apt-get install -y cabal-install
+      - name: Install dependencies (dnf)
+        if: startsWith(matrix.image, 'fedora')
+        run: |
+          dnf install -y cabal-install ghc-template-haskell-devel findutils libstdc++-static gcc-c++
+      - name: Install dependencies (zypper)
+        if: startsWith(matrix.image, 'opensuse')
+        run: |
+          zypper install -y cabal-install ghc
+      - name: Install dependencies (pacman)
+        if: startsWith(matrix.image, 'archlinux')
+        run: |
+          pacman -S -y --noconfirm cabal-install ghc-static base-devel
+      - name: Configure cabal
+        if: startsWith(matrix.image, 'archlinux')
+        # See https://wiki.archlinux.org/title/Haskell
+        run: |
+          mkdir -p ~/.config/cabal
+          cat > ~/.config/cabal/config << EOF
+          library-vanilla: False
+          shared: True
+          executable-dynamic: True
+          EOF
+          cabal user-config update
+      - name: Update and install dependencies
+        run: |
+          cabal update
+          cabal install --dependencies-only --enable-tests ||
+          cabal install --dependencies-only ||
+          cabal install --dependencies-only --max-backjumps -1
+      - name: Build and test
+        run: |
+          cabal configure --enable-tests
+          cabal build
+          cabal test
+      - name: Build haddock
+        run: |
+          cabal haddock
