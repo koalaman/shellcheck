@@ -132,7 +132,7 @@ optionalCheckMap = M.fromList $ map (\(desc, check) -> (cdName desc, check)) opt
 prop_verifyOptionalExamples = all check optionalCommandChecks
   where
     check (desc, check) =
-      verify check (cdPositive desc)
+      runAndGetCodes (getChecker [check]) (cdPositive desc) == Just (cdId desc)
       && verifyNot check (cdNegative desc)
 
 -- Run a check against the getopt parser. If it fails, the lists are empty.

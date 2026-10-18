@@ -217,8 +217,9 @@ optionalChecks = map fst optionalTreeChecks
 prop_verifyOptionalExamples = all check optionalTreeChecks
   where
     check (desc, check) =
-        verifyTree check (cdPositive desc)
+        verifyCodesTree check (cdId desc) (cdPositive desc)
         && verifyNotTree check (cdNegative desc)
+
 
 optionalTreeChecks :: [(CheckDescription, (Parameters -> Token -> [TokenComment]))]
 optionalTreeChecks = [
@@ -232,10 +233,10 @@ optionalTreeChecks = [
 
     ,(newCheckDescription {
         cdName = "avoid-nullary-conditions",
-        cdId = [2243],
+        cdId = [2243, 2244],
         cdDescription = "Suggest explicitly using -n in `[ $var ]`",
-        cdPositive = "[ \"$var\" ]",
-        cdNegative = "[ -n \"$var\" ]"
+        cdPositive = "[ \"$var\" ] && [ \"$(cmd)\" ]",
+        cdNegative = "[ -n \"$var\" ] && [ -n \"$(cmd)\" ]"
     }, nodeChecksToTreeCheck [checkNullaryExpansionTest])
 
     ,(newCheckDescription {
@@ -290,15 +291,8 @@ optionalTreeChecks = [
         cdName = "check-set-e-suppressed",
         cdId = [2310, 2311],
         cdDescription = "Notify when set -e is suppressed during function invocation",
-        cdPositive = "set -e; func() { cp *.txt ~/backup; rm *.txt; }; func && echo ok",
-        cdNegative = "set -e; func() { cp *.txt ~/backup; rm *.txt; }; func; echo ok"
-    }, checkSetESuppressed)
-
-    ,(newCheckDescription {
-        cdName = "check-set-e-suppressed",
-        cdDescription = "Notify when set -e is suppressed during function invocation",
-        cdPositive = "set -e; func() { echo 1; false; echo 2; }; x=$(func)",
-        cdNegative = "set -e; func() { echo 1; false; echo 2; }; x=$(set -e; func)"
+        cdPositive = "set -e; func() { cp *.txt ~/backup; rm *.txt; }; func && echo ok; x=$(func)",
+        cdNegative = "set -e; func() { cp *.txt ~/backup; rm *.txt; }; func; echo ok; x=$(set -e; func)"
     }, checkSetESuppressed)
 
     ,(newCheckDescription {
@@ -356,9 +350,12 @@ checkUnqualifiedCommand str f t@(T_SimpleCommand id _ (cmd:rest))
 checkUnqualifiedCommand _ _ _ = return ()
 
 verifyCodes :: (Parameters -> Token -> Writer [TokenComment] ()) -> [Code] -> String -> Bool
-verifyCodes f l s = codes == Just l
+verifyCodes f = verifyCodesTree (runNodeAnalysis f)
+
+verifyCodesTree :: (Parameters -> Token -> [TokenComment]) -> [Code] -> String -> Bool
+verifyCodesTree treeCheck l s =
+    fmap sort codes == Just (sort l)
   where
-    treeCheck = runNodeAnalysis f
     comments = runAndGetComments treeCheck s
     codes = map (cCode . tcComment) <$> comments
 
