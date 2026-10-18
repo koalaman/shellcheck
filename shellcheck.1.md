@@ -116,7 +116,7 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 **-W** *NUM*,\ **--wiki-link-count=NUM**
 
 :   For TTY output, show *NUM* wiki links to more information about mentioned
-    warnings. Set to 0 to disable them entirely.
+    warnings. The default is 3. Set to 0 to disable them entirely.
 
 **-x**,\ **--external-sources**
 
