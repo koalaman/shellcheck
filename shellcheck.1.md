@@ -69,6 +69,10 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
     standard output. Subsequent **-f** options are ignored, see **FORMATS**
     below for more information.
 
+**--help**
+
+:   Show a usage summary and exit.
+
 **--list-optional**
 
 :   Output a list of known optional checks. These can be enabled with **-o**
