@@ -154,7 +154,7 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
     For example, in Vim, `:set makeprg=shellcheck\ -f\ gcc\ %` will allow
     using `:make` to check the script, and `:cnext` to jump to the next error.
 
-        <file>:<line>:<column>: <type>: <message>
+        <file>:<line>:<column>: <type>: <message> [SC####]
 
 **checkstyle**
 
@@ -293,7 +293,7 @@ Valid keys are:
 **shell**
 :   Overrides the shell detected from the shebang.  This is useful for
     files meant to be included (and thus lacking a shebang), or possibly
-    as a more targeted alternative to 'disable=SC2039'.
+    as a more targeted alternative to 'disable=SC3000-SC4000'.
 
 # RC FILES
 
