@@ -4986,6 +4986,9 @@ prop_checkExtraMaskedReturns35 = verifyTree checkExtraMaskedReturns "f() { local
 prop_checkExtraMaskedReturns36 = verifyNotTree checkExtraMaskedReturns "time false"
 prop_checkExtraMaskedReturns37 = verifyNotTree checkExtraMaskedReturns "time $(time false)"
 prop_checkExtraMaskedReturns38 = verifyTree checkExtraMaskedReturns "x=$(time time time false) time $(time false)"
+prop_checkExtraMaskedReturns39 = verifyNotTree checkExtraMaskedReturns "eval \"$(false || echo exit 42)\""
+prop_checkExtraMaskedReturns40 = verifyNotTree checkExtraMaskedReturns "eval \"$(git rev-parse --parseopt -- \"$@\" || echo exit $?)\""
+prop_checkExtraMaskedReturns41 = verifyTree checkExtraMaskedReturns "true \"$(false || cat)\""
 
 checkExtraMaskedReturns params t =
     runNodeAnalysis findMaskingNodes params (removeTransparentCommands t)
@@ -5035,7 +5038,7 @@ checkExtraMaskedReturns params t =
     isMaskDeliberate t = any isOrIf $ NE.init $ parents params t
       where
         isOrIf (T_OrIf _ _ (T_Pipeline _ _ [T_Redirecting _ _ cmd]))
-            = getCommandBasename cmd `elem` [Just "true", Just ":"]
+            = getCommandBasename cmd `elem` [Just "true", Just ":", Just "echo"]
         isOrIf _ = False
 
     isCheckedElsewhere t = any isDeclaringCommand $ NE.tail $ parents params t
