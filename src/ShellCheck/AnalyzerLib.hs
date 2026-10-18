@@ -155,12 +155,16 @@ pScript s =
 
 -- For testing. If parsed, returns whether there are any comments
 producesComments :: Checker -> String -> Maybe Bool
-producesComments c s = do
+producesComments c s = fmap (not . null) $ runAndGetCodes c s
+
+-- If parsed, returns the list of codes
+runAndGetCodes :: Checker -> String -> Maybe [Integer]
+runAndGetCodes c s = do
         let pr = pScript s
         prRoot pr
         let spec = defaultSpec pr
         let params = makeParameters spec
-        return . not . null $ filterByAnnotation spec params $ runChecker params c
+        return . (sort . map (cCode . tcComment)) $ filterByAnnotation spec params $ runChecker params c
 
 makeComment :: Severity -> Id -> Code -> String -> TokenComment
 makeComment severity id code note =

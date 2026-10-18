@@ -121,6 +121,7 @@ optionalCommandChecks :: [(CheckDescription, CommandCheck)]
 optionalCommandChecks = [
     (newCheckDescription {
         cdName = "deprecate-which",
+        cdId = [2230],
         cdDescription = "Suggest 'command -v' instead of 'which'",
         cdPositive = "which javac",
         cdNegative = "command -v javac"
@@ -131,7 +132,7 @@ optionalCheckMap = M.fromList $ map (\(desc, check) -> (cdName desc, check)) opt
 prop_verifyOptionalExamples = all check optionalCommandChecks
   where
     check (desc, check) =
-      verify check (cdPositive desc)
+      runAndGetCodes (getChecker [check]) (cdPositive desc) == Just (cdId desc)
       && verifyNot check (cdNegative desc)
 
 -- Run a check against the getopt parser. If it fails, the lists are empty.
