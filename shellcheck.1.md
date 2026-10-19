@@ -130,7 +130,8 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
     may `source`.
 
     This option may also be enabled using `external-sources=true` in
-    `.shellcheckrc`. This flag takes precedence.
+    `.shellcheckrc`. A value set in an rc file or an `external-sources`
+    directive takes precedence over this flag.
 
 **FILES...**
 
