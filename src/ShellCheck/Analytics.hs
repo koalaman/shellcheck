@@ -4161,6 +4161,11 @@ prop_checkUnnecessarilyInvertedTest7 = verify checkUnnecessarilyInvertedTest "[[
 prop_checkUnnecessarilyInvertedTest8 = verifyNot checkUnnecessarilyInvertedTest "! [[ $var =~ .* ]]"
 prop_checkUnnecessarilyInvertedTest9 = verify checkUnnecessarilyInvertedTest "[ ! $var -eq 0 ]"
 prop_checkUnnecessarilyInvertedTest10 = verify checkUnnecessarilyInvertedTest "! [[ $var -gt 3 ]]"
+prop_checkUnnecessarilyInvertedTest11 = verify checkUnnecessarilyInvertedTest "test ! -n \"$1\""
+prop_checkUnnecessarilyInvertedTest12 = verify checkUnnecessarilyInvertedTest "! test -z \"$1\""
+prop_checkUnnecessarilyInvertedTest13 = verifyNot checkUnnecessarilyInvertedTest "test ! -x \"$1\""
+prop_checkUnnecessarilyInvertedTest14 = verifyNot checkUnnecessarilyInvertedTest "test -n \"$1\""
+prop_checkUnnecessarilyInvertedTest15 = verifyNot checkUnnecessarilyInvertedTest "! test -x \"$1\""
 checkUnnecessarilyInvertedTest _ t =
     case t of
         TC_Unary _ _ "!" (TC_Unary _ _ op _) ->
@@ -4173,6 +4178,21 @@ checkUnnecessarilyInvertedTest _ t =
             case op of
                 "-n" -> style (getId t) 2237 "Use [ -z .. ] instead of ! [ -n .. ]."
                 "-z" -> style (getId t) 2237 "Use [ -n .. ] instead of ! [ -z .. ]."
+                _ -> return ()
+        -- test ! -n x
+        T_SimpleCommand _ _ [_, bang, op, _]
+          | t `isCommand` "test" && getLiteralString bang == Just "!" ->
+            case getLiteralString op of
+                Just "-n" -> style (getId t) 2236 "Use -z instead of ! -n."
+                Just "-z" -> style (getId t) 2236 "Use -n instead of ! -z."
+                _ -> return ()
+        -- ! test -z x
+        T_Banged _ (T_Pipeline _ _
+          [T_Redirecting _ _ s@(T_SimpleCommand _ _ [_, op, _])])
+          | s `isCommand` "test" ->
+            case getLiteralString op of
+                Just "-n" -> style (getId t) 2237 "Use test -z .. instead of ! test -n .."
+                Just "-z" -> style (getId t) 2237 "Use test -n .. instead of ! test -z .."
                 _ -> return ()
         TC_Unary _ _ "!" (TC_Binary _ bracketStyle op _ _) ->
             maybeSuggestRewrite True bracketStyle (getId t) op
