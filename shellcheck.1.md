@@ -96,7 +96,7 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 **-P**\ *SOURCEPATH*,\ **--source-path=***SOURCEPATH*
 
 :   Specify paths to search for sourced files, separated by `:` on Unix and
-    `;` on Windows. This is equivalent to specifying `search-path`
+    `;` on Windows. This is equivalent to specifying `source-path`
     directives.
 
 **-s**\ *shell*,\ **--shell=***shell*
