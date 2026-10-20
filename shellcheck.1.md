@@ -261,6 +261,8 @@ Valid keys are:
     The command can be a simple command like `echo foo`, or a compound command
     like a function definition, subshell block or loop. A range can be
     specified with a dash, e.g. `disable=SC3000-SC4000` to exclude 3xxx.
+    The end of the range is exclusive: this example covers SC3000 through
+    SC3999, but not SC4000.
     All warnings can be disabled with `disable=all`.
 
 **enable**
