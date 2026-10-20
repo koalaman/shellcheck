@@ -1194,8 +1194,10 @@ checkCatastrophicRm = CommandCheck (Basename "rm") $ \t ->
         go a r = a : case r of b:rest | b == c && a == b -> rest; _ -> r
 
     paths = [
-        "", "/bin", "/etc", "/home", "/mnt", "/usr", "/usr/share", "/usr/local",
-        "/var", "/lib", "/dev", "/media", "/boot", "/lib64", "/usr/bin"
+        "", "/bin", "/boot", "/dev", "/etc", "/home", "/lib", "/lib64", "/media",
+        "/mnt", "/opt", "/proc", "/root", "/run", "/sbin", "/srv", "/sys", "/usr",
+        "/usr/bin", "/usr/include", "/usr/lib", "/usr/libexec", "/usr/lib64",
+        "/usr/local", "/usr/sbin", "/usr/share", "/var"
         ]
     importantPaths = filter (not . null) $
         ["", "/", "/*", "/*/*"] >>= (\x -> map (++x) paths)
