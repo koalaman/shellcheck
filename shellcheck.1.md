@@ -102,10 +102,13 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 **-s**\ *shell*,\ **--shell=***shell*
 
 :   Specify Bourne shell dialect. Valid values are *sh*, *bash*, *dash*, *ksh*,
-    and *busybox*.
+    and *busybox*. The synonyms *bats* (handled as *bash*), *ash* (*dash*),
+    *ksh88*, *ksh93*, *oksh* (*ksh*), *busybox sh* and *busybox ash*
+    (*busybox*) are accepted as well.
     The default is to deduce the shell from the file's `shell` directive,
-    shebang, or `.bash/.bats/.dash/.ksh` extension, in that order. *sh* refers to
-    POSIX `sh` (not the system's), and will warn of portability issues.
+    shebang, or `.bash/.bats/.dash/.ksh/.envrc` extension, in that order.
+    *sh* refers to POSIX `sh` (not the system's), and will warn of portability
+    issues.
 
 **-S**\ *SEVERITY*,\ **--severity=***severity*
 
