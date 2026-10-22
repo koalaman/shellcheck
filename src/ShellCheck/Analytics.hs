@@ -74,6 +74,7 @@ treeChecks = [
     ,checkUseBeforeDefinition
     ,checkAliasUsedInSameParsingUnit
     ,checkArrayValueUsedAsIndex
+    ,checkGlobstarWithoutShopt
     ]
 
 checker spec params = mkChecker spec params treeChecks
@@ -5435,6 +5436,222 @@ checkUnaryTestA params t =
             styleWithFix id 2331 "For file existence, prefer standard -e over legacy -a." $
                 fixWith [replaceStart id params 2 "-e"]
         _ -> return ()
+
+
+prop_checkGlobstarWithoutShopt1 = verifyTree checkGlobstarWithoutShopt "#!/bin/bash\nfor f in **/*; do echo \"$f\"; done"
+prop_checkGlobstarWithoutShopt2 = verifyTree checkGlobstarWithoutShopt "#!/bin/bash\nls src/**/*.c"
+prop_checkGlobstarWithoutShopt3 = verifyCodesTree checkGlobstarWithoutShopt [2339] "#!/bin/bash\nls **/src/**/test/*.c"
+prop_checkGlobstarWithoutShopt4 = verifyTree checkGlobstarWithoutShopt "#!/bin/bash\nls a**/**/b"
+prop_checkGlobstarWithoutShopt5 = verifyCodesTree checkGlobstarWithoutShopt [2339, 2339] "#!/bin/bash\nls ./** \"$dir\"/**"
+prop_checkGlobstarWithoutShopt6 = verifyTree checkGlobstarWithoutShopt "#!/bin/bash\nfiles=( ./** )"
+prop_checkGlobstarWithoutShopt7 = verifyTree checkGlobstarWithoutShopt "#!/bin/bash\nselect f in a/**; do :; done"
+prop_checkGlobstarWithoutShopt8 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\nls ' **/* ' '**/*.c' \"**\" \\*\\*/x"
+prop_checkGlobstarWithoutShopt9 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\nls a**b *** **.c"
+prop_checkGlobstarWithoutShopt10 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\npattern='**/*.c'\necho '**/*.c'"
+prop_checkGlobstarWithoutShopt11 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\nx=**/*"
+prop_checkGlobstarWithoutShopt12 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\ncase \"$f\" in **/foo) ;; esac"
+prop_checkGlobstarWithoutShopt13 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\n[[ \"$f\" == **/foo ]]"
+prop_checkGlobstarWithoutShopt14 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\nshopt -s globstar; for f in **/*; do echo \"$f\"; done"
+prop_checkGlobstarWithoutShopt15 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\nshopt -s nullglob globstar\nls **/*.c"
+prop_checkGlobstarWithoutShopt16 = verifyTree checkGlobstarWithoutShopt "#!/bin/bash\nshopt -u globstar\nls **/*.c"
+prop_checkGlobstarWithoutShopt17 = verifyTree checkGlobstarWithoutShopt "#!/bin/bash\nshopt -s globstar\nshopt -u globstar\nls **/*.c"
+prop_checkGlobstarWithoutShopt18 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\nshopt -u globstar\nshopt -s globstar\nls **/*.c"
+prop_checkGlobstarWithoutShopt19 = verifyTree checkGlobstarWithoutShopt "#!/bin/bash\nls **/*.c\nshopt -s globstar"
+prop_checkGlobstarWithoutShopt20 = verifyTree checkGlobstarWithoutShopt "#!/bin/bash\nshopt globstar\nls **/*.c"
+prop_checkGlobstarWithoutShopt21 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\nshopt -s \"$opt\"\nls **/*.c"
+prop_checkGlobstarWithoutShopt22 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\nshopt -s globstar || exit 1\nls **/*.c"
+prop_checkGlobstarWithoutShopt23 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash -O globstar\nls **/*.c"
+prop_checkGlobstarWithoutShopt24 = verifyNotTree checkGlobstarWithoutShopt "#!/usr/bin/env -S bash -O globstar\nls **/*.c"
+prop_checkGlobstarWithoutShopt25 = verifyTree checkGlobstarWithoutShopt "#!/bin/bash -O nullglob\nls **/*.c"
+prop_checkGlobstarWithoutShopt26 = verifyTree checkGlobstarWithoutShopt "#!/bin/bash -O globstar\nshopt -u globstar\nls **/*.c"
+prop_checkGlobstarWithoutShopt27 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/sh\nls **/*.c"
+prop_checkGlobstarWithoutShopt28 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/ksh\nls **/*.c"
+prop_checkGlobstarWithoutShopt29 = verifyNotTree checkGlobstarWithoutShopt "ls **/*.c"
+prop_checkGlobstarWithoutShopt30 = verifyTree checkGlobstarWithoutShopt "shopt -u globstar\nls **/*.c"
+prop_checkGlobstarWithoutShopt31 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\nif [[ \"$c\" == yes ]]; then\n  shopt -s globstar\nfi\nprintf '%s\\n' **/*.c"
+prop_checkGlobstarWithoutShopt32 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\nif a; then :; else shopt -s globstar; fi\nls **/*.c"
+prop_checkGlobstarWithoutShopt33 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\nif a; then if b; then shopt -s globstar; fi; fi\nls **/*.c"
+prop_checkGlobstarWithoutShopt34 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\nshopt -s globstar\nif a; then :; else shopt -u globstar; fi\nls **/*.c"
+prop_checkGlobstarWithoutShopt35 = verifyTree checkGlobstarWithoutShopt "#!/bin/bash\nif a; then echo hi; else echo bye; fi\nls **/*.c"
+prop_checkGlobstarWithoutShopt36 = verifyTree checkGlobstarWithoutShopt "#!/bin/bash\nif a; then ls **/*.c; fi"
+prop_checkGlobstarWithoutShopt37 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\n[ -n \"$r\" ] && shopt -s globstar\nls **/*.c"
+prop_checkGlobstarWithoutShopt38 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\nfor x in y; do shopt -s globstar; done\nls **/*.c"
+prop_checkGlobstarWithoutShopt39 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\nshopt -s globstar\nwhile read -r f; do ls **/*.c; done"
+prop_checkGlobstarWithoutShopt40 = verifyTree checkGlobstarWithoutShopt "#!/bin/bash\n(shopt -s globstar)\nls **/*.c"
+prop_checkGlobstarWithoutShopt41 = verifyTree checkGlobstarWithoutShopt "#!/bin/bash\nshopt -s globstar | cat\nls **/*.c"
+prop_checkGlobstarWithoutShopt42 = verifyTree checkGlobstarWithoutShopt "#!/bin/bash\nx=$(shopt -s globstar)\nls **/*.c"
+prop_checkGlobstarWithoutShopt43 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\n(shopt -s globstar; ls **/*.c)"
+prop_checkGlobstarWithoutShopt44 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\nshopt -s globstar\nn=$(ls **/*.c | wc -l)"
+prop_checkGlobstarWithoutShopt45 = verifyTree checkGlobstarWithoutShopt "#!/bin/bash\nenable_globstar() { shopt -s globstar; }\nls **/*.c"
+prop_checkGlobstarWithoutShopt46 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\nenable_globstar() { shopt -s globstar; }\nenable_globstar\nls **/*.c"
+prop_checkGlobstarWithoutShopt47 = verifyTree checkGlobstarWithoutShopt "#!/bin/bash\nlist_files() { ls **/*.c; }\nlist_files"
+prop_checkGlobstarWithoutShopt48 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\nlist_files() { ls **/*.c; }\nshopt -s globstar\nlist_files"
+prop_checkGlobstarWithoutShopt49 = verifyTree checkGlobstarWithoutShopt "#!/bin/bash\nlist_files() { ls **/*.c; }\nlist_files\nshopt -s globstar"
+prop_checkGlobstarWithoutShopt50 = verifyCodesTree checkGlobstarWithoutShopt [2339] "#!/bin/bash\nf() { ls **/*.c; }\nshopt -s globstar\nf\nshopt -u globstar\nf"
+prop_checkGlobstarWithoutShopt51 = verifyTree checkGlobstarWithoutShopt "#!/bin/bash\nf() { ls **/*.c; }"
+prop_checkGlobstarWithoutShopt52 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\nshopt -s globstar\nf() { ls **/*.c; }"
+prop_checkGlobstarWithoutShopt53 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\nf() { f; ls **/*.c; }\nf"
+prop_checkGlobstarWithoutShopt54 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash -eO globstar\nls **/*.c"
+prop_checkGlobstarWithoutShopt55 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash -e -O globstar\nls **/*.c"
+prop_checkGlobstarWithoutShopt56 = verifyTree checkGlobstarWithoutShopt "#!/bin/bash +O globstar\nls **/*.c"
+prop_checkGlobstarWithoutShopt57 = verifyTree checkGlobstarWithoutShopt "#!/bin/bash -Oglobstar\nls **/*.c"
+prop_checkGlobstarWithoutShopt58 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\nf() {\n  shopt -s globstar\n  ls **/*.c\n}\nif c; then\n  f\nfi"
+prop_checkGlobstarWithoutShopt59 = verifyTree checkGlobstarWithoutShopt "#!/bin/bash\nf() { ls **/*.c; }\nif c; then f; fi"
+prop_checkGlobstarWithoutShopt60 = verifyTree checkGlobstarWithoutShopt "#!/bin/bash\nf() { echo hi; }\nif c; then f; fi\nls **/*.c"
+prop_checkGlobstarWithoutShopt61 = verifyTree checkGlobstarWithoutShopt "#!/bin/bash\necho | shopt -s globstar\nls **/*.c"
+prop_checkGlobstarWithoutShopt62 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\nshopt -s lastpipe\necho | shopt -s globstar\nls **/*.c"
+prop_checkGlobstarWithoutShopt63 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\nf() {\n  shopt -s globstar\n  ls **/*.c\n}\nif c; then\n  f\nfi\nls **/*.c"
+prop_checkGlobstarWithoutShopt64 = verifyNotTree checkGlobstarWithoutShopt "#!/bin/bash\nshopt -s lastpipe\nshopt -s globstar\necho | shopt -u globstar\nls **/*.c"
+checkGlobstarWithoutShopt params root
+    | shellType params /= Bash = []
+    | otherwise = execWriter $ mapM_ warnAbout disabledUses
+  where
+    warnAbout id =
+        warn id 2339 "Without globstar, ** is the same as *. Use 'shopt -s globstar' to make it recursive."
+
+    -- Only warn where globstar is surely off. When unsure, stay quiet.
+    disabledUses = nub [id | (id, GlobstarOff) <- observedUses]
+    observedUses = execWriter $ evalStateT (run [] initialState (eventsIn root)) Map.empty
+
+    -- Without a shebang the file may be sourced, and inherit globstar
+    initialState
+        | null (shebang root) = GlobstarUnknown
+        | enabledInShebang = GlobstarOn
+        | otherwise = GlobstarOff
+
+    -- Like #!/bin/bash -O globstar or -eO globstar
+    enabledInShebang = any setsGlobstar $ zip shebangWords (drop 1 shebangWords)
+    shebangWords = words (shebang root)
+    setsGlobstar (flag, name) =
+        name == "globstar"
+        && "-" `isPrefixOf` flag
+        && not ("--" `isPrefixOf` flag)
+        && "O" `isSuffixOf` flag
+    shebang (T_Annotation _ _ t) = shebang t
+    shebang (T_Script _ (T_Literal _ str) _) = str
+    shebang _ = ""
+
+    -- Everything that affects globstar, in the order it runs
+    eventsIn t@(OuterToken _ inner) =
+        case t of
+            T_Function _ _ _ name body -> [GlobstarFunctionDefined name (eventsIn body)]
+            T_Subshell {} -> [GlobstarInSubshell children]
+            T_DollarExpansion {} -> [GlobstarInSubshell children]
+            T_Backticked {} -> [GlobstarInSubshell children]
+            T_ProcSub {} -> [GlobstarInSubshell children]
+            T_Backgrounded {} -> [GlobstarInSubshell children]
+            T_CoProc {} -> [GlobstarInSubshell children]
+            T_Pipeline _ _ commands@(_:_:_) -> pipelineEvents commands
+            T_AndIf _ lhs rhs -> eventsIn lhs ++ [GlobstarMaybeRuns (eventsIn rhs)]
+            T_OrIf _ lhs rhs -> eventsIn lhs ++ [GlobstarMaybeRuns (eventsIn rhs)]
+            T_IfExpression {} -> [GlobstarMaybeRuns children]
+            T_CaseExpression {} -> [GlobstarMaybeRuns children]
+            T_WhileExpression {} -> [GlobstarMaybeRuns children]
+            T_UntilExpression {} -> [GlobstarMaybeRuns children]
+            T_ForArithmetic {} -> [GlobstarMaybeRuns children]
+            T_ForIn _ _ list body -> concatMap eventsIn list ++ usesIn list ++ [GlobstarMaybeRuns (concatMap eventsIn body)]
+            T_SelectIn _ _ list body -> concatMap eventsIn list ++ usesIn list ++ [GlobstarMaybeRuns (concatMap eventsIn body)]
+            T_SimpleCommand _ _ (_:args) -> children ++ usesIn args ++ commandEffect t
+            T_Array _ elements -> children ++ usesIn elements
+            _ -> children
+      where
+        children = concatMap eventsIn inner
+
+    -- With lastpipe the last part may run in this shell (not with job control),
+    -- so its changes may or may not stick
+    pipelineEvents commands =
+        if hasLastpipe params
+        then map (GlobstarInSubshell . eventsIn) (init commands) ++ [GlobstarMaybeRuns (eventsIn (last commands))]
+        else map (GlobstarInSubshell . eventsIn) commands
+
+    commandEffect t
+        | Just newState <- shoptChange t = [GlobstarChanged newState]
+        | Just name <- getCommandName t, name `Map.member` functions = [GlobstarFunctionCalled name]
+        | otherwise = []
+
+    shoptChange t = do
+        guard $ t `isUnqualifiedCommand` "shopt" && "o" `notElem` flags
+        guard $ any (`elem` [Just "globstar", Nothing]) names
+        newState <-
+            if "s" `elem` flags then Just GlobstarOn
+            else if "u" `elem` flags then Just GlobstarOff
+            else Nothing
+        -- We can't tell what shopt -s "$opt" sets
+        return $ if Just "globstar" `elem` names then newState else GlobstarUnknown
+      where
+        flags = map snd $ getAllFlags t
+        names = map getLiteralString $ filter (not . isFlag) $ arguments t
+        isFlag word = maybe False ("-" `isPrefixOf`) (getLiteralString word)
+
+    usesIn list = [GlobstarUsed id | T_NormalWord _ parts <- list, Just id <- [findGlobstar Nothing parts]]
+
+    -- ** only recurses when it's a whole path part, like a/**/b.
+    -- One warning per word is enough, since the fix is the same.
+    findGlobstar previous (a:b:rest)
+        | isStar a && isStar b && startsComponent previous && endsComponent rest = Just (getId a)
+    findGlobstar _ (x:rest) = findGlobstar (Just x) rest
+    findGlobstar _ [] = Nothing
+
+    isStar (T_Glob _ "*") = True
+    isStar _ = False
+
+    startsComponent Nothing = True
+    startsComponent (Just (T_Literal _ str)) = "/" `isSuffixOf` str
+    startsComponent _ = False
+
+    endsComponent [] = True
+    endsComponent (T_Literal _ str : _) = "/" `isPrefixOf` str
+    endsComponent _ = False
+
+    functions = Map.fromList $ execWriter $ doAnalysis findFunction root
+    findFunction (T_Function _ _ _ name body) = tell [(name, body)]
+    findFunction _ = return ()
+
+    calledFunctions = S.fromList $ execWriter $ doAnalysis findCall root
+    findCall t =
+        case getCommandName t of
+            Just name | name `Map.member` functions -> tell [name]
+            _ -> return ()
+
+    -- Note the globstar state at each **. Function results are cached.
+    run stack state events = foldM (step stack) state events
+
+    step stack state event =
+        case event of
+            GlobstarChanged newState -> return newState
+            GlobstarUsed id -> do
+                tell [(id, state)]
+                return state
+            GlobstarFunctionDefined name body -> do
+                -- Not called by name, so check it where it's defined
+                unless (name `S.member` calledFunctions) $
+                    void $ run (name:stack) state body
+                return state
+            GlobstarFunctionCalled name
+                | name `elem` stack -> return GlobstarUnknown
+                | otherwise -> do
+                    cached <- gets $ Map.lookup (name, state)
+                    case cached of
+                        Just result -> return result
+                        Nothing -> do
+                            result <- run (name:stack) state $ maybe [] eventsIn (Map.lookup name functions)
+                            modify $ Map.insert (name, state) result
+                            return result
+            GlobstarInSubshell body -> do
+                void $ run stack state body
+                return state
+            GlobstarMaybeRuns body -> do
+                after <- run stack state body
+                return $ if after == state then state else GlobstarUnknown
+
+data GlobstarState = GlobstarOff | GlobstarOn | GlobstarUnknown deriving (Eq, Ord)
+data GlobstarEvent =
+    GlobstarChanged GlobstarState
+    | GlobstarUsed Id
+    | GlobstarFunctionDefined String [GlobstarEvent]
+    | GlobstarFunctionCalled String
+    | GlobstarInSubshell [GlobstarEvent]
+    | GlobstarMaybeRuns [GlobstarEvent]
 
 return []
 runTests =  $( [| $(forAllProperties) (quickCheckWithResult (stdArgs { maxSuccess = 1 }) ) |])
