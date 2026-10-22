@@ -29,6 +29,7 @@ import Data.List
 import System.IO
 import System.Info
 import System.Environment
+import qualified Data.List.NonEmpty as NE
 
 -- A formatter that carries along an arbitrary piece of data
 data Formatter = Formatter {
@@ -53,6 +54,16 @@ severityText pc =
         WarningC -> "warning"
         InfoC    -> "info"
         StyleC   -> "style"
+
+commentsByFile :: [PositionedComment] -> [NE.NonEmpty PositionedComment]
+commentsByFile = NE.groupWith sourceFile
+
+readCommentsForFile :: SystemInterface IO -> NE.NonEmpty PositionedComment -> IO (FilePath, [PositionedComment], String)
+readCommentsForFile sys group = do
+    let filename = sourceFile (NE.head group)
+    result <- siReadFile sys (Just True) filename
+    let contents = either (const "") id result
+    return (filename, NE.toList group, contents)
 
 -- Realign comments from a tabstop of 8 to 1
 makeNonVirtual comments contents =
