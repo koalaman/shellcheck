@@ -3292,10 +3292,12 @@ readConfigFile filename = do
             Just (file, str) -> readConfig file str
 
     readConfig filename contents = do
-        result <- lift $ runParserT readConfigKVs initialUserState filename contents
+        result <- lift $
+            runParserT (parseWithNotes readConfigKVs) initialUserState filename contents
         case result of
-            Right result ->
-                return result
+            Right (annotations, userState) -> do
+                mapM_ addParseNote (parseNotes userState)
+                return annotations
 
             Left err -> do
                 -- Report the error at its location in the config file
