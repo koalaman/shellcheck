@@ -977,7 +977,8 @@ readCondition = called "test expression" $ do
     when (open == "[[" && close /= "]]") $ parseProblemAt cpos ErrorC 1033 "Test expression was opened with double [[ but closed with single ]. Make sure they match."
     when (open == "[" && close /= "]" ) $ parseProblemAt opos ErrorC 1034 "Test expression was opened with single [ but closed with double ]]. Make sure they match."
     spacing
-    return $ T_Condition id typ condition
+    let closeTyp = if close == "]" then SingleBracket else DoubleBracket
+    return $ T_Condition id typ closeTyp condition
 
 readAnnotationPrefix = do
     char '#'
@@ -3297,7 +3298,10 @@ readConfigFile filename = do
                 return result
 
             Left err -> do
-                parseProblem ErrorC 1134 $ errorFor filename err
+                -- Report the error at its location in the config file
+                -- (e.g. .shellcheckrc or .editorconfig), not at the
+                -- current position in the script being checked.
+                parseProblemAt (errorPos err) ErrorC 1134 $ errorFor filename err
                 return []
 
     errorFor filename err =

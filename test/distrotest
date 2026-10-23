@@ -61,7 +61,7 @@ do
   < /dev/null docker run -v "$tmp:/mnt" "$distro" sh -c "
     $setup
     cd /mnt || exit 1
-    test/buildtest
+    test/buildtest --do-invoke
     "
   ret=$?
   if [ "$ret" = 0 ]
@@ -78,17 +78,19 @@ debian:stable         apt-get update && apt-get install -y cabal-install
 debian:testing        apt-get update && apt-get install -y cabal-install
 ubuntu:latest         apt-get update && apt-get install -y cabal-install
 haskell:latest        true
-opensuse/leap:latest  zypper install -y cabal-install ghc
+opensuse/leap:latest  zypper install -y cabal-install ghc find
 fedora:latest         dnf install -y cabal-install ghc-template-haskell-devel findutils libstdc++-static gcc-c++
 archlinux:latest      pacman -S -y --noconfirm cabal-install ghc-static base-devel
 
 # Ubuntu LTS
+ubuntu:26.04          apt-get update && apt-get install -y cabal-install
+
+# Ubuntu LTS failing due to old 'cabal' without root keys, will hopefully be updated
 ubuntu:24.04          apt-get update && apt-get install -y cabal-install
 ubuntu:22.04          apt-get update && apt-get install -y cabal-install
-ubuntu:20.04          apt-get update && apt-get install -y cabal-install
 
 # Stack on Ubuntu LTS
-ubuntu:24.04          set -e; apt-get update && apt-get install -y curl && curl -sSL https://get.haskellstack.org/ | sh -s - -f && cd /mnt && exec test/stacktest
+ubuntu:26.04          set -e; apt-get update && apt-get install -y curl && curl -sSL https://get.haskellstack.org/ | sh -s - -f && cd /mnt && exec test/stacktest
 EOF
 
 exit "$final"

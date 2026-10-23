@@ -1,7 +1,13 @@
 ## Git
 ### Added
+- SC2337: warn about `grep -q` in pipelines under pipefail
+- SC2338: Optionally suggest `[[ x == y ]]` over `[[ x = y ]]`
+  (bash `require-double-equals`)
+- Add `--files-from` option to read input files from a file
+- Support EditorConfig `shellcheck.*` keys
 
 ### Changed
+- SC3040: Support `pipefail` as specified in POSIX.1-2024
 
 ### Fixed
 

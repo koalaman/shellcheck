@@ -17,7 +17,7 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -}
-module ShellCheck.Formatter.TTY (format) where
+module ShellCheck.Formatter.TTY (format, wikiLink) where
 
 import ShellCheck.Fixer
 import ShellCheck.Interface

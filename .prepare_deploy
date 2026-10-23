@@ -23,9 +23,11 @@ This binary was compiled on $(date -u).
 $(git log -n 3)
 END
 
+cp ../shellcheck.1 .
+
 for dir in */
 do
-  cp LICENSE.txt README.txt "$dir"
+  cp LICENSE.txt README.txt shellcheck.1 "$dir"
 done
 
 echo "Tags are $TAGS"

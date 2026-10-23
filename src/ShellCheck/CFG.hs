@@ -663,7 +663,7 @@ build t = do
                 pg <- wordToExactPseudoGlob c
                 return $ pg `pseudoGlobIsSuperSetof` [PGMany]
 
-        T_Condition id _ op -> do
+        T_Condition id _ _ op -> do
             cond <- build op
             status <- newNodeRange $ CFSetExitCode id
             linkRange cond status

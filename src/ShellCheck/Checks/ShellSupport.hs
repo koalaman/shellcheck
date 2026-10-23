@@ -245,6 +245,7 @@ prop_checkBashisms147 = verify checkBashisms "[ -R ref ]" -- SC3063
 prop_checkBashisms148 = verify checkBashisms "[ -N file ]" -- SC3064
 prop_checkBashisms149 = verify checkBashisms "[ -G file ]" -- SC3066
 prop_checkBashisms150 = verify checkBashisms "[ -O file ]" -- SC3067
+prop_checkBashisms151 = verifyNot checkBashisms "#!/bin/busybox sh\npwd | tee >(gzip > log.gz)" -- SC3001
 checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
     params <- ask
     kludge params t
@@ -260,7 +261,7 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
         else warn id code $ "In POSIX sh, " ++ s ++ " undefined."
     asStr = getLiteralString
 
-    bashism (T_ProcSub id _ _) = warnMsg id 3001 "process substitution is"
+    bashism (T_ProcSub id _ _) = unless isBusyboxSh $ warnMsg id 3001 "process substitution is"
     bashism (T_Extglob id _ _) = warnMsg id 3002 "extglob is"
     bashism (T_DollarDoubleQuoted id _) = warnMsg id 3004 "$\"..\" is"
     bashism (T_ForArithmetic id _ _ _ _) = warnMsg id 3005 "arithmetic for loops are"
@@ -268,7 +269,7 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
     bashism (T_DollarBracket id _) = warnMsg id 3007 "$[..] in place of $((..)) is"
     bashism (T_SelectIn id _ _ _) = warnMsg id 3008 "select loops are"
     bashism (T_BraceExpansion id _) = warnMsg id 3009 "brace expansion is"
-    bashism (T_Condition id DoubleBracket _) =
+    bashism (T_Condition id DoubleBracket _ _) =
         unless isBusyboxSh $ warnMsg id 3010 "[[ ]] is"
     bashism (T_HereString id _) = warnMsg id 3011 "here-strings are"
 
