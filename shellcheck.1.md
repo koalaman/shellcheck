@@ -81,11 +81,13 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 **--norc**
 
 :   Don't try to look for .shellcheckrc or .editorconfig configuration files.
+    This also disables **--rcfile**.
 
 **--rcfile** *RCFILE*
 
 :   Prefer the specified configuration file over searching for one
-    in the default locations.
+    in the default locations. The specified file is not read if
+    **--norc** is also given.
 
 **-o**\ *NAME1*[,*NAME2*...],\ **--enable=***NAME1*[,*NAME2*...]
 
