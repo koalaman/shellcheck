@@ -409,7 +409,7 @@ time --format=%s sleep 10         # Passing time(1) flags to time builtin
 while read h; do ssh "$h" uptime  # Commands eating while loop input
 alias archive='mv $1 /backup'     # Defining aliases with arguments
 tr -cd '[a-zA-Z0-9]'              # [] around ranges in tr
-exec foo; echo "Done!"            # Misused 'exec'
+exec foo; bar                     # Misused 'exec'
 find -name \*.bak -o -name \*~ -delete  # Implicit precedence in find
 # find . -exec foo > bar \;       # Redirections in find
 f() { whoami; }; sudo f           # External use of internal functions
@@ -448,7 +448,7 @@ cd dir; process *; cd ..;         # Use subshells instead
 echo $[1+2]                       # Use standard $((..)) instead of old $[]
 echo $(($RANDOM % 6))             # Don't use $ on variables in $((..))
 echo "$(date)"                    # Useless use of echo
-cat file | grep foo               # Useless use of cat
+cat file | grep foo               # Useless use of cat (optional check)
 ```
 
 ### Data and typing errors
