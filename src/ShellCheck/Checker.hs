@@ -441,6 +441,13 @@ prop_brokenRcGetsWarning = result == [1134, 2086]
         csIgnoreRC = False
     }
 
+prop_unknownRcDirectiveGetsWarning = result == [1107, 2086]
+  where
+    result = checkWithRc "foo=bar" emptyCheckSpec {
+        csScript = "#!/bin/sh\necho $1",
+        csIgnoreRC = False
+    }
+
 prop_canEnableOptionalsWithRc = result == [2244]
   where
     result = checkWithRc "enable=avoid-nullary-conditions" emptyCheckSpec {
