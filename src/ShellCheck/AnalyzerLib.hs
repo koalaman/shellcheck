@@ -81,12 +81,14 @@ composeAnalyzers :: (a -> Analysis) -> (a -> Analysis) -> a -> Analysis
 composeAnalyzers f g x = f x >> g x
 
 data Parameters = Parameters {
+    -- Whether this script has 'set -a' or 'set -o allexport' anywhere.
+    hasAllexport       :: Bool,
     -- Whether this script has the 'lastpipe' option set/default.
     hasLastpipe        :: Bool,
     -- Whether this script has the 'inherit_errexit' option set/default.
     hasInheritErrexit  :: Bool,
-    -- Whether this script has 'set -e' anywhere.
-    hasSetE            :: Bool,
+    -- Whether this script has 'set -e' or 'set -o errexit' anywhere.
+    hasErrexit         :: Bool,
     -- Whether this script has 'set -f' or 'set -o noglob' anywhere.
     hasNoglob          :: Bool,
     -- Whether this script has 'set -o pipefail' anywhere.
@@ -114,7 +116,7 @@ data Parameters = Parameters {
 -- TODO: Cache results of common AST ops here
 data Cache = Cache {}
 
-data Scope = SubshellScope String | NoneScope deriving (Show, Eq)
+data Scope = SubshellScope String | FunctionScope | NoneScope deriving (Show, Eq)
 data StackData =
     StackScope Scope
     | StackScopeEnd
@@ -153,12 +155,16 @@ pScript s =
 
 -- For testing. If parsed, returns whether there are any comments
 producesComments :: Checker -> String -> Maybe Bool
-producesComments c s = do
+producesComments c s = fmap (not . null) $ runAndGetCodes c s
+
+-- If parsed, returns the list of codes
+runAndGetCodes :: Checker -> String -> Maybe [Integer]
+runAndGetCodes c s = do
         let pr = pScript s
         prRoot pr
         let spec = defaultSpec pr
         let params = makeParameters spec
-        return . not . null $ filterByAnnotation spec params $ runChecker params c
+        return . (sort . map (cCode . tcComment)) $ filterByAnnotation spec params $ runChecker params c
 
 makeComment :: Severity -> Id -> Code -> String -> TokenComment
 makeComment severity id code note =
@@ -208,7 +214,8 @@ makeParameters spec = params
     params = Parameters {
         rootNode = root,
         shellType = fromMaybe (determineShell (asFallbackShell spec) root) $ asShellType spec,
-        hasSetE = containsSetE root,
+        hasAllexport = containsAllexport root,
+        hasErrexit = containsErrexit root,
         hasNoglob = containsNoglob root,
         hasLastpipe =
             case shellType params of
@@ -251,31 +258,25 @@ makeParameters spec = params
     root = asScript spec
 
 
+-- | detect e.g. 'set -o errexit' or 'set -e'
+isOptionSet' :: [Char] -> Char -> Token -> Bool
+isOptionSet' longOpt shortOpt root = isNothing $ doAnalysis (guard . not . isSetOption) root
+  where
+    isSetOption t =
+        case t of
+            T_Script _ (T_Literal _ str) _ -> str `matches` re
+            T_SimpleCommand {}  ->
+                t `isUnqualifiedCommand` "set" &&
+                    (longOpt `elem` oversimplify t ||
+                        [shortOpt] `elem` map snd (getAllFlags t))
+            _ -> False
+    re = mkRegex $ "[[:space:]]-[^-]*" ++ [shortOpt]
+
+containsAllexport = isOptionSet' "allexport" 'a'
 -- Does this script mention 'set -e' anywhere?
 -- Used as a hack to disable certain warnings.
-containsSetE root = isNothing $ doAnalysis (guard . not . isSetE) root
-  where
-    isSetE t =
-        case t of
-            T_Script _ (T_Literal _ str) _ -> str `matches` re
-            T_SimpleCommand {}  ->
-                t `isUnqualifiedCommand` "set" &&
-                    ("errexit" `elem` oversimplify t ||
-                        "e" `elem` map snd (getAllFlags t))
-            _ -> False
-    re = mkRegex "[[:space:]]-[^-]*e"
-
-containsNoglob root = isNothing $ doAnalysis (guard . not . isNoglob) root
-  where
-    isNoglob t =
-        case t of
-            T_Script _ (T_Literal _ str) _ -> str `matches` re
-            T_SimpleCommand {}  ->
-                t `isUnqualifiedCommand` "set" &&
-                    ("noglob" `elem` oversimplify t ||
-                        "f" `elem` map snd (getAllFlags t))
-            _ -> False
-    re = mkRegex "[[:space:]]-[^-]*f"
+containsErrexit = isOptionSet' "errexit" 'e'
+containsNoglob = isOptionSet' "noglob" 'f'
 
 containsSetOption opt root = isNothing $ doAnalysis (guard . not . isPipefail) root
   where
@@ -521,6 +522,7 @@ leadType params t =
         T_Subshell _ _  -> SubshellScope "(..) group"
         T_BatsTest {} -> SubshellScope "@bats test"
         T_CoProcBody _ _  -> SubshellScope "coproc"
+        T_Function {} -> FunctionScope
         T_Redirecting {}  ->
             if causesSubshell == Just True
             then SubshellScope "pipeline"
@@ -600,6 +602,20 @@ getModifiedVariables t =
                     return (place, t, str, DataString SourceChecked)
             _ -> Nothing
 
+
+-- Variables set by bats' run command
+getBatsRunVariables args =
+    [
+        ("status", DataString SourceInteger),
+        ("output", DataString SourceExternal),
+        ("lines", DataArray SourceExternal)
+    ] ++ if "--separate-stderr" `elem` opts then [
+        ("stderr", DataString SourceExternal),
+        ("stderr_lines", DataArray SourceExternal)
+    ] else []
+  where
+    opts = takeWhile (\s -> s == "!" || (s /= "--" && "-" `isPrefixOf` s)) $
+        map (fromMaybe "" . getLiteralString) args
 
 -- Consider 'export/declare -x' a reference, since it makes the var available
 getReferencedVariableCommand base@(T_SimpleCommand _ _ (T_NormalWord _ (T_Literal _ x:_):rest)) =
@@ -689,6 +705,8 @@ getModifiedVariableCommand base@(T_SimpleCommand id cmdPrefix (T_NormalWord _ (T
         "DEFINE_float" -> maybeToList $ getFlagVariable rest
         "DEFINE_integer" -> maybeToList $ getFlagVariable rest
         "DEFINE_string" -> maybeToList $ getFlagVariable rest
+
+        "run" -> [(base, base, name, value) | (name, value) <- getBatsRunVariables rest]
 
         _ -> []
   where
@@ -824,12 +842,6 @@ getReferencedVariables parents t =
             if isDereferencingBinaryOp op
             then concatMap (getIfReference t) [lhs, rhs]
             else []
-
-        T_BatsTest {} -> [ -- pretend @test references vars to avoid warnings
-            (t, t, "lines"),
-            (t, t, "status"),
-            (t, t, "output")
-            ]
 
         T_FdRedirect _ ('{':var) op -> -- {foo}>&- references and closes foo
             [(t, t, takeWhile (/= '}') var) | isClosingFileOp op]

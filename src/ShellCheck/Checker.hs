@@ -22,6 +22,7 @@ module ShellCheck.Checker (checkScript, ShellCheck.Checker.runTests) where
 
 import ShellCheck.Analyzer
 import ShellCheck.ASTLib
+import ShellCheck.EditorConfig
 import ShellCheck.Interface
 import ShellCheck.Parser
 
@@ -164,6 +165,41 @@ checkWithRcIncludesAndSourcePath rc includes mapper = getErrors
     (mockRcFile rc $ mockedSystemInterface includes) {
         siFindSource = mapper
     }
+
+-- shellcheck.* directives extracted from an EditorConfig file are merged
+-- into the same "key=value" blob as .shellcheckrc. We simulate that here
+-- by feeding editorConfigDirectives' output through siGetConfig.
+checkWithEditorConfig ec name src =
+    let sys = (mockedSystemInterface [("foo", src)]) {
+            siGetConfig = const . return $
+                Just (".editorconfig", fromMaybe "" $ editorConfigDirectives ec name)
+        }
+    in getErrors sys emptyCheckSpec {
+        csScript = src,
+        csExcludedWarnings = [2148]
+    }
+
+prop_editorConfigAppliesKnownShell =
+    null $ checkWithEditorConfig "[foo]\nshellcheck.shell=bash\n" "foo"
+        "#!/bin/sh\necho \"hi\""
+prop_editorConfigAppliesDisable =
+    null $ checkWithEditorConfig "[foo]\nshellcheck.disable=SC2086\n" "foo"
+        "#!/bin/sh\necho $1"
+prop_editorConfigUnknownShellIsReported =
+    -- An unknown shell can't be applied silently; it surfaces as a
+    -- config parse error (SC1134) rather than being dropped.
+    [1134] == checkWithEditorConfig "[foo]\nshellcheck.shell=zsh\n" "foo"
+        "#!/bin/sh\necho \"hi\""
+prop_editorConfigCommentValueIsReported =
+    -- EditorConfig has no inline comments, so a '#'-prefixed value is
+    -- reported as a config error (SC1134) instead of being eaten.
+    [1134] == checkWithEditorConfig "[foo]\nshellcheck.disable=#abc\n" "foo"
+        "#!/bin/sh\necho \"hi\""
+prop_editorConfigNonMatchingSectionIgnored =
+    -- A directive in a section whose glob does not match the file is
+    -- not applied (and produces no config error).
+    [2086] == checkWithEditorConfig "[bar]\nshellcheck.disable=SC2086\n" "foo"
+        "#!/bin/sh\necho $1"
 
 prop_findsParseIssue = check "echo \"$12\"" == [1037]
 

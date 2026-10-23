@@ -15,7 +15,7 @@ RUN curl -L "https://downloads.haskell.org/~ghc/9.12.2/ghc-9.12.2-src.tar.xz" | 
 RUN ./boot.source && ./configure --host x86_64-linux-gnu --build x86_64-linux-gnu --target "$TARGET"
 # GHC fails to build if it can't encode non-ascii
 ENV LC_CTYPE=C.utf8
-# We have to do a binary-dist instead of a direct install, otherwise the targest won't have
+# We have to do a binary-dist instead of a direct install, otherwise the target won't have
 # cross compilation prefixes in /usr/local/lib/aarch64-linux-gnu-ghc-*/lib/settings
 RUN ./hadrian/build --flavour=quickest --bignum=native -V -j --prefix=/usr/local install
 # Hadrian just outputs "gcc" as the name of gcc, without accounting for $TARGET. Manually fix up the paths:
