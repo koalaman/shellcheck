@@ -3410,6 +3410,12 @@ prop_checkUncheckedPopd11 = verifyNotTree checkUncheckedCdPushdPopd "cd ../.././
 prop_checkUncheckedPopd12 = verifyNotTree checkUncheckedCdPushdPopd "cd /"
 prop_checkUncheckedPopd13 = verifyTree checkUncheckedCdPushdPopd "cd ../../.../.."
 prop_checkUncheckedCdInFunction1 = verifyNotTree checkUncheckedCdPushdPopd "#!/bin/bash\nfoo() {\n  cd /abc\n}"
+prop_checkUncheckedCdInFunction2 = verifyNotTree checkUncheckedCdPushdPopd "foo() { cd /abc; return; }"
+prop_checkUncheckedCdInFunction3 = verifyNotTree checkUncheckedCdPushdPopd "foo() { cd /abc; exit; }"
+prop_checkUncheckedCdInFunction4 = verifyTree checkUncheckedCdPushdPopd "foo() { cd /abc; return 0; }"
+prop_checkUncheckedCdInFunction5 = verifyTree checkUncheckedCdPushdPopd "foo() { cd /abc; return > output; }"
+prop_checkUncheckedCdInFunction6 = verifyTree checkUncheckedCdPushdPopd "foo() { cd /abc; return | cat; }"
+prop_checkUncheckedCdInFunction7 = verifyNotTree checkUncheckedCdPushdPopd "foo() { cd /abc; return $?; }"
 
 checkUncheckedCdPushdPopd params root =
     if hasErrexit params then
@@ -3432,7 +3438,15 @@ checkUncheckedCdPushdPopd params root =
         go $ NE.tail $ getPath (parentMap params) t
       where
         go (child:T_BraceGroup _ commands:T_Function {}:_) =
-            not (null commands) && getId (last commands) == getId child
+            case dropWhile ((/= getId child) . getId) commands of
+                [_] -> True
+                [_, T_Pipeline _ [] [T_Redirecting _ [] (T_SimpleCommand _ [] (cmd:args))]] ->
+                    case args of
+                        [] -> getLiteralString cmd `elem` [Just "return", Just "exit"]
+                        [T_NormalWord _ [T_DollarBraced _ False status]] ->
+                            getLiteralString cmd == Just "return" && getLiteralString status == Just "?"
+                        _ -> False
+                _ -> False
         go (_:rest) = go rest
         go [] = False
     isSafeDir t = case oversimplify t of
