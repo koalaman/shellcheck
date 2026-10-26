@@ -1153,6 +1153,7 @@ prop_checkCatastrophicRm12 = verify checkCatastrophicRm "rm -r /{{usr,},{bin,sbi
 prop_checkCatastrophicRm13 = verifyNot checkCatastrophicRm "rm -r /{{a,b},{c,d}}/$exec"
 prop_checkCatastrophicRmA = verify checkCatastrophicRm "rm -rf /usr /lib/nvidia-current/xorg/xorg"
 prop_checkCatastrophicRmB = verify checkCatastrophicRm "rm -rf \"$STEAMROOT/\"*"
+prop_checkCatastrophicRmC = verify checkCatastrophicRm "rm -rf /boot/*"
 checkCatastrophicRm = CommandCheck (Basename "rm") $ \t ->
     when (isRecursive t) $
         mapM_ (mapM_ checkWord . braceExpand) $ arguments t
@@ -1160,7 +1161,7 @@ checkCatastrophicRm = CommandCheck (Basename "rm") $ \t ->
     isRecursive = any ((`elem` ["r", "R", "recursive"]) . snd) . getAllFlags
 
     checkWord token =
-        case getLiteralString token of
+        case getGlobOrLiteralString token of
             Just str ->
                 when (fixPath str `elem` importantPaths) $
                     warn (getId token) 2114 "Warning: deletes a system directory."
