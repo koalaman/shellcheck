@@ -430,10 +430,18 @@ parseOption flag options =
                 rcfile = Just str
             }
 
-        Flag "enable" value ->
-            let cs = checkSpec options in return options {
+        Flag "enable" value -> do
+            let checks = filter (not . null) $ split ',' value
+            let supported = map cdName ShellCheck.Analyzer.optionalChecks
+            let unknown = filter (\name -> name /= "all" && name `notElem` supported) checks
+            unless (null unknown) $ do
+                printErr $ "Unknown checks: " ++ intercalate ", " unknown
+                printErr "Supported checks: all, or see `shellcheck --list-optional'"
+                throwError SupportFailure
+            let cs = checkSpec options
+            return options {
                 checkSpec = cs {
-                    csOptionalChecks = (csOptionalChecks cs) ++ split ',' value
+                    csOptionalChecks = (csOptionalChecks cs) ++ checks
                 }
             }
 
