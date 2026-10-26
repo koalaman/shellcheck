@@ -4017,6 +4017,8 @@ prop_checkUseBeforeDefinition8 = verifyNotTree checkUseBeforeDefinition "#!/usr/
 prop_checkUseBeforeDefinition9 = verifyNotTree checkUseBeforeDefinition "#!/usr/bin/env bats\n@test 'foo' { f; }\nsetup() { f() { true; }; }"
 prop_checkUseBeforeDefinition10 = verifyTree checkUseBeforeDefinition "#!/usr/bin/env bats\n@test 'foo' {\n f\n f() { true; }\n}"
 prop_checkUseBeforeDefinition11 = verifyTree checkUseBeforeDefinition "#!/usr/bin/env bats\nf\n@test 'foo' { true; }\nf() { true; }"
+prop_checkUseBeforeDefinition12 = verifyNotTree checkUseBeforeDefinition "setup() { f() { true; }; }; f; f() { true; }"
+prop_checkUseBeforeDefinition13 = verifyNotTree checkUseBeforeDefinition "#!/usr/bin/env bats\nsetup() { f() { true; }; }\n@test \"a\" {\n  f\n}\n@test \"b\" {\n  f() { true; }\n}"
 checkUseBeforeDefinition :: Parameters -> Token -> [TokenComment]
 checkUseBeforeDefinition params t = fromMaybe [] $ do
     cfga <- cfgAnalysis params
@@ -4043,7 +4045,10 @@ checkUseBeforeDefinition params t = fromMaybe [] $ do
                 -- defined outside of tests are available in all of them.
                 guard . not $ isInBatsTest t && any (not . snd) definitions
                 -- Is the function definitely being defined later?
-                guard $ any (\c -> CF.doesPostDominate cfga c id) invocations
+                -- Every definition has to be later: one whose order we can't
+                -- determine, such as in a function nothing visibly invokes,
+                -- may already have run.
+                guard $ all (\c -> CF.doesPostDominate cfga c id) invocations
                 -- Was one already defined, so it's actually a re-definition?
                 guard . not $ any (\c -> CF.doesPostDominate cfga id c) invocations
                 return $ err id 2218 "This function is only defined later. Move the definition up."
