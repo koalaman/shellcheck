@@ -2563,11 +2563,44 @@ prop_checkUnused54 = verifyNotTree checkUnusedAssignments "#!/usr/bin/env bats\n
 prop_checkUnused55 = verifyTree checkUnusedAssignments "run=1"
 prop_checkUnused56 = verifyNotTree checkUnusedAssignments "run foo bar"
 prop_checkUnused57 = verifyTree checkUnusedAssignments "#!/usr/bin/env bats\n@test 'foo' { output=$(true); }"
+prop_checkUnused58 = verifyTree checkUnusedAssignments "function func\n{\n    local var=inner\n}\n\nvar=outer\nfunc\necho $var"
+prop_checkUnused59 = verifyTree checkUnusedAssignments "f() { local var; var=inner; }; var=outer; f; echo $var"
+prop_checkUnused60 = verifyTree checkUnusedAssignments "f() { declare var=inner; }; var=outer; f; echo $var"
+prop_checkUnused61 = verifyNotTree checkUnusedAssignments "f() { local var=inner; echo $var; }; var=outer; f; echo $var"
+prop_checkUnused62 = verifyNotTree checkUnusedAssignments "f() { local var=inner; g; }; g() { echo $var; }; var=outer; f; echo $var"
+prop_checkUnused63 = verifyNotTree checkUnusedAssignments "f() { declare -g var=inner; }; f; echo $var"
+prop_checkUnused64 = verifyNotTree checkUnusedAssignments "f() { local -x var=inner; cmd; }; var=outer; f; echo $var"
+prop_checkUnused65 = verifyNotTree checkUnusedAssignments "f() { local IFS=,; read -r a b; echo \"$a$b\"; }; f; echo $IFS"
+prop_checkUnused66 = verifyTree checkUnusedAssignments "f() { local var=inner; }; g() { echo \"$var\"; }; var=outer; f; g"
+prop_checkUnused67 = verifyNotTree checkUnusedAssignments "f() { local var=inner; g; }; g() { h; }; h() { echo \"$var\"; }; var=outer; f; echo \"$var\""
+prop_checkUnused68 = verifyNotTree checkUnusedAssignments "f() { local var=inner; \"$1\"; }; g() { echo \"$var\"; }; var=outer; f g; g"
+prop_checkUnused69 = verifyNotTree checkUnusedAssignments "f() { local var=inner; eval \"$cmd\"; }; g() { echo \"$var\"; }; var=outer; f; g"
+prop_checkUnused70 = verifyNotTree checkUnusedAssignments "f() { local var=inner; false; }; on_err() { echo \"$var\"; }; trap on_err ERR; var=outer; f; on_err"
+prop_checkUnused71 = verifyTree checkUnusedAssignments "f() { local var=inner; run_hooks; }; hook() { echo \"$var\"; }; var=outer; f; echo \"$var\""
+prop_checkUnused72 = verifyTree checkUnusedAssignments "f() { local var=inner; }; never_called() { echo \"$var\"; }; var=outer; f; echo \"$var\""
+prop_checkUnused73 = verifyNotTree checkUnusedAssignments "f() { local var=inner; source ./lib.sh; }; g() { echo \"$var\"; }; var=outer; f; g"
+prop_checkUnused74 = verifyNotTree checkUnusedAssignments "f() { local var=inner; . ./lib.sh; }; g() { echo \"$var\"; }; var=outer; f; g"
+prop_checkUnused75 = verifyNotTree checkUnusedAssignments "f() { local var=inner; g; }; g() { \"$cmd\"; }; h() { echo \"$var\"; }; var=outer; f; h"
+prop_checkUnused76 = verifyTree checkUnusedAssignments "source ./lib.sh\neval \"$cmd\"\n\"$1\"\nf() { local var=inner; }; g() { echo \"$var\"; }; var=outer; f; g"
+prop_checkUnused77 = verifyTree checkUnusedAssignments "trap - INT\ntrap '' TERM\nf() { local var=inner; }; g() { echo \"$var\"; }; var=outer; f; g"
+prop_checkUnused78 = verifyNotTree checkUnusedAssignments "trap cleanup EXIT\nf() { local var=inner; exit 1; }; cleanup() { echo \"$var\"; }; var=outer; f; cleanup"
+prop_checkUnused79 = verifyNotTree checkUnusedAssignments "trap -- cleanup EXIT\nf() { local var=inner; exit 1; }; cleanup() { echo \"$var\"; }; var=outer; f; cleanup"
+prop_checkUnused80 = verifyTree checkUnusedAssignments "trap cleanup EXIT\nf() { local var=inner; }; cleanup() { rm -f tmp; }; g() { echo \"$var\"; }; var=outer; f; g"
+prop_checkUnused81 = verifyNotTree checkUnusedAssignments "trap \"$handler\" EXIT\nf() { local var=inner; }; g() { echo \"$var\"; }; var=outer; f; g"
+prop_checkUnused82 = verifyNotTree checkUnusedAssignments "trap 'echo $var' EXIT\nf() { local var=inner; exit 1; }; var=outer; f"
+prop_checkUnused83 = verifyNotTree checkUnusedAssignments "source ./lib.sh\nf() { local var=inner; libfn; }; g() { echo \"$var\"; }; var=outer; f; g"
+prop_checkUnused84 = verifyNotTree checkUnusedAssignments "trap -- 'echo $var' EXIT\nf() { local var=inner; exit 1; }; var=outer; f; echo \"$var\""
+prop_checkUnused85 = verifyTree checkUnusedAssignments "trap -p EXIT\nf() { local var=inner; }; g() { echo \"$var\"; }; var=outer; f; g"
+prop_checkUnused86 = verifyTree checkUnusedAssignments "loader() { source ./lib.sh; }\nf() { local var=inner; }; g() { echo \"$var\"; }; var=outer; loader; f; g"
+prop_checkUnused87 = verifyTree checkUnusedAssignments "source ./lib.sh\nf() { local var=inner; grep x y; }; g() { echo \"$var\"; }; var=outer; f; g"
+prop_checkUnused88 = verifyTree checkUnusedAssignments "trap -l\nf() { local var=inner; }; g() { echo \"$var\"; }; var=outer; f; g"
+prop_checkUnused89 = verifyNotTree checkUnusedAssignments "trap cleanup EXIT\ntrap - EXIT\nf() { local var=inner; }; cleanup() { echo \"$var\"; }; var=outer; f; echo \"$var\""
+prop_checkUnused90 = verifyNotTree checkUnusedAssignments "loader() { source ./lib.sh; }\nf() { local var=inner; jq . x; }; g() { echo \"$var\"; }; var=outer; loader; f; g"
 
 checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
     flow = variableFlow params
-    references = Map.union (Map.fromList [(stripSuffix name, ()) | Reference (base, token, name) <- flow]) defaultMap
+    references = Map.union (Map.fromList [(stripSuffix name, ()) | Reference (_, _, name) <- flow]) defaultMap
 
     assignments = Map.fromList [(name, token) | Assignment (base, token, name, _) <- flow, isVariableName name, not $ isBats base]
     -- Variables set by bats' run (or pretended to be set by @test)
@@ -2577,7 +2610,107 @@ checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
         T_BatsTest {} -> True
         _ -> False
 
-    unused = Map.assocs $ Map.difference assignments references
+    unused = Map.assocs (Map.difference assignments references) ++ unusedLocals
+
+    -- Locals only live while their function runs, so a read anywhere other than
+    -- that function (or what it calls) is reading some other variable
+    unusedLocals = Map.elems $ Map.fromListWith keepFirst
+        [((functionId, name), (name, token))
+        | Assignment (base, token, name, _) <- flow
+        , isVariableName name
+        , isLocalDeclaration base
+        , Just functionId <- [enclosingFunction base]
+        , name `Map.member` references -- otherwise it's already reported above
+        , name `Map.notMember` defaultMap
+        , name `S.notMember` readInTraps
+        , not $ any (readsVariable name) (Map.findWithDefault [] functionId mayRunDuring)
+        ]
+    keepFirst _ first = first
+
+    readsVariable name functionId =
+        maybe False (S.member name) $ Map.lookup functionId readsByFunction
+    readsByFunction = Map.fromListWith S.union
+        [(functionId, S.singleton (stripSuffix name))
+        | Reference (_, token, name) <- flow, Just functionId <- [enclosingFunction token]]
+
+    -- Functions that can run while each function does. If we can't tell, assume all.
+    mayRunDuring = Map.fromList [(id, functionsRunDuring id) | id <- allFunctions]
+    functionsRunDuring start =
+        if hasUnreadableTrap || any makesUnknownCalls reached
+        then allFunctions
+        else reached
+      where
+        reached = S.toList $ followCalls S.empty (start : trapHandlers)
+
+    followCalls seen [] = seen
+    followCalls seen (function:rest)
+        | function `S.member` seen = followCalls seen rest
+        | otherwise = followCalls (S.insert function seen) (calledFunctions function ++ rest)
+    calledFunctions function =
+        concat [Map.findWithDefault [] name functionIds | Just name <- callsIn function]
+    callsIn function = Map.findWithDefault [] function callsByFunction
+
+    -- "$cmd", eval and source could run anything. Other programs can't call our functions.
+    makesUnknownCalls function = any isUnknownCall (callsIn function)
+    isUnknownCall call =
+        case call of
+            Nothing -> True
+            Just name -> name `elem` dynamicCommands || (hasDynamicCode && mayBeHiddenFunction name)
+    dynamicCommands = ["eval", "source", "."]
+    hasDynamicCode = any (`elem` map Just dynamicCommands) (map snd commands)
+
+    -- source and eval may define functions we can't see
+    mayBeHiddenFunction name =
+        name `Map.notMember` functionIds && name `notElem` (commonCommands ++ declaringCommands)
+
+    -- e.g. cleanup in: trap cleanup EXIT
+    trapActionTokens = execWriter $ doAnalysis findTrap t
+    findTrap command@(T_SimpleCommand _ _ (_:args))
+        | getCommandName command == Just "trap"
+        , action:_:_ <- handlerArgs args = tell [action]
+    findTrap _ = return ()
+
+    -- Nothing if it's not a plain string, like "$handler".
+    -- trap '' INT and trap - INT don't set a handler.
+    trapActions = filter setsHandler $ map getLiteralString trapActionTokens
+    setsHandler action = action `notElem` [Just "", Just "-"]
+    -- Skip --, and ignore trap -p and -l since they only print
+    handlerArgs (arg:rest)
+        | getLiteralString arg == Just "--" = rest
+        | isOption arg = []
+    handlerArgs args = args
+    isOption arg = maybe False (\str -> "-" `isPrefixOf` str && str /= "-") (getLiteralString arg)
+
+    hasUnreadableTrap = Nothing `elem` trapActions
+    -- We don't check if a trap was removed before the function runs, so any handler counts
+    trapHandlers = concat
+        [Map.findWithDefault [] word functionIds
+        | Just action <- trapActions, word <- words (map spaceOutSymbols action)]
+    spaceOutSymbols c = if c `elem` ";&|()" then ' ' else c
+    readInTraps = S.fromList $ concatMap getVariablesFromLiteralToken trapActionTokens
+
+    allFunctions = concat $ Map.elems functionIds
+    functionIds = Map.fromListWith (++) $ execWriter $ doAnalysis findFunction t
+    findFunction (T_Function id _ _ name _) = tell [(name, [id])]
+    findFunction _ = return ()
+
+    -- Skips plain assignments like x=1
+    callsByFunction = Map.fromListWith (++) [(function, [call]) | (Just function, call) <- commands]
+    commands = execWriter $ doAnalysis findCommand t
+    findCommand command@(T_SimpleCommand _ _ (_:_)) =
+        tell [(enclosingFunction command, getCommandName command)]
+    findCommand _ = return ()
+
+    enclosingFunction token =
+        getId <$> find isFunction (NE.toList $ getPath (parentMap params) token)
+
+    -- declare -g makes a global, otherwise these all make locals
+    isLocalDeclaration command =
+        case getCommandName command of
+            Just "local" -> True
+            Just name | name `elem` ["declare", "typeset"] ->
+                "g" `notElem` map snd (getAllFlags command)
+            _ -> False
 
     warnFor (name, token) =
         unless ("_" `isPrefixOf` name || hasAllexport params) $
