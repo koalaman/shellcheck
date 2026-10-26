@@ -2645,6 +2645,8 @@ prop_checkUnassignedReferences55 = verifyNotTree checkUnassignedReferences "#!/u
 prop_checkUnassignedReferences56 = verifyTree checkUnassignedReferences "f() { run true; echo $stderr; }"
 prop_checkUnassignedReferences57 = verifyNotTree checkUnassignedReferences "f() { run -1 --separate-stderr false; echo \"$stderr ${stderr_lines[0]}\"; }"
 prop_checkUnassignedReferences58 = verifyTree checkUnassignedReferences "echo $stderr"
+prop_checkUnassignedReferences59 = verifyNotTree checkUnassignedReferences "compgen -V files -G '*'; echo \"${files[@]}\""
+prop_checkUnassignedReferences60 = verifyNotTree checkUnassignedReferences "compgen -A function -V funcs; echo \"${funcs[@]}\""
 
 checkUnassignedReferences = checkUnassignedReferences' False
 checkUnassignedReferences' includeGlobals params t = warnings
