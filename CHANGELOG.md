@@ -10,6 +10,7 @@
 - SC3040: Support `pipefail` as specified in POSIX.1-2024
 
 ### Fixed
+- SC2064 no longer warns about expanding readonly variables in trap commands
 
 ### Removed
 - SC3003: removed since ANSI C string is specified in POSIX.1-2024
