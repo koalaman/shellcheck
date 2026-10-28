@@ -10,6 +10,8 @@
 - SC3040: Support `pipefail` as specified in POSIX.1-2024
 
 ### Fixed
+- SC1072 about an invalid `disable=` value now names the value instead
+  of a missing `=`
 
 ### Removed
 - SC3003: removed since ANSI C string is specified in POSIX.1-2024
