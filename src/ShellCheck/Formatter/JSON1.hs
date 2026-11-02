@@ -111,16 +111,13 @@ instance ToJSON Fix where
 
 outputError file msg = hPutStrLn stderr $ file ++ ": " ++ msg
 
-collectResult ref cr sys = mapM_ f groups
+collectResult ref cr sys = mapM_ f (commentsByFile comments)
   where
     comments = crComments cr
-    groups = NE.groupWith sourceFile comments
     f :: NE.NonEmpty PositionedComment -> IO ()
     f group = do
-        let filename = sourceFile (NE.head group)
-        result <- siReadFile sys (Just True) filename
-        let contents = either (const "") id result
-        let comments' = makeNonVirtual (NE.toList group) contents
+        (_, fileComments, contents) <- readCommentsForFile sys group
+        let comments' = makeNonVirtual fileComments contents
         deepseq comments' $ modifyIORef ref (\x -> comments' ++ x)
 
 finish ref = do
