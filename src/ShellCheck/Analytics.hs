@@ -3416,6 +3416,7 @@ prop_checkUncheckedCdInFunction4 = verifyTree checkUncheckedCdPushdPopd "foo() {
 prop_checkUncheckedCdInFunction5 = verifyTree checkUncheckedCdPushdPopd "foo() { cd /abc; return > output; }"
 prop_checkUncheckedCdInFunction6 = verifyTree checkUncheckedCdPushdPopd "foo() { cd /abc; return | cat; }"
 prop_checkUncheckedCdInFunction7 = verifyNotTree checkUncheckedCdPushdPopd "foo() { cd /abc; return $?; }"
+prop_checkUncheckedCdInFunction8 = verifyNotTree checkUncheckedCdPushdPopd "foo() { cd /abc; exit $?; }"
 
 checkUncheckedCdPushdPopd params root =
     if hasErrexit params then
@@ -3441,10 +3442,9 @@ checkUncheckedCdPushdPopd params root =
             case dropWhile ((/= getId child) . getId) commands of
                 [_] -> True
                 [_, T_Pipeline _ [] [T_Redirecting _ [] (T_SimpleCommand _ [] (cmd:args))]] ->
-                    case args of
-                        [] -> getLiteralString cmd `elem` [Just "return", Just "exit"]
-                        [T_NormalWord _ [T_DollarBraced _ False status]] ->
-                            getLiteralString cmd == Just "return" && getLiteralString status == Just "?"
+                    getLiteralString cmd `elem` [Just "return", Just "exit"] && case args of
+                        [] -> True
+                        [T_NormalWord _ [T_DollarBraced _ False status]] -> getLiteralString status == Just "?"
                         _ -> False
                 _ -> False
         go (_:rest) = go rest
