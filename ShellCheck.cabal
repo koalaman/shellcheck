@@ -119,7 +119,7 @@ executable shellcheck
       containers,
       deepseq,
       Diff,
-      directory,
+      directory             >= 1.3,
       fgl,
       mtl,
       filepath,
