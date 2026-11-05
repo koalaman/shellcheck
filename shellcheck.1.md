@@ -39,9 +39,9 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 
 **-C**[*WHEN*],\ **--color**[=*WHEN*]
 
-:   For TTY output, enable colors *always*, *never* or *auto*. The default
-    is *auto*. **--color** without an argument is equivalent to
-    **--color=always**.
+:   For **tty** and **diff** output, enable colors *always*, *never* or
+    *auto*. The default is *auto*. **--color** without an argument is
+    equivalent to **--color=always**.
 
 **-i**\ *CODE1*[,*CODE2*...],\ **--include=***CODE1*[,*CODE2*...]
 
