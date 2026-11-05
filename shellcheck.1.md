@@ -209,14 +209,22 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
             {
               "file": "filename",
               "line": lineNumber,
+              "endLine": endLineNumber,
               "column": columnNumber,
+              "endColumn": endColumnNumber,
               "level": "severitylevel",
               "code": errorCode,
-              "message": "warning message"
+              "message": "warning message",
+              "fix": fixOrNull
             },
             ...
           ]
         }
+
+    Each comment covers the whole range it refers to, so `endLine` and
+    `endColumn` are always present. `fix` is `null` unless an automatic
+    fix is available, in which case it is an object with a `replacements`
+    array.
 
 **json**
 
