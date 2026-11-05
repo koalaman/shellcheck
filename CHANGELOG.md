@@ -10,6 +10,7 @@
 - SC3040: Support `pipefail` as specified in POSIX.1-2024
 
 ### Fixed
+- SC2034: Warn about unused local variables even when a global with the same name is used
 
 ### Removed
 - SC3003: removed since ANSI C string is specified in POSIX.1-2024
