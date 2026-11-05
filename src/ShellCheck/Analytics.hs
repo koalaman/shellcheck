@@ -985,12 +985,18 @@ prop_checkConcatenatedDollarAt2 = verify checkConcatenatedDollarAt "echo ${arr[@
 prop_checkConcatenatedDollarAt3 = verify checkConcatenatedDollarAt "echo $a$@"
 prop_checkConcatenatedDollarAt4 = verifyNot checkConcatenatedDollarAt "echo $@"
 prop_checkConcatenatedDollarAt5 = verifyNot checkConcatenatedDollarAt "echo \"${arr[@]}\""
+prop_checkConcatenatedDollarAt6 = verifyNot checkConcatenatedDollarAt $ unlines ["echo \"${@}\"\\", "    | cat"]
+prop_checkConcatenatedDollarAt7 = verifyNot checkConcatenatedDollarAt $ unlines ["echo \"${arr[@]}\"\\", "    other"]
+prop_checkConcatenatedDollarAt8 = verify checkConcatenatedDollarAt "echo \"$@\"''"
 checkConcatenatedDollarAt p word@T_NormalWord {}
     | not $ isQuoteFree (shellType p) (parentMap p) word
     || null (drop 1 parts) =
         mapM_ for array
   where
-    parts = getWordParts word
+    -- Escaped linefeeds can leave empty unquoted literals in the word.
+    parts = filter hasContent $ getWordParts word
+    hasContent (T_Literal _ "") = False
+    hasContent _ = True
     array = find isArrayExpansion parts
     for t = err (getId t) 2145 "Argument mixes string and array. Use * or separate argument."
 checkConcatenatedDollarAt _ _ = return ()
