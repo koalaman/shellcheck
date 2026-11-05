@@ -360,9 +360,10 @@ For example:
     shellcheck.shell=bash
     shellcheck.disable=SC2034
 
-If no matching directives are found in any `.editorconfig` in the parent
-directories, ShellCheck will look in the global default
-`$XDG_CONFIG_HOME/editorconfig.ini` (usually `~/.config/editorconfig.ini`).
+In addition to those `.editorconfig` files, ShellCheck always reads the global
+default `$XDG_CONFIG_HOME/editorconfig.ini` (usually
+`~/.config/editorconfig.ini`), whether or not a parent directory already
+provided matching directives.
 
 Directives from `.shellcheckrc`/`shellcheckrc` and from `.editorconfig` are
 both applied, with `.shellcheckrc` taking precedence in case of conflicts.
