@@ -686,9 +686,15 @@ prop_checkInteractiveSu1 = verify checkInteractiveSu "su; rm file; su $USER"
 prop_checkInteractiveSu2 = verify checkInteractiveSu "su foo; something; exit"
 prop_checkInteractiveSu3 = verifyNot checkInteractiveSu "echo rm | su foo"
 prop_checkInteractiveSu4 = verifyNot checkInteractiveSu "su root < script"
+prop_checkInteractiveSu5 = verifyNot checkInteractiveSu "su -c something"
+prop_checkInteractiveSu6 = verifyNot checkInteractiveSu "su --command=something"
+prop_checkInteractiveSu7 = verifyNot checkInteractiveSu "su --command something"
+prop_checkInteractiveSu8 = verifyNot checkInteractiveSu "su -csomething"
+prop_checkInteractiveSu9 = verifyNot checkInteractiveSu "su -lc something"
+prop_checkInteractiveSu10 = verify checkInteractiveSu "su -sc"
 checkInteractiveSu = CommandCheck (Basename "su") f
   where
-    f cmd = when (length (arguments cmd) <= 1) $ do
+    f cmd = when (noCommandArgPresent (arguments cmd)) $ do
         path <- getPathM cmd
         when (all undirected path) $
             info (getId cmd) 2117
@@ -698,6 +704,14 @@ checkInteractiveSu = CommandCheck (Basename "su") f
     -- This should really just be modifications to stdin, but meh
     undirected (T_Redirecting _ (_:_) _) = False
     undirected _ = True
+
+    noCommandArgPresent = not . any isCommandArg . map (getLiteralStringDef "_")
+    isCommandArg arg = arg == "--command" || "--command=" `isPrefixOf` arg || hasShortC arg
+    hasShortC ('-':x:rest) | x /= '-' = shortC (x:rest)
+    hasShortC _ = False
+    shortC ('c':_) = True
+    shortC (x:rest) = x `notElem` "gGsw" && shortC rest
+    shortC [] = False
 
 
 -- This is hard to get right without properly parsing ssh args
