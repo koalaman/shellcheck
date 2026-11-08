@@ -435,8 +435,8 @@ parseOption flag options =
             let supported = map cdName ShellCheck.Analyzer.optionalChecks
             let unknown = filter (\name -> name /= "all" && name `notElem` supported) checks
             unless (null unknown) $ do
-                printErr $ "Unknown checks: " ++ intercalate ", " unknown
-                printErr "Supported checks: all, or see `shellcheck --list-optional'"
+                printErr $ "Unrecognized optional checks: " ++ intercalate ", " unknown
+                printErr "Supported checks: see `shellcheck --list-optional` (or 'all')"
                 throwError SupportFailure
             let cs = checkSpec options
             return options {
