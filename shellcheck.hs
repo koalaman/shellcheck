@@ -244,9 +244,12 @@ process flags files = do
             throwError SupportFailure
         Just f -> ExceptT $ fmap Right f
 
-    sys <- lift $ ioInterface options allFiles
-
-    lift $ runFormatter sys formatter options allFiles
+    lift $ do
+        rcReadFailed <- newIORef False
+        sys <- ioInterface options allFiles (writeIORef rcReadFailed True)
+        status <- runFormatter sys formatter options allFiles
+        failed <- readIORef rcReadFailed
+        return $ if failed then RuntimeException else status
 
   where
     readFilesFrom :: FilePath -> ExceptT Status IO [FilePath]
@@ -473,8 +476,8 @@ parseOption flag options =
                 printErr $ "Invalid boolean, expected true/false: " ++ str
                 throwError SyntaxFailure
 
-ioInterface :: Options -> [FilePath] -> IO (SystemInterface IO)
-ioInterface options files = do
+ioInterface :: Options -> [FilePath] -> IO () -> IO (SystemInterface IO)
+ioInterface options files onRcReadFailure = do
     inputs <- mapM normalize files
     cache <- newIORef emptyCache
     configCache <- newIORef ("", Nothing)
@@ -554,9 +557,10 @@ ioInterface options files = do
                 if path == "/"
                   then return result
                   else do
-                    result <- readConfig file
-                    when (isNothing result) $
+                    result <- readConfig doesFileExist onRcReadFailure file
+                    when (isNothing result) $ do
                         hPutStrLn stderr $ "Warning: unable to read --rcfile " ++ file
+                        onRcReadFailure
                     writeIORef cache ("/", result)
                     return result
 
@@ -617,7 +621,7 @@ ioInterface options files = do
             | otherwise = dir ++ "/"
 
         collectDirConfigs dir = do
-            current <- readConfig (dir </> ".editorconfig")
+            current <- readConfig doesFileExist (return ()) (dir </> ".editorconfig")
             let isRoot = maybe False (isEditorConfigRoot . snd) current
                 next = takeDirectory dir
             rest <- if next /= dir && not isRoot
@@ -630,16 +634,26 @@ ioInterface options files = do
                         `catch` ((const $ return "") :: IOException -> IO FilePath)
             if null path
               then return []
-              else maybeToList <$> readConfig path
+              else maybeToList <$> readConfig doesFileExist (return ()) path
 
     findConfig paths =
         case paths of
             (file:rest) -> do
-                contents <- readConfig file
+                contents <- readConfig rcFileExists onRcReadFailure file
                 if isJust contents
                   then return contents
                   else findConfig rest
             [] -> return Nothing
+
+    -- A dangling symlink is a configured path even though its target is absent.
+    rcFileExists file = do
+        exists <- doesFileExist file
+        if exists
+          then return True
+          else do
+            link <- pathIsSymbolicLink file `catch`
+                ((const $ return False) :: IOException -> IO Bool)
+            if link then not <$> doesDirectoryExist file else return False
 
     -- Get a list of candidate filenames. This includes .shellcheckrc
     -- in all parent directories, plus the user's home dir and xdg dir.
@@ -657,8 +671,8 @@ ioInterface options files = do
         xdg <- getXdgDirectory XdgConfig "shellcheckrc"
         return [home, xdg]
 
-    readConfig file = do
-        exists <- doesFileExist file
+    readConfig fileExists onReadFailure file = do
+        exists <- fileExists file
         if exists
           then do
             (contents, _) <- inputFile file `catch` handler file
@@ -669,6 +683,7 @@ ioInterface options files = do
         handler :: FilePath -> IOException -> IO (String, Bool)
         handler file err = do
             hPutStrLn stderr $ file ++ ": " ++ show err
+            onReadFailure
             return ("", True)
 
     andM a b arg = do
