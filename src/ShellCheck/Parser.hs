@@ -1051,7 +1051,7 @@ readAnnotationWithoutPrefix sandboxed = do
                 case parsed of
                     Just annotations -> return annotations
                     Nothing -> fail ("Unknown disable value '" ++ str
-                        ++ "'. Expected 'all' or check codes/ranges like SC2050 or SC2050-SC2070")
+                        ++ "'. Expected a code like 'SC2000', or a range like 'SC2000-SC3000', or 'all'.")
               where
                 readElement = readRange <|> readAll
                 readAll = do
