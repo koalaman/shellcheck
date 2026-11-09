@@ -39,11 +39,12 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 
 **-C**[*WHEN*],\ **--color**[=*WHEN*]
 
-:   For TTY output, enable colors *always*, *never* or *auto*. The default
-    is *auto*. In *auto* mode, colors are only used when standard output is
-    a terminal, `TERM` is set to a value other than an empty string or
-    `dumb`, and ShellCheck was not built for Windows with MinGW. **--color**
-    without an argument is equivalent to **--color=always**.
+:   For **tty** and **diff** output, enable colors *always*, *never* or
+    *auto*. The default is *auto*. In *auto* mode, colors are only used when
+    standard output is a terminal, `TERM` is set to a value other than an
+    empty string or `dumb`, and ShellCheck was not built for Windows with
+    MinGW. **--color** without an argument is equivalent to
+    **--color=always**.
 
 **-i**\ *CODE1*[,*CODE2*...],\ **--include=***CODE1*[,*CODE2*...]
 
@@ -83,11 +84,13 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 **--norc**
 
 :   Don't try to look for .shellcheckrc or .editorconfig configuration files.
+    This also disables **--rcfile**.
 
 **--rcfile** *RCFILE*
 
 :   Prefer the specified configuration file over searching for one
-    in the default locations.
+    in the default locations. The specified file is not read if
+    **--norc** is also given.
 
 **-o**\ *NAME1*[,*NAME2*...],\ **--enable=***NAME1*[,*NAME2*...]
 
@@ -145,7 +148,6 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
     read the list from standard input. This option is processed in addition to
     any files specified on the command line.
 
-
 # FORMATS
 
 **tty**
@@ -197,7 +199,6 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
              && echo -e 'Playlist $f contains a HQ file in mp3 format'
          done
 
-
 **json1**
 
 :   Json is a popular serialization format that is more suitable for web
@@ -209,14 +210,22 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
             {
               "file": "filename",
               "line": lineNumber,
+              "endLine": endLineNumber,
               "column": columnNumber,
+              "endColumn": endColumnNumber,
               "level": "severitylevel",
               "code": errorCode,
-              "message": "warning message"
+              "message": "warning message",
+              "fix": fixOrNull
             },
             ...
           ]
         }
+
+    Each comment covers the whole range it refers to, so `endLine` and
+    `endColumn` are always present. `fix` is `null` unless an automatic
+    fix is available, in which case it is an object with a `replacements`
+    array.
 
 **json**
 
@@ -227,7 +236,6 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 
 :   Suppress all normal output. Exit with zero if no issues are found,
     otherwise exit with one. Stops processing after the first issue.
-
 
 # DIRECTIVES
 
@@ -263,6 +271,8 @@ Valid keys are:
     The command can be a simple command like `echo foo`, or a compound command
     like a function definition, subshell block or loop. A range can be
     specified with a dash, e.g. `disable=SC3000-SC4000` to exclude 3xxx.
+    The end of the range is exclusive: this example covers SC3000 through
+    SC3999, but not SC4000.
     All warnings can be disabled with `disable=all`.
 
 **enable**
@@ -330,9 +340,14 @@ Here is an example `.shellcheckrc`:
     disable=SC2236
 
 If no `.shellcheckrc` is found in any of the parent directories, ShellCheck
-will look in `~/.shellcheckrc` followed by the `$XDG_CONFIG_HOME`
-(usually `~/.config/shellcheckrc`) on Unix, or `%APPDATA%/shellcheckrc` on
-Windows. Only the first file found will be used.
+checks the following additional paths and uses the first file found:
+
++ On Unix-like systems, checks for `~/.shellcheckrc` followed by
+  `$XDG_CONFIG_HOME/shellcheckrc` (no leading dot). If `$XDG_CONFIG_HOME` is
+  unset it defaults to `~/.config`.
++ On Windows systems, checks for `%APPDATA%\shellcheckrc` followed by
+  `%XDG_CONFIG_HOME%\shellcheckrc`. If `%XDG_CONFIG_HOME%` is unset it defaults
+  to `%APPDATA%`, making this path equal to the previous path and a no-op.
 
 Note for Snap users: the Snap sandbox disallows access to hidden files.
 Use `shellcheckrc` without the dot instead.
@@ -364,7 +379,6 @@ directories, ShellCheck will look in the global default
 
 Directives from `.shellcheckrc`/`shellcheckrc` and from `.editorconfig` are
 both applied, with `.shellcheckrc` taking precedence in case of conflicts.
-
 
 # ENVIRONMENT VARIABLES
 

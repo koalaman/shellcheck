@@ -696,7 +696,7 @@ readConditionContents single =
 
     readCondNot = do
         start <- startSpan
-        char '!'
+        if single then void (try (readRegularOrEscaped (string "!"))) else void (char '!')
         id <- endSpan start
         spacingOrLf
         expr <- readCondExpr
@@ -947,6 +947,7 @@ prop_readCondition26 = isOk readScript "[[ foo ]]\\\n && bar"
 prop_readCondition27 = not $ isOk readConditionCommand "[[ x ]] foo"
 prop_readCondition28 = isOk readCondition "[[ x = [\"$1\"] ]]"
 prop_readCondition29 = isOk readCondition "[[ x = [*] ]]"
+prop_readCondition30 = isOk readCondition "[ \\! \\( -e foo -a -e bar \\) ]"
 
 readCondition = called "test expression" $ do
     opos <- getPosition
@@ -996,6 +997,21 @@ prop_readAnnotation8 = isOk readAnnotation "# shellcheck disable=all\n"
 prop_readAnnotation9 = isOk readAnnotation "# shellcheck source='foo bar' source-path=\"baz etc\"\n"
 prop_readAnnotation10 = isOk readAnnotation "# shellcheck disable='SC1234,SC2345' enable=\"foo\" shell='bash'\n"
 prop_readAnnotation11 = isOk (readAnnotationWithoutPrefix False) "external-sources='true'"
+prop_readAnnotation12 = isOk readAnnotation "# shellcheck disable=2034-2036\n"
+prop_readAnnotation13 = isOk readAnnotation "# shellcheck disable=all,SC2034\n"
+prop_readAnnotation14 = isNotOk readAnnotation "# shellcheck disable=foo\n"
+prop_readAnnotation15 = isNotOk readAnnotation "# shellcheck disable='foo'\n"
+prop_readAnnotation16 = isNotOk readAnnotation "# shellcheck disable=SC2034-x\n"
+-- #3425: an invalid disable value should blame the value, not a missing '='
+prop_readAnnotationBadDisableMessage =
+    "Unknown disable value 'foo'" `isInfixOf` rendered
+        && not ("Expected '=' after directive key" `isInfixOf` rendered)
+  where
+    rendered = case res of
+        Left err -> getStringFromParsec $ errorMessages err
+        Right _ -> ""
+    (res, _) = runIdentity $
+        runParser testEnvironment readAnnotation "-" "# shellcheck disable=foo\n"
 
 readAnnotation = called "shellcheck directive" $ do
     try readAnnotationPrefix
@@ -1024,7 +1040,19 @@ readAnnotationWithoutPrefix sandboxed = do
         key <- many1 (letter <|> char '-')
         char '=' <|> fail "Expected '=' after directive key"
         annotations <- case key of
-            "disable" -> plainOrQuoted $ readElement `sepBy` char ','
+            "disable" -> do
+                pos <- getPosition
+                str <- quoted (many1 anyChar)
+                    <|> many1 (letter <|> digit <|> char '-' <|> char ',')
+                    <|> return ""
+                parsed <- subParse pos
+                    (try (Just <$> (readElement `sepBy` char ',' <* eof))
+                        <|> return Nothing)
+                    str
+                case parsed of
+                    Just annotations -> return annotations
+                    Nothing -> fail ("Unknown disable value '" ++ str
+                        ++ "'. Expected a code like 'SC2000', or a range like 'SC2000-SC3000', or 'all'.")
               where
                 readElement = readRange <|> readAll
                 readAll = do

@@ -985,12 +985,18 @@ prop_checkConcatenatedDollarAt2 = verify checkConcatenatedDollarAt "echo ${arr[@
 prop_checkConcatenatedDollarAt3 = verify checkConcatenatedDollarAt "echo $a$@"
 prop_checkConcatenatedDollarAt4 = verifyNot checkConcatenatedDollarAt "echo $@"
 prop_checkConcatenatedDollarAt5 = verifyNot checkConcatenatedDollarAt "echo \"${arr[@]}\""
+prop_checkConcatenatedDollarAt6 = verifyNot checkConcatenatedDollarAt $ unlines ["echo \"${@}\"\\", "    | cat"]
+prop_checkConcatenatedDollarAt7 = verifyNot checkConcatenatedDollarAt $ unlines ["echo \"${arr[@]}\"\\", "    other"]
+prop_checkConcatenatedDollarAt8 = verify checkConcatenatedDollarAt "echo \"$@\"''"
 checkConcatenatedDollarAt p word@T_NormalWord {}
     | not $ isQuoteFree (shellType p) (parentMap p) word
     || null (drop 1 parts) =
         mapM_ for array
   where
-    parts = getWordParts word
+    -- Escaped linefeeds can leave empty unquoted literals in the word.
+    parts = filter hasContent $ getWordParts word
+    hasContent (T_Literal _ "") = False
+    hasContent _ = True
     array = find isArrayExpansion parts
     for t = err (getId t) 2145 "Argument mixes string and array. Use * or separate argument."
 checkConcatenatedDollarAt _ _ = return ()
@@ -1132,6 +1138,7 @@ prop_checkSingleQuotedVariables30 = verify checkSingleQuotedVariables "runc exec
 prop_checkSingleQuotedVariables31 = verify checkSingleQuotedVariables "runc exec ctr sh script -c 'echo $HOME'"
 prop_checkSingleQuotedVariables32 = verify checkSingleQuotedVariables "echo sh --rcfile 'echo $HOME'"
 prop_checkSingleQuotedVariables33 = verifyNot checkSingleQuotedVariables "chroot /mnt /bin/ksh93 -c 'echo $HOME'"
+prop_checkSingleQuotedVariables34 = verifyNot checkSingleQuotedVariables "yq '.a as $x | $x'"
 
 
 checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
@@ -1168,6 +1175,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
                 ,"oc"
                 ,"dpkg-query"
                 ,"jq"  -- could also check that user provides --arg
+                ,"yq"
                 ,"rename"
                 ,"rg"
                 ,"unset"
@@ -1773,6 +1781,8 @@ prop_checkValidCondOps2 = verify checkValidCondOps "[ -M a ]"
 prop_checkValidCondOps2a = verifyNot checkValidCondOps "[ 3 \\> 2 ]"
 prop_checkValidCondOps3 = verifyNot checkValidCondOps "[ 1 = 2 -a 3 -ge 4 ]"
 prop_checkValidCondOps4 = verifyNot checkValidCondOps "[[ ! -v foo ]]"
+prop_checkValidCondOps5 = verifyNot checkValidCondOps "[ \\! -e foo ]"
+prop_checkValidCondOps6 = verifyNot checkValidCondOps "[ '!' -e foo ]"
 checkValidCondOps _ (TC_Binary id _ s _ _)
     | s `notElem` binaryTestOps =
         warn id 2057 "Unknown binary operator."
@@ -3410,6 +3420,13 @@ prop_checkUncheckedPopd11 = verifyNotTree checkUncheckedCdPushdPopd "cd ../.././
 prop_checkUncheckedPopd12 = verifyNotTree checkUncheckedCdPushdPopd "cd /"
 prop_checkUncheckedPopd13 = verifyTree checkUncheckedCdPushdPopd "cd ../../.../.."
 prop_checkUncheckedCdInFunction1 = verifyNotTree checkUncheckedCdPushdPopd "#!/bin/bash\nfoo() {\n  cd /abc\n}"
+prop_checkUncheckedCdInFunction2 = verifyNotTree checkUncheckedCdPushdPopd "foo() { cd /abc; return; }"
+prop_checkUncheckedCdInFunction3 = verifyNotTree checkUncheckedCdPushdPopd "foo() { cd /abc; exit; }"
+prop_checkUncheckedCdInFunction4 = verifyTree checkUncheckedCdPushdPopd "foo() { cd /abc; return 0; }"
+prop_checkUncheckedCdInFunction5 = verifyTree checkUncheckedCdPushdPopd "foo() { cd /abc; return > output; }"
+prop_checkUncheckedCdInFunction6 = verifyTree checkUncheckedCdPushdPopd "foo() { cd /abc; return | cat; }"
+prop_checkUncheckedCdInFunction7 = verifyNotTree checkUncheckedCdPushdPopd "foo() { cd /abc; return $?; }"
+prop_checkUncheckedCdInFunction8 = verifyNotTree checkUncheckedCdPushdPopd "foo() { cd /abc; exit $?; }"
 
 checkUncheckedCdPushdPopd params root =
     if hasErrexit params then
@@ -3432,7 +3449,14 @@ checkUncheckedCdPushdPopd params root =
         go $ NE.tail $ getPath (parentMap params) t
       where
         go (child:T_BraceGroup _ commands:T_Function {}:_) =
-            not (null commands) && getId (last commands) == getId child
+            case dropWhile ((/= getId child) . getId) commands of
+                [_] -> True
+                [_, T_Pipeline _ [] [T_Redirecting _ [] (T_SimpleCommand _ [] (cmd:args))]] ->
+                    getLiteralString cmd `elem` [Just "return", Just "exit"] && case args of
+                        [] -> True
+                        [T_NormalWord _ [T_DollarBraced _ False status]] -> getLiteralString status == Just "?"
+                        _ -> False
+                _ -> False
         go (_:rest) = go rest
         go [] = False
     isSafeDir t = case oversimplify t of
@@ -4017,6 +4041,8 @@ prop_checkUseBeforeDefinition8 = verifyNotTree checkUseBeforeDefinition "#!/usr/
 prop_checkUseBeforeDefinition9 = verifyNotTree checkUseBeforeDefinition "#!/usr/bin/env bats\n@test 'foo' { f; }\nsetup() { f() { true; }; }"
 prop_checkUseBeforeDefinition10 = verifyTree checkUseBeforeDefinition "#!/usr/bin/env bats\n@test 'foo' {\n f\n f() { true; }\n}"
 prop_checkUseBeforeDefinition11 = verifyTree checkUseBeforeDefinition "#!/usr/bin/env bats\nf\n@test 'foo' { true; }\nf() { true; }"
+prop_checkUseBeforeDefinition12 = verifyNotTree checkUseBeforeDefinition "setup() { f() { true; }; }; f; f() { true; }"
+prop_checkUseBeforeDefinition13 = verifyNotTree checkUseBeforeDefinition "#!/usr/bin/env bats\nsetup() { f() { true; }; }\n@test \"a\" {\n  f\n}\n@test \"b\" {\n  f() { true; }\n}"
 checkUseBeforeDefinition :: Parameters -> Token -> [TokenComment]
 checkUseBeforeDefinition params t = fromMaybe [] $ do
     cfga <- cfgAnalysis params
@@ -4043,7 +4069,10 @@ checkUseBeforeDefinition params t = fromMaybe [] $ do
                 -- defined outside of tests are available in all of them.
                 guard . not $ isInBatsTest t && any (not . snd) definitions
                 -- Is the function definitely being defined later?
-                guard $ any (\c -> CF.doesPostDominate cfga c id) invocations
+                -- Every definition has to be later: one whose order we can't
+                -- determine, such as in a function nothing visibly invokes,
+                -- may already have run.
+                guard $ all (\c -> CF.doesPostDominate cfga c id) invocations
                 -- Was one already defined, so it's actually a re-definition?
                 guard . not $ any (\c -> CF.doesPostDominate cfga id c) invocations
                 return $ err id 2218 "This function is only defined later. Move the definition up."
@@ -5261,9 +5290,14 @@ prop_checkOverwrittenExitCode2 = verifyNot checkOverwrittenExitCode "x; [ $? -eq
 prop_checkOverwrittenExitCode3 = verify checkOverwrittenExitCode "x; echo \"Exit is $?\"; [ $? -eq 0 ]"
 prop_checkOverwrittenExitCode4 = verifyNot checkOverwrittenExitCode "x; [ $? -eq 0 ] && echo Success"
 prop_checkOverwrittenExitCode5 = verify checkOverwrittenExitCode "x; if [ $? -eq 0 ]; then var=$?; fi"
+prop_checkOverwrittenExitCode5a = verify checkOverwrittenExitCode "x; if [ $? -eq 0 ]; then exit $?; fi"
 prop_checkOverwrittenExitCode6 = verify checkOverwrittenExitCode "x; [ $? -gt 0 ] && fail=$?"
+prop_checkOverwrittenExitCode6a = verify checkOverwrittenExitCode "x; [ $? -eq 0 ] && exit $?"
 prop_checkOverwrittenExitCode7 = verifyNot checkOverwrittenExitCode "[ 1 -eq 2 ]; status=$?"
 prop_checkOverwrittenExitCode8 = verifyNot checkOverwrittenExitCode "[ 1 -eq 2 ]; exit $?"
+prop_checkOverwrittenExitCode9  = verifyNot checkOverwrittenExitCode "[[ -e \"./lockfile\" ]] || retval=$?"
+prop_checkOverwrittenExitCode10 = verifyNot checkOverwrittenExitCode "[ -e \"./lockfile\" ] || retval=$?"
+prop_checkOverwrittenExitCode11 = verifyNot checkOverwrittenExitCode "[ 1 -eq 2 ] && status=$?"
 checkOverwrittenExitCode params t =
     case t of
         T_DollarBraced id _ val | getLiteralString val == Just "?" -> check id
@@ -5277,10 +5311,16 @@ checkOverwrittenExitCode params t =
 
         let idToToken = idMap params
         exitCodeTokens <- traverse (\k -> Map.lookup k idToToken) $ S.toList exitCodeIds
+        let inAssignment = isInAssignment id
+            condHasDollarQ = conditionContainsDollarQuestion id exitCodeIds
+            suppress = inAssignment && not condHasDollarQ
         return $ do
-            when (all isCondition exitCodeTokens && not (usedUnconditionally cfga t exitCodeIds)) $
+            when (all isCondition exitCodeTokens
+                  && not (usedUnconditionally cfga t exitCodeIds)
+                  && not suppress) $
                 warn id 2319 "This $? refers to a condition, not a command. Assign to a variable to avoid it being overwritten."
-            when (all isPrinting exitCodeTokens) $
+            when (all isPrinting exitCodeTokens
+                  && not suppress) $
                 warn id 2320 "This $? refers to echo/printf, not a previous command. Assign to variable to avoid it being overwritten."
 
     isCondition t =
@@ -5299,6 +5339,26 @@ checkOverwrittenExitCode params t =
             Just "echo" -> True
             Just "printf" -> True
             _ -> False
+
+    isInAssignment tokenId =
+        let token = Map.lookup tokenId (idMap params)
+        in maybe False (\tok -> any isAssignmentToken $ getPath (parentMap params) tok) token
+      where
+        isAssignmentToken (T_Assignment _ _ _ _ _) = True
+        isAssignmentToken _ = False
+
+    conditionContainsDollarQuestion tokenId exitIds =
+        let tree = parentMap params
+            tokenMap = idMap params
+            condTokens = mapMaybe (`Map.lookup` tokenMap) (S.toList exitIds)
+            dollarQTokens = [(tid, tok) | (tid, tok) <- Map.toList tokenMap,
+                                           tid /= tokenId,
+                                           isDollarQ tok]
+            isDollarQ (T_DollarBraced _ _ val) = getLiteralString val == Just "?"
+            isDollarQ _ = False
+        in any (\(_, dqToken) ->
+            any (\cond -> isParentOf tree cond dqToken) condTokens
+          ) dollarQTokens
 
 
 prop_checkUnnecessaryArithmeticExpansionIndex1 = verify checkUnnecessaryArithmeticExpansionIndex "a[$((1+1))]=n"

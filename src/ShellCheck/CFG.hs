@@ -160,7 +160,7 @@ data CFStringPart =
   deriving (Eq, Ord, Show, Generic, NFData)
 
 -- The properties of a variable
-data CFVariableProp = CFVPExport | CFVPArray | CFVPAssociative | CFVPInteger
+data CFVariableProp = CFVPExport | CFVPArray | CFVPAssociative | CFVPInteger | CFVPReadonly
   deriving (Eq, Ord, Show, Generic, NFData)
 
 -- Options when generating CFG
@@ -939,6 +939,7 @@ handleCommand cmd vars args literalCmd = do
         Just "declare" -> handleDeclare args
         Just "local" -> handleDeclare args
         Just "typeset" -> handleDeclare args
+        Just "readonly" -> handleDeclare args
 
         Just "printf" -> regularExpansionWithStatus vars args $ handlePrintf args
         Just "wait" -> regularExpansionWithStatus vars args $ handleWait args
@@ -1029,23 +1030,28 @@ handleCommand cmd vars args literalCmd = do
         func = "f" `elem` opts || "F" `elem` opts
         global = "g" `elem` opts
         export = "x" `elem` opts
+        -- 'readonly' is like 'declare -r', except it doesn't make variables local
+        isReadonlyCommand = literalCmd == Just "readonly"
+        readonly = "r" `elem` opts || isReadonlyCommand
         writer isFunc =
             case () of
                 _ | global -> CFWriteGlobal
-                _ | isFunc -> CFWriteLocal
+                _ | isFunc && not isReadonlyCommand -> CFWriteLocal
                 _ -> CFWriteVariable
 
         scope isFunc =
             case () of
                 _ | global -> Just GlobalScope
-                _ | isFunc -> Just LocalScope
+                _ | isFunc && not isReadonlyCommand -> Just LocalScope
                 _ -> Nothing
 
         addedProps = S.fromList $ concat $ [
             [ CFVPArray | array ],
             [ CFVPInteger | integer ],
             [ CFVPExport | export ],
-            [ CFVPAssociative | associative ]
+            [ CFVPAssociative | associative ],
+            -- 'readonly -f' and 'declare -rf' apply to functions, not variables
+            [ CFVPReadonly | readonly && not func ]
           ]
 
         removedProps = S.fromList $ concat $ [
