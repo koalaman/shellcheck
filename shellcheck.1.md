@@ -40,8 +40,11 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 **-C**[*WHEN*],\ **--color**[=*WHEN*]
 
 :   For **tty** and **diff** output, enable colors *always*, *never* or
-    *auto*. The default is *auto*. **--color** without an argument is
-    equivalent to **--color=always**.
+    *auto*. The default is *auto*. In *auto* mode, colors are only used when
+    standard output is a terminal, `TERM` is set to a value other than an
+    empty string or `dumb`, and ShellCheck was not built for Windows with
+    MinGW. **--color** without an argument is equivalent to
+    **--color=always**.
 
 **-i**\ *CODE1*[,*CODE2*...],\ **--include=***CODE1*[,*CODE2*...]
 
