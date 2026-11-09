@@ -1138,6 +1138,7 @@ prop_checkSingleQuotedVariables30 = verify checkSingleQuotedVariables "runc exec
 prop_checkSingleQuotedVariables31 = verify checkSingleQuotedVariables "runc exec ctr sh script -c 'echo $HOME'"
 prop_checkSingleQuotedVariables32 = verify checkSingleQuotedVariables "echo sh --rcfile 'echo $HOME'"
 prop_checkSingleQuotedVariables33 = verifyNot checkSingleQuotedVariables "chroot /mnt /bin/ksh93 -c 'echo $HOME'"
+prop_checkSingleQuotedVariables34 = verifyNot checkSingleQuotedVariables "yq '.a as $x | $x'"
 
 
 checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
@@ -1174,6 +1175,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
                 ,"oc"
                 ,"dpkg-query"
                 ,"jq"  -- could also check that user provides --arg
+                ,"yq"
                 ,"rename"
                 ,"rg"
                 ,"unset"
