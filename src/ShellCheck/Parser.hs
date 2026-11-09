@@ -696,7 +696,7 @@ readConditionContents single =
 
     readCondNot = do
         start <- startSpan
-        char '!'
+        if single then void (try (readRegularOrEscaped (string "!"))) else void (char '!')
         id <- endSpan start
         spacingOrLf
         expr <- readCondExpr
@@ -947,6 +947,7 @@ prop_readCondition26 = isOk readScript "[[ foo ]]\\\n && bar"
 prop_readCondition27 = not $ isOk readConditionCommand "[[ x ]] foo"
 prop_readCondition28 = isOk readCondition "[[ x = [\"$1\"] ]]"
 prop_readCondition29 = isOk readCondition "[[ x = [*] ]]"
+prop_readCondition30 = isOk readCondition "[ \\! \\( -e foo -a -e bar \\) ]"
 
 readCondition = called "test expression" $ do
     opos <- getPosition
