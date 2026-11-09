@@ -60,6 +60,7 @@ module ShellCheck.CFGAnalysis (
     ,doesPostDominate
     ,variableMayBeDeclaredInteger
     ,variableMayBeAssignedInteger
+    ,variableMustBeDeclaredReadonly
     ,ShellCheck.CFGAnalysis.runTests -- STRIP
     ) where
 
@@ -160,8 +161,17 @@ variableMayHaveState state var property = do
     value <- M.lookup var $ variablesInScope state
     return $ any (S.member property) $ variableProperties value
 
+-- See if every execution path results in the variable containing a state
+variableMustHaveState :: ProgramState -> String -> CFVariableProp -> Maybe Bool
+variableMustHaveState state var property = do
+    value <- M.lookup var $ variablesInScope state
+    return $ all (S.member property) $ variableProperties value
+
 -- See if any execution path declares the variable an integer (declare -i).
 variableMayBeDeclaredInteger state var = variableMayHaveState state var CFVPInteger
+
+-- See if every execution path declares the variable readonly (readonly, declare -r).
+variableMustBeDeclaredReadonly state var = variableMustHaveState state var CFVPReadonly
 
 -- See if any execution path suggests the variable may contain an integer value
 variableMayBeAssignedInteger state var = do

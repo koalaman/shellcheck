@@ -467,6 +467,23 @@ prop_checkTrapQuotes1 = verify checkTrapQuotes "trap \"echo $num\" INT"
 prop_checkTrapQuotes1a = verify checkTrapQuotes "trap \"echo `ls`\" INT"
 prop_checkTrapQuotes2 = verifyNot checkTrapQuotes "trap 'echo $num' INT"
 prop_checkTrapQuotes3 = verify checkTrapQuotes "trap \"echo $((1+num))\" EXIT DEBUG"
+prop_checkTrapQuotes4 = verifyNot checkTrapQuotes "readonly num; trap \"echo $num\" INT"
+prop_checkTrapQuotes5 = verifyNot checkTrapQuotes "num=1; readonly num; trap \"echo ${num}\" INT"
+prop_checkTrapQuotes6 = verifyNot checkTrapQuotes "declare -r num=1; trap \"echo $num\" INT"
+prop_checkTrapQuotes7 = verifyNot checkTrapQuotes "typeset -r num=1; trap \"echo $num\" INT"
+prop_checkTrapQuotes8 = verify checkTrapQuotes "trap \"echo $num\" INT; readonly num"
+prop_checkTrapQuotes9 = verify checkTrapQuotes "declare num=1; trap \"echo $num\" INT"
+prop_checkTrapQuotes10 = verifyNot checkTrapQuotes "f() { readonly num=1; }; f; trap \"echo $num\" ERR"
+prop_checkTrapQuotes11 = verify checkTrapQuotes "readonly num; f() { local num; trap \"echo $num\" ERR; }"
+prop_checkTrapQuotes12 = verifyNot checkTrapQuotes "f() { local -r num; trap \"echo $num\" ERR; }"
+prop_checkTrapQuotes13 = verify checkTrapQuotes "readonly num; trap \"echo $num $other\" ERR"
+prop_checkTrapQuotes14 = verify checkTrapQuotes "[ \"$1\" ] && readonly num; trap \"echo $num\" ERR"
+prop_checkTrapQuotes15 = verifyNot checkTrapQuotes "if [ \"$1\" ]; then readonly num=1; else readonly num=2; fi; trap \"echo $num\" ERR"
+prop_checkTrapQuotes16 = verify checkTrapQuotes "f() { readonly num=1; }; trap \"echo $num\" ERR"
+prop_checkTrapQuotes17 = verify checkTrapQuotes "readonly -f num; trap \"echo $num\" ERR"
+prop_checkTrapQuotes18 = verifyNot checkTrapQuotes "builtin readonly num; trap \"echo $num\" ERR"
+prop_checkTrapQuotes19 = verify checkTrapQuotes "f() { local -r num; }; f; trap \"echo $num\" ERR"
+prop_checkTrapQuotes20 = verifyNot checkTrapQuotes "f() { declare -gr num; }; f; trap \"echo $num\" ERR"
 checkTrapQuotes = CommandCheck (Exactly "trap") (f . arguments) where
     f (x:_) = checkTrap x
     f _ = return ()
@@ -475,9 +492,20 @@ checkTrapQuotes = CommandCheck (Exactly "trap") (f . arguments) where
     warning id = warn id 2064 "Use single quotes, otherwise this expands now rather than when signalled."
     checkExpansions (T_DollarExpansion id _) = warning id
     checkExpansions (T_Backticked id _) = warning id
-    checkExpansions (T_DollarBraced id _ _) = warning id
+    checkExpansions (T_DollarBraced id _ word) = do
+        params <- ask
+        let name = concat $ oversimplify word
+        unless (isVariableName name && isReadonly params id name) $
+            warning id
     checkExpansions (T_DollarArithmetic id _) = warning id
     checkExpansions _ = return ()
+
+    -- A readonly variable can never change value, so it doesn't matter
+    -- whether it's expanded now or when the trap runs.
+    isReadonly params id name = fromMaybe False $ do
+        cfga <- cfgAnalysis params
+        state <- CF.getIncomingState cfga id
+        CF.variableMustBeDeclaredReadonly state name
 
 
 prop_checkReturn1 = verifyNot checkReturn "return"

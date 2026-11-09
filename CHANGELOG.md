@@ -12,6 +12,7 @@
 ### Fixed
 - SC1072 about an invalid `disable=` value now names the value instead
   of a missing `=`
+- SC2064 no longer warns about expanding readonly variables in trap commands
 
 ### Removed
 - SC3003: removed since ANSI C string is specified in POSIX.1-2024
