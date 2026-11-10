@@ -1182,12 +1182,20 @@ prop_checkCatastrophicRm13 = verifyNot checkCatastrophicRm "rm -r /{{a,b},{c,d}}
 prop_checkCatastrophicRmA = verify checkCatastrophicRm "rm -rf /usr /lib/nvidia-current/xorg/xorg"
 prop_checkCatastrophicRmB = verify checkCatastrophicRm "rm -rf \"$STEAMROOT/\"*"
 prop_checkCatastrophicRmC = verify checkCatastrophicRm "rm -rf /boot/*"
+prop_checkCatastrophicRmD = verify checkCatastrophicRm "rm /bin/*"
+prop_checkCatastrophicRmE = verify checkCatastrophicRm "rm /bin"
+prop_checkCatastrophicRmF = verify checkCatastrophicRm "rm -f /lib"
+prop_checkCatastrophicRmG = verify checkCatastrophicRm "rm /{bin,sbin}/*"
+prop_checkCatastrophicRmH = verify checkCatastrophicRm "rm /home/$foo/*"
+prop_checkCatastrophicRmI = verifyNot checkCatastrophicRm "rm /home/${USER:?}/*"
+prop_checkCatastrophicRmJ = verifyNot checkCatastrophicRm "rm /home/${USER:-thing}/*"
+prop_checkCatastrophicRmK = verifyNot checkCatastrophicRm "rm /tmp/file"
+prop_checkCatastrophicRmL = verifyNot checkCatastrophicRm "rm /usr/local/myapp/*"
 checkCatastrophicRm = CommandCheck (Basename "rm") $ \t ->
-    when (isRecursive t) $
-        mapM_ (mapM_ checkWord . braceExpand) $ arguments t
+    -- Even without recursion, rm can delete files in system directories or
+    -- unlink a system directory that is a symlink (e.g. /bin on merged-/usr).
+    mapM_ (mapM_ checkWord . braceExpand) $ arguments t
   where
-    isRecursive = any ((`elem` ["r", "R", "recursive"]) . snd) . getAllFlags
-
     checkWord token =
         case getGlobOrLiteralString token of
             Just str ->
