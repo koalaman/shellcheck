@@ -2573,11 +2573,31 @@ prop_checkUnused54 = verifyNotTree checkUnusedAssignments "#!/usr/bin/env bats\n
 prop_checkUnused55 = verifyTree checkUnusedAssignments "run=1"
 prop_checkUnused56 = verifyNotTree checkUnusedAssignments "run foo bar"
 prop_checkUnused57 = verifyTree checkUnusedAssignments "#!/usr/bin/env bats\n@test 'foo' { output=$(true); }"
+prop_checkUnused58 = verifyTree checkUnusedAssignments "while getopts ':a' opt; do case ${opt} in 'a') var=1 ;; *) ;; esac; done; shift $((OPTIND - 1)); var=${var:-0}"
+prop_checkUnused59 = verifyNotTree checkUnusedAssignments "while getopts ':a' opt; do case ${opt} in 'a') var=1 ;; *) ;; esac; done; shift $((OPTIND - 1)); var=${var:-0}; echo ${var}"
+prop_checkUnused60 = verifyTree checkUnusedAssignments "#!/bin/bash\nvar=1;if [[ -n $var ]]; then echo var is set but unused; fi"
+prop_checkUnused61 = verifyNotTree checkUnusedAssignments "#!/bin/bash\nvar=1;if [[ -n $var ]]; then echo \"$var\"; fi"
+prop_checkUnused62 = verifyTree checkUnusedAssignments "#!/bin/bash\nif [[ -z $var ]]; then var=default; fi"
+prop_checkUnused63 = verifyNotTree checkUnusedAssignments "#!/bin/bash\nvar=1;if [[ -n $var ]]; then var=default; fi; echo \"$var\""
+prop_checkUnused64 = verifyTree checkUnusedAssignments "#!/bin/bash\nvar=1;x=2;if [[ -z $var && -n $x ]]; then echo \"x is $x\"; var=default; fi"
+prop_checkUnused65 = verifyNotTree checkUnusedAssignments "#!/bin/bash\nvar=1;x=2;if [[ -z $var && -n $x ]]; then var=default; fi; echo \"x is $x\"; echo \"var is $var\""
+prop_checkUnused66 = verifyTree checkUnusedAssignments "#!/bin/sh\nif [ -z \"$var\" ]; then var=default; fi"
+prop_checkUnused67 = verifyNotTree checkUnusedAssignments "#!/bin/sh\nvar=1;if [ -n \"$var\" ]; then var=default; fi; echo \"$var\""
+prop_checkUnused68 = verifyTree checkUnusedAssignments "#!/bin/sh\nif test -z \"$var\"; then var=default; fi"
+prop_checkUnused69 = verifyNotTree checkUnusedAssignments "#!/bin/sh\nvar=1;if test -n \"$var\"; then var=default; fi; echo \"$var\""
 
 checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
     flow = variableFlow params
-    references = Map.union (Map.fromList [(stripSuffix name, ()) | Reference (base, token, name) <- flow]) defaultMap
+    references =
+        Map.union
+            (Map.fromList
+                [ (stripSuffix name, ())
+                | Reference (base, token, name) <- flow
+                , not $ isSelfDefault token name
+                , not $ isSetUnsetCheck token
+                ])
+            defaultMap
 
     assignments = Map.fromList [(name, token) | Assignment (base, token, name, _) <- flow, isVariableName name, not $ isBats base]
     -- Variables set by bats' run (or pretended to be set by @test)
@@ -2596,6 +2616,65 @@ checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
 
     stripSuffix = takeWhile isVariableChar
     defaultMap = Map.fromList $ zip internalVariables $ repeat ()
+
+    -- Operators that only test whether a variable is set or empty/unset,
+    -- and so don't count as using its value.
+    setunsetOps = ["-z", "-n"]
+
+    -- True for a reference that just uses the operands of -z/-n or their negation, as in
+    --   [[ -z ${var} ]], [[ -n ${var} ]], [[ ! -z ${var} ]], [[ ! -n ${var} ]]
+    --   [ -z "$var" ], [ -n "$var" ], [ ! -z "$var" ], [ ! -n "$var" ]
+    --   test -z "$var", test -n "$var", test ! -z "$var", test ! -n "$var"
+    isSetUnsetCheck :: Token -> Bool
+    isSetUnsetCheck token = go token (NE.tail $ getPath (parentMap params) token)
+      where
+        -- 'child' is the node we just came from, so for 'test'
+        -- we can tell which argument it was.
+        go child (parent:rest) =
+            case parent of
+                -- Only look through wrappers that contain nothing else,
+                -- so "${var}suffix" or "$var$other" still count as uses.
+                T_NormalWord _ [_]   -> go parent rest
+                T_DoubleQuoted _ [_] -> go parent rest
+                -- [ ... ] and [[ ... ]]
+                TC_Unary _ _ op _    -> op `elem` setunsetOps
+                -- test -z "$var" / test -n "$var"
+                T_SimpleCommand _ _ (cmd:args)
+                    | getLiteralString cmd `elem` [Just "test", Just "["] ->
+                        afterUnsetOp (getId child) args
+                _ -> False
+        go _ [] = False
+
+        afterUnsetOp cid args =
+            or [ getLiteralString a `elem` map Just setunsetOps && getId b == cid
+               | (a, b) <- zip args (drop 1 args)
+               ]
+    
+    -- True for a reference like ${var:-0}, ${var-0}, ${var:=0} or ${var=0}
+    -- whose result is assigned straight back to the same variable, as in
+    --   var="${var:-0}"
+    isSelfDefault :: Token -> String -> Bool
+    isSelfDefault token name =
+        case token of
+            T_DollarBraced _ _ l ->
+                hasDefaultOp (concat $ oversimplify l) && assignedToSelf
+            _ -> False
+      where
+        hasDefaultOp braced =
+            case stripPrefix name braced of
+                Just rest -> any (`isPrefixOf` rest) [":-", "-", ":=", "="]
+                Nothing   -> False
+
+        -- getPath returns the token itself first, so take the tail
+        assignedToSelf = go (NE.tail $ getPath (parentMap params) token)
+
+        go (parent:rest) =
+            case parent of
+                T_NormalWord {}   -> go rest
+                T_DoubleQuoted {} -> go rest
+                T_Assignment _ _ var _ _ -> var == name
+                _ -> False
+        go [] = False
 
 prop_checkUnassignedReferences1 = verifyTree checkUnassignedReferences "echo $foo"
 prop_checkUnassignedReferences2 = verifyNotTree checkUnassignedReferences "foo=hello; echo $foo"
