@@ -1192,6 +1192,9 @@ prop_checkCatastrophicRm20 = verify checkCatastrophicRm "rm -rf \"$x/../etc\""
 prop_checkCatastrophicRm21 = verifyNot checkCatastrophicRm "rm -rf ../etc"
 prop_checkCatastrophicRm22 = verifyNot checkCatastrophicRm "rm -rf foo/../etc"
 prop_checkCatastrophicRm23 = verify checkCatastrophicRm "rm -rf /etc/./"
+prop_checkCatastrophicRm24 = verify checkCatastrophicRm "rm -rf /*/../etc/"
+prop_checkCatastrophicRm25 = verifyNot checkCatastrophicRm "rm -rf /etc/*/../etc"
+prop_checkCatastrophicRm26 = verifyNot checkCatastrophicRm "rm -rf /usr/*/../local/etc"
 checkCatastrophicRm = CommandCheck (Basename "rm") $ \t ->
     when (isRecursive t) $
         mapM_ (mapM_ checkWord . braceExpand) $ arguments t
@@ -1217,10 +1220,11 @@ checkCatastrophicRm = CommandCheck (Basename "rm") $ \t ->
             if normalized == "/" then normalized else
                 canonicalize $ stripTrailing '/' normalized
 
-    -- Lexically resolve "." and ".." components so that e.g. "/./etc" and
-    -- "/etc/../etc" are recognized. A ".." cannot pop a leading ".." of a
-    -- relative path, or a segment containing a glob character since
-    -- e.g. "/etc/*/../x" does not necessarily resolve to "/x".
+    -- Lexically resolve "." and ".." components so that e.g. "/./etc",
+    -- "/etc/../etc" and "/*/../etc" are recognized. A ".." pops the nearest
+    -- previous segment, glob or concrete: "/*" expands to top-level entries
+    -- "/name", so "/name/../etc" is exactly "/etc". Only a leading ".." of a
+    -- relative path survives, since there is nothing above it to pop.
     canonicalize path =
         case resolve [] $ splitPath path of
             [""] | "/" `isPrefixOf` path -> "/"
@@ -1230,7 +1234,6 @@ checkCatastrophicRm = CommandCheck (Basename "rm") $ \t ->
             case break (== '/') s of
                 (seg, '/':rest) -> seg : splitPath rest
                 (seg, _) -> [seg]
-        hasGlob = any (`elem` "*?[")
         resolve done [] = reverse done
         resolve done (seg:rest)
             | seg == "." = resolve done rest
@@ -1239,7 +1242,6 @@ checkCatastrophicRm = CommandCheck (Basename "rm") $ \t ->
                     top:d | top /= ".." && top /= "" -> resolve d rest
                     "":_ -> resolve done rest
                     _ -> resolve (seg:done) rest
-            | hasGlob seg = reverse done ++ seg:rest
             | otherwise = resolve (seg:done) rest
 
     getPotentialPath = getLiteralStringExt f
