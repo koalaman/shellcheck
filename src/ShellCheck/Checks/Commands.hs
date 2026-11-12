@@ -62,6 +62,10 @@ verify :: CommandCheck -> String -> Bool
 verify f s = producesComments (getChecker [f]) s == Just True
 verifyNot f s = producesComments (getChecker [f]) s == Just False
 
+-- For testing. Checks that a command produces exactly the given codes.
+verifyCodes :: CommandCheck -> [Code] -> String -> Bool
+verifyCodes f codes s = runAndGetCodes (getChecker [f]) s == Just (sort codes)
+
 commandChecks :: [CommandCheck]
 commandChecks = [
     checkTr
@@ -1168,20 +1172,20 @@ checkWhileGetoptsCase = CommandCheck (Exactly "getopts") f
             T_Redirecting _ _ x@(T_CaseExpression {}) -> return x
             _ -> Nothing
 
-prop_checkCatastrophicRm1 = verify checkCatastrophicRm "rm -r $1/$2"
-prop_checkCatastrophicRm2 = verify checkCatastrophicRm "rm -r /home/$foo"
+prop_checkCatastrophicRm1 = verifyCodes checkCatastrophicRm [2115] "rm -r $1/$2"
+prop_checkCatastrophicRm2 = verifyCodes checkCatastrophicRm [2115] "rm -r /home/$foo"
 prop_checkCatastrophicRm3 = verifyNot checkCatastrophicRm "rm -r /home/${USER:?}/*"
-prop_checkCatastrophicRm4 = verify checkCatastrophicRm "rm -fr /home/$(whoami)/*"
+prop_checkCatastrophicRm4 = verifyCodes checkCatastrophicRm [2115] "rm -fr /home/$(whoami)/*"
 prop_checkCatastrophicRm5 = verifyNot checkCatastrophicRm "rm -r /home/${USER:-thing}/*"
-prop_checkCatastrophicRm6 = verify checkCatastrophicRm "rm --recursive /etc/*$config*"
-prop_checkCatastrophicRm8 = verify checkCatastrophicRm "rm -rf /home"
+prop_checkCatastrophicRm6 = verifyCodes checkCatastrophicRm [2115] "rm --recursive /etc/*$config*"
+prop_checkCatastrophicRm8 = verifyCodes checkCatastrophicRm [2114] "rm -rf /home"
 prop_checkCatastrophicRm10 = verifyNot checkCatastrophicRm "rm -r \"${DIR}\"/{.gitignore,.gitattributes,ci}"
-prop_checkCatastrophicRm11 = verify checkCatastrophicRm "rm -r /{bin,sbin}/$exec"
-prop_checkCatastrophicRm12 = verify checkCatastrophicRm "rm -r /{{usr,},{bin,sbin}}/$exec"
+prop_checkCatastrophicRm11 = verifyCodes checkCatastrophicRm [2115, 2115] "rm -r /{bin,sbin}/$exec"
+prop_checkCatastrophicRm12 = verifyCodes checkCatastrophicRm [2115, 2115, 2115, 2115] "rm -r /{{usr,},{bin,sbin}}/$exec"
 prop_checkCatastrophicRm13 = verifyNot checkCatastrophicRm "rm -r /{{a,b},{c,d}}/$exec"
-prop_checkCatastrophicRmA = verify checkCatastrophicRm "rm -rf /usr /lib/nvidia-current/xorg/xorg"
-prop_checkCatastrophicRmB = verify checkCatastrophicRm "rm -rf \"$STEAMROOT/\"*"
-prop_checkCatastrophicRmC = verify checkCatastrophicRm "rm -rf /boot/*"
+prop_checkCatastrophicRmA = verifyCodes checkCatastrophicRm [2114] "rm -rf /usr /lib/nvidia-current/xorg/xorg"
+prop_checkCatastrophicRmB = verifyCodes checkCatastrophicRm [2115] "rm -rf \"$STEAMROOT/\"*"
+prop_checkCatastrophicRmC = verifyCodes checkCatastrophicRm [2114] "rm -rf /boot/*"
 checkCatastrophicRm = CommandCheck (Basename "rm") $ \t ->
     when (isRecursive t) $
         mapM_ (mapM_ checkWord . braceExpand) $ arguments t
