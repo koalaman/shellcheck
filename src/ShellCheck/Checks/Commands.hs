@@ -1182,6 +1182,19 @@ prop_checkCatastrophicRm13 = verifyNot checkCatastrophicRm "rm -r /{{a,b},{c,d}}
 prop_checkCatastrophicRmA = verify checkCatastrophicRm "rm -rf /usr /lib/nvidia-current/xorg/xorg"
 prop_checkCatastrophicRmB = verify checkCatastrophicRm "rm -rf \"$STEAMROOT/\"*"
 prop_checkCatastrophicRmC = verify checkCatastrophicRm "rm -rf /boot/*"
+prop_checkCatastrophicRm14 = verify checkCatastrophicRm "rm -rf /./etc"
+prop_checkCatastrophicRm15 = verify checkCatastrophicRm "rm -rf /etc/../etc"
+prop_checkCatastrophicRm16 = verifyNot checkCatastrophicRm "rm -rf /usr/local/../etc"
+prop_checkCatastrophicRm17 = verify checkCatastrophicRm "rm -rf /etc/.."
+prop_checkCatastrophicRm18 = verify checkCatastrophicRm "rm -rf /./etc/*"
+prop_checkCatastrophicRm19 = verifyNot checkCatastrophicRm "rm -rf /etc/*/../foo"
+prop_checkCatastrophicRm20 = verify checkCatastrophicRm "rm -rf \"$x/../etc\""
+prop_checkCatastrophicRm21 = verifyNot checkCatastrophicRm "rm -rf ../etc"
+prop_checkCatastrophicRm22 = verifyNot checkCatastrophicRm "rm -rf foo/../etc"
+prop_checkCatastrophicRm23 = verify checkCatastrophicRm "rm -rf /etc/./"
+prop_checkCatastrophicRm24 = verify checkCatastrophicRm "rm -rf /*/../etc/"
+prop_checkCatastrophicRm25 = verifyNot checkCatastrophicRm "rm -rf /etc/*/../etc"
+prop_checkCatastrophicRm26 = verifyNot checkCatastrophicRm "rm -rf /usr/*/../local/etc"
 checkCatastrophicRm = CommandCheck (Basename "rm") $ \t ->
     when (isRecursive t) $
         mapM_ (mapM_ checkWord . braceExpand) $ arguments t
@@ -1204,7 +1217,32 @@ checkCatastrophicRm = CommandCheck (Basename "rm") $ \t ->
 
     fixPath filename =
         let normalized = skipRepeating '/' . skipRepeating '*' $ filename in
-            if normalized == "/" then normalized else stripTrailing '/' normalized
+            if normalized == "/" then normalized else
+                canonicalize $ stripTrailing '/' normalized
+
+    -- Lexically resolve "." and ".." components so that e.g. "/./etc",
+    -- "/etc/../etc" and "/*/../etc" are recognized. A ".." pops the nearest
+    -- previous segment, glob or concrete: "/*" expands to top-level entries
+    -- "/name", so "/name/../etc" is exactly "/etc". Only a leading ".." of a
+    -- relative path survives, since there is nothing above it to pop.
+    canonicalize path =
+        case resolve [] $ splitPath path of
+            [""] | "/" `isPrefixOf` path -> "/"
+            resolved -> intercalate "/" resolved
+      where
+        splitPath s =
+            case break (== '/') s of
+                (seg, '/':rest) -> seg : splitPath rest
+                (seg, _) -> [seg]
+        resolve done [] = reverse done
+        resolve done (seg:rest)
+            | seg == "." = resolve done rest
+            | seg == ".." =
+                case done of
+                    top:d | top /= ".." && top /= "" -> resolve d rest
+                    "":_ -> resolve done rest
+                    _ -> resolve (seg:done) rest
+            | otherwise = resolve (seg:done) rest
 
     getPotentialPath = getLiteralStringExt f
       where
