@@ -13,6 +13,8 @@
 - SC1072 about an invalid `disable=` value now names the value instead
   of a missing `=`
 - SC2064 no longer warns about expanding readonly variables in trap commands
+- SC2317 no longer reports commands as unreachable when a `case` catch-all
+  is followed by `;;&` and a non-default final clause
 
 ### Removed
 - SC3003: removed since ANSI C string is specified in POSIX.1-2024
