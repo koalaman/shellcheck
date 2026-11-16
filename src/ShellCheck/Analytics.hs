@@ -5258,6 +5258,13 @@ prop_checkCommandIsUnreachable2 = verify checkCommandIsUnreachable "die() { exit
 prop_checkCommandIsUnreachable3 = verifyNot checkCommandIsUnreachable "foo; bar || exit; baz"
 prop_checkCommandIsUnreachable4 = verifyNot checkCommandIsUnreachable "f() { foo; };    # Maybe sourced"
 prop_checkCommandIsUnreachable5 = verify checkCommandIsUnreachable "f() { foo; }; exit  # Not sourced"
+prop_checkCommandIsUnreachable6 = verifyNot checkCommandIsUnreachable "f() { case x in *) : ;;& foo) return;; esac; echo x; }; f"
+prop_checkCommandIsUnreachable7 = verify checkCommandIsUnreachable "f() { case x in *) return;; foo) return;; esac; echo x; }; f"
+prop_checkCommandIsUnreachable8 = verify checkCommandIsUnreachable "f() { case x in foo) : ;;& *) return;; esac; echo x; }; f"
+prop_checkCommandIsUnreachable9 = verifyNot checkCommandIsUnreachable "f() { case x in *) : ;;& foo) return;; bar) return;; esac; echo x; }; f"
+prop_checkCommandIsUnreachable10 = verifyNot checkCommandIsUnreachable "f() { case x in *) : ;& foo) : ;;& bar) return;; esac; echo x; }; f"
+prop_checkCommandIsUnreachable11 = verify checkCommandIsUnreachable "f() { case x in *) : ;& foo) return;; esac; echo x; }; f"
+prop_checkCommandIsUnreachable12 = verifyNot checkCommandIsUnreachable "f() { case x in *) : ;;& foo) return;; *) :;; esac; echo x; }; f"
 checkCommandIsUnreachable params t =
     case t of
         T_Pipeline {} -> sequence_ $ do
