@@ -117,13 +117,10 @@ outputResult options ref result sys = do
     color <- getColorFunc $ foColorOption options
     let comments = crComments result
     appendComments ref comments (fromIntegral $ foWikiLinkCount options)
-    let fileGroups = NE.groupWith sourceFile comments
-    mapM_ (outputForFile color sys) fileGroups
+    mapM_ (outputForFile color sys) (commentsByFile comments)
 
 outputForFile color sys comments = do
-    let fileName = sourceFile (NE.head comments)
-    result <- siReadFile sys (Just True) fileName
-    let contents = either (const "") id result
+    (fileName, _, contents) <- readCommentsForFile sys comments
     let fileLinesList = lines contents
     let lineCount = length fileLinesList
     let fileLines = listArray (1, lineCount) fileLinesList
