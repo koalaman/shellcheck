@@ -17,7 +17,7 @@ RUN ./boot.source && ./configure --host x86_64-linux-gnu --build x86_64-linux-gn
 ENV LC_CTYPE=C.utf8
 # We have to do a binary-dist instead of a direct install, otherwise the target won't have
 # cross compilation prefixes in /usr/local/lib/aarch64-linux-gnu-ghc-*/lib/settings
-RUN ./hadrian/build --flavour=quickest --bignum=native --docs=none -V -j --prefix=/usr/local install
+RUN ./hadrian/build --flavour=perf+split_sections+no_dynamic_libs --bignum=native --docs=none -V -j --prefix=/usr/local install && rm -rf /ghc/_build
 # Hadrian just outputs "gcc" as the name of gcc, without accounting for $TARGET. Manually fix up the paths:
 RUN sed -e 's/"\(gcc\|g++\|ld\)"/"'"$TARGET"'-\1"/g' -i /usr/local/lib/$TARGET-ghc-*/lib/settings
 
