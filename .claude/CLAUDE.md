@@ -22,6 +22,8 @@ To inspect the AST without an interactive session:
 cabal run -fdev-mode shellcheck-dev -- ast 'myshellcommand'
 ```
 
+Release binaries are built by Docker images in `builders/`. Read `.claude/rules/builders.md` before changing them or the CI workflow.
+
 ## Architecture
 
 ShellCheck processes shell scripts in three stages:
