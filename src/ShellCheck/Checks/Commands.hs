@@ -1182,19 +1182,29 @@ prop_checkCatastrophicRm13 = verifyNot checkCatastrophicRm "rm -r /{{a,b},{c,d}}
 prop_checkCatastrophicRmA = verify checkCatastrophicRm "rm -rf /usr /lib/nvidia-current/xorg/xorg"
 prop_checkCatastrophicRmB = verify checkCatastrophicRm "rm -rf \"$STEAMROOT/\"*"
 prop_checkCatastrophicRmC = verify checkCatastrophicRm "rm -rf /boot/*"
+prop_checkCatastrophicRmD = verify checkCatastrophicRm "rm /bin/*"
+prop_checkCatastrophicRmE = verifyNot checkCatastrophicRm "rm /bin"
+prop_checkCatastrophicRmF = verifyNot checkCatastrophicRm "rm '/bin/*'"
+prop_checkCatastrophicRmG = verifyNot checkCatastrophicRm "rm /home/$foo"
 checkCatastrophicRm = CommandCheck (Basename "rm") $ \t ->
-    when (isRecursive t) $
-        mapM_ (mapM_ checkWord . braceExpand) $ arguments t
+    mapM_ (mapM_ (checkWord t) . braceExpand) $ arguments t
   where
     isRecursive = any ((`elem` ["r", "R", "recursive"]) . snd) . getAllFlags
 
-    checkWord token =
+    checkWord command token =
         case getGlobOrLiteralString token of
-            Just str ->
+            Just str | isRecursive command || hasGlob token ->
                 when (fixPath str `elem` importantPaths) $
                     warn (getId token) 2114 "Warning: deletes a system directory."
-            Nothing ->
+            Just _ -> return ()
+            Nothing -> when (isRecursive command) $
                 checkWord' token
+
+    hasGlob (T_Glob {}) = True
+    hasGlob (T_Extglob {}) = True
+    hasGlob (T_NormalWord _ parts) = any hasGlob parts
+    hasGlob (TA_Expansion _ parts) = any hasGlob parts
+    hasGlob _ = False
 
     checkWord' token = sequence_ $ do
         filename <- getPotentialPath token
