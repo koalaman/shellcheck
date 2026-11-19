@@ -7,6 +7,7 @@ FROM alpine:3.24
 # alpine:3.21 (GHC 9.8.2): 16.0 megabytes
 # alpine:3.22 (GHC 9.8.2): 16.0 megabytes
 # alpine:3.24 (GHC 9.10.3): 16.9 megabytes
+# alpine:3.24 (GHC 9.10.3):  8.3 megabytes (split sections in dependencies)
 
 ENV TARGETNAME=linux.x86_64
 
@@ -14,9 +15,8 @@ ENV TARGETNAME=linux.x86_64
 USER root
 RUN apk add ghc cabal g++ libffi-dev curl bash gmp gmp-static
 
-# Cabal has failed to cache if options are not specified on the command line,
-# so do that explicitly.
-ENV CABALOPTS="--ghc-options;-split-sections -optc-Os -optc-Wl,--gc-sections"
+# Build options for ShellCheck and its dependencies
+COPY cabal.project /etc/
 
 # Verify that we have the certificates in place to successfully update cabal
 RUN cabal update && rm -rf ~/.cache/cabal

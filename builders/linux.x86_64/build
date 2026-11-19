@@ -5,7 +5,8 @@ set -xe
   chmod +x striptests && ./striptests
   mkdir "$TARGETNAME"
   cabal update
-  ( IFS=';'; cabal build $CABALOPTS --enable-executable-static )
+  cp /etc/cabal.project .
+  cabal build --enable-executable-static
   find . -name shellcheck -type f -exec mv {} "$TARGETNAME/" \;
   ls -l "$TARGETNAME"
   strip -s "$TARGETNAME/shellcheck"
