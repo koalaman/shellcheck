@@ -1,0 +1,13 @@
+#!/bin/sh
+# Cross toolchain for ARMv6 (ARM1176JZF-S, VFPv2, hard float, ARM mode)
+# using Raspbian's libraries in /sysroot
+case "$0" in
+  *-llc)
+    # LLVM marks everything in GHC's llvm.used as SHF_GNU_RETAIN when it
+    # assumes a modern assembler, which defeats --gc-sections entirely.
+    exec llc-20 -no-integrated-as "$@" ;;
+  *++) cc=clang++-20 ;;
+  *) cc=clang-20 ;;
+esac
+exec "$cc" --target=arm-linux-gnueabihf -mcpu=arm1176jzf-s -mfpu=vfp -mfloat-abi=hard -marm \
+  --sysroot=/sysroot -fuse-ld=/usr/lib/llvm-20/bin/ld.lld "$@"
