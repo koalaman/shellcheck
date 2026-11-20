@@ -2598,8 +2598,13 @@ checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
                 , not $ isSetUnsetCheck token
                 ])
             defaultMap
-
-    assignments = Map.fromList [(name, token) | Assignment (base, token, name, _) <- flow, isVariableName name, not $ isBats base]
+    assignments = Map.fromList
+        [ (name, token)
+        | Assignment (base, token, name, _) <- flow
+        , isVariableName name
+        , not $ isBats base
+        , not $ isSetUnsetCheck token
+        ]
     -- Variables set by bats' run (or pretended to be set by @test)
     -- are for the caller to check, if needed
     isBats t = case t of
