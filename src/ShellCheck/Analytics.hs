@@ -2585,6 +2585,7 @@ prop_checkUnused66 = verifyTree checkUnusedAssignments "#!/bin/sh\nif [ -z \"$va
 prop_checkUnused67 = verifyNotTree checkUnusedAssignments "#!/bin/sh\nvar=1;if [ -n \"$var\" ]; then var=default; fi; echo \"$var\""
 prop_checkUnused68 = verifyTree checkUnusedAssignments "#!/bin/sh\nif test -z \"$var\"; then var=default; fi"
 prop_checkUnused69 = verifyNotTree checkUnusedAssignments "#!/bin/sh\nvar=1;if test -n \"$var\"; then var=default; fi; echo \"$var\""
+prop_checkUnused70 = verifyNotTree checkUnusedAssignments "#!/bin/sh\nif [ -z \"$x\" ]; then echo 'x is not set'; fi"
 
 checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
