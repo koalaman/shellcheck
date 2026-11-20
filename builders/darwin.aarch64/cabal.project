@@ -1,0 +1,9 @@
+-- Copied next to ShellCheck.cabal when building. Options set here under
+-- `package *` apply to all dependencies, unlike --ghc-options on the command
+-- line, which only applies to ShellCheck itself.
+packages: .
+with-compiler: aarch64-apple-darwin-ghc
+with-hc-pkg: aarch64-apple-darwin-ghc-pkg
+
+package *
+  ghc-options: -split-sections -optc-Os

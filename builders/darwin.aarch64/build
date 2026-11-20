@@ -4,13 +4,14 @@ set -xe
   tar xzv --strip-components=1
   chmod +x striptests && ./striptests
   mkdir "$TARGETNAME"
-  ( IFS=';'; cabal build $CABALOPTS )
-  find . -name shellcheck -type f -exec mv {} "$TARGETNAME/" \;
+  cp /etc/cabal.project .
+  cabal build
+  find dist*/ -name shellcheck -type f -exec mv {} "$TARGETNAME/" \;
   ls -l "$TARGETNAME"
-  # Stripping invalidates the code signature and the build image does
-  # not appear to have anything similar to the 'codesign' tool.
-  # "$TARGET-strip" "$TARGETNAME/shellcheck"
+  # macOS on ARM refuses to run unsigned code. The linker adds an ad-hoc
+  # signature, which cctools' strip invalidates but llvm-strip regenerates.
+  llvm-strip-18 -s "$TARGETNAME/shellcheck"
   ls -l "$TARGETNAME"
-  file "$TARGETNAME/shellcheck" | grep "Mach-O 64-bit arm64 executable"
+  file "$TARGETNAME/shellcheck" | grep "Mach-O 64-bit ${OSXCROSS%%-*} executable"
 } >&2
 tar czv "$TARGETNAME"
