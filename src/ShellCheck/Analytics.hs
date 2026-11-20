@@ -3773,6 +3773,8 @@ prop_checkSplittingInArrays5 = verifyNot checkSplittingInArrays "a=( $! $$ $# )"
 prop_checkSplittingInArrays6 = verifyNot checkSplittingInArrays "a=( ${#arr[@]} )"
 prop_checkSplittingInArrays7 = verifyNot checkSplittingInArrays "a=( foo{1,2} )"
 prop_checkSplittingInArrays8 = verifyNot checkSplittingInArrays "a=( * )"
+prop_checkSplittingInArrays9 = verify checkSplittingInArrays "a=( $(( 1 + 2 )) )"
+prop_checkSplittingInArrays10 = verifyNot checkSplittingInArrays "a=( \"$(( 1 + 2 ))\" )"
 checkSplittingInArrays params t =
     case t of
         T_Array _ elements -> mapM_ check elements
@@ -3785,15 +3787,19 @@ checkSplittingInArrays params t =
         T_DollarExpansion id _ -> forCommand id
         T_DollarBraceCommandExpansion id _ _ -> forCommand id
         T_Backticked id _ -> forCommand id
+        T_DollarArithmetic id _ -> forWordSplitting id
         T_DollarBraced id _ str |
             not (isCountingReference part)
             && not (isQuotedAlternativeReference part)
             && getBracedReference (concat $ oversimplify str) `notElem` variablesWithoutSpaces
-            -> warn id 2206 $
-                if shellType params == Ksh
-                then "Quote to prevent word splitting/globbing, or split robustly with read -A or while read."
-                else "Quote to prevent word splitting/globbing, or split robustly with mapfile or read -a."
+            -> forWordSplitting id
         _ -> return ()
+
+    forWordSplitting id =
+        warn id 2206 $
+            if shellType params == Ksh
+            then "Quote to prevent word splitting/globbing, or split robustly with read -A or while read."
+            else "Quote to prevent word splitting/globbing, or split robustly with mapfile or read -a."
 
     forCommand id =
         warn id 2207 $
