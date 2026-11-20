@@ -4,7 +4,6 @@
 packages: .
 with-compiler: arm-linux-gnueabihf-ghc
 with-hc-pkg: arm-linux-gnueabihf-ghc-pkg
-constraints: hashable -arch-native
 
 package *
-  ghc-options: -split-sections -optc-Os -optc-Wl,--gc-sections
+  ghc-options: -split-sections -optc-Os

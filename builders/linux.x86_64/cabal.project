@@ -4,4 +4,4 @@
 packages: .
 
 package *
-  ghc-options: -split-sections -optc-Os -optc-Wl,--gc-sections
+  ghc-options: -split-sections -optc-Os
