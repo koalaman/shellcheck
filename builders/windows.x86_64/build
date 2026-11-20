@@ -8,10 +8,11 @@ set -xe
   tar xzv --strip-components=1
   chmod +x striptests && ./striptests
   mkdir "$TARGETNAME"
-  ( IFS=';'; cabal build $CABALOPTS )
+  cp /etc/cabal.project .
+  cabal build
   find dist*/ -name shellcheck.exe -type f -ls -exec mv {} "$TARGETNAME/" \;
   ls -l "$TARGETNAME"
-  wine "/haskell/mingw/bin/strip.exe" -s "$TARGETNAME/shellcheck.exe"
+  wine /binutils/ucrt64/bin/strip.exe -s "$TARGETNAME/shellcheck.exe"
   ls -l "$TARGETNAME"
   wine "$TARGETNAME/shellcheck.exe" --version
 } >&2

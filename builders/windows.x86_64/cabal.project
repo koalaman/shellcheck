@@ -1,0 +1,14 @@
+-- Copied next to ShellCheck.cabal when building. Options set here under
+-- `package *` apply to all dependencies, unlike --ghc-options on the command
+-- line, which only applies to ShellCheck itself.
+packages: .
+
+package *
+  ghc-options: -split-sections -optc-Os
+
+package ShellCheck
+  -- Link with GNU ld from the Dockerfile, so unused sections are discarded.
+  -- Clang leaves the C runtime off the end of the link line since GHC passes
+  -- -lucrt itself, and unlike lld, GNU ld doesn't rescan libraries, so make it
+  -- pick up rand_s (used by libmingwex) on the first pass.
+  ghc-options: -optl-fuse-ld=Z:/binutils/ucrt64/bin/ld.bfd.exe -optl-Wl,-u,__imp_rand_s

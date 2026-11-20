@@ -5,15 +5,10 @@ ENV TARGETNAME=windows.x86_64
 # We don't need wine32, even though it complains
 USER root
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y curl busybox wine winbind xz-utils
+RUN apt-get update && apt-get install -y curl busybox wine winbind xz-utils zstd
 
 # Fetch Windows version, will be available under z:\haskell
 WORKDIR /haskell
-# 9.14.1 produces a 35M binary
-# 9.12.2 produces a 37M binary
-# 9.0.2  produces a 28M binary
-# 8.10.4 produces a 16M binary
-# We don't want to be stuck on old versions forever though, so just go with the latest version
 RUN curl -L "https://downloads.haskell.org/~ghc/9.14.1/ghc-9.14.1-x86_64-unknown-mingw32.tar.xz" | tar xJ --strip-components=1
 
 # Fetch dependencies
@@ -23,12 +18,18 @@ RUN curl -L "https://curl.se/windows/dl-8.23.0_9/curl-8.23.0_9-win64-mingw.zip" 
 RUN wine /haskell/bin/cabal.exe update
 ENV WINEPATH=/haskell/bin:/haskell/mingw/bin
 
-# None of these actually seem to have an effect on GHC on Windows anymore,
-# but we'll leave them in place anyways.
-ENV CABALOPTS="--ghc-options;-split-sections -optc-Os -optc-Wl,--gc-sections"
+# Fetch GNU binutils from MSYS2, for linking and stripping.
+# GHC's lld ignores split-sections on Windows.
+WORKDIR /binutils
+COPY binutils.sha256 .
+RUN for f in $(cut -d' ' -f3 binutils.sha256); do curl -LO "https://repo.msys2.org/mingw/ucrt64/$f"; done && \
+    sha256sum -c binutils.sha256 && \
+    for f in *.pkg.tar.zst; do tar --zstd -xf "$f" ucrt64; done && rm *.pkg.tar.zst
 
-# Precompile some deps to speed up later builds
-RUN IFS=';' && wine /haskell/bin/cabal.exe install --lib --dependencies-only $CABALOPTS ShellCheck
+# Prebuild the dependencies of the latest release
+COPY cabal.project /etc/
+RUN cd /tmp && wine /haskell/bin/cabal.exe get ShellCheck && cd ShellCheck-*/ && \
+    cp /etc/cabal.project . && wine /haskell/bin/cabal.exe build --only-dependencies && cd .. && rm -rf ShellCheck-*/
 
 COPY build /usr/bin
 WORKDIR /scratch
