@@ -246,6 +246,15 @@ prop_checkBashisms148 = verify checkBashisms "[ -N file ]" -- SC3064
 prop_checkBashisms149 = verify checkBashisms "[ -G file ]" -- SC3066
 prop_checkBashisms150 = verify checkBashisms "[ -O file ]" -- SC3067
 prop_checkBashisms151 = verifyNot checkBashisms "#!/bin/busybox sh\npwd | tee >(gzip > log.gz)" -- SC3001
+prop_checkBashisms152 = verifyNot checkBashisms "echo \"${cn:+\nreplace: cn\ncn: ${cn}\n-}\""
+prop_checkBashisms153 = verifyNot checkBashisms "echo \"${cn:-\ncn: fallback}\""
+prop_checkBashisms154 = verifyNot checkBashisms "cat <<EOF\n${cn:+\ncn: ${cn}\n-}${uid:+\nuid: ${uid}\n-}\nEOF"
+prop_checkBashisms155 = verify checkBashisms "#!/bin/sh\necho ${cn:1}"
+prop_checkBashisms156 = verify checkBashisms "#!/bin/dash\necho ${cn:1}"
+prop_checkBashisms157 = verifyNot checkBashisms "#!/bin/busybox sh\necho ${cn:1}"
+prop_checkBashisms158 = verifyNot checkBashisms "echo ${cn:-fallback} ${cn:+alternate}"
+prop_checkBashisms159 = verify checkBashisms "echo ${cn:1\n2}"
+prop_checkBashisms160 = verify checkBashisms "echo \"${cn:+\n${uid:1}}\""
 checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
     params <- ask
     kludge params t
@@ -496,7 +505,8 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
         (re $ "^[" ++ varChars ++ "*@]+(\\[.*\\])?[,^]", 3059, "case modification is")
         ]
     simpleExpansions = let re = mkRegex in [
-        (re $ "^[" ++ varChars ++ "*@]+:[^-=?+]", 3057, "string indexing is"),
+        -- Match the start of the expansion, not a line inside its default text.
+        (re $ "\\`[" ++ varChars ++ "*@]+:[^-=?+]", 3057, "string indexing is"),
         (re $ "^([*@][%#]|#[@*])", 3058, "string operations on $@/$* are"),
         (re $ "^[" ++ varChars ++ "*@]+(\\[.*\\])?/", 3060, "string replacement is")
         ]
