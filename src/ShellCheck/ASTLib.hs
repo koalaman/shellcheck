@@ -628,18 +628,23 @@ getCommandSequences t =
         _ -> []
 
 -- Get a list of names of associative arrays
-getAssociativeArrays t =
+getAssociativeArrays = getAssociativeArraysWith []
+
+-- Extra declaration commands only declare array types for assignment arguments.
+getAssociativeArraysWith assignmentOnlyCommands t =
     nub . execWriter $ doAnalysis f t
   where
     f :: Token -> Writer [String] ()
     f t@T_SimpleCommand {} = sequence_ $ do
         name <- getCommandName t
         let assocNames = ["declare","local","typeset"]
-        guard $ name `elem` assocNames
+        let requiresAssignment = name `elem` assignmentOnlyCommands
+        guard $ name `elem` assocNames || requiresAssignment
         let flags = getAllFlags t
         guard $ "A" `elem` map snd flags
         let args = [arg | (arg, "") <- flags]
-        let names = mapMaybe (getLiteralStringExt nameAssignments) args
+        let getName = if requiresAssignment then nameAssignments else getLiteralStringExt nameAssignments
+        let names = mapMaybe getName args
         return $ tell names
     f _ = return ()
 

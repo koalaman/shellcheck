@@ -99,10 +99,10 @@ checkList l t = concatMap (\f -> f t) l
 runNodeAnalysis f p t = execWriter (doAnalysis (f p) t)
 
 -- Perform multiple node checks in a single iteration over the tree
-nodeChecksToTreeCheck checkList =
-    runNodeAnalysis
-        (\p t -> (mapM_ ((\ f -> f t) . (\ f -> f p))
-            checkList))
+nodeChecksToTreeCheck checkList params =
+    execWriter . doAnalysis (\t -> mapM_ ($ t) checks)
+  where
+    checks = map ($ params) checkList
 
 nodeChecks :: [Parameters -> Token -> Writer [TokenComment] ()]
 nodeChecks = [
@@ -3773,27 +3773,65 @@ prop_checkSplittingInArrays5 = verifyNot checkSplittingInArrays "a=( $! $$ $# )"
 prop_checkSplittingInArrays6 = verifyNot checkSplittingInArrays "a=( ${#arr[@]} )"
 prop_checkSplittingInArrays7 = verifyNot checkSplittingInArrays "a=( foo{1,2} )"
 prop_checkSplittingInArrays8 = verifyNot checkSplittingInArrays "a=( * )"
-checkSplittingInArrays params t =
-    case t of
-        T_Array _ elements -> mapM_ check elements
-        _ -> return ()
+prop_checkSplittingInArrays9 = verifyCodes checkSplittingInArrays [2206] "a=( $((10 + 20)) )"
+prop_checkSplittingInArrays10 = verifyCodes checkSplittingInArrays [2206] "a=( $[10 + 20] )"
+prop_checkSplittingInArrays11 = verifyCodes checkSplittingInArrays [2206] "a=( pre\"$((10 + 20))\" $((10 + 20))post )"
+prop_checkSplittingInArrays12 = verifyNot checkSplittingInArrays "a=( \"$((10 + 20))\" \"$[10 + 20]\" )"
+prop_checkSplittingInArrays13 = verifyNot checkSplittingInArrays "a=( [$((2 + 3))]=$((10 + 20)) )"
+prop_checkSplittingInArrays14 = verifyNot checkSplittingInArrays "declare -A a=( key $((10 + 20)) )"
+prop_checkSplittingInArrays15 = verifyNot checkSplittingInArrays "declare -A a; a=( key $[10 + 20] )"
+prop_checkSplittingInArrays16 = verifyCodes checkSplittingInArrays [2206] "#!/bin/ksh\na=( $((10 + 20)) )"
+prop_checkSplittingInArrays17 = verifyNot checkSplittingInArrays "readonly -A a=( key $((10 + 20)) )"
+prop_checkSplittingInArrays18 = verifyNot checkSplittingInArrays "export -A a=( key $((10 + 20)) )"
+prop_checkSplittingInArrays19 = verifyCodes checkSplittingInArrays [2206] "export -A a; a=( key $((10 + 20)) )"
+prop_checkSplittingInArrays20 = verifyCodes checkSplittingInArrays [2206] "f() { local -A a; }; declare -a a=( $((10 + 20)) )"
+prop_checkSplittingInArrays21 = verifyNot checkSplittingInArrays "export -A a=value; a=( key $((10 + 20)) )"
+checkSplittingInArrays params = checkArray
   where
-    check word = case word of
-        T_NormalWord _ parts -> mapM_ checkPart parts
+    assocs = S.fromList $ getAssociativeArraysWith ["export"] (rootNode params)
+
+    checkArray (T_Array id elements) = mapM_ (checkWord $ splitsArithmetic id) elements
+    checkArray _ = return ()
+
+    splitsArithmetic id = case shellType params of
+        Bash -> case Map.lookup id (parentMap params) of
+            -- Bash associative key/value pairs do not undergo word splitting.
+            Just (T_Assignment assignmentId _ name _ _) ->
+                not $ fromMaybe (name `S.member` assocs) (declaredAssociative assignmentId)
+            _ -> True
+        Ksh -> True
+        _ -> False
+
+    declaredAssociative assignmentId = do
+        command@(T_SimpleCommand _ _ args) <- Map.lookup assignmentId (parentMap params)
+        guard $ assignmentId `elem` map getId args
+        name <- getCommandName command
+        guard $ name `elem` ["declare", "local", "typeset", "readonly", "export"]
+        if hasFlag command "A"
+            then Just True
+            else False <$ guard (hasFlag command "a")
+
+    checkWord splitArithmetic word = case word of
+        T_NormalWord _ parts -> mapM_ (checkPart splitArithmetic) parts
         _ -> return ()
-    checkPart part = case part of
+    checkPart splitArithmetic part = case part of
         T_DollarExpansion id _ -> forCommand id
         T_DollarBraceCommandExpansion id _ _ -> forCommand id
         T_Backticked id _ -> forCommand id
+        T_DollarArithmetic id _ | splitArithmetic -> forExpansion id
+        T_DollarBracket id _ | shellType params == Bash && splitArithmetic -> forExpansion id
         T_DollarBraced id _ str |
             not (isCountingReference part)
             && not (isQuotedAlternativeReference part)
             && getBracedReference (concat $ oversimplify str) `notElem` variablesWithoutSpaces
-            -> warn id 2206 $
-                if shellType params == Ksh
-                then "Quote to prevent word splitting/globbing, or split robustly with read -A or while read."
-                else "Quote to prevent word splitting/globbing, or split robustly with mapfile or read -a."
+            -> forExpansion id
         _ -> return ()
+
+    forExpansion id =
+        warn id 2206 $
+            if shellType params == Ksh
+            then "Quote to prevent word splitting/globbing, or split robustly with read -A or while read."
+            else "Quote to prevent word splitting/globbing, or split robustly with mapfile or read -a."
 
     forCommand id =
         warn id 2207 $
