@@ -629,6 +629,12 @@ build t = do
                 -- There's no *) branch, so assume we can fall through
                 void $ linkRange token end
 
+            -- A catch-all earlier in the list doesn't guarantee a match:
+            -- ;;& keeps testing later patterns, so the last clause's
+            -- condition may still fail and fall through to end.
+            when (lastCondReachable && not lastIsCatchAll) $
+                void $ linkRange lastCond end
+
             return $ spanRange start end
 
           where
@@ -662,6 +668,21 @@ build t = do
             isCatchAll c = fromMaybe False $ do
                 pg <- wordToExactPseudoGlob c
                 return $ pg `pseudoGlobIsSuperSetof` [PGMany]
+
+            lastIsCatchAll = hasCatchAll $ NE.last (hd NE.:| tl)
+
+            -- Whether the last clause's condition can be evaluated at all:
+            -- a clause is reached when the previous clause's condition may
+            -- fail (not a catch-all) or when its body ends with ;;&, which
+            -- keeps testing patterns. ;& only reaches the next body.
+            lastCondReachable =
+                fst $ foldl' nextReachability (True, False) $ NE.init (hd NE.:| tl)
+              where
+                nextReachability (condReached, fallIn) clause@(typ, _, _) =
+                    let bodyReached = condReached || fallIn
+                    in  (   (condReached && not (hasCatchAll clause))
+                                || (bodyReached && typ == CaseContinue)
+                        ,   bodyReached && typ == CaseFallThrough)
 
         T_Condition id _ _ op -> do
             cond <- build op
