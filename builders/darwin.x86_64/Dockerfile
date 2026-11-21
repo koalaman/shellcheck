@@ -1,30 +1,56 @@
-FROM liushuyu/osxcross@sha256:fa32af4677e2860a1c5950bc8c360f309e2a87e2ddfed27b642fddf7a6093b76
+# osxcross's tools are built for Ubuntu 24.04 (they need libxml2.so.2)
+FROM ubuntu:24.04
 
-ENV TARGET=x86_64-apple-darwin18
+# GHC's target has no OS version, since Hadrian mangles the names of
+# executables when the target has a dot in it. osxcross's tools are named
+# after the SDK version, so they're passed to GHC explicitly.
+ENV TARGET=x86_64-apple-darwin
+ENV OSXCROSS=x86_64-apple-darwin25.1
 ENV TARGETNAME=darwin.x86_64
 
 # Build dependencies
 USER root
 ENV DEBIAN_FRONTEND=noninteractive
-RUN sed -e 's/focal/kinetic/g' -e 's/archive\|security/old-releases/' -i /etc/apt/sources.list
-RUN apt-get update
-RUN apt-get dist-upgrade -y
-RUN apt-get install -y ghc automake autoconf llvm curl alex happy
+RUN apt-get update && apt-get install -y clang libxml2 libgmp-dev alex happy automake autoconf build-essential curl xz-utils file
+RUN curl -L "https://downloads.haskell.org/~cabal/cabal-install-3.16.0.0/cabal-install-3.16.0.0-x86_64-linux-alpine3_20.tar.xz" | tar xJv -C /usr/local/bin && cabal update
 
-# Build GHC
+# macOS cross toolchain and SDK, copied from crazymax/osxcross:latest-ubuntu
+COPY --from=koalaman/scbuilder-osxcross /osxcross /osxcross
+ENV PATH=/osxcross/bin:$PATH
+ENV LD_LIBRARY_PATH=/osxcross/lib
+
+# GHC passes its LLVM target (x86_64-apple-darwin) to clang as --target,
+# and clang then looks for a linker by that name. Without it, clang would
+# fall back to the host's /usr/bin/ld.
+RUN ln -s "/osxcross/bin/$OSXCROSS-ld" "/usr/local/bin/${OSXCROSS%%-*}-apple-darwin-ld"
+
+# Building GHC 9.14 needs GHC 9.6 to 9.12, and Ubuntu 24.04 has 9.4
+WORKDIR /host-ghc
+RUN curl -L "https://downloads.haskell.org/~ghc/9.12.2/ghc-9.12.2-x86_64-ubuntu22_04-linux.tar.xz" | tar xJ --strip-components=1 && \
+    ./configure --prefix=/usr/local && make install && cd / && rm -rf /host-ghc
+
+# GHC fails to build if it can't encode non-ascii
+ENV LC_CTYPE=C.utf8
+
+# Build GHC. This is a single step so the build tree doesn't end up in the image.
+# - Cabal passes --host=<arch>-osx to the configure scripts of GHC's own
+#   packages (like rts), so teach GHC's OS name conversion about "osx".
+ENV GHCTOOLS="CC=$OSXCROSS-clang CXX=$OSXCROSS-clang++ LD=$OSXCROSS-ld AR=$OSXCROSS-ar NM=$OSXCROSS-nm RANLIB=$OSXCROSS-ranlib STRIP=$OSXCROSS-strip OTOOL=$OSXCROSS-otool INSTALL_NAME_TOOL=$OSXCROSS-install_name_tool"
 WORKDIR /ghc
-RUN curl -L "https://downloads.haskell.org/~ghc/9.2.8/ghc-9.2.8-src.tar.xz" | tar xJ --strip-components=1
-RUN ./configure --host x86_64-linux-gnu --build x86_64-linux-gnu --target "$TARGET"
-RUN cp mk/flavours/quick-cross.mk mk/build.mk && make -j "$(nproc)"
-RUN make install
-RUN curl -L "https://downloads.haskell.org/~cabal/cabal-install-3.9.0.0/cabal-install-3.9-x86_64-linux-alpine.tar.xz" | tar xJv -C /usr/local/bin
+RUN curl -L "https://downloads.haskell.org/~ghc/9.14.1/ghc-9.14.1-src.tar.xz" | tar xJ --strip-components=1 && \
+    sed -i 's/^      darwin\*) # e.g. aarch64-apple-darwin14/      osx|darwin*) # e.g. aarch64-apple-darwin14/' m4/ghc_convert_os.m4 && \
+    grep -q "osx|darwin" m4/ghc_convert_os.m4 && \
+    ./boot.source && \
+    env $GHCTOOLS ./configure --host x86_64-linux-gnu --build x86_64-linux-gnu --target "$TARGET" && \
+    ./hadrian/build --flavour=perf+split_sections+no_dynamic_libs --bignum=native --docs=none -j binary-dist-dir && \
+    cd _build/bindist/ghc-*-"$TARGET" && \
+    env $GHCTOOLS sh configure --prefix=/usr/local --build=x86_64-linux-gnu --host=x86_64-linux-gnu --target="$TARGET" && \
+    make install && cd / && rm -rf /ghc
 
-# Due to an apparent cabal bug, we specify our options directly to cabal
-# It won't reuse caches if ghc-options are specified in ~/.cabal/config
-ENV CABALOPTS="--with-ghc=$TARGET-ghc;--with-hc-pkg=$TARGET-ghc-pkg"
-
-# Prebuild the dependencies
-RUN cabal update && IFS=';' && cabal install --dependencies-only $CABALOPTS ShellCheck
+# Prebuild the dependencies of the latest release
+COPY cabal.project /etc/
+RUN cd /tmp && cabal get ShellCheck && cd ShellCheck-*/ && \
+    cp /etc/cabal.project . && cabal build --only-dependencies && cd .. && rm -rf ShellCheck-*/
 
 # Copy the build script
 COPY build /usr/bin
