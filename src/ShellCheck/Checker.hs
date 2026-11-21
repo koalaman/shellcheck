@@ -57,9 +57,8 @@ shellFromFilename filename = listToMaybe candidates
                       ,(".bash", Bash)
                       ,(".bats", Bash)
                       ,(".dash", Dash)
-                      ,(".envrc", Bash)]
-                      -- The `.sh` is too generic to determine the shell:
-                      -- We fallback to Bash in this case and emit SC2148 if there is no shebang
+                      ,(".envrc", Bash)
+                      ,(".sh", Sh)]
     candidates =
         [sh | (ext,sh) <- shellExtensions, ext `isSuffixOf` filename]
 
@@ -373,11 +372,18 @@ prop_canDisableParseErrors = null $ result
         csScript = "#shellcheck disable=SC1073,SC1072,SC2148\n()"
     }
 
-prop_shExtensionDoesntMatter = result == [2148]
+prop_shExtensionConsideredPOSIX = null $ result
   where
     result = checkWithSpec [] emptyCheckSpec {
         csFilename = "file.sh",
         csScript = "echo 'hello world'"
+    }
+
+prop_shIsNotBash = result == [3010]
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "file.sh",
+        csScript = "[[ -n $1 ]]"
     }
 
 prop_sourcedFileUsesOriginalShellExtension = result == [2079]
