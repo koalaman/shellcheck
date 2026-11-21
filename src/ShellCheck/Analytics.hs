@@ -2575,17 +2575,17 @@ prop_checkUnused56 = verifyNotTree checkUnusedAssignments "run foo bar"
 prop_checkUnused57 = verifyTree checkUnusedAssignments "#!/usr/bin/env bats\n@test 'foo' { output=$(true); }"
 prop_checkUnused58 = verifyTree checkUnusedAssignments "while getopts ':a' opt; do case ${opt} in 'a') var=1 ;; *) ;; esac; done; shift $((OPTIND - 1)); var=${var:-0}"
 prop_checkUnused59 = verifyNotTree checkUnusedAssignments "while getopts ':a' opt; do case ${opt} in 'a') var=1 ;; *) ;; esac; done; shift $((OPTIND - 1)); var=${var:-0}; echo ${var}"
-prop_checkUnused60 = verifyTree checkUnusedAssignments "#!/bin/bash\nvar=1;if [[ -n $var ]]; then echo var is set but unused; fi"
-prop_checkUnused61 = verifyNotTree checkUnusedAssignments "#!/bin/bash\nvar=1;if [[ -n $var ]]; then echo \"$var\"; fi"
-prop_checkUnused62 = verifyTree checkUnusedAssignments "#!/bin/bash\nif [[ -z $var ]]; then var=default; fi"
-prop_checkUnused63 = verifyNotTree checkUnusedAssignments "#!/bin/bash\nvar=1;if [[ -n $var ]]; then var=default; fi; echo \"$var\""
-prop_checkUnused64 = verifyTree checkUnusedAssignments "#!/bin/bash\nvar=1;x=2;if [[ -z $var && -n $x ]]; then echo \"x is $x\"; var=default; fi"
-prop_checkUnused65 = verifyNotTree checkUnusedAssignments "#!/bin/bash\nvar=1;x=2;if [[ -z $var && -n $x ]]; then var=default; fi; echo \"x is $x\"; echo \"var is $var\""
-prop_checkUnused66 = verifyTree checkUnusedAssignments "#!/bin/sh\nif [ -z \"$var\" ]; then var=default; fi"
-prop_checkUnused67 = verifyNotTree checkUnusedAssignments "#!/bin/sh\nvar=1;if [ -n \"$var\" ]; then var=default; fi; echo \"$var\""
-prop_checkUnused68 = verifyTree checkUnusedAssignments "#!/bin/sh\nif test -z \"$var\"; then var=default; fi"
-prop_checkUnused69 = verifyNotTree checkUnusedAssignments "#!/bin/sh\nvar=1;if test -n \"$var\"; then var=default; fi; echo \"$var\""
-prop_checkUnused70 = verifyNotTree checkUnusedAssignments "#!/bin/sh\nif [ -z \"$x\" ]; then echo 'x is not set'; fi"
+prop_checkUnused60 = verifyTree checkUnusedAssignments "var=1;if [[ -n $var ]]; then echo var is set but unused; fi"
+prop_checkUnused61 = verifyNotTree checkUnusedAssignments "var=1;if [[ -n $var ]]; then echo \"$var\"; fi"
+prop_checkUnused62 = verifyTree checkUnusedAssignments "if [[ -z $var ]]; then var=default; fi"
+prop_checkUnused63 = verifyNotTree checkUnusedAssignments "var=1;if [[ -n $var ]]; then var=default; fi; echo \"$var\""
+prop_checkUnused64 = verifyTree checkUnusedAssignments "var=1;x=2;if [[ -z $var && -n $x ]]; then echo \"x is $x\"; var=default; fi"
+prop_checkUnused65 = verifyNotTree checkUnusedAssignments "var=1;x=2;if [[ -z $var && -n $x ]]; then var=default; fi; echo \"x is $x\"; echo \"var is $var\""
+prop_checkUnused66 = verifyTree checkUnusedAssignments "if [ -z \"$var\" ]; then var=default; fi"
+prop_checkUnused67 = verifyNotTree checkUnusedAssignments "var=1;if [ -n \"$var\" ]; then var=default; fi; echo \"$var\""
+prop_checkUnused68 = verifyTree checkUnusedAssignments "if test -z \"$var\"; then var=default; fi"
+prop_checkUnused69 = verifyNotTree checkUnusedAssignments "var=1;if test -n \"$var\"; then var=default; fi; echo \"$var\""
+prop_checkUnused70 = verifyNotTree checkUnusedAssignments "if [ -z \"$x\" ]; then echo 'x is not set'; fi"
 
 checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
   where
@@ -2655,7 +2655,7 @@ checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
             or [ getLiteralString a `elem` map Just setunsetOps && getId b == cid
                | (a, b) <- zip args (drop 1 args)
                ]
-    
+
     -- True for a reference like ${var:-0}, ${var-0}, ${var:=0} or ${var=0}
     -- whose result is assigned straight back to the same variable, as in
     --   var="${var:-0}"
