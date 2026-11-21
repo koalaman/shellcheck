@@ -990,6 +990,13 @@ prop_checkFindWithoutPath5 = verifyNot checkFindWithoutPath "find -O3 ."
 prop_checkFindWithoutPath6 = verifyNot checkFindWithoutPath "find -D exec ."
 prop_checkFindWithoutPath7 = verifyNot checkFindWithoutPath "find --help"
 prop_checkFindWithoutPath8 = verifyNot checkFindWithoutPath "find -Hx . -print"
+prop_checkFindWithoutPath9 = verifyNot checkFindWithoutPath "find -files0-from - < file"
+prop_checkFindWithoutPath10 = verifyNot checkFindWithoutPath "find -files0-from 'paths list.nul' -print"
+prop_checkFindWithoutPath11 = verifyNot checkFindWithoutPath "find -L '-files0-from' \"$paths\" -print"
+prop_checkFindWithoutPath12 = verify checkFindWithoutPath "find -L"
+prop_checkFindWithoutPath13 = verify checkFindWithoutPath "find -L -files0-from"
+prop_checkFindWithoutPath14 = verify checkFindWithoutPath "find -name '-files0-from' -print"
+prop_checkFindWithoutPath15 = verify checkFindWithoutPath "find -exec echo -files0-from {} \\;"
 checkFindWithoutPath = CommandCheck (Basename "find") f
   where
     f t@(T_SimpleCommand _ _ (cmd:args)) =
@@ -1000,9 +1007,11 @@ checkFindWithoutPath = CommandCheck (Basename "find") f
     -- after the path, as well as multiple non-flag arguments that are not the
     -- path. We assume that all the pre-path flags are single characters from a
     -- list of GNU and macOS flags.
-    hasPath (first:rest) =
-        let flag = getLiteralStringDef "___" first in
-            not ("-" `isPrefixOf` flag) || isLeadingFlag flag && hasPath rest
+    hasPath (first:rest)
+        | flag == "-files0-from" = not (null rest)
+        | otherwise = not ("-" `isPrefixOf` flag) || isLeadingFlag flag && hasPath rest
+      where
+        flag = getLiteralStringDef "___" first
     hasPath [] = False
     isLeadingFlag flag = length flag <= 2 || all (`elem` leadingFlagChars) flag
     leadingFlagChars="-EHLPXdfsxO0123456789"
