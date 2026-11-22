@@ -161,7 +161,6 @@ nodeChecks = [
     ,checkWrongArithmeticAssignment
     ,checkConditionalAndOrs
     ,checkFunctionDeclarations
-    ,checkStderrPipe
     ,checkOverridingPath
     ,checkArrayAsString
     ,checkUnsupported
@@ -3003,17 +3002,6 @@ checkFunctionDeclarations _ _ = return ()
 
 
 
-prop_checkStderrPipe1 = verify checkStderrPipe "#!/bin/ksh\nfoo |& bar"
-prop_checkStderrPipe2 = verifyNot checkStderrPipe "#!/bin/bash\nfoo |& bar"
-checkStderrPipe params =
-    case shellType params of
-        Ksh -> match
-        _ -> const $ return ()
-  where
-    match (T_Pipe id "|&") =
-        err id 2118 "Ksh does not support |&. Use 2>&1 |."
-    match _ = return ()
-
 prop_checkUnpassedInFunctions1 = verifyTree checkUnpassedInFunctions "foo() { echo $1; }; foo"
 prop_checkUnpassedInFunctions2 = verifyNotTree checkUnpassedInFunctions "foo() { echo $1; };"
 prop_checkUnpassedInFunctions3 = verifyNotTree checkUnpassedInFunctions "foo() { echo $lol; }; foo"
@@ -4506,6 +4494,7 @@ checkBlatantRecursion params t =
     checkList name t =
         case t of
             T_Backgrounded _ t -> checkList name t
+            T_KshCoprocess _ t -> checkList name t
             T_AndIf _ lhs _ -> checkList name lhs
             T_OrIf _ lhs _ -> checkList name lhs
             T_Pipeline _ _ cmds -> mapM_ (checkCommand name) cmds
