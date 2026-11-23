@@ -384,7 +384,7 @@ checkBashisms = ForShell [Sh, Dash, BusyboxSh] $ \t -> do
         checkFlags (flag@(fid, flag'):rest)
             | startsOption flag' = do
                 unless (flag' `matches` validFlagsRegex) $
-                  forM_ (tail flag') $ \letter ->
+                  forM_ (drop 1 flag') $ \letter ->
                     when (letter `notElem` optionsSet) $
                       warnMsg fid 3041 $ "set flag " <> ('-':letter:" is")
                 checkOptions rest

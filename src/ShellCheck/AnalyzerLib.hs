@@ -278,9 +278,9 @@ containsAllexport = isOptionSet' "allexport" 'a'
 containsErrexit = isOptionSet' "errexit" 'e'
 containsNoglob = isOptionSet' "noglob" 'f'
 
-containsSetOption opt root = isNothing $ doAnalysis (guard . not . isPipefail) root
+containsSetOption opt root = isNothing $ doAnalysis (guard . not . isOptionSet) root
   where
-    isPipefail t =
+    isOptionSet t =
         case t of
             T_SimpleCommand {}  ->
                 t `isUnqualifiedCommand` "set" &&
@@ -289,9 +289,9 @@ containsSetOption opt root = isNothing $ doAnalysis (guard . not . isPipefail) r
             _ -> False
 
 containsShopt shopt root =
-        isNothing $ doAnalysis (guard . not . isShoptLastPipe) root
+        isNothing $ doAnalysis (guard . not . isShoptSet) root
     where
-        isShoptLastPipe t =
+        isShoptSet t =
             case t of
                 T_SimpleCommand {}  ->
                     t `isUnqualifiedCommand` "shopt" &&
