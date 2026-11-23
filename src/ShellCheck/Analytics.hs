@@ -5053,6 +5053,21 @@ prop_checkSetESuppressed16 = verifyTree    checkSetESuppressed "set -e; f(){ :; 
 prop_checkSetESuppressed17 = verifyNotTree checkSetESuppressed "set -e; f(){ :; }; g(){ :; }; g f"
 prop_checkSetESuppressed18 = verifyNotTree checkSetESuppressed "set -e; shopt -s inherit_errexit; f(){ :; }; x=$(f)"
 prop_checkSetESuppressed19 = verifyNotTree checkSetESuppressed "set -e; set -o posix; f(){ :; }; x=$(f)"
+prop_checkSetESuppressed20 = verifyTree    checkSetESuppressed "set -e; shopt -s inherit_errexit; f(){ :; }; echo \"$(f)\""
+prop_checkSetESuppressed21 = verifyTree    checkSetESuppressed "set -e; shopt -s inherit_errexit; f(){ :; }; echo TEST > \"$(f)\""
+prop_checkSetESuppressed22 = verifyTree    checkSetESuppressed "set -e; shopt -s inherit_errexit; f(){ :; }; cat <<< $(f)"
+prop_checkSetESuppressed23 = verifyTree    checkSetESuppressed "set -e; shopt -s inherit_errexit; f(){ :; }; g(){ local x=$(f); }; g"
+prop_checkSetESuppressed24 = verifyTree    checkSetESuppressed "set -e; shopt -s inherit_errexit; f(){ :; }; x=$(f) true"
+prop_checkSetESuppressed25 = verifyTree    checkSetESuppressed "set -e; shopt -s inherit_errexit; f(){ :; }; declare x=$(f)"
+prop_checkSetESuppressed26 = verifyTree    checkSetESuppressed "set -e; shopt -s inherit_errexit; f(){ :; }; x=$(echo $(f))"
+prop_checkSetESuppressed27 = verifyNotTree checkSetESuppressed "set -e; shopt -s inherit_errexit; f(){ :; }; x=\"a$(f)b\""
+prop_checkSetESuppressed28 = verifyNotTree checkSetESuppressed "set -e; shopt -s inherit_errexit; f(){ :; }; x=($(f))"
+prop_checkSetESuppressed29 = verifyNotTree checkSetESuppressed "set -e; shopt -s inherit_errexit; f(){ :; }; x=${y:-$(f)}"
+prop_checkSetESuppressed30 = verifyNotTree checkSetESuppressed "set -e; shopt -s inherit_errexit; f(){ :; }; x=$(( $(f) + 1 ))"
+prop_checkSetESuppressed31 = verifyNotTree checkSetESuppressed "set -e; shopt -s inherit_errexit; f(){ :; }; x=`f`"
+prop_checkSetESuppressed32 = verifyNotTree checkSetESuppressed "set -e; shopt -s inherit_errexit; f(){ :; }; a[1]=$(f)"
+prop_checkSetESuppressed33 = verifyTree    checkSetESuppressed "set -e; shopt -s inherit_errexit; f(){ :; }; case $(f) in esac"
+prop_checkSetESuppressed34 = verifyTree    checkSetESuppressed "set -e; shopt -s inherit_errexit; f(){ :; }; x=$(f) | cat"
 checkSetESuppressed params t =
     if hasErrexit params then runNodeAnalysis checkNode params t else []
   where
@@ -5075,8 +5090,8 @@ checkSetESuppressed params t =
                 T_IfExpression    _ condition _ | child `isIn` concatMap fst condition -> informConditional "an 'if' condition" cmd
                 T_UntilExpression _ condition _ | child `isIn` condition -> informConditional "an 'until' condition" cmd
                 T_WhileExpression _ condition _ | child `isIn` condition -> informConditional "a 'while' condition" cmd
-                T_DollarExpansion {} | not $ errExitEnabled parent -> informUninherited cmd
-                T_Backticked      {} | not $ errExitEnabled parent -> informUninherited cmd
+                T_DollarExpansion {} | not $ errExitEnabled parent rest -> informUninherited cmd
+                T_Backticked      {} | not $ errExitEnabled parent rest -> informUninherited cmd
                 _ -> return ()
             go (parent:rest)
         go _ = return ()
@@ -5091,7 +5106,42 @@ checkSetESuppressed params t =
                 "Bash implicitly disabled set -e for this function " ++
                 "invocation because it's inside a command substitution. " ++
                 "Add set -e; before it or enable inherit_errexit.")
-        errExitEnabled t = hasInheritErrexit params || containsErrexit t
+        errExitEnabled t ancestors =
+            containsErrexit t ||
+                (hasInheritErrexit params && inheritErrexitApplies ancestors)
+          where
+            -- inherit_errexit keeps errexit enabled inside the substitution,
+            -- but its exit status only reaches set -e when the substitution
+            -- is expanded as part of a plain assignment's right-hand side.
+            -- In argument or redirect position the status is discarded, so
+            -- the warning still applies there.
+            inheritErrexitApplies
+                (T_Assignment {} : T_SimpleCommand _ _ [] : redir@(T_Redirecting _ _ _) : T_Pipeline _ _ cmds : _)
+                | not (null cmds) && getId redir == getId (last cmds) = True
+            inheritErrexitApplies (T_Assignment {} : _) = False
+            inheritErrexitApplies (t : ts)
+                | isExpansionWord t = inheritErrexitApplies ts
+            inheritErrexitApplies _ = False
+
+            isExpansionWord t = case t of
+                T_NormalWord {} -> True
+                T_DoubleQuoted {} -> True
+                T_DollarDoubleQuoted {} -> True
+                T_Array {} -> True
+                T_IndexedElement {} -> True
+                T_BraceExpansion {} -> True
+                T_DollarBraced {} -> True
+                T_DollarArithmetic {} -> True
+                T_DollarBracket {} -> True
+                TA_Assignment {} -> True
+                TA_Binary {} -> True
+                TA_Expansion {} -> True
+                TA_Parenthesis {} -> True
+                TA_Sequence {} -> True
+                TA_Trinary {} -> True
+                TA_Unary {} -> True
+                TA_Variable {} -> True
+                _ -> False
         isIn t cmds = getId t `elem` map getId cmds
 
 
