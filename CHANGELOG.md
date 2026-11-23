@@ -13,6 +13,8 @@
 - SC1072 about an invalid `disable=` value now names the value instead
   of a missing `=`
 - SC2064 no longer warns about expanding readonly variables in trap commands
+- SC2114/SC2115 now also trigger on non-canonical paths such as
+  `rm -rf /./etc` or `rm -rf /etc/../etc`
 
 ### Removed
 - SC3003: removed since ANSI C string is specified in POSIX.1-2024
