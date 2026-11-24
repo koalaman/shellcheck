@@ -352,6 +352,33 @@ prop_deducesTypeFromEnvrcExtension = result == [2079]
         csScript = "(( 3.14 ))"
     }
 
+prop_pathCommentIsNotShebang =
+    [1113] == checkWithSpec [] emptyCheckSpec {
+        csScript = "# /etc/profile: login shell setup\necho ok\n"
+    }
+
+prop_pathCommentDoesNotPreventAnalysis =
+    [1113, 2086] == checkWithSpec [] emptyCheckSpec {
+        csScript = "# /usr/bin/python backup helper\necho $1\n"
+    }
+
+prop_canDisableMissingShebangBang =
+    null $ checkWithSpec [] emptyCheckSpec {
+        csScript = "# /etc/profile: login shell setup\necho ok\n",
+        csExcludedWarnings = [1113]
+    }
+
+prop_missingShebangBangStillInfersShell =
+    [1113] == checkWithSpec [] emptyCheckSpec {
+        csFilename = "script.dash",
+        csScript = "# /usr/bin/env bash -x\nitems=(a b)\nprintf '%s\\n' \"${items[@]}\"\n"
+    }
+
+prop_pathCommentDoesNotSetShellOptions =
+    [1113, 2035] == checkWithSpec [] emptyCheckSpec {
+        csScript = "# /bin/bash -f\nls *\n"
+    }
+
 prop_canDisableShebangWarning = null $ result
   where
     result = checkWithSpec [] emptyCheckSpec {

@@ -327,6 +327,8 @@ determineShell fallbackShell t = fromMaybe Bash $
     getCandidate (T_Annotation _ annotations s) =
         headOrDefault (fromShebang s) [s | ShellOverride s <- annotations]
     fromShebang (T_Script _ (T_Literal _ s) _) = executableFromShebang s
+    -- A missing bang leaves the interpreter as a hint for dialect inference.
+    fromShebang (T_Script _ (T_ShebangMissingBang _ s) _) = executableFromShebang s
 
 -- Given a root node, make a map from Id to parent Token.
 -- This is used to populate parentMap in Parameters

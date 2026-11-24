@@ -3224,13 +3224,15 @@ prop_readShebang6 = isWarning readShebang " # Copyright \n!#/bin/bash"
 prop_readShebang7 = isNotOk readShebang "# Copyright \nfoo\n#!/bin/bash"
 readShebang = do
     start <- startSpan
-    anyShebang <|> try readMissingBang <|> withHeader
+    token <- T_Literal <$ anyShebang
+         <|> T_ShebangMissingBang <$ try readMissingBang
+         <|> T_Literal <$ withHeader
     many linewhitespace
     str <- many $ noneOf "\r\n"
     id <- endSpan start
     optional carriageReturn
     optional linefeed
-    return $ T_Literal id str
+    return $ token id str
   where
     anyShebang = choice $ map try [
         readCorrect,
@@ -3374,7 +3376,6 @@ readScriptFile sourced = do
     withAnnotations rcAnnotations $ do
         hasBom <- wasIncluded readUtf8Bom
         shebang <- readShebang <|> readEmptyLiteral
-        let (T_Literal _ shebangString) = shebang
         allspacing
         annotationStart <- startSpan
         fileAnnotations <- readAnnotations
@@ -3391,9 +3392,11 @@ readScriptFile sourced = do
             shellFlagSpecified <- isJust <$> Mr.asks shellTypeOverride
             let ignoreShebang = shellAnnotationSpecified || shellFlagSpecified
 
-            unless ignoreShebang $
-                verifyShebang pos (executableFromShebang shebangString)
-            if ignoreShebang || isValidShell (executableFromShebang shebangString) /= Just False
+            parseBody <- case shebang of
+                T_Literal _ str | not ignoreShebang ->
+                    verifyShebang pos (executableFromShebang str)
+                _ -> return True
+            if parseBody
               then do
                     commands <- readCompoundListOrEmpty
                     id <- endSpan start
@@ -3411,9 +3414,13 @@ readScriptFile sourced = do
   where
     verifyShebang pos s = do
         case isValidShell s of
-            Just True -> return ()
-            Just False -> parseProblemAt pos ErrorC 1071 "ShellCheck only supports sh/bash/dash/ksh/'busybox sh' scripts. Sorry!"
-            Nothing -> parseProblemAt pos ErrorC 1008 "This shebang was unrecognized. ShellCheck only supports sh/bash/dash/ksh/'busybox sh'. Add a 'shell' directive to specify."
+            Just True -> return True
+            Just False -> do
+                parseProblemAt pos ErrorC 1071 "ShellCheck only supports sh/bash/dash/ksh/'busybox sh' scripts. Sorry!"
+                return False
+            Nothing -> do
+                parseProblemAt pos ErrorC 1008 "This shebang was unrecognized. ShellCheck only supports sh/bash/dash/ksh/'busybox sh'. Add a 'shell' directive to specify."
+                return True
 
     isValidShell s =
         let good = null s || any (`isPrefixOf` s) goodShells
