@@ -189,7 +189,7 @@ buildGraph params root =
         (nextNode, base) = execRWS (buildRoot root) (newCFContext params) 0
         (nodes, edges, mapping, association) =
 --            renumberTopologically $
---                removeUnnecessaryStructuralNodes
+                removeUnnecessaryStructuralNodes
                     base
 
         idToRange = M.fromList mapping
@@ -270,10 +270,10 @@ prop_testRemoveStructural =
             [(Id 0, 3)]
             )
         after = (
-            [(1,s), (2,s), (4,s)],
-            [(1,2,CFEFlow), (2,4,CFEFlow)],
-            [(Id 0, (2,2))],
-            [(Id 0, 2)]
+            [(1,s), (3,s), (4,s)],
+            [(1,3,CFEFlow), (3,4,CFEFlow)],
+            [(Id 0, (3,3))],
+            [(Id 0, 3)]
             )
     in after == removeUnnecessaryStructuralNodes before
 
@@ -293,20 +293,19 @@ removeUnnecessaryStructuralNodes (nodes, edges, mapping, association) =
         )
   where
     regularEdges = filter isRegularEdge edges
-    inDegree = counter $ map (\(from,to,_) -> from) regularEdges
-    outDegree = counter $ map (\(from,to,_) -> to) regularEdges
+    inDegree = counter $ map (\(from,to,_) -> to) regularEdges
+    outDegree = counter $ map (\(from,to,_) -> from) regularEdges
     structuralNodes = S.fromList [node | (node, CFStructuralNode) <- nodes]
     candidateNodes = S.filter isLinear structuralNodes
     edgesToCollapse = S.fromList $ filter filterEdges regularEdges
 
     remapping :: M.Map Node Node
-    remapping = M.fromList $ map orderEdge $ S.toList edgesToCollapse
+    remapping = M.fromList $ map (\(a,b,_) -> (a,b)) $ S.toList edgesToCollapse
     recursiveRemapping = M.mapWithKey (\c _ -> recursiveLookup remapping c) remapping
 
     filterEdges (a,b,_) =
         a `S.member` candidateNodes && b `S.member` candidateNodes
 
-    orderEdge (a,b,_) = if a < b then (b,a) else (a,b)
     counter = M.fromListWith (+) . map (\key -> (key, 1))
     isRegularEdge (_, _, CFEFlow) = True
     isRegularEdge _ = False
