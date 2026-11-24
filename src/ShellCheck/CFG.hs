@@ -189,7 +189,7 @@ buildGraph params root =
         (nextNode, base) = execRWS (buildRoot root) (newCFContext params) 0
         (nodes, edges, mapping, association) =
 --            renumberTopologically $
-                removeUnnecessaryStructuralNodes
+--                removeUnnecessaryStructuralNodes
                     base
 
         idToRange = M.fromList mapping
@@ -612,77 +612,52 @@ build t = do
 
         T_CaseExpression id t list@(hd:tl) -> do
             start <- newStructuralNode
-            token <- build t
-            branches <- mapM buildBranch (hd NE.:| tl)
             end <- newStructuralNode
+            token <- build t
+            branches <- mapM (buildBranch end) (hd NE.:| tl)
 
-            let neighbors = zip (NE.toList branches) $ NE.tail branches
-            let (_, firstCond, _) = NE.head branches
-            let (_, lastCond, lastBody) = NE.last branches
+            let neighbors = zip (NE.toList branches) $ (NE.tail branches ++ [(end, end, undefined, undefined)])
+            let (firstCond, _, _, _) = NE.head branches
 
             linkRange start token
             linkRange token firstCond
-            mapM_ (uncurry $ linkBranch end) neighbors
-            linkRange lastBody end
-
-            unless (any hasCatchAll list) $
-                -- There's no *) branch, so assume we can fall through
-                void $ linkRange token end
-
-            -- A catch-all earlier in the list doesn't guarantee a match:
-            -- ;;& keeps testing later patterns, so the last clause's
-            -- condition may still fail and fall through to end.
-            when (lastCondReachable && not lastIsCatchAll) $
-                void $ linkRange lastCond end
+            mapM_ (uncurry linkBranch) neighbors
 
             return $ spanRange start end
 
           where
-            -- for a | b | c, evaluate each in turn and allow short circuiting
-            buildCond list = do
-                start <- newStructuralNode
-                conds <- mapM build list
-                end <- newStructuralNode
-                linkRanges (start:conds)
-                mapM_ (`linkRange` end) conds
-                return $ spanRange start end
-
-            buildBranch (typ, cond, body) = do
-                c <- buildCond cond
-                b <- sequentially body
-                linkRange c b
-                return (typ, c, b)
-
-            linkBranch end (typ, cond, body) (_, nextCond, nextBody) = do
-                -- Failure case
-                linkRange cond nextCond
-                -- After body
+            buildBranch end (typ, cond, body) = do
+                bodyNode <- sequentially body
+                condNode <- buildCond bodyNode cond
+                nextCondNode <- newStructuralNode
+                nextBodyNode <- newStructuralNode
                 case typ of
-                    CaseBreak -> linkRange body end
-                    CaseFallThrough -> linkRange body nextBody
-                    CaseContinue -> linkRange body nextCond
+                    CaseBreak -> linkRange bodyNode end
+                    CaseFallThrough -> linkRange bodyNode nextBodyNode
+                    CaseContinue -> linkRange bodyNode nextCondNode
+                linkRange condNode nextCondNode
+                return (condNode, bodyNode, nextCondNode, nextBodyNode)
 
-            -- Find a *) if any
+            -- for a | b | c, evaluate each in turn and allow short circuiting
+            buildCond _ [] = newStructuralNode
+            buildCond body (alt:rest) = do
+                altNode <- build alt
+                linkRange altNode body
 
-            hasCatchAll (_,cond,_) = any isCatchAll cond
-            isCatchAll c = fromMaybe False $ do
-                pg <- wordToExactPseudoGlob c
-                return $ pg `pseudoGlobIsSuperSetof` [PGMany]
+                let isCatchAll = fromMaybe False $ do
+                        pg <- wordToExactPseudoGlob alt
+                        return $ pg `pseudoGlobIsSuperSetof` [PGMany]
 
-            lastIsCatchAll = hasCatchAll $ NE.last (hd NE.:| tl)
+                nextNode <- buildCond body rest
+                unless isCatchAll $
+                    void $ linkRange altNode nextNode
 
-            -- Whether the last clause's condition can be evaluated at all:
-            -- a clause is reached when the previous clause's condition may
-            -- fail (not a catch-all) or when its body ends with ;;&, which
-            -- keeps testing patterns. ;& only reaches the next body.
-            lastCondReachable =
-                fst $ foldl' nextReachability (True, False) $ NE.init (hd NE.:| tl)
-              where
-                nextReachability (condReached, fallIn) clause@(typ, _, _) =
-                    let bodyReached = condReached || fallIn
-                    in  (   (condReached && not (hasCatchAll clause))
-                                || (bodyReached && typ == CaseContinue)
-                        ,   bodyReached && typ == CaseFallThrough)
+                return $ spanRange altNode nextNode
+
+            linkBranch (cond, body, nextCond, nextBody) (cond2, body2, nextCond2, nextBody2) = do
+                linkRange nextCond cond2
+                linkRange nextBody body2
+
 
         T_Condition id _ _ op -> do
             cond <- build op
