@@ -894,10 +894,9 @@ getOffsetReferences mods = fromMaybe [] $ do
 
 -- Returns whether a token is a parameter expansion without any modifiers.
 -- True for $var ${var} $1 $#
--- False for ${#var} ${var[x]} ${var:-0}
+-- False for ${#var} ${var[x]} ${var:-0}, and zsh's $var[x] and $var:t
 isUnmodifiedParameterExpansion t =
     case t of
-        T_DollarBraced _ False _ -> True
         T_DollarBraced _ _ list ->
             let str = concat $ oversimplify list
             in getBracedReference str == str

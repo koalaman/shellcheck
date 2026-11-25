@@ -1883,7 +1883,15 @@ readDollarVariable = do
             lookAhead $ char '['
             parseNoteAt pos ErrorC 1087 "Use braces when expanding arrays, e.g. ${array[idx]} (or ${var}[.. to quiet)."
 
-    try $ char '$' >> (positional <|> special <|> regular)
+    -- zsh: subscripts, modifiers and flags work without braces, as in $a[1],
+    -- $0:h, $+commands[git] and $#array. These get the same contents as the
+    -- braced versions, ${a[1]} and so on.
+    let zshUnbraced = do
+        value <- readZshUnbracedParameter
+        id <- endSpan start
+        return $ T_DollarBraced id False value
+
+    try $ char '$' >> ((zshOnly >> zshUnbraced) <|> positional <|> special <|> regular)
 
   where
     wrapString p = do
@@ -1898,6 +1906,86 @@ readVariableName = do
     f <- variableStart
     rest <- many variableChars
     return (f:rest)
+
+prop_readZshPositionalAssignment1 = isOk readScript "#!/bin/zsh\n0=${(%):-%N}\n1=foo\necho \"$0 $1\""
+prop_readZshPositionalAssignment2 =
+    case debugParse readScript "#!/bin/zsh\n0=x" of
+        Right (T_Annotation _ _ (T_Script _ _ [T_Pipeline _ _ [T_Redirecting _ _ (T_SimpleCommand _ [T_Assignment _ _ "0" _ _] [])]])) -> True
+        _ -> False
+prop_readZshPositionalAssignment3 =
+    case debugParse readScript "#!/bin/bash\n0=x" of
+        Right (T_Annotation _ _ (T_Script _ _ [T_Pipeline _ _ [T_Redirecting _ _ (T_SimpleCommand _ [] [_])]])) -> True
+        _ -> False
+prop_readZshUnbraced1 = isOk readScript "#!/bin/zsh\na=(x y z)\necho $a[2] $a[-1] $a[2,3] \"$a[1]\" $#a $a[(i)y] $a[(r)z]"
+prop_readZshUnbraced2 = isOk readScript "#!/bin/zsh\necho $0:h $0:A:h $PWD:t:r ${1:-x}"
+prop_readZshUnbraced3 = isOk readScript "#!/bin/zsh\n(( $+commands[git] )) && (( ! $#functions[(i)r(benv|vm)] )) && echo $=x $~x $^x"
+prop_readZshUnbraced4 = isOk readScript "#!/bin/zsh\nb=\"a b\"\necho $b[(s: :w)2] $b[(w)$#argv]"
+prop_readZshUnbraced5 = isWarning readScript "#!/bin/bash\na=(x y)\necho $a[1]"
+prop_readZshUnbraced6 =
+    case debugParse readScript "#!/bin/zsh\necho $a[$i]" of
+        Right (T_Annotation _ _ (T_Script _ _ [T_Pipeline _ _ [T_Redirecting _ _ (T_SimpleCommand _ _ [_, T_NormalWord _ [T_DollarBraced _ False (T_NormalWord _ [T_Literal _ "a", T_Literal _ "[", T_DollarBraced {}, T_Literal _ "]"])]])]])) -> True
+        _ -> False
+prop_readZshUnbraced7 =
+    case debugParse readScript "#!/bin/zsh\necho $HOME:x $HOME:bar" of
+        Right (T_Annotation _ _ (T_Script _ _ [T_Pipeline _ _ [T_Redirecting _ _ (T_SimpleCommand _ _ [_, T_NormalWord _ [T_DollarBraced _ False _, T_Literal _ ":x"], T_NormalWord _ [T_DollarBraced _ False _, T_Literal _ ":bar"]])]])) -> True
+        _ -> False
+-- zsh: the inside of an unbraced parameter expansion with flags, subscripts or
+-- modifiers, after the $: +name, #name, =name, ~name, ^name, name[...], name:t.
+-- A plain name doesn't match, so that it's read as usual.
+readZshUnbracedParameter = try $ do
+    start <- startSpan
+    pos <- getPosition
+    flags <- many (oneOf "+#=~^")
+    name <- readVariableName <|> (guard (null flags) >> (:[]) <$> digit)
+    endName <- getPosition
+    nameId <- getNextIdBetween pos endName
+    subscripts <- many readZshSubscript
+    modifiers <- many readZshModifier
+    guard . not $ null flags && null subscripts && null modifiers
+    id <- endSpan start
+    return $ T_NormalWord id $ T_Literal nameId (flags ++ name) : concat subscripts ++ modifiers
+
+-- An unbraced subscript like [(i)$x], kept as literal text and expansions
+readZshSubscript = do
+    open <- literalOf $ string "["
+    contents <- many part
+    close <- literalOf $ string "]"
+    return $ open : concat contents ++ [close]
+  where
+    part = choice [
+        (:[]) <$> readNormalDollar,
+        (:[]) <$> readSingleQuoted,
+        (:[]) <$> readDoubleQuoted,
+        (:[]) <$> readUnquotedBackTicked,
+        (:[]) <$> literalOf (many1 $ noneOf "[]$'\"`\\\n"),
+        (:[]) <$> literalOf ((\a b -> [a,b]) <$> char '\\' <*> anyChar),
+        readZshSubscript
+        ]
+    literalOf p = do
+        start <- startSpan
+        str <- p
+        id <- endSpan start
+        return $ T_Literal id str
+
+-- An unbraced modifier like :h or :gs/a/b/. zsh 5.9 applies only these
+-- letters without braces; others, like the x in $HOME:x, stay literal text.
+readZshModifier = try $ do
+    start <- startSpan
+    char ':'
+    modifier <- substitution <|> ((:[]) <$> oneOf "aAcehlPqQrtu")
+    id <- endSpan start
+    return $ T_Literal id $ ':' : modifier
+  where
+    -- :s/old/new/ and :gs/old/new/, with any delimiter
+    substitution = do
+        global <- option "" (string "g")
+        s <- oneOf "sS"
+        delim <- noneOf " \t\n"
+        old <- many $ noneOf [delim, '\n']
+        char delim
+        new <- many $ noneOf [delim, '\n']
+        end <- option "" ((:[]) <$> char delim)
+        return $ global ++ s : delim : old ++ [delim] ++ new ++ end
 
 
 prop_readDollarLonely1 = isWarning readNormalWord "\"$\"var"
@@ -3425,7 +3513,8 @@ readAssignmentWordExt lenient = called "variable assignment" $ do
             if lenient
             then optionMaybe $ getSpanPositionsFor (char '$')
             else return Nothing
-        variable <- readVariableName
+        -- zsh can also assign positional parameters, as in 0=${(%):-%N}
+        variable <- readVariableName <|> (zshOnly >> many1 digit)
         indices <- many readArrayIndex
         hasLeftSpace <- fmap (not . null) spacing
         opStart <- getPosition
