@@ -301,6 +301,8 @@ containsShopt shopt root =
 -- Does this script mention 'shopt -s $opt' or 'set -o $opt' anywhere?
 isOptionSet opt root = containsShopt opt root || containsSetOption opt root
 
+-- Make sure all shells in supportedShellDialects resolve with shellForExecutable
+prop_supportedShellsResolve = isJust $ sequence $ map shellForExecutable supportedShellDialects
 
 prop_determineShell0 = determineShellTest "#!/bin/sh" == Sh
 prop_determineShell1 = determineShellTest "#!/usr/bin/env ksh" == Ksh

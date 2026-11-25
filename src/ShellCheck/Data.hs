@@ -156,6 +156,10 @@ unaryTestOps = [
     "-o", "-v", "-R"
   ]
 
+supportedShellDialects = [
+    "sh", "bash", "dash", "ksh", "busybox"
+  ]
+
 shellForExecutable :: String -> Maybe Shell
 shellForExecutable name =
     case name of

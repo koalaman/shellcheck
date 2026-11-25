@@ -122,8 +122,8 @@ options = [
         (ReqArg (Flag "source-path") "SOURCEPATHS")
         "Specify path when looking for sourced files (\"SCRIPTDIR\" for script's dir)",
     Option "s" ["shell"]
-        (ReqArg (Flag "shell") "SHELLNAME")
-        "Specify dialect (sh, bash, dash, ksh, busybox)",
+        (ReqArg (Flag "shell") "SHELLNAME") $
+        "Specify dialect (" ++ intercalate ", " supportedShellDialects ++ ")",
     Option "S" ["severity"]
         (ReqArg (Flag "severity") "SEVERITY")
         "Minimum severity of errors to consider (error, warning, info, style)",
@@ -339,6 +339,7 @@ parseOption flag options =
     case flag of
         Flag "shell" str ->
             fromMaybe (die $ "Unknown shell: " ++ str) $ do
+                guard $ str `elem` supportedShellDialects
                 shell <- shellForExecutable str
                 return $ return options {
                             checkSpec = (checkSpec options) {
