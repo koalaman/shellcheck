@@ -36,7 +36,7 @@ import Control.Monad.Identity
 import Control.Monad.Trans
 import Data.Char
 import Data.Functor
-import Data.List (isPrefixOf, isInfixOf, isSuffixOf, partition, sortBy, intercalate, nub, find)
+import Data.List (isPrefixOf, isInfixOf, isSuffixOf, partition, sortBy, intercalate, nub, find, dropWhileEnd)
 import Data.Maybe
 import Data.Monoid
 import GHC.Exts (sortWith)
@@ -835,7 +835,40 @@ readArithmeticContents =
         spacing
         return $ TA_Parenthesis id s
 
-    readArithTerm = readGroup <|> readVariable <|> readExpansion
+    readArithTerm = readZshArithTerm <|> readGroup <|> readVariable <|> readExpansion
+
+    -- zsh: [#16] and [##16] set the output base, as in $(( [##16] 255 )),
+    -- #name is the code of the first character of $name, and name(...)
+    -- calls a math function
+    readZshArithTerm = do
+        zshOnly
+        outputBase <|> characterCode <|> mathFunction
+    outputBase = do
+        start <- startSpan
+        op <- try $ do
+            char '['
+            hashes <- many1 (char '#')
+            base <- many1 (digit <|> char '_')
+            char ']'
+            return $ "[" ++ hashes ++ base ++ "]"
+        id <- endSpan start
+        spacing
+        x <- readArithTerm
+        return $ TA_Unary id op x
+    characterCode = do
+        start <- startSpan
+        try $ char '#' >> lookAhead variableStart
+        id <- endSpan start
+        x <- readVariable
+        return $ TA_Unary id "#" x
+    mathFunction = do
+        start <- startSpan
+        name <- try $ readVariableName <* char '('
+        args <- readSequence
+        char ')'
+        id <- endSpan start
+        spacing
+        return $ TA_Unary id (name ++ "()") args
 
     readSequence = do
         spacing
@@ -1316,9 +1349,25 @@ readSpacePart = do
 readDollarBracedWord = do
     start <- startSpan
     zsh <- isZsh
-    list <- if zsh then readZshDollarBracedParts 0 else many readDollarBracedPart
+    quoted <- isInDoubleQuotes
+    -- zsh balances braces in ${..}, except in double quotes
+    list <- if zsh && not quoted then readZshDollarBracedParts 0 else many readDollarBracedPart
     id <- endSpan start
     return $ T_NormalWord id list
+
+-- Are we inside double quotes (or a here document), and not in a command
+-- substitution nested inside them?
+isInDoubleQuotes = do
+    contexts <- getCurrentContexts
+    return $ case [name | ContextName _ name <- contexts, name `elem` quotingContexts] of
+        (name:_) -> name `elem` ["double quoted string", "here document"]
+        [] -> False
+  where
+    quotingContexts = [
+        "double quoted string", "here document",
+        "command expansion", "backtick expansion", "process substitution",
+        "=(..) process substitution", "ksh-style ${ ..; } command expansion"
+        ]
 
 -- zsh: like readDollarBracedPart, but braces in the contents must be
 -- balanced, so ${x:-%F{red}} ends at the last }.
@@ -1952,10 +2001,14 @@ prop_readZshPositionalAssignment3 =
         Right (T_Annotation _ _ (T_Script _ _ [T_Pipeline _ _ [T_Redirecting _ _ (T_SimpleCommand _ [] [_])]])) -> True
         _ -> False
 prop_readZshNestedBraces1 = isOk readScript "#!/bin/zsh\necho ${x:-%F{yellow}} ${(@)${:-{$#parts..1}}} ${x//\\{/[}"
+prop_readZshNestedBraces3 = isOk readScript "#!/bin/zsh\nx=\"${(@)${(@o)parameters[(I)P_*]}:/(#m)*/\\${${(q)MATCH}-$IFS\\}}\"\necho \"${x:-a{b}c} $(echo ${x:-a{b}c})\""
 prop_readZshNestedBraces2 =
     case debugParse readScript "#!/bin/zsh\necho ${x:-a{b}}" of
         Right (T_Annotation _ _ (T_Script _ _ [T_Pipeline _ _ [T_Redirecting _ _ (T_SimpleCommand _ _ [_, T_NormalWord _ [T_DollarBraced {}]])]])) -> True
         _ -> False
+prop_readZshArrayPatternElement = isOk readScript "#!/bin/zsh\nfiles=( (#i)**/*.(zip|rar)~(*/*|.(_backup|git))/*(-.DN) )"
+prop_readZshArithmeticExtras = isOk readScript "#!/bin/zsh\nbyte=A\nord=$(( [##16] #byte ))\nx=$(( [#8] 64 + [##36]$RANDOM ))\n(( get_columns() == 80 || max(1, x) ))"
+prop_readZshArithmeticExtras2 = not $ isOk readScript "#!/bin/bash\nord=$(( [##16] 255 ))"
 prop_readZshArithmeticSubscriptFlags = isOk readScript "#!/bin/zsh\nlong=(--force)\nif (( long[(I)--force] || ${#long[(r)x*]} )); then echo y; fi"
 prop_readZshUnbraced1 = isOk readScript "#!/bin/zsh\na=(x y z)\necho $a[2] $a[-1] $a[2,3] \"$a[1]\" $#a $a[(i)y] $a[(r)z]"
 prop_readZshUnbraced2 = isOk readScript "#!/bin/zsh\necho $0:h $0:A:h $PWD:t:r ${1:-x}"
@@ -2427,10 +2480,13 @@ readSimpleCommand = called "simple command" $ do
             validateCommand cmd
             -- We have to ignore possible parsing problems from the lookAhead parser
             firstArgument <- ignoreProblemsOf . optionMaybe . try . lookAhead $ readCmdWord
+            zsh <- isZsh
+            -- zsh's integer, float and private declare variables like typeset
+            let zshModifiers = if zsh then ["integer", "float", "private"] else []
             suffix <- option [] $ getParser readCmdSuffix
                     -- If `export` or other modifier commands are called with `builtin` we have to look at the first argument
                     (if isCommand ["builtin"] cmd then fromMaybe cmd firstArgument else cmd) [
-                        (["declare", "export", "local", "readonly", "typeset"], readModifierSuffix),
+                        (["declare", "export", "local", "readonly", "typeset"] ++ zshModifiers, readModifierSuffix),
                         (["time"], readTimeSuffix),
                         (["let"], readLetSuffix),
                         (["eval"], readEvalSuffix)
@@ -2764,6 +2820,7 @@ prop_readZshCase7 =
     case debugParse readScript "#!/bin/zsh\ncase $x in (a|b)*) true ;; esac" of
         Right (T_Annotation _ _ (T_Script _ _ [T_Pipeline _ _ [T_Redirecting _ _ (T_CaseExpression _ _ [(_, [T_NormalWord _ [T_Extglob {}, T_Glob {}]], _)])]])) -> True
         _ -> False
+prop_readZshCase8 = isOk readScript "#!/bin/zsh\ncase $x in\n  (|ftp(|s)|git) echo a ;;\n  (*# SKIP*) echo b ;;\n  ( a | b ) echo c ;;\nesac"
 prop_readZshCase5 =
     case debugParse readScript "#!/bin/zsh\ncase $1 in a) true ;| *) true ;; esac" of
         Right (T_Annotation _ _ (T_Script _ _ [T_Pipeline _ _ [T_Redirecting _ _ (T_CaseExpression _ _ [(CaseContinue, _, _), (CaseBreak, _, _)])]])) -> True
@@ -3145,7 +3202,8 @@ readZshRepeatClause = called "repeat loop" $ do
     count <- readNormalWord `thenSkip` spacing
     optional readSequentialSep
     allspacing
-    body <- readZshBracedList <|> readZshSublistBody <|> readDoGroup kwId
+    -- zsh also accepts `repeat 3` with no body at the end of the script
+    body <- readZshBracedList <|> readZshSublistBody <|> (eof >> return []) <|> readDoGroup kwId
     id <- endSpan start
     return $ T_RepeatExpression id count body
 
@@ -3218,11 +3276,8 @@ readCaseItem caseEnd = called "case item" $ do
         try . lookAhead $ readAnnotationPrefix
         parseProblem ErrorC 1124 "ShellCheck directives are only valid in front of complete commands like 'case' statements, not individual case branches."
     zsh <- isZsh
-    pattern' <- readZshGroupedPattern <|> do
-        if zsh
-            -- zsh: in `(#*)`, the # doesn't start a comment
-            then optional (char '(' >> many linewhitespace)
-            else optional g_Lparen >> void spacing
+    pattern' <- readZshGroupedPattern <|> readZshOpenedPattern <|> do
+        unless zsh $ optional g_Lparen >> void spacing
         readPattern
     void g_Rparen <|> do
         parseProblem ErrorC 1085
@@ -3237,6 +3292,29 @@ readCaseItem caseEnd = called "case item" $ do
             "Did you forget the ;; after the previous case item?"
     readLineBreak
     return (separator, pattern', list)
+
+-- zsh: after the optional (, a pattern can be empty or contain spaces, as in
+-- `(|ftp|http)` or `(*# SKIP*)`. Spaces next to the ( ) and | don't count.
+-- In `(#*)`, the # doesn't start a comment either.
+readZshOpenedPattern = do
+    zshOnly
+    char '('
+    many linewhitespace
+    alternatives <- readExtglobPart `sepBy1` (char '|' >> many linewhitespace)
+    lookAhead $ char ')'
+    mapM trim alternatives
+  where
+    trim (T_NormalWord id parts) =
+        case dropWhileEnd isSpace' (dropWhile isSpace' parts) of
+            [] -> do
+                emptyId <- getNewIdFor id
+                return $ T_NormalWord id [T_Literal emptyId ""]
+            trimmed -> return $ T_NormalWord id trimmed
+    trim t = return t
+    isSpace' t =
+        case t of
+            T_Literal _ s -> not (null s) && all isSpace s
+            _ -> False
 
 -- zsh: in `(a|b)*)` the leading ( starts a pattern group rather than being
 -- the optional ( before a pattern, since more pattern follows its ).
@@ -3320,12 +3398,11 @@ readFunctionDefinition = called "function" $ do
                 readZshFunctionName
             return first
 
-        -- zsh: a name with expansions, as in `widget_${name}() { ..; }`.
-        -- Names without expansions are read above, and `arr=()` is an assignment.
+        -- zsh: any other word followed by (), as in `widget_${name}() { ..; }`
+        -- or `→check() { ..; }`. A word with = or quotes, like arr=(), isn't a name.
         readZshWithoutFunction = try $ do
             zshOnly
             name <- many1 $ noneOf " \t\r\n;&|()<>='\"`"
-            guard $ '$' `elem` name
             spacing
             string "()"
             return $ \id -> T_Function id (FunctionKeyword False) (FunctionParentheses True) name
@@ -3361,6 +3438,7 @@ prop_readZshFunctionName7 =
     case debugParse readScript "#!/bin/zsh\narr=()\nx='a() b'" of
         Right (T_Annotation _ _ (T_Script _ _ [T_Pipeline _ _ [T_Redirecting _ _ (T_SimpleCommand _ [T_Assignment {}] [])], T_Pipeline _ _ [T_Redirecting _ _ (T_SimpleCommand _ [T_Assignment {}] [])]])) -> True
         _ -> False
+prop_readZshFunctionName8 = isOk readScript "#!/bin/zsh\n\x2192check() { true; }\n\x2192check"
 prop_readZshFunctionName6 =
     case debugParse readScript "#!/bin/zsh\nfunction a b { true; }" of
         Right (T_Annotation _ _ (T_Script _ _ [T_Pipeline _ _ [T_Redirecting _ _ (T_Function _ _ _ "a" _)]])) -> True
@@ -3724,7 +3802,8 @@ readArray = called "array assignment" $ do
         value <- readRegular <|> nothing
         id <- endSpan start
         return $ T_IndexedElement id index value
-    readRegular = readArray <|> readNormalWord
+    -- zsh: an element starting with ( is a pattern, as in arr=( (#i)*.txt )
+    readRegular = (zshOnly >> readNormalWord) <|> readArray <|> readNormalWord
 
     nothing = do
         start <- startSpan
@@ -4219,7 +4298,9 @@ notesForContext list = zipWith ($) [first, second] [(pos, str) | ContextName pos
 reparseIndices root = process root
   where
     process = analyze blank blank f
-    associative = getAssociativeArrays root
+    -- zsh: subscripts of zsh's own associative arrays, like
+    -- compstate[insert], are strings, not arithmetic
+    associative = getAssociativeArrays root ++ zshAssociativeArrays
     isAssociative s = s `elem` associative
     f (T_Assignment id mode name indices value) = do
         newIndices <- mapM (fixAssignmentIndex name) indices

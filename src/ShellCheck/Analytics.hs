@@ -2589,6 +2589,10 @@ checkFunctionsUsedExternally params t =
             info definitionId 2032 $
               "This function can't be invoked via " ++ cmd ++ patternContext cmdId
 
+prop_checkUnusedZsh1 = verifyNotTree checkUnusedAssignments "#!/bin/zsh\nPROMPT='%~ '; BUFFER=x; local match mbegin mend; TMPPREFIX=/tmp/x"
+prop_checkUnusedZsh2 = verifyNotTree checkUnusedAssignments "#!/bin/zsh\nbranch=x; RPROMPT='$branch'"
+prop_checkUnusedZsh3 = verifyNotTree checkUnusedAssignments "#!/bin/zsh\nlines=x; print -l ${(f)lines}"
+prop_checkUnusedZsh4 = verifyTree checkUnusedAssignments "#!/bin/bash\nBUFFER=x"
 prop_checkUnused0 = verifyNotTree checkUnusedAssignments "var=foo; echo $var"
 prop_checkUnused1 = verifyTree checkUnusedAssignments "var=foo; echo $bar"
 prop_checkUnused2 = verifyNotTree checkUnusedAssignments "var=foo; export var;"
@@ -2670,7 +2674,14 @@ checkUnusedAssignments params t = execWriter (mapM_ warnFor unused)
                 name ++ " appears unused. Verify use (or export if used externally)."
 
     stripSuffix = takeWhile isVariableChar
-    defaultMap = Map.fromList $ zip internalVariables $ repeat ()
+    defaultMap = Map.fromList $ zip (shellInternalVariables params) $ repeat ()
+
+-- zsh's own variables, and globals from functions shipped with zsh, like
+-- $fg from `colors` and $vcs_info_msg_0_ from vcs_info
+shellInternalVariables params =
+    if shellType params == Zsh
+    then internalVariables ++ zshInternalVariables ++ zshBundledFunctionVariables
+    else internalVariables
 
 prop_checkUnassignedReferences1 = verifyTree checkUnassignedReferences "echo $foo"
 prop_checkUnassignedReferences2 = verifyNotTree checkUnassignedReferences "foo=hello; echo $foo"
@@ -2678,6 +2689,9 @@ prop_checkUnassignedReferences3 = verifyTree checkUnassignedReferences "MY_VALUE
 prop_checkUnassignedReferences4 = verifyNotTree checkUnassignedReferences "RANDOM2=foo; echo $RANDOM"
 prop_checkUnassignedReferences5 = verifyNotTree checkUnassignedReferences "declare -A foo=([bar]=baz); echo ${foo[bar]}"
 prop_checkUnassignedReferences6 = verifyNotTree checkUnassignedReferences "foo=..; echo ${foo-bar}"
+prop_checkUnassignedReferencesZsh1 = verifyNotTree checkUnassignedReferences "#!/bin/zsh\necho $fg[red]$reset_color ${commands[git]} $BUFFER $vcs_info_msg_0_ $match"
+prop_checkUnassignedReferencesZsh2 = verifyNotTree checkUnassignedReferences "#!/bin/zsh\nread -q 'yn?Go? '; echo $yn; read -A arr; echo $arr; integer n=1; echo $n"
+prop_checkUnassignedReferencesZsh3 = verifyTree checkUnassignedReferences "#!/bin/bash\necho $reset_color"
 prop_checkUnassignedReferences7 = verifyNotTree checkUnassignedReferences "getopts ':h' foo; echo $foo"
 prop_checkUnassignedReferences8 = verifyNotTree checkUnassignedReferences "let 'foo = 1'; echo $foo"
 prop_checkUnassignedReferences9 = verifyNotTree checkUnassignedReferences "echo ${foo-bar}"
@@ -2737,7 +2751,7 @@ checkUnassignedReferences = checkUnassignedReferences' False
 checkUnassignedReferences' includeGlobals params t = warnings
   where
     (readMap, writeMap) = execState (mapM tally $ variableFlow params) (Map.empty, Map.empty)
-    defaultAssigned = Map.fromList $ map (\a -> (a, ())) $ filter (not . null) internalVariables
+    defaultAssigned = Map.fromList $ map (\a -> (a, ())) $ filter (not . null) $ shellInternalVariables params
 
     tally (Assignment (_, _, name, _))  =
         modify (\(read, written) -> (read, Map.insert name () written))
@@ -2762,6 +2776,10 @@ checkUnassignedReferences' includeGlobals params t = warnings
 
     isLocal = any isLower
 
+    -- vcs_info sets vcs_info_msg_0_, vcs_info_msg_1_ and so on
+    isZshVcsInfo var = shellType params == Zsh && var `matches` vcsInfoRegex
+    vcsInfoRegex = mkRegex "^vcs_info_msg_[0-9]+_$"
+
     warningForGlobals var place = do
         match <- getBestMatch var
         return $ info (getId place) 2153 $
@@ -2780,7 +2798,7 @@ checkUnassignedReferences' includeGlobals params t = warnings
 
     warningFor (var, place) = do
         guard $ isVariableName var
-        guard . not $ isException var place || isGuarded place
+        guard . not $ isException var place || isGuarded place || isZshVcsInfo var
         (if includeGlobals || isLocal var
          then warningForLocals
          else warningForGlobals) var place

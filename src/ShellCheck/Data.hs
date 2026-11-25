@@ -217,6 +217,144 @@ shellFromFirstLine script =
     isMarker m = m `isPrefixOf` firstLine &&
         all (`elem` " \t\r") (take 1 $ drop (length m) firstLine)
 
+-- zsh 5.9 parameters that zsh itself sets or reads, in addition to internalVariables.
+-- Checked 26 Nov 2026 against zsh 5.9 (zsh -fc, all modules loaded) and zshparam(1),
+-- zshmodules(1), zshmisc(1). Use only when the dialect is zsh.
+zshInternalVariables = [
+    -- Set by the shell itself (zsh -f; ${(k)parameters})
+    "ARGC", "CPUTYPE", "EGID", "FPATH", "GID", "HISTCHARS", "HOST", "KEYBOARD_HACK",
+    "KEYTIMEOUT", "LISTMAX", "MANPATH", "MODULE_PATH", "NULLCMD", "PROMPT", "PROMPT2",
+    "PROMPT3", "PROMPT4", "PSVAR", "READNULLCMD", "SAVEHIST", "SPROMPT", "TIMEFMT",
+    "TMPPREFIX", "TRY_BLOCK_ERROR", "TRY_BLOCK_INTERRUPT", "TTY", "TTYIDLE",
+    "USERNAME", "VENDOR", "WATCH", "WORDCHARS", "ZSH_ARGZERO", "ZSH_EVAL_CONTEXT",
+    "ZSH_EXECUTION_STRING", "ZSH_NAME", "ZSH_PATCHLEVEL", "ZSH_SUBSHELL",
+    "ZSH_VERSION", "argv", "cdpath", "fignore", "fpath", "mailpath", "manpath",
+    "module_path", "path", "pipestatus", "prompt", "psvar", "signals", "status",
+    "watch", "zsh_eval_context",
+
+    -- zsh/parameter module (autoloaded on first use)
+    "aliases", "builtins", "commands", "dirstack", "dis_aliases", "dis_builtins",
+    "dis_functions", "dis_functions_source", "dis_galiases", "dis_patchars",
+    "dis_reswords", "dis_saliases", "funcfiletrace", "funcsourcetrace", "funcstack",
+    "functions", "functions_source", "functrace", "galiases", "history",
+    "historywords", "jobdirs", "jobstates", "jobtexts", "modules", "nameddirs",
+    "options", "parameters", "patchars", "reswords", "saliases", "userdirs",
+    "usergroups",
+
+    -- Other modules: zle, zleparameter, termcap, terminfo, sched, datetime, watch, system,
+    -- langinfo, mapfile, pcre, curses, complist, zftp, db/gdbm
+    "keymaps", "widgets", "termcap", "terminfo", "zsh_scheduled_events", "epochtime",
+    "LOGCHECK", "WATCHFMT", "errnos", "sysparams", "langinfo", "mapfile",
+    "zle_bracketed_paste", "ZPCRE_OP", "ZCURSES_COLORS", "ZCURSES_COLOR_PAIRS",
+    "zcurses_attrs", "zcurses_colors", "zcurses_keycodes", "zcurses_windows",
+    "ZLS_COLORS", "ZLS_COLOURS", "LISTPROMPT", "MENUPROMPT", "MENUSCROLL",
+    "MENUSELECT", "ZFTP_ACCOUNT", "ZFTP_CODE", "ZFTP_HOST", "ZFTP_IP", "ZFTP_PORT",
+    "ZFTP_PREFS", "ZFTP_PWD", "ZFTP_REPLY", "ZFTP_SESSION", "ZFTP_SYSTEM",
+    "ZFTP_TMOUT", "ZFTP_TYPE", "ZFTP_USER", "ZFTP_VERBOSE", "zgdbm_tied",
+
+    -- Read by the shell when set, or set by matching (zshparam: Parameters Used By The Shell)
+    "ERRNO", "ZSH_SCRIPT", "ARGV0", "BAUD", "CORRECT_IGNORE", "CORRECT_IGNORE_FILE",
+    "DIRSTACKSIZE", "HISTORY_IGNORE", "MATCH", "MBEGIN", "MEND", "match", "mbegin",
+    "mend", "POSTEDIT", "PROMPT_EOL_MARK", "REPORTMEMORY", "REPORTTIME", "reply",
+    "RPROMPT", "RPS1", "RPROMPT2", "RPS2", "STTY", "TERMINFO", "TERMINFO_DIRS",
+    "TMPSUFFIX", "ZBEEP", "ZDOTDIR", "zle_highlight", "ZLE_LINE_ABORTED",
+    "ZLE_REMOVE_SUFFIX_CHARS", "ZLE_SPACE_SUFFIX_CHARS", "ZLE_RPROMPT_INDENT",
+
+    -- Hook arrays (zshmisc: Hook Functions) and PERIOD
+    "chpwd_functions", "periodic_functions", "precmd_functions", "preexec_functions",
+    "zshaddhistory_functions", "zshexit_functions", "PERIOD"
+  ] ++ zshZleVariables ++ zshCompletionVariables
+
+-- Special only inside ZLE widget functions (zshzle(1), User-Defined Widgets).
+-- Precedent: bash's READLINE_LINE is in internalVariables unconditionally.
+zshZleVariables = [
+    "BUFFER", "BUFFERLINES", "CONTEXT", "CURSOR", "CUTBUFFER", "HISTNO",
+    "ISEARCHMATCH_ACTIVE", "ISEARCHMATCH_END", "ISEARCHMATCH_START", "KEYMAP", "KEYS",
+    "KEYS_QUEUED_COUNT", "killring", "LASTABORTEDSEARCH", "LASTSEARCH", "LASTWIDGET",
+    "LBUFFER", "MARK", "NUMERIC", "PENDING", "POSTDISPLAY", "PREBUFFER", "PREDISPLAY",
+    "RBUFFER", "REGION_ACTIVE", "region_highlight", "registers", "SUFFIX_ACTIVE",
+    "SUFFIX_END", "SUFFIX_START", "UNDO_CHANGE_NO", "UNDO_LIMIT_NO", "WIDGET",
+    "WIDGETFUNC", "WIDGETSTYLE", "YANK_ACTIVE", "YANK_END", "YANK_START",
+    "ZLE_RECURSIVE", "ZLE_STATE"
+  ]
+
+-- Special inside completion widgets (zshcompwid(1)), plus the variables the
+-- completion system (compsys) sets for, or reads from, completion functions:
+-- _arguments/_values set context state state_descr line opt_args val_args;
+-- _main_complete sets curcontext; _dispatch sets service; compinit sets the _comp* globals.
+-- Precedent: bash's COMP_WORDS and COMPREPLY are in internalVariables.
+zshCompletionVariables = [
+    -- completion widgets
+    "CURRENT", "IPREFIX", "ISUFFIX", "PREFIX", "QIPREFIX", "QISUFFIX", "SUFFIX",
+    "compstate", "words", "redirections",
+    -- completion system
+    "context", "state", "state_descr", "line", "opt_args", "val_args", "curcontext",
+    "service", "compcontext", "_comp_caller_options", "_comp_priv_prefix",
+    "compprefuncs", "comppostfuncs", "_compskip", "_comp_command", "_comp_command1",
+    "_comp_command2", "_comps", "_services", "_patcomps", "_postpatcomps",
+    "_compautos", "_comp_dumpfile", "_comp_options", "_comp_setup", "_lastcomp"
+  ]
+
+-- Globals created by functions shipped with zsh: `autoload -U colors && colors`
+-- and `promptinit`. vcs_info sets vcs_info_msg_0_ .. vcs_info_msg_N_ (N from the
+-- max-exports style, default 2): match the pattern vcs_info_msg_[0-9]+_ instead of listing.
+zshBundledFunctionVariables = [
+    "color", "colour", "fg", "fg_bold", "fg_no_bold", "bg", "bg_bold", "bg_no_bold",
+    "reset_color", "bold_color", "prompt_theme", "prompt_themes", "prompt_newline"
+  ]
+
+-- Arrays (normal, not associative) among all zsh names above, from ${(t)name}.
+-- Complete list: the existing arrayVariables is applied to bash only.
+zshArrayVariables = [
+    "argv", "cdpath", "fignore", "fpath", "mailpath", "manpath", "module_path", "path",
+    "pipestatus", "psvar", "signals", "watch", "zsh_eval_context", "dirstack",
+    "dis_patchars", "dis_reswords", "funcfiletrace", "funcsourcetrace", "funcstack",
+    "functrace", "historywords", "patchars", "reswords", "keymaps",
+    "zsh_scheduled_events", "epochtime", "errnos", "zle_bracketed_paste",
+    "zcurses_attrs", "zcurses_colors", "zcurses_keycodes", "zcurses_windows",
+    "zgdbm_tied", "match", "mbegin", "mend", "reply", "zle_highlight",
+    "chpwd_functions", "periodic_functions", "precmd_functions", "preexec_functions",
+    "zshaddhistory_functions", "zshexit_functions", "killring", "region_highlight",
+    "words", "redirections", "context", "state", "state_descr", "line",
+    "_comp_priv_prefix", "compprefuncs", "comppostfuncs", "_comp_options",
+    "prompt_theme", "prompt_themes"
+  ]
+
+-- Associative arrays among the names above: their subscripts are string keys,
+-- never arithmetic, e.g. compstate[insert]=1, functions[foo]=..., commands[ls].
+zshAssociativeArrays = [
+    "aliases", "builtins", "commands", "dis_aliases", "dis_builtins", "dis_functions",
+    "dis_functions_source", "dis_galiases", "dis_saliases", "functions",
+    "functions_source", "galiases", "history", "jobdirs", "jobstates", "jobtexts",
+    "modules", "nameddirs", "options", "parameters", "saliases", "userdirs",
+    "usergroups", "widgets", "termcap", "terminfo", "sysparams", "langinfo", "mapfile",
+    "registers", "compstate", "opt_args", "val_args", "_comp_caller_options", "_comps",
+    "_services", "_patcomps", "_postpatcomps", "_compautos", "_lastcomp", "color",
+    "colour", "fg", "fg_bold", "fg_no_bold", "bg", "bg_bold", "bg_no_bold"
+  ]
+
+-- Integer or float zsh parameters (values never contain spaces), in addition to
+-- variablesWithoutSpaces. Matters only under sh_word_split/emulate sh, since native
+-- zsh does not split unquoted expansions.
+zshVariablesWithoutSpaces = [
+    "ARGC", "EGID", "FUNCNEST", "GID", "HISTCMD", "KEYTIMEOUT", "LISTMAX", "MAILCHECK",
+    "SAVEHIST", "TRY_BLOCK_ERROR", "TRY_BLOCK_INTERRUPT", "TTYIDLE", "ZSH_SUBSHELL",
+    "status", "LOGCHECK", "ZCURSES_COLORS", "ZCURSES_COLOR_PAIRS", "ZFTP_TMOUT",
+    "ERRNO", "MBEGIN", "MEND", "ZLE_RPROMPT_INDENT", "BUFFERLINES", "CURSOR", "HISTNO",
+    "ISEARCHMATCH_ACTIVE", "ISEARCHMATCH_END", "ISEARCHMATCH_START",
+    "KEYS_QUEUED_COUNT", "MARK", "NUMERIC", "PENDING", "REGION_ACTIVE",
+    "SUFFIX_ACTIVE", "SUFFIX_END", "SUFFIX_START", "UNDO_CHANGE_NO", "UNDO_LIMIT_NO",
+    "YANK_ACTIVE", "YANK_END", "YANK_START", "ZLE_RECURSIVE", "CURRENT"
+  ]
+
+-- Prompt parameters: zsh expands them at prompt time (with PROMPT_SUBST, as
+-- oh-my-zsh, prezto and most themes set), so $var inside their values are reads.
+-- Extends specialReferences ("PS1".."PS4", "PROMPT_COMMAND") in getReferencedVariables.
+zshPromptVariables = [
+    "PS1", "PS2", "PS3", "PS4", "PROMPT", "PROMPT2", "PROMPT3", "PROMPT4", "prompt",
+    "RPROMPT", "RPS1", "RPROMPT2", "RPS2", "SPROMPT"
+  ]
+
 flagsForRead = "sreu:n:N:i:p:a:t:"
 flagsForMapfile = "d:n:O:s:u:C:c:t"
 

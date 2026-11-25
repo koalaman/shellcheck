@@ -283,15 +283,25 @@ isOptionSet' longOpt shortOpt root = isNothing $ doAnalysis (guard . not . isSet
     re = mkRegex $ "[[:space:]]-[^-]*" ++ [shortOpt]
 
 -- zsh: does the script turn on an option that makes unquoted expansions act
--- like in sh or ksh, as in `setopt shwordsplit` or `emulate sh`?
+-- like in sh or ksh, as in `setopt shwordsplit` or `emulate sh`? Only
+-- commands outside functions count: inside functions, options are usually
+-- local (`emulate -L`, `setopt localoptions`) or restore the caller's
+-- settings, as in `(( was_set )) && setopt ksh_arrays`.
 prop_containsZshShCompatibility1 = containsZshShCompatibility' "setopt local_options SH_WORD_SPLIT"
 prop_containsZshShCompatibility2 = containsZshShCompatibility' "emulate -L ksh"
 prop_containsZshShCompatibility3 = containsZshShCompatibility' "set -o globsubst"
 prop_containsZshShCompatibility4 = not $ containsZshShCompatibility' "setopt noshwordsplit no_ksh_arrays"
 prop_containsZshShCompatibility5 = not $ containsZshShCompatibility' "emulate -L zsh; unsetopt shwordsplit"
+prop_containsZshShCompatibility6 = not $ containsZshShCompatibility' "f() { (( x )) && setopt ksh_arrays; }"
+prop_containsZshShCompatibility7 = not $ containsZshShCompatibility' "() { emulate -L sh; }"
 containsZshShCompatibility' = containsZshShCompatibility . fromJust . prRoot . pScript . ("#!/bin/zsh\n" ++)
-containsZshShCompatibility root = isNothing $ doAnalysis (guard . not . turnsOn) root
+containsZshShCompatibility root = any turnsOn $ outsideFunctions root
   where
+    outsideFunctions t =
+        case t of
+            T_Function {} -> []
+            T_AnonymousFunction {} -> []
+            OuterToken _ inner -> t : concatMap outsideFunctions (foldr (:) [] inner)
     turnsOn t =
         case t of
             T_SimpleCommand {} -> fromMaybe False $ do
@@ -552,12 +562,15 @@ getVariableFlow params t =
     assignFirst (T_BatsTest {}) = True
     assignFirst _             = False
 
+    isZsh = shellType params == Zsh
+
     setRead t =
         let read    = getReferencedVariables (parentMap params) t
+                      ++ (if isZsh then getZshReferencedVariables t else [])
         in mapM_ (\v -> modify (Reference v:)) read
 
     setWritten t =
-        let written = getModifiedVariables t
+        let written = if isZsh then getZshModifiedVariables t else getModifiedVariables t
         in mapM_ (\v -> modify (Assignment v:)) written
 
 
@@ -870,6 +883,182 @@ getVariableForTestDashV t = do
     -- Turn foo[$x] into foo[\0] so that we can get the constant array name
     -- in a non-constant expression (while filtering out foo$x[$y])
     toStr _ = return "\0"
+
+-- References that only exist in zsh: the name in ${(f)name}, ${=name} and
+-- similar, and $vars in prompt strings like PROMPT='$(git_prompt_info) $x',
+-- which zsh expands each time it shows the prompt.
+prop_getZshReferencedVariables1 = zshReferencedNames "#!/bin/zsh\necho ${(f)lines} ${=words} ${(j:,:)list}" == ["lines", "words", "list"]
+prop_getZshReferencedVariables2 = zshReferencedNames "#!/bin/zsh\nRPROMPT='$branch %~'" == ["branch"]
+zshReferencedNames s = [name | (_, _, name) <- concatMap getZshReferencedVariables (allTokens s)]
+  where
+    allTokens s = execWriter $ doAnalysis (tell . (:[])) $ fromJust . prRoot . pScript $ s
+
+getZshReferencedVariables t =
+    case t of
+        T_DollarBraced _ _ l -> maybeToList $ do
+            let str = concat $ oversimplify l
+            name <- getZshBracedReference str
+            guard $ name /= getBracedReference str
+            return (t, t, name)
+        T_Assignment _ _ name _ word
+            | name `elem` zshPromptVariables && name `notElem` ["PS1", "PS2", "PS3", "PS4"] ->
+                map (\x -> (t, t, x)) $ getVariablesFromLiteralToken word
+        _ -> []
+
+-- The name in a zsh parameter expansion with flags or prefixes, like the x in
+-- ${(f)x}, ${(j:,:)x}, ${=x}, ${~x}, ${^x} and ${+x}
+getZshBracedReference s =
+    let name = takeWhile isVariableChar . dropWhile (`elem` "=~^+#") $ dropFlags s
+    in if null name then Nothing else Just name
+  where
+    dropFlags ('(':rest) = drop 1 $ dropWhile (/= ')') rest
+    dropFlags x = x
+
+-- Variables modified by zsh-specific commands, or by bash commands that take
+-- different flags in zsh. Everything else is as in getModifiedVariables.
+prop_getZshModifiedVariables1 = zshModifiedNames "read -A arr" == ["arr"]
+prop_getZshModifiedVariables2 = zshModifiedNames "read -q 'yn?Continue? '" == ["yn"]
+prop_getZshModifiedVariables3 = zshModifiedNames "read -t v w" == ["v", "w"]
+prop_getZshModifiedVariables4 = zshModifiedNames "read -k 2 -u 0 key" == ["key"]
+prop_getZshModifiedVariables5 = zshModifiedNames "read -e v" == []
+prop_getZshModifiedVariables6 = zshModifiedNames "typeset -F x=1.5" == ["x"]
+prop_getZshModifiedVariables7 = zshModifiedNames "integer n=3 m" == ["n", "m"]
+prop_getZshModifiedVariables8 = zshModifiedNames "set -A arr a b" == ["arr"]
+prop_getZshModifiedVariables9 = zshModifiedNames "zparseopts -D -E -A opts h=help v+:=verbose" == ["opts", "help", "verbose"]
+prop_getZshModifiedVariables10 = zshModifiedNames "zstyle -s ':ctx' style value" == ["value"]
+prop_getZshModifiedVariables11 = zshModifiedNames "zstyle -a ':prezto:load' zmodule 'zmodules'" == ["zmodules"]
+prop_getZshModifiedVariables12 = zshModifiedNames "vared -p 'Name: ' name" == ["name"]
+prop_getZshModifiedVariables13 = zshModifiedNames "print -v out -f '%s' x" == ["out"]
+prop_getZshModifiedVariables14 = zshModifiedNames "zformat -f result '%a' a:1" == ["result"]
+prop_getZshModifiedVariables15 = zshModifiedNames ": ${c::=3}" == ["c"]
+prop_getZshModifiedVariables16 = zshModifiedNames "builtin read -A arr" == ["arr"]
+prop_getZshModifiedVariables17 = zshModifiedNames "zsystem flock -f lockfd file" == ["lockfd"]
+zshModifiedNames s = [name | (_, _, name, _) <- concatMap getZshModifiedVariables (allTokens s)]
+  where
+    allTokens s = execWriter $ doAnalysis (tell . (:[])) $ fromJust . prRoot . pScript $ "#!/bin/zsh\n" ++ s
+
+getZshModifiedVariables t =
+    case t of
+        T_SimpleCommand id prefix (cmd:args) -> fromMaybe (getModifiedVariables t) $ do
+            name <- getLiteralString cmd
+            zshCommandAssignments t id prefix name args
+        T_DollarBraced _ _ l ->
+            let str = concat $ oversimplify l
+                name = getBracedReference str
+            in if "::=" `isPrefixOf` getBracedModifier str && isVariableName name
+               then [(t, t, name, DataString $ SourceFrom [l])]
+               else getModifiedVariables t
+        _ -> getModifiedVariables t
+
+zshCommandAssignments base id prefix name args =
+    case name of
+        _ | name `elem` ["builtin", "noglob", "nocorrect", "-"] ->
+            return $ getZshModifiedVariables $ T_SimpleCommand id prefix args
+        "read" -> return readNames
+        "getln" -> return readNames
+        "vared" -> return . maybeToList $ named DataString =<< lastMaybe args
+        "integer" -> return declared
+        "float" -> return declared
+        "private" -> return declared
+        _ | name `elem` ["typeset", "declare", "local"] ->
+            -- In zsh, -F and -E declare floats, while -f, -p and -m don't assign
+            return $ if any (`elem` flags) ["f", "p", "m"] then [] else declared
+        "set" -> do
+            (_, rest) <- find (\(flag, _) -> any (`isSuffixOf` flag) ["-A", "+A"] || isClusterWithA flag) $ withRest args
+            arrayName <- listToMaybe rest
+            return . maybeToList $ named DataArray arrayName
+        "print" -> return . maybeToList $ named DataString =<< afterFlag 'v' args
+        "zformat" -> return . maybeToList $ named DataString =<< (afterFlag 'f' args `mplus` afterFlag 'F' args `mplus` afterFlag 'a' args)
+        "strftime" -> return . maybeToList $ named DataString =<< afterFlag 's' args
+        "sysopen" -> return . maybeToList $ named DataString =<< afterFlag 'u' args
+        "zsystem" -> return . maybeToList $ named DataString =<< afterFlag 'f' args
+        "zparseopts" -> return zparseoptsNames
+        "zstyle" -> return zstyleNames
+        _ -> Nothing
+  where
+    flags = map snd $ getAllFlags base
+    literal t = getLiteralString t
+    isClusterWithA s = "-" `isPrefixOf` s && 'A' `elem` s && all isAlpha (drop 1 s)
+    withRest list = [(s, rest) | (t:rest) <- tails list, Just s <- [literal t]]
+    lastMaybe [] = Nothing
+    lastMaybe xs = Just (last xs)
+    named dataType t = do
+        s <- literal t
+        guard $ isVariableName s
+        return (base, t, s, dataType SourceExternal)
+
+    -- The word after a flag like -v, also when it's the last of a cluster like -rv
+    afterFlag c list = listToMaybe $ do
+        (t:next:_) <- tails list
+        Just s <- [literal t]
+        guard $ "-" `isPrefixOf` s && not ("--" `isPrefixOf` s) && lastMaybe s == Just c
+        return next
+
+    declared = concatMap declaredVar args
+    defaultType = if any (`elem` flags) ["a", "A"] then DataArray else DataString
+    declaredVar t =
+        case t of
+            T_Assignment _ _ name _ value -> [(base, t, name, dataTypeFrom defaultType value)]
+            T_NormalWord {} -> maybeToList $ do
+                name <- literal t
+                guard $ isVariableName name
+                return (base, t, name, defaultType SourceDeclaration)
+            _ -> []
+
+    -- zsh's read: options first (d and u take an argument, t and k an
+    -- optional number), then names. The first name can be name?prompt.
+    -- With no names, REPLY (or reply with -A) is set. -e assigns nothing.
+    readNames =
+        let (options, rest) = readOptions [] args
+            names = [(t, takeWhile (/= '?') s) | t <- rest, Just s <- [literal t]]
+            valid = [(t, s) | (t, s) <- names, isVariableName s]
+        in if 'e' `elem` options || 'E' `elem` options && null valid then [] else
+            case valid of
+                [] -> [(base, base, if 'A' `elem` options then "reply" else "REPLY", DataString SourceExternal)]
+                ((t, s):more) | 'A' `elem` options -> [(base, t, s, DataArray SourceExternal)]
+                _ -> [(base, t, s, DataString SourceExternal) | (t, s) <- valid]
+    readOptions acc list =
+        case list of
+            (t:rest) | Just s <- literal t, s `elem` ["-", "--"] -> (acc, rest)
+            (t:rest) | Just ('-':opts@(_:_)) <- literal t -> readCluster acc opts rest
+            _ -> (acc, list)
+    readCluster acc opts rest =
+        case opts of
+            [] -> readOptions acc rest
+            (c:more) | c `elem` "du" ->
+                if null more then readOptions (c:acc) (drop 1 rest) else readOptions (c:acc) rest
+            (c:more) | c `elem` "tk" ->
+                let digits = takeWhile (\x -> isDigit x || x == '.') more
+                in if not (null digits)
+                    then readCluster (c:acc) (drop (length digits) more) rest
+                    else if null more && startsWithDigit rest
+                        then readOptions (c:acc) (drop 1 rest)
+                        else readCluster (c:acc) more rest
+            (c:more) -> readCluster (c:acc) more rest
+    startsWithDigit (t:_) = maybe False (\s -> take 1 s /= "" && isDigit (head s)) (literal t)
+    startsWithDigit [] = False
+
+    -- zparseopts: -a NAME, -A NAME, and NAME in every spec=NAME
+    zparseoptsNames = go args
+      where
+        go list =
+            case list of
+                (t:next:rest) | Just s <- literal t, s `elem` ["-a", "-A"] ->
+                    maybeToList (named (if s == "-A" then DataArray else DataArray) next) ++ go rest
+                (t:rest) | Just s <- literal t, "-" `isPrefixOf` s, '=' `notElem` s -> go rest
+                (t:rest) | Just s <- literal t, '=' `elem` s ->
+                    let arrayName = reverse . takeWhile (/= '=') $ reverse s
+                    in [(base, t, arrayName, DataArray SourceExternal) | isVariableName arrayName] ++ go rest
+                (_:rest) -> go rest
+                [] -> []
+
+    -- zstyle -s/-b ctx style NAME, -a ctx style NAME, -g NAME
+    zstyleNames =
+        case args of
+            (flag:_:_:target:_) | literal flag `elem` map Just ["-s", "-b", "-a"] ->
+                maybeToList $ named (if literal flag == Just "-a" then DataArray else DataString) target
+            (flag:target:_) | literal flag == Just "-g" -> maybeToList $ named DataArray target
+            _ -> []
 
 getReferencedVariables parents t =
     case t of
