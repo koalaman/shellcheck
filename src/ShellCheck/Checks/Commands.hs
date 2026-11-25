@@ -777,6 +777,8 @@ prop_checkPrintfVar20 = verifyNot checkPrintfVar "printf '%d %(%s)T' 42"
 prop_checkPrintfVar21 = verify checkPrintfVar "printf '%d %(%s)T'"
 prop_checkPrintfVar22 = verify checkPrintfVar "printf '%s\n%s' foo"
 prop_checkPrintfVar23 = verifyNot checkPrintfVar "printf -vTODAY '%(%Y)T'"
+prop_checkPrintfVarZsh = verifyNot checkPrintfVar "#!/bin/zsh\nprintf '%s=%s\\n' \"${(@kv)map}\""
+prop_checkPrintfVarBashFlags = verify checkPrintfVar "printf '%s=%s\\n' \"${(@kv)map}\""
 
 checkPrintfVar = CommandCheck (Exactly "printf") (f . arguments) where
     f (doubledash:rest) | getLiteralString doubledash == Just "--" = f rest
@@ -786,6 +788,8 @@ checkPrintfVar = CommandCheck (Exactly "printf") (f . arguments) where
     f _ = return ()
 
     check format more = do
+        params <- ask
+        let mayBecomeMultiple = mayBecomeMultipleArgsIn (shellType params == Zsh)
         sequence_ $ do
             string <- getLiteralString format
             let formats = getPrintfFormats string
@@ -799,7 +803,7 @@ checkPrintfVar = CommandCheck (Exactly "printf") (f . arguments) where
                 | formatCount == 0 && argCount > 0 ->
                     err (getId format) 2182
                         "This printf format string has no variables. Other arguments are ignored."
-                | any mayBecomeMultipleArgs more ->
+                | any mayBecomeMultiple more ->
                     return () -- We don't know so trust the user
                 | argCount < formatCount && onlyTrailingTs formats argCount ->
                     return () -- Allow trailing %()Ts since they use the current time
@@ -1295,9 +1299,10 @@ checkLetUsage = CommandCheck (Exactly "let") f
 
 
 missingDestination handler token = do
+    zsh <- (== Zsh) <$> asks shellType
     case params of
         [single] -> do
-            unless (hasTarget || mayBecomeMultipleArgs single) $
+            unless (hasTarget || mayBecomeMultipleArgsIn zsh single) $
                 handler token
         _ -> return ()
   where
@@ -1315,6 +1320,8 @@ prop_checkMvArguments6 = verifyNot checkMvArguments "mv --target-directory=foo b
 prop_checkMvArguments7 = verifyNot checkMvArguments "mv --target-direc=foo bar"
 prop_checkMvArguments8 = verifyNot checkMvArguments "mv --version"
 prop_checkMvArguments9 = verifyNot checkMvArguments "mv \"${!var}\""
+prop_checkMvArgumentsZsh = verifyNot checkMvArguments "#!/bin/zsh\nmv \"${(@)files}\""
+prop_checkMvArgumentsBashFlags = verify checkMvArguments "mv \"${(@)files}\""
 checkMvArguments = CommandCheck (Basename "mv") $ missingDestination f
   where
     f t = err (getId t) 2224 "This mv has no destination. Check the arguments."

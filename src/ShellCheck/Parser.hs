@@ -1391,13 +1391,10 @@ readZshDollarBracedParts depth = more <|> return []
                 readUnquotedBackTicked <|> literal
     literal = do
         start <- startSpan
-        str <- many1 (readBraceEscaped <|> escapedBrace <|> ((:[]) <$> noneOf "{}\"$`'"))
+        -- readBraceEscaped also reads \{ and \}, so they aren't counted
+        str <- many1 (readBraceEscaped <|> ((:[]) <$> noneOf "{}\"$`'"))
         id <- endSpan start
         return $ T_Literal id $ concat str
-    escapedBrace = try $ do
-        char '\\'
-        c <- oneOf "{}"
-        return ['\\', c]
 
 readDollarBracedPart = readSingleQuoted <|> readDoubleQuoted <|>
                        readParamSubSpecialChar <|> readExtglob <|> readNormalDollar <|>
@@ -2010,6 +2007,14 @@ prop_readZshArrayPatternElement = isOk readScript "#!/bin/zsh\nfiles=( (#i)**/*.
 prop_readZshArithmeticExtras = isOk readScript "#!/bin/zsh\nbyte=A\nord=$(( [##16] #byte ))\nx=$(( [#8] 64 + [##36]$RANDOM ))\n(( get_columns() == 80 || max(1, x) ))"
 prop_readZshArithmeticExtras2 = not $ isOk readScript "#!/bin/bash\nord=$(( [##16] 255 ))"
 prop_readZshArithmeticSubscriptFlags = isOk readScript "#!/bin/zsh\nlong=(--force)\nif (( long[(I)--force] || ${#long[(r)x*]} )); then echo y; fi"
+prop_readZshModifierEnds = isOk readScript "#!/bin/zsh\nx=abc\nprint $x:s/a/b; cd /tmp\n[[ $x:s/a/b == bbc ]] && echo y\necho \"$x:gs/a/b\" $x:s/a/b}c\n{ print $x:s/a/b}"
+prop_readZshReservedBeforeAnon = isOk readScript "#!/bin/zsh\ntime () { sleep 0 } a\ncoproc () { cat }\nnocorrect () { echo x } y\nnoglob () { echo $1 }\nnocorrect mkdir dir"
+prop_readZshReservedBeforeAnon2 =
+    case debugParse readScript "#!/bin/zsh\nnoglob () { echo $1 }" of
+        Right (T_Annotation _ _ (T_Script _ _ [T_Pipeline _ _ [T_Redirecting _ _ (T_Function _ _ _ "noglob" _)]])) -> True
+        _ -> False
+prop_readZshCommandWithPatternGroup = isOk readScript "#!/bin/zsh\nrm (a|b).txt\ncp (a|b) /tmp\nls (#i)*.jpg"
+prop_readZshEscapedBraces = isOk readScript "#!/bin/zsh\nx=a; echo ${x/a/\\}} ${x:+\\{}"
 prop_readZshUnbraced1 = isOk readScript "#!/bin/zsh\na=(x y z)\necho $a[2] $a[-1] $a[2,3] \"$a[1]\" $#a $a[(i)y] $a[(r)z]"
 prop_readZshUnbraced2 = isOk readScript "#!/bin/zsh\necho $0:h $0:A:h $PWD:t:r ${1:-x}"
 prop_readZshUnbraced3 = isOk readScript "#!/bin/zsh\n(( $+commands[git] )) && (( ! $#functions[(i)r(benv|vm)] )) && echo $=x $~x $^x"
@@ -2070,16 +2075,24 @@ readZshModifier = try $ do
     id <- endSpan start
     return $ T_Literal id $ ':' : modifier
   where
-    -- :s/old/new/ and :gs/old/new/, with any delimiter
+    -- :s/old/new/ and :gs/old/new/, with any delimiter. Like the word, the
+    -- text ends at a blank or ; & | < > ( ) or a quote, and the last
+    -- delimiters are optional, as in `print $x:s/a/b; next`.
     substitution = do
         global <- option "" (string "g")
         s <- oneOf "sS"
-        delim <- noneOf " \t\n"
-        old <- many $ noneOf [delim, '\n']
-        char delim
-        new <- many $ noneOf [delim, '\n']
+        delim <- noneOf wordEnd
+        old <- many $ textChar delim
+        mid <- option "" ((:[]) <$> char delim)
+        new <- many $ textChar delim
         end <- option "" ((:[]) <$> char delim)
-        return $ global ++ s : delim : old ++ [delim] ++ new ++ end
+        return $ global ++ s : delim : old ++ mid ++ new ++ end
+    wordEnd = " \t\r\n;&|<>()\"'`"
+    -- A } that ends the word closes a group, as in `{ print $x:s/a/b}`
+    textChar delim = try $ do
+        c <- noneOf (delim : wordEnd)
+        when (c == '}') . lookAhead . void $ noneOf wordEnd
+        return c
 
 
 prop_readDollarLonely1 = isWarning readNormalWord "\"$\"var"
@@ -2483,11 +2496,13 @@ readSimpleCommand = called "simple command" $ do
             zsh <- isZsh
             -- zsh's integer, float and private declare variables like typeset
             let zshModifiers = if zsh then ["integer", "float", "private"] else []
+            -- zsh's nocorrect is a reserved word like time, as in `nocorrect () { ..; }`
+            let zshPrecommands = if zsh then ["nocorrect"] else []
             suffix <- option [] $ getParser readCmdSuffix
                     -- If `export` or other modifier commands are called with `builtin` we have to look at the first argument
                     (if isCommand ["builtin"] cmd then fromMaybe cmd firstArgument else cmd) [
                         (["declare", "export", "local", "readonly", "typeset"] ++ zshModifiers, readModifierSuffix),
-                        (["time"], readTimeSuffix),
+                        ("time" : zshPrecommands, readTimeSuffix),
                         (["let"], readLetSuffix),
                         (["eval"], readEvalSuffix)
                     ]
@@ -2785,7 +2800,9 @@ skipAnnotationAndWarn = optional $ do
 prop_readZshIf1 = isOk readScript "#!/bin/zsh\nif [[ -n $1 ]] { echo yes }"
 prop_readZshIf2 = isOk readScript "#!/bin/zsh\nif [[ $1 == a ]] {\n  echo a\n} elif (( $# > 2 )) {\n  echo many\n} else {\n  echo other\n}\necho after"
 prop_readZshIf3 = isOk readScript "#!/bin/zsh\nif [[ $1 == a ]] { echo a } elif true; then echo b; fi"
-prop_readZshIf4 = not $ isOk readScript "#!/bin/zsh\nif [[ -n $1 ]] { echo yes } fi"
+prop_readZshIf4 = isOk readScript "#!/bin/zsh\nif [[ -n $1 ]] { echo yes } fi\nif [[ -n $1 ]] { echo yes } elif [[ -n $2 ]] { echo no } fi"
+prop_readZshIf4b = isNotOk readScript "#!/bin/zsh\nif [[ -n $1 ]] { echo yes } else { echo no } fi"
+prop_readZshIf4c = isNotOk readScript "#!/bin/zsh\nif [[ -n $1 ]] { echo yes }\nfi"
 prop_readZshIf5 = not $ isOk readScript "#!/bin/zsh\nif [[ -n $1 ]] { echo yes }; else { echo no }"
 prop_readZshIf6 = not $ isOk readScript "#!/bin/bash\nif [[ -n $1 ]] { echo yes; }"
 prop_readZshIf7 = isOk readScript "#!/bin/zsh\nif true; then { echo x } fi"
@@ -2845,6 +2862,9 @@ readIfClause = called "if expression" $ do
     let needsFi = case elseBranch of
                     Just (_, elseBraced) -> not elseBraced
                     Nothing -> not lastBraced
+    -- zsh also accepts a `fi` on the same line right after the braced body
+    -- of an `if cond { ..; }` or `elif`, but not after `else { ..; }`
+    when (lastBraced && isNothing elseBranch) . optional $ g_Fi
     when needsFi . void $
         g_Fi `orFail` do
             parseProblemAt pos ErrorC 1046 "Couldn't find 'fi' for this 'if'."
@@ -3399,6 +3419,8 @@ readFunctionDefinition = called "function" $ do
         readWithoutFunction = try $ do
             name <- (:) <$> functionStartChars <*> many functionChars
             guard $ name /= "time"  -- Interferes with time ( foo )
+            zsh <- isZsh
+            guard . not $ zsh && name `elem` zshAnonymousFunctionPrefixes
             spacing
             readParens
             return $ \id -> T_Function id (FunctionKeyword False) (FunctionParentheses True) name
@@ -3422,21 +3444,32 @@ readFunctionDefinition = called "function" $ do
         readZshWithoutFunction = try $ do
             zshOnly
             name <- many1 $ noneOf " \t\r\n;&|()<>='\"`"
+            guard $ name `notElem` zshAnonymousFunctionPrefixes
             spacing
             string "()"
             return $ \id -> T_Function id (FunctionKeyword False) (FunctionParentheses True) name
 
+        -- In zsh, `time () { ..; }` runs an anonymous function. Other words,
+        -- like noglob or builtin, define a function with that name.
+        zshAnonymousFunctionPrefixes = ["time", "nocorrect", "coproc"]
+
         readParens = do
-            g_Lparen
-            spacing
-            g_Rparen <|> do
-                parseProblem ErrorC 1065 "Trying to declare parameters? Don't. Use () and refer to params as $1, $2.."
-                many $ noneOf "\n){"
-                g_Rparen
-            return ()
+            zsh <- isZsh
+            if zsh
+              -- zsh only accepts (): `rm (a|b).txt` runs a command with a
+              -- pattern, and `foo ( ) { ..; }` is an error
+              then void . try $ string "()"
+              else do
+                g_Lparen
+                spacing
+                g_Rparen <|> do
+                    parseProblem ErrorC 1065 "Trying to declare parameters? Don't. Use () and refer to params as $1, $2.."
+                    many $ noneOf "\n){"
+                    g_Rparen
+                return ()
 
 prop_readAnonymousFunction1 = isOk readScript "#!/bin/zsh\n() { echo \"$1\"; } a b"
-prop_readAnonymousFunction2 = isOk readScript "#!/bin/zsh\nfunction { echo \"$1\" } a > /dev/null b"
+prop_readAnonymousFunction2 = isOk readScript "#!/bin/zsh\n() { echo \"$1\" } a > /dev/null b\nfunction { echo \"$1\" } a"
 prop_readAnonymousFunction3 = isOk readScript "#!/bin/zsh\n()\n{\n  local x=1\n} && echo finished"
 prop_readAnonymousFunction4 = isOk readScript "#!/bin/zsh\nfunction () ( echo sub ) a"
 prop_readAnonymousFunction5 = isOk readScript "#!/bin/zsh\ncat <(() { echo x } && echo y)"
@@ -3444,6 +3477,10 @@ prop_readAnonymousFunction6 = isNotOk readScript "#!/bin/zsh\n() { echo x"
 prop_readAnonymousFunction7 = isNotOk readScript "#!/bin/bash\n() { echo x; }"
 prop_readAnonymousFunction8 = isNotOk readScript "#!/bin/zsh\n( ) { echo x; }"
 prop_readAnonymousFunction10 = isOk readScript "#!/bin/zsh\nfunction {a,b}_x() { echo \"$0\"; }"
+prop_readAnonymousFunction13 = isNotOk readScript "#!/bin/zsh\nfunction { echo \"$1\" } > /dev/null a"
+prop_readAnonymousFunction14 = isOk readScript "#!/bin/zsh\nfunction { echo \"$1\" } a 2> /dev/null"
+prop_readZshFunctionParensNoSpace = isNotOk readScript "#!/bin/zsh\nfoo ( ) { echo x }"
+prop_readBashFunctionParensSpace = isOk readScript "#!/bin/bash\nfoo ( ) { echo x; }"
 prop_readAnonymousFunction11 =
     case debugParse readScript "#!/bin/zsh\nfunction {a,b}_x() { true; }" of
         Right (T_Annotation _ _ (T_Script _ _ [T_Pipeline _ _ [T_Redirecting _ _ (T_Function {})]])) -> True
@@ -3490,10 +3527,16 @@ prop_readAnonymousFunction9 =
 readAnonymousFunction = called "anonymous function" $ do
     zshOnly
     start <- startSpan
-    try $ withoutKeyword <|> withKeyword
+    hasKeyword <- try $ (withoutKeyword >> return False) <|> (withKeyword >> return True)
     allspacing
     body <- readBraceGroup <|> readSubshell
-    argsAndRedirs <- many (readIoRedirect <|> readCmdWord)
+    argsAndRedirs <- if hasKeyword
+        -- `function { ..; } a > file` takes its arguments before any redirection
+        then do
+            args <- many (notFollowedBy2 readIoRedirect >> readCmdWord)
+            redirs <- many readIoRedirect
+            return $ args ++ redirs
+        else many (readIoRedirect <|> readCmdWord)
     id <- endSpan start
     let (redirs, args) = partition isRedirect argsAndRedirs
     let fn = T_AnonymousFunction id args body
@@ -3532,7 +3575,8 @@ readCoProc = called "coproc" $ do
         notFollowedBy2 readAssignmentWord
         (var, body) <- choice [
             try $ do
-                body <- readBody readCompoundCommand
+                -- zsh: `coproc () { ..; }` runs an anonymous function
+                body <- readBody (readAnonymousFunction <|> readCompoundCommand)
                 return (Nothing, body),
             try $ do
                 var <- readNormalWord `thenSkip` spacing
@@ -4096,7 +4140,7 @@ readScriptFile sourced = do
     -- Put the rc annotations on the stack so that one can ignore e.g. SC1084 in .shellcheckrc
     withAnnotations rcAnnotations $ do
         hasBom <- wasIncluded readUtf8Bom
-        firstLine <- lookAhead $ many (noneOf "\n")
+        firstLine <- lookAhead $ many (noneOf "\n")  -- the BOM, if any, is already read
         shebang <- readShebang <|> readEmptyLiteral
         let (T_Literal _ shebangString) = shebang
         allspacing
@@ -4123,7 +4167,7 @@ readScriptFile sourced = do
                     unless sourced $ do
                         filename <- Mr.asks currentFilename
                         let dialect = fromMaybe Bash $ msum
-                                [shellOverride, shellFromAnnotations annotations executable, shellFromFirstLine firstLine, shellFromFilename filename]
+                                [shellOverride, shellFromAnnotations annotations executable, shellFromFilename filename, shellFromFirstLine firstLine]
                         modifyState $ \state -> state { parseShellType = dialect }
                     commands <- readCompoundListOrEmpty
                     id <- endSpan start
@@ -4318,12 +4362,16 @@ notesForContext list = zipWith ($) [first, second] [(pos, str) | ContextName pos
 
 -- Go over all T_UnparsedIndex and reparse them as either arithmetic or text
 -- depending on declare -A statements.
-reparseIndices root = process root
-  where
-    process = analyze blank blank f
+reparseIndices root = do
+    zsh <- isZsh
     -- zsh: subscripts of zsh's own associative arrays, like
     -- compstate[insert], are strings, not arithmetic
-    associative = getAssociativeArrays root ++ zshAssociativeArrays
+    reparseIndicesWith (if zsh then zshAssociativeArrays else []) root
+
+reparseIndicesWith extraAssociative root = process root
+  where
+    process = analyze blank blank f
+    associative = getAssociativeArrays root ++ extraAssociative
     isAssociative s = s `elem` associative
     f (T_Assignment id mode name indices value) = do
         newIndices <- mapM (fixAssignmentIndex name) indices

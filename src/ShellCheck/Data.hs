@@ -3,7 +3,7 @@ module ShellCheck.Data where
 import ShellCheck.AST (Annotation(ShellOverride))
 import ShellCheck.Interface
 import ShellCheck.Prelude (headOrDefault)
-import Data.List (isPrefixOf, isSuffixOf)
+import Data.List (isPrefixOf, isSuffixOf, stripPrefix)
 import Data.Maybe (listToMaybe)
 import Data.Version (showVersion)
 
@@ -176,7 +176,16 @@ shellForExecutable name =
         "ksh93" -> return Ksh
         "oksh"  -> return Ksh
         "zsh"   -> return Zsh
+        _ | isVersionedZsh name -> return Zsh
         _ -> Nothing
+  where
+    -- zsh5, zsh-5.9, zsh-static
+    isVersionedZsh n =
+        case stripPrefix "zsh" n of
+            Just rest ->
+                let version = dropWhile (== '-') rest
+                in not (null version) && (all (`elem` "0123456789.") version || version == "static")
+            Nothing -> False
 
 shellFromAnnotations :: [Annotation] -> String -> Maybe Shell
 shellFromAnnotations annotations executable =
@@ -213,7 +222,7 @@ shellFromFirstLine :: String -> Maybe Shell
 shellFromFirstLine script =
     if any isMarker ["#compdef", "#autoload"] then Just Zsh else Nothing
   where
-    firstLine = takeWhile (/= '\n') script
+    firstLine = takeWhile (/= '\n') $ dropWhile (== '\xFEFF') script
     isMarker m = m `isPrefixOf` firstLine &&
         all (`elem` " \t\r") (take 1 $ drop (length m) firstLine)
 

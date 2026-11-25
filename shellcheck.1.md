@@ -106,8 +106,8 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
 :   Specify Bourne shell dialect. Valid values are *sh*, *bash*, *dash*, *ksh*,
     *busybox*, and *zsh*.
     The default is to deduce the shell from the file's `shell` directive,
-    shebang, a zsh `#compdef`/`#autoload` first line, or `.bash/.bats/.dash/.ksh/.zsh`
-    extension (or zsh startup file name like `.zshrc`), in that order. *sh* refers to
+    shebang, `.bash/.bats/.dash/.ksh/.zsh` extension (or zsh startup file name like
+    `.zshrc`), or a zsh `#compdef`/`#autoload` first line, in that order. *sh* refers to
     POSIX `sh` (not the system's), and will warn of portability issues.
 
 **-S**\ *SEVERITY*,\ **--severity=***severity*

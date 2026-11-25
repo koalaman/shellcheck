@@ -291,11 +291,14 @@ isArrayExpansion (T_DollarBraced _ _ l) =
 isArrayExpansion _ = False
 
 -- Is it possible that this arg becomes multiple args?
-mayBecomeMultipleArgs t = willBecomeMultipleArgs t || f False t
+mayBecomeMultipleArgs = mayBecomeMultipleArgsIn False
+
+-- The same, also counting zsh's flags when isZsh is set
+mayBecomeMultipleArgsIn isZsh t = willBecomeMultipleArgs t || f False t
   where
     f quoted (T_DollarBraced _ _ l) =
         let string = concat $ oversimplify l in
-            not quoted || "!" `isPrefixOf` string || hasZshSplittingFlag string
+            not quoted || "!" `isPrefixOf` string || isZsh && hasZshSplittingFlag string
     f quoted (T_DoubleQuoted _ parts) = any (f True) parts
     f quoted (T_NormalWord _ parts) = any (f quoted) parts
     f _ _ = False

@@ -74,7 +74,7 @@ checkScript sys spec = do
                 as {
                     asScript = root,
                     asShellType = csShellTypeOverride spec,
-                    asFallbackShell = shellFromFirstLine (csScript spec) `mplus` shellFromFilename (csFilename spec),
+                    asFallbackShell = shellFromFilename (csFilename spec) `mplus` shellFromFirstLine (csScript spec),
                     asCheckSourced = csCheckSourced spec,
                     asExecutionMode = Executed,
                     asTokenPositions = tokenPositions,
@@ -437,6 +437,27 @@ prop_deducesTypeFromAutoloadLine = null result
     result = checkWithSpec [] emptyCheckSpec {
         csFilename = "myfunction",
         csScript = "#autoload\n(( 3.14 ))"
+    }
+
+prop_extensionBeatsCompdefLine = result == [2086]
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "comp.bash",
+        csScript = "#compdef foo\nx='a b'\nls $x"
+    }
+
+prop_compdefLineAfterBom = result == [1082]
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "_foo",
+        csScript = "\xFEFF#compdef foo\n(( 3.14 ))"
+    }
+
+prop_versionedZshShebang = null result
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "file",
+        csScript = "#!/usr/local/bin/zsh-5.9\n(( 3.14 ))"
     }
 
 prop_compdefMarkerMustBeWholeWord = result == [2079, 2148]

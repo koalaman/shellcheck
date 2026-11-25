@@ -566,10 +566,12 @@ prop_checkUuoc3c = verifyNot checkUuoc "cat \"${!var}\" | grep bar"
 prop_checkUuoc4 = verifyNot checkUuoc "cat $var"
 prop_checkUuoc5 = verifyNot checkUuoc "cat \"$@\""
 prop_checkUuoc6 = verifyNot checkUuoc "cat -n | grep bar"
-checkUuoc _ (T_Pipeline _ _ (T_Redirecting _ _ cmd:_:_)) =
+prop_checkUuocZsh = verifyNot checkUuoc "#!/bin/zsh\ncat \"${(@)files}\" | grep bar"
+prop_checkUuocBashFlags = verify checkUuoc "cat \"${(@)files}\" | grep bar"
+checkUuoc params (T_Pipeline _ _ (T_Redirecting _ _ cmd:_:_)) =
     checkCommand "cat" (const f) cmd
   where
-    f [word] | not (mayBecomeMultipleArgs word || isOption word) =
+    f [word] | not (mayBecomeMultipleArgsIn (shellType params == Zsh) word || isOption word) =
         style (getId word) 2002 "Useless cat. Consider 'cmd < file | ..' or 'cmd file | ..' instead."
     f _ = return ()
     isOption word = "-" `isPrefixOf` onlyLiteralString word
@@ -726,19 +728,20 @@ prop_checkForInQuoted6 = verifyNot checkForInQuoted "for f in \"${!arr}\"; do tr
 prop_checkForInQuotedZsh1 = verifyNot checkForInQuoted "#!/bin/zsh\nfor f in \"${(@k)map}\" \"${(f)lines}\"; do true; done"
 prop_checkForInQuotedZsh2 = verifyNot checkForInQuoted "#!/bin/zsh\nfor k v in \"${(@kv)map}\"; do true; done"
 prop_checkForInQuotedZsh3 = verify checkForInQuoted "#!/bin/zsh\nfor f in \"$var\"; do true; done"
+prop_checkForInQuotedBashFlags = verify checkForInQuoted "for f in \"${(@k)map}\"; do true; done"
 prop_checkForInQuoted7 = verify checkForInQuoted "for f in ls, grep, mv; do true; done"
 prop_checkForInQuoted8 = verify checkForInQuoted "for f in 'ls', 'grep', 'mv'; do true; done"
 prop_checkForInQuoted9 = verifyNot checkForInQuoted "for f in 'ls,' 'grep,' 'mv'; do true; done"
-checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [word@(T_DoubleQuoted id list)]] _)
-    | any willSplit list && not (mayBecomeMultipleArgs word)
+checkForInQuoted params (T_ForIn _ f [T_NormalWord _ [word@(T_DoubleQuoted id list)]] _)
+    | any willSplit list && not (mayBecomeMultipleArgsIn (shellType params == Zsh) word)
             || maybe False wouldHaveBeenGlob (getLiteralString word) =
         err id 2066 "Since you double quoted this, it will not word split, and the loop will only run once."
 checkForInQuoted _ (T_ForIn _ f [T_NormalWord _ [T_SingleQuoted id _]] _) =
     warn id 2041 "This is a literal string. To run as a command, use $(..) instead of '..' . "
-checkForInQuoted _ (T_ForIn _ _ [single] _)
+checkForInQuoted params (T_ForIn _ _ [single] _)
     | maybe False (',' `elem`) $ getUnquotedLiteral single =
         warn (getId single) 2042 "Use spaces, not commas, to separate loop elements."
-    | not (willSplit single || mayBecomeMultipleArgs single) =
+    | not (willSplit single || mayBecomeMultipleArgsIn (shellType params == Zsh) single) =
         warn (getId single) 2043 "This loop will only ever run once. Bad quoting or missing glob/expansion?"
 checkForInQuoted params (T_ForIn _ _ multiple _) =
     forM_ multiple $ \arg -> sequence_ $ do
