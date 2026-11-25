@@ -295,10 +295,21 @@ mayBecomeMultipleArgs t = willBecomeMultipleArgs t || f False t
   where
     f quoted (T_DollarBraced _ _ l) =
         let string = concat $ oversimplify l in
-            not quoted || "!" `isPrefixOf` string
+            not quoted || "!" `isPrefixOf` string || hasZshSplittingFlag string
     f quoted (T_DoubleQuoted _ parts) = any (f True) parts
     f quoted (T_NormalWord _ parts) = any (f quoted) parts
     f _ _ = False
+
+-- Does this zsh parameter expansion have a flag that makes several words
+-- even when quoted, like the @ in "${(@)array}" or the f in "${(f)lines}"?
+prop_hasZshSplittingFlag1 = hasZshSplittingFlag "(@kv)map"
+prop_hasZshSplittingFlag2 = hasZshSplittingFlag "(s: :)var"
+prop_hasZshSplittingFlag3 = not $ hasZshSplittingFlag "(j: :)var"
+prop_hasZshSplittingFlag4 = not $ hasZshSplittingFlag "var"
+hasZshSplittingFlag string =
+    case string of
+        '(':rest -> any (`elem` "@fsz0") $ takeWhile (/= ')') rest
+        _ -> False
 
 -- Is it certain that this word will becomes multiple words?
 willBecomeMultipleArgs t = willConcatInAssignment t || f t

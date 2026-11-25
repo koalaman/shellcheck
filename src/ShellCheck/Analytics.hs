@@ -723,6 +723,9 @@ prop_checkForInQuoted4 = verify checkForInQuoted "for f in 1,2,3; do true; done"
 prop_checkForInQuoted4a = verifyNot checkForInQuoted "for f in foo{1,2,3}; do true; done"
 prop_checkForInQuoted5 = verify checkForInQuoted "for f in ls; do true; done"
 prop_checkForInQuoted6 = verifyNot checkForInQuoted "for f in \"${!arr}\"; do true; done"
+prop_checkForInQuotedZsh1 = verifyNot checkForInQuoted "#!/bin/zsh\nfor f in \"${(@k)map}\" \"${(f)lines}\"; do true; done"
+prop_checkForInQuotedZsh2 = verifyNot checkForInQuoted "#!/bin/zsh\nfor k v in \"${(@kv)map}\"; do true; done"
+prop_checkForInQuotedZsh3 = verify checkForInQuoted "#!/bin/zsh\nfor f in \"$var\"; do true; done"
 prop_checkForInQuoted7 = verify checkForInQuoted "for f in ls, grep, mv; do true; done"
 prop_checkForInQuoted8 = verify checkForInQuoted "for f in 'ls', 'grep', 'mv'; do true; done"
 prop_checkForInQuoted9 = verifyNot checkForInQuoted "for f in 'ls,' 'grep,' 'mv'; do true; done"
@@ -1038,7 +1041,8 @@ prop_checkArrayWithoutIndex11 = verifyNotTree checkArrayWithoutIndex "read -rpfo
 prop_checkArrayWithoutIndex12 = verifyNotTree checkArrayWithoutIndex "#!/bin/sh\nPIPESTATUS=foo"
 prop_checkArrayWithoutIndex13 = verifyNotTree checkArrayWithoutIndex "#!/bin/zsh\nfoo=(a b); echo $foo; foo+=c"
 prop_checkArrayWithoutIndex14 = verifyTree checkArrayWithoutIndex "#!/bin/zsh\nsetopt ksharrays\nfoo=(a b); echo $foo"
-prop_checkArrayWithoutIndex15 = verifyTree checkArrayWithoutIndex "#!/bin/zsh\nfoo=(a b); foo=bar"
+prop_checkArrayWithoutIndex15 = verifyNotTree checkArrayWithoutIndex "#!/bin/zsh\nfoo=(a b); foo=bar"
+prop_checkArrayWithoutIndex16 = verifyTree checkArrayWithoutIndex "#!/bin/zsh\nsetopt ksh_arrays\nfoo=(a b); foo=bar"
 checkArrayWithoutIndex params _ =
     doVariableFlowAnalysis readF writeF defaultSet (variableFlow params)
   where
@@ -1057,6 +1061,8 @@ checkArrayWithoutIndex params _ =
         isArray <- gets (S.member name)
         return $ if not isArray then [] else
             case mode of
+                -- In zsh, this replaces the whole array, unlike in bash
+                Assign | isNativeZsh params -> []
                 Assign -> [makeComment WarningC id 2178 "Variable was used as an array but is now assigned a string."]
                 -- In zsh, array+=item appends an item
                 Append | isNativeZsh params -> []
@@ -1466,6 +1472,9 @@ prop_checkQuotedCondRegex3 = verifyNot checkQuotedCondRegex "[[ $foo =~ $foo ]]"
 prop_checkQuotedCondRegex4 = verifyNot checkQuotedCondRegex "[[ $foo =~ \"bar\" ]]"
 prop_checkQuotedCondRegex5 = verifyNot checkQuotedCondRegex "[[ $foo =~ 'cow bar' ]]"
 prop_checkQuotedCondRegex6 = verify checkQuotedCondRegex "[[ $foo =~ 'cow|bar' ]]"
+prop_checkQuotedCondRegex7 = verifyNot checkQuotedCondRegex "#!/bin/zsh\n[[ $foo =~ \"bar.*\" ]]"
+-- zsh treats a quoted right-hand side as a regex too
+checkQuotedCondRegex params _ | shellType params == Zsh = return ()
 checkQuotedCondRegex _ (TC_Binary _ _ "=~" _ rhs) =
     case rhs of
         T_NormalWord id [T_DoubleQuoted _ _] -> error rhs
@@ -1932,7 +1941,7 @@ prop_checkBadParameterSubstitution11 = verify checkBadParameterSubstitution "${$
 
 prop_checkBadParameterSubstitution12 = verifyNot checkBadParameterSubstitution "#!/bin/zsh\necho ${(f)x} ${${x%.*}##*/} ${$(cmd):u} ${+x} ${=x} ${~x} ${^x} ${${x}}"
 prop_checkBadParameterSubstitution13 = verify checkBadParameterSubstitution "#!/bin/zsh\necho ${\"x\"}"
-prop_checkBadParameterSubstitution14 = verify checkBadParameterSubstitution "#!/bin/zsh\necho ${{x}"
+prop_checkBadParameterSubstitution14 = verify checkBadParameterSubstitution "#!/bin/zsh\necho ${{x}}"
 prop_checkBadParameterSubstitution15 = verify checkBadParameterSubstitution "#!/bin/zsh\necho ${foo$n}"
 checkBadParameterSubstitution params t =
     case t of

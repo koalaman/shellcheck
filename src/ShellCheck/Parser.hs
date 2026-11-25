@@ -788,7 +788,11 @@ readArithmeticContents =
         start <- startSpan
         char '['
         pos <- getPosition
-        middle <- readStringForParser readArithmeticContents
+        -- zsh: a subscript starting with ( has flags and a pattern, as in
+        -- (( a[(I)--force] )), not an arithmetic expression
+        zshFlags <- isFollowedBy (zshOnly >> char '(')
+        middle <- readStringForParser $
+            if zshFlags then readIndexSpan else readArithmeticContents
         char ']'
         id <- endSpan start
         return $ T_UnparsedIndex id pos middle
@@ -1311,9 +1315,40 @@ readSpacePart = do
 
 readDollarBracedWord = do
     start <- startSpan
-    list <- many readDollarBracedPart
+    zsh <- isZsh
+    list <- if zsh then readZshDollarBracedParts 0 else many readDollarBracedPart
     id <- endSpan start
     return $ T_NormalWord id list
+
+-- zsh: like readDollarBracedPart, but braces in the contents must be
+-- balanced, so ${x:-%F{red}} ends at the last }.
+readZshDollarBracedParts depth = more <|> return []
+  where
+    more = do
+        (part, change) <- choice [
+            brace '{' 1,
+            guard (depth > 0) >> brace '}' (-1),
+            (\t -> (t, 0)) <$> otherPart
+            ]
+        rest <- readZshDollarBracedParts (depth + change)
+        return (part : rest)
+    brace c change = do
+        start <- startSpan
+        char c
+        id <- endSpan start
+        return (T_Literal id [c], change)
+    otherPart = readSingleQuoted <|> readDoubleQuoted <|>
+                readParamSubSpecialChar <|> readExtglob <|> readNormalDollar <|>
+                readUnquotedBackTicked <|> literal
+    literal = do
+        start <- startSpan
+        str <- many1 (readBraceEscaped <|> escapedBrace <|> ((:[]) <$> noneOf "{}\"$`'"))
+        id <- endSpan start
+        return $ T_Literal id $ concat str
+    escapedBrace = try $ do
+        char '\\'
+        c <- oneOf "{}"
+        return ['\\', c]
 
 readDollarBracedPart = readSingleQuoted <|> readDoubleQuoted <|>
                        readParamSubSpecialChar <|> readExtglob <|> readNormalDollar <|>
@@ -1916,6 +1951,12 @@ prop_readZshPositionalAssignment3 =
     case debugParse readScript "#!/bin/bash\n0=x" of
         Right (T_Annotation _ _ (T_Script _ _ [T_Pipeline _ _ [T_Redirecting _ _ (T_SimpleCommand _ [] [_])]])) -> True
         _ -> False
+prop_readZshNestedBraces1 = isOk readScript "#!/bin/zsh\necho ${x:-%F{yellow}} ${(@)${:-{$#parts..1}}} ${x//\\{/[}"
+prop_readZshNestedBraces2 =
+    case debugParse readScript "#!/bin/zsh\necho ${x:-a{b}}" of
+        Right (T_Annotation _ _ (T_Script _ _ [T_Pipeline _ _ [T_Redirecting _ _ (T_SimpleCommand _ _ [_, T_NormalWord _ [T_DollarBraced {}]])]])) -> True
+        _ -> False
+prop_readZshArithmeticSubscriptFlags = isOk readScript "#!/bin/zsh\nlong=(--force)\nif (( long[(I)--force] || ${#long[(r)x*]} )); then echo y; fi"
 prop_readZshUnbraced1 = isOk readScript "#!/bin/zsh\na=(x y z)\necho $a[2] $a[-1] $a[2,3] \"$a[1]\" $#a $a[(i)y] $a[(r)z]"
 prop_readZshUnbraced2 = isOk readScript "#!/bin/zsh\necho $0:h $0:A:h $PWD:t:r ${1:-x}"
 prop_readZshUnbraced3 = isOk readScript "#!/bin/zsh\n(( $+commands[git] )) && (( ! $#functions[(i)r(benv|vm)] )) && echo $=x $~x $^x"
@@ -4207,10 +4248,12 @@ reparseIndices root = process root
                 process idx -- Recursively parse for cases like x[y[z=1]]=1
             _ -> return word
 
-    parsed name pos src =
-        if isAssociative name
-        then subParse pos (called "associative array index" $ readIndexSpan) src
-        else subParse pos (called "arithmetic array index expression" $ optional space >> readArithmeticContents) src
+    parsed name pos src = do
+        zsh <- isZsh
+        -- zsh: subscripts starting with ( have flags, as in a[(i)foo]
+        if isAssociative name || (zsh && "(" `isPrefixOf` src)
+            then subParse pos (called "associative array index" $ readIndexSpan) src
+            else subParse pos (called "arithmetic array index expression" $ optional space >> readArithmeticContents) src
 
 reattachHereDocs root map =
     doTransform f root
