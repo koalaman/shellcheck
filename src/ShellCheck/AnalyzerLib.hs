@@ -223,21 +223,26 @@ makeParameters spec = params
                 Dash -> False
                 BusyboxSh -> False
                 Sh   -> False
-                Ksh  -> True,
+                Ksh  -> True
+                -- zsh runs the last command of a pipeline in the current shell
+                Zsh  -> True,
         hasInheritErrexit =
             case shellType params of
                 Bash -> isOptionSet "inherit_errexit" root
                 Dash -> True
                 BusyboxSh -> True
                 Sh   -> True
-                Ksh  -> False,
+                Ksh  -> False
+                -- zsh's command substitutions inherit errexit
+                Zsh  -> True,
         hasPipefail =
             case shellType params of
                 Bash -> isOptionSet "pipefail" root
                 Dash -> isOptionSet "pipefail" root
                 BusyboxSh -> isOptionSet "pipefail" root
                 Sh -> isOptionSet "pipefail" root
-                Ksh  -> isOptionSet "pipefail" root,
+                Ksh  -> isOptionSet "pipefail" root
+                Zsh  -> isOptionSet "pipefail" root,
         hasExecfail =
             case shellType params of
                 Bash -> isOptionSet "execfail" root
@@ -317,6 +322,11 @@ prop_determineShell9 = determineShellTest "#!/bin/env -S dash -x" == Dash
 prop_determineShell10 = determineShellTest "#!/bin/env --split-string= dash -x" == Dash
 prop_determineShell11 = determineShellTest "#!/bin/busybox sh" == BusyboxSh -- busybox sh is a specific shell, not posix sh
 prop_determineShell12 = determineShellTest "#!/bin/busybox ash" == BusyboxSh
+
+prop_determineShell13 = determineShellTest "#!/bin/zsh" == Zsh
+prop_determineShell14 = determineShellTest "#!/usr/bin/env zsh -f" == Zsh
+prop_determineShell15 = determineShellTest "#!/bin/bash\n# shellcheck shell=zsh\nfoo" == Zsh
+prop_determineShell16 = determineShellTest' (Just Zsh) "" == Zsh
 
 determineShellTest = determineShellTest' Nothing
 determineShellTest' fallbackShell = determineShell fallbackShell . fromJust . prRoot . pScript
@@ -948,6 +958,7 @@ isQuotedAlternativeReference t =
 
 supportsArrays Bash = True
 supportsArrays Ksh = True
+supportsArrays Zsh = True
 supportsArrays _ = False
 
 isTrueAssignmentSource c =

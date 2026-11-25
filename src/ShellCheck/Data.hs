@@ -3,7 +3,7 @@ module ShellCheck.Data where
 import ShellCheck.AST (Annotation(ShellOverride))
 import ShellCheck.Interface
 import ShellCheck.Prelude (headOrDefault)
-import Data.List (isSuffixOf)
+import Data.List (isPrefixOf, isSuffixOf)
 import Data.Maybe (listToMaybe)
 import Data.Version (showVersion)
 
@@ -157,7 +157,7 @@ unaryTestOps = [
   ]
 
 supportedShellDialects = [
-    "sh", "bash", "dash", "ksh", "busybox"
+    "sh", "bash", "dash", "ksh", "busybox", "zsh"
   ]
 
 shellForExecutable :: String -> Maybe Shell
@@ -175,6 +175,7 @@ shellForExecutable name =
         "ksh88" -> return Ksh
         "ksh93" -> return Ksh
         "oksh"  -> return Ksh
+        "zsh"   -> return Zsh
         _ -> Nothing
 
 shellFromAnnotations :: [Annotation] -> String -> Maybe Shell
@@ -188,11 +189,33 @@ shellFromFilename filename = listToMaybe candidates
                       ,(".bash", Bash)
                       ,(".bats", Bash)
                       ,(".dash", Dash)
-                      ,(".envrc", Bash)]
+                      ,(".envrc", Bash)
+                      ,(".zsh", Zsh)
+                      ,(".zsh-theme", Zsh)
+                      ,(".zshenv", Zsh)
+                      ,(".zprofile", Zsh)
+                      ,(".zshrc", Zsh)
+                      ,(".zlogin", Zsh)
+                      ,(".zlogout", Zsh)]
                       -- The `.sh` is too generic to determine the shell:
                       -- We fallback to Bash in this case and emit SC2148 if there is no shebang
+    -- zsh startup files without a leading dot, as in /etc/zsh/zshrc
+    zshStartupFiles = ["zshenv", "zprofile", "zshrc", "zlogin", "zlogout"]
+    basename = reverse . takeWhile (/= '/') . reverse $ filename
     candidates =
         [sh | (ext,sh) <- shellExtensions, ext `isSuffixOf` filename]
+        ++ [Zsh | basename `elem` zshStartupFiles]
+
+-- zsh's completion system marks completion and autoloadable functions with
+-- a first line of "#compdef ..." or "#autoload ...". Such files rarely have
+-- a shebang or an extension, so the marker identifies them as zsh.
+shellFromFirstLine :: String -> Maybe Shell
+shellFromFirstLine script =
+    if any isMarker ["#compdef", "#autoload"] then Just Zsh else Nothing
+  where
+    firstLine = takeWhile (/= '\n') script
+    isMarker m = m `isPrefixOf` firstLine &&
+        all (`elem` " \t\r") (take 1 $ drop (length m) firstLine)
 
 flagsForRead = "sreu:n:N:i:p:a:t:"
 flagsForMapfile = "d:n:O:s:u:C:c:t"

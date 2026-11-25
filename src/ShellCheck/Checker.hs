@@ -22,7 +22,7 @@ module ShellCheck.Checker (checkScript, ShellCheck.Checker.runTests) where
 
 import ShellCheck.Analyzer
 import ShellCheck.ASTLib
-import ShellCheck.Data (shellFromFilename)
+import ShellCheck.Data (shellFromFilename, shellFromFirstLine)
 import ShellCheck.EditorConfig
 import ShellCheck.Interface
 import ShellCheck.Parser
@@ -74,7 +74,7 @@ checkScript sys spec = do
                 as {
                     asScript = root,
                     asShellType = csShellTypeOverride spec,
-                    asFallbackShell = shellFromFilename $ csFilename spec,
+                    asFallbackShell = shellFromFirstLine (csScript spec) `mplus` shellFromFilename (csFilename spec),
                     asCheckSourced = csCheckSourced spec,
                     asExecutionMode = Executed,
                     asTokenPositions = tokenPositions,
@@ -177,7 +177,7 @@ prop_editorConfigAppliesDisable =
 prop_editorConfigUnknownShellIsReported =
     -- An unknown shell can't be applied silently; it surfaces as a
     -- config parse error (SC1134) rather than being dropped.
-    [1134] == checkWithEditorConfig "[foo]\nshellcheck.shell=zsh\n" "foo"
+    [1134] == checkWithEditorConfig "[foo]\nshellcheck.shell=fish\n" "foo"
         "#!/bin/sh\necho \"hi\""
 prop_editorConfigCommentValueIsReported =
     -- EditorConfig has no inline comments, so a '#'-prefixed value is
@@ -388,6 +388,90 @@ prop_deducesTypeFromEnvrcExtension = result == [2079]
     result = checkWithSpec [] emptyCheckSpec {
         csFilename = ".envrc",
         csScript = "(( 3.14 ))"
+    }
+
+prop_deducesTypeFromZshExtension = null result
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "file.zsh",
+        csScript = "(( 3.14 ))"
+    }
+
+prop_deducesTypeFromZshThemeExtension = null result
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "themes/mytheme.zsh-theme",
+        csScript = "(( 3.14 ))"
+    }
+
+prop_deducesTypeFromZshStartupFile = null result
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "home/user/.zshrc",
+        csScript = "(( 3.14 ))"
+    }
+
+prop_deducesTypeFromZshStartupFileWithoutDot = null result
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "etc/zsh/zprofile",
+        csScript = "(( 3.14 ))"
+    }
+
+prop_zshStartupFileNameMustMatchExactly = result == [2079, 2148]
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "notzshrc",
+        csScript = "(( 3.14 ))"
+    }
+
+prop_deducesTypeFromCompdefLine = null result
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "_mycommand",
+        csScript = "#compdef mycommand\n(( 3.14 ))"
+    }
+
+prop_deducesTypeFromAutoloadLine = null result
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "myfunction",
+        csScript = "#autoload\n(( 3.14 ))"
+    }
+
+prop_compdefMarkerMustBeWholeWord = result == [2079, 2148]
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "myfunction",
+        csScript = "#compdefault\n(( 3.14 ))"
+    }
+
+prop_compdefMarkerMustBeOnFirstLine = result == [2079, 2148]
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "myfunction",
+        csScript = "true\n#compdef mycommand\n(( 3.14 ))"
+    }
+
+prop_shebangOverridesZshExtension = result == [2079]
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "file.zsh",
+        csScript = "#!/bin/bash\n(( 3.14 ))"
+    }
+
+prop_zshShebangIsAccepted = null result
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "file",
+        csScript = "#!/usr/bin/env zsh\n(( 3.14 ))"
+    }
+
+prop_zshDirectiveIsAccepted = null result
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "file.sh",
+        csScript = "# shellcheck shell=zsh\n(( 3.14 ))"
     }
 
 prop_canDisableShebangWarning = null $ result
@@ -637,7 +721,7 @@ prop_fileCannotEnableExternalSources2 = result == [1144]
 prop_rcCanSuppressEarlyProblems1 = null result
   where
     result = checkWithRc "disable=1071" emptyCheckSpec {
-        csScript = "#!/bin/zsh\necho $1"
+        csScript = "#!/usr/bin/fish\necho $1"
     }
 
 prop_rcCanSuppressEarlyProblems2 = null result

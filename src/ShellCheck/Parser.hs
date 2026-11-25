@@ -3382,7 +3382,7 @@ prop_readScript3 = isWarning readScript "#!/bin/bash\necho hello\xA0world"
 prop_readScript4 = isWarning readScript "#!/usr/bin/perl\nfoo=("
 prop_readScript5 = isOk readScript "#!/bin/bash\n#This is an empty script\n\n"
 prop_readScript6 = isOk readScript "#!/usr/bin/env -S X=FOO bash\n#This is an empty script\n\n"
-prop_readScript7 = isOk readScript "#!/bin/zsh\n# shellcheck disable=SC1071\nfor f (a b); echo $f\n"
+prop_readScript7 = isOk readScript "#!/usr/bin/fish\n# shellcheck disable=SC1071\nfor f in a b; echo $f; end\n"
 readScriptFile sourced = do
     start <- startSpan
     pos <- getPosition
@@ -3395,6 +3395,7 @@ readScriptFile sourced = do
     -- Put the rc annotations on the stack so that one can ignore e.g. SC1084 in .shellcheckrc
     withAnnotations rcAnnotations $ do
         hasBom <- wasIncluded readUtf8Bom
+        firstLine <- lookAhead $ many (noneOf "\n")
         shebang <- readShebang <|> readEmptyLiteral
         let (T_Literal _ shebangString) = shebang
         allspacing
@@ -3421,7 +3422,7 @@ readScriptFile sourced = do
                     unless sourced $ do
                         filename <- Mr.asks currentFilename
                         let dialect = fromMaybe Bash $ msum
-                                [shellOverride, shellFromAnnotations annotations executable, shellFromFilename filename]
+                                [shellOverride, shellFromAnnotations annotations executable, shellFromFirstLine firstLine, shellFromFilename filename]
                         modifyState $ \state -> state { parseShellType = dialect }
                     commands <- readCompoundListOrEmpty
                     id <- endSpan start
@@ -3440,8 +3441,8 @@ readScriptFile sourced = do
     verifyShebang pos s = do
         case isValidShell s of
             Just True -> return ()
-            Just False -> parseProblemAt pos ErrorC 1071 "ShellCheck only supports sh/bash/dash/ksh/'busybox sh' scripts. Sorry!"
-            Nothing -> parseProblemAt pos ErrorC 1008 "This shebang was unrecognized. ShellCheck only supports sh/bash/dash/ksh/'busybox sh'. Add a 'shell' directive to specify."
+            Just False -> parseProblemAt pos ErrorC 1071 "ShellCheck only supports sh/bash/dash/ksh/zsh/'busybox sh' scripts. Sorry!"
+            Nothing -> parseProblemAt pos ErrorC 1008 "This shebang was unrecognized. ShellCheck only supports sh/bash/dash/ksh/zsh/'busybox sh'. Add a 'shell' directive to specify."
 
     isValidShell s =
         let good = null s || any (`isPrefixOf` s) goodShells
@@ -3461,7 +3462,8 @@ readScriptFile sourced = do
         "bash",
         "bats",
         "ksh",
-        "oksh"
+        "oksh",
+        "zsh"
         ]
     badShells = [
         "awk",
@@ -3472,8 +3474,7 @@ readScriptFile sourced = do
         "python",
         "python3",
         "ruby",
-        "tcsh",
-        "zsh"
+        "tcsh"
         ]
 
     readUtf8Bom = called "Byte Order Mark" $ string "\xFEFF"

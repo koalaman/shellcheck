@@ -1271,6 +1271,8 @@ prop_checkNumberComparisons22 = verify checkNumberComparisons "x=10; [[ $x > $z 
 prop_checkNumberComparisons23 = verify checkNumberComparisons "x=0; if [[ -n $def ]]; then x=$def; fi; while [ $x > $z ]; do lol; done"
 prop_checkNumberComparisons24 = verify checkNumberComparisons "x=$RANDOM; [ $x > $z ]"
 prop_checkNumberComparisons25 = verify checkNumberComparisons "[[ $((n++)) > $x ]]"
+prop_checkNumberComparisons26 = verifyNot checkNumberComparisons "#!/bin/zsh\n[[ 1.5 -lt 2 ]]"
+prop_checkNumberComparisons27 = verify checkNumberComparisons "#!/bin/zsh\n[ 1.5 -lt 2 ]"
 
 checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
     if isNum lhs || isNum rhs
@@ -1306,8 +1308,10 @@ checkNumberComparisons params (TC_Binary id typ op lhs rhs) = do
       isLtGt = flip elem ["<", "\\<", ">", "\\>"]
       isLeGe = flip elem ["<=", "\\<=", ">=", "\\>="]
 
+      -- zsh compares decimals in [[ ]], but not in [ ]
+      zshDecimals = shellType params == Zsh && typ == DoubleBracket
       checkDecimals hs =
-        when (isFraction hs && not (hasFloatingPoint params)) $
+        when (isFraction hs && not (hasFloatingPoint params) && not zshDecimals) $
             err (getId hs) 2072 decimalError
       decimalError = "Decimals are not supported. " ++
         "Either use integers only, or use bc or awk to compare."
@@ -1557,6 +1561,7 @@ checkForDecimals _ _ = return ()
 prop_checkDivBeforeMult = verify checkDivBeforeMult "echo $((c/n*100))"
 prop_checkDivBeforeMult2 = verifyNot checkDivBeforeMult "echo $((c*100/n))"
 prop_checkDivBeforeMult3 = verifyNot checkDivBeforeMult "echo $((c/10*10))"
+prop_checkDivBeforeMult4 = verify checkDivBeforeMult "#!/bin/zsh\necho $((c/n*100))"
 checkDivBeforeMult params (TA_Binary _ "*" (TA_Binary id "/" _ x) y)
     | not (hasFloatingPoint params) && x /= y =
         info id 2017 "Increase precision by replacing a/b*c with a*c/b."
@@ -2993,6 +2998,7 @@ checkFunctionDeclarations params
         Dash -> forSh
         BusyboxSh -> forSh
         Sh   -> forSh
+        Zsh  -> return ()
 
     where
         forSh = do
