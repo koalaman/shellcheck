@@ -3244,7 +3244,7 @@ prop_readShebang6 = isWarning readShebang " # Copyright \n!#/bin/bash"
 prop_readShebang7 = isNotOk readShebang "# Copyright \nfoo\n#!/bin/bash"
 readShebang = do
     start <- startSpan
-    anyShebang <|> try readMissingBang <|> withHeader
+    anyShebang <|> try readMissingBang <|> try withHeader
     many linewhitespace
     str <- many $ noneOf "\r\n"
     id <- endSpan start
@@ -3295,6 +3295,8 @@ readShebang = do
         ensurePathAhead
         parseProblemAt pos ErrorC 1113
             "Use #!, not just #, for the shebang."
+        -- Emit a warning, but don't consider a leading comment a valid shebang
+        fail ""
 
     ensurePathAhead = lookAhead $ do
         many linewhitespace
@@ -3582,9 +3584,10 @@ system = lift . lift . lift
 parseShell env name contents = do
     (result, state) <- runParser env (parseWithNotes readScript) name contents
     case result of
-        Right (script, userstate) ->
+        Right (script, userstate) -> do
+            let isScriptLevelDisabled c = isAnnotationIgnoringCode (codeForParseNote c) script
             return newParseResult {
-                prComments = map toPositionedComment $ nub $ parseNotes userstate ++ parseProblems state,
+                prComments = map toPositionedComment $ filter (not . isScriptLevelDisabled) $ nub $ parseNotes userstate ++ parseProblems state,
                 prTokenPositions = Map.map startEndPosToPos (positionMap userstate),
                 prRoot = Just script
             }

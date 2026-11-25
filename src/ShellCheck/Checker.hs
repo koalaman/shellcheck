@@ -397,6 +397,42 @@ prop_canDisableShebangWarning = null $ result
         csScript = "#shellcheck disable=SC2148\nfoo"
     }
 
+prop_warnsButIgnoresLeadingCommentWithFilename = [1113, 2148] == result
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "file.sh",
+        csScript = "# /usr/bin/python is an interpreter\n/usr/bin/python \"$@\""
+    }
+
+prop_canIgnoreLeadingFormatWarning1 = [2148] == result
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "file.sh",
+        csScript = "# /usr/bin/python is an interpreter\n# shellcheck disable=SC1113\n/usr/bin/python \"$@\""
+    }
+
+-- This technically avoids the warning, but either way
+prop_canIgnoreLeadingFormatWarning2 = [2148] == result
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "file.sh",
+        csScript = "# shellcheck disable=SC1113\n# /usr/bin/python is an interpreter\n/usr/bin/python \"$@\""
+    }
+
+prop_canIgnoreLeadingFormatWarning3 = null result
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "file.sh",
+        csScript = "# /etc/profile -- Shell Initialization\n# shellcheck disable=SC1113 shell=sh\nVAR=VALUE\nexport VAR\n"
+    }
+
+prop_onlyFirstLineCanTriggerMissingBangWarning = [2148] == result
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "file.sh",
+        csScript = "# shell init file\n# /etc/profile is my name and init is my game\n echo 'Hello World' >&2\n"
+    }
+
 prop_canDisableAllWarnings = result == [2086]
   where
     result = checkWithSpec [] emptyCheckSpec {
