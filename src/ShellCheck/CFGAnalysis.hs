@@ -966,6 +966,7 @@ transfer ctx label =
 
         CFExecuteCommand cmd -> transferCommand ctx cmd
         CFExecuteSubshell reason entry exit -> transferSubshell ctx reason entry exit
+        CFExecuteFunction name entry exit -> transferFunctionValue ctx (FunctionDefinition name entry exit)
         CFApplyEffects effects -> mapM_ (\(IdTagged _ f) -> transferEffect ctx f) effects
         CFSetExitCode id -> transferExitCode ctx id
 

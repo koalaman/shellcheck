@@ -145,6 +145,15 @@ data InnerToken t =
     | Inner_T_Include t
     | Inner_T_SourceCommand t t
     | Inner_T_BatsTest String t
+    -- A zsh anonymous function, `() { ..; } args` or `function { ..; } args`,
+    -- which is called as soon as it's defined. The arguments are expanded
+    -- before the body runs, so they come first.
+    | Inner_T_AnonymousFunction [t] t
+    -- zsh's `{ try-list } always { always-list }`. The always block runs even
+    -- if the try block fails or is left by return, break or continue.
+    | Inner_T_TryAlways t t
+    -- zsh's `repeat word do list done`, which runs the list word times
+    | Inner_T_RepeatExpression t [t]
     deriving (Show, Eq, Functor, Foldable, Traversable)
 
 data Annotation =
@@ -218,6 +227,9 @@ pattern T_KshCoprocess id l = OuterToken id (Inner_T_KshCoprocess l)
 pattern T_Backticked id list = OuterToken id (Inner_T_Backticked list)
 pattern T_Banged id l = OuterToken id (Inner_T_Banged l)
 pattern T_BatsTest id name t = OuterToken id (Inner_T_BatsTest name t)
+pattern T_AnonymousFunction id args body = OuterToken id (Inner_T_AnonymousFunction args body)
+pattern T_TryAlways id tryBlock alwaysBlock = OuterToken id (Inner_T_TryAlways tryBlock alwaysBlock)
+pattern T_RepeatExpression id count body = OuterToken id (Inner_T_RepeatExpression count body)
 pattern T_BraceExpansion id list = OuterToken id (Inner_T_BraceExpansion list)
 pattern T_BraceGroup id l = OuterToken id (Inner_T_BraceGroup l)
 pattern TC_And id typ str t1 t2 = OuterToken id (Inner_TC_And typ str t1 t2)
@@ -262,7 +274,7 @@ pattern T_Subshell id l = OuterToken id (Inner_T_Subshell l)
 pattern T_UntilExpression id c l = OuterToken id (Inner_T_UntilExpression c l)
 pattern T_WhileExpression id c l = OuterToken id (Inner_T_WhileExpression c l)
 
-{-# COMPLETE T_AND_IF, T_Bang, T_Case, TC_Empty, T_CLOBBER, T_DGREAT, T_DLESS, T_DLESSDASH, T_Do, T_DollarSingleQuoted, T_Done, T_DSEMI, T_Elif, T_Else, T_EOF, T_Esac, T_Fi, T_For, T_Glob, T_GREATAND, T_Greater, T_If, T_In, T_Lbrace, T_Less, T_LESSAND, T_LESSGREAT, T_Literal, T_Lparen, T_NEWLINE, T_OR_IF, T_ParamSubSpecialChar, T_Pipe, T_Rbrace, T_Rparen, T_Select, T_Semi, T_SingleQuoted, T_Then, T_UnparsedIndex, T_Until, T_While, TA_Assignment, TA_Binary, TA_Expansion, T_AndIf, T_Annotation, T_Arithmetic, T_Array, TA_Sequence, TA_Parenthesis, T_Assignment, TA_Trinary, TA_Unary, TA_Variable, T_Backgrounded, T_Backticked, T_Banged, T_BatsTest, T_BraceExpansion, T_BraceGroup, TC_And, T_CaseExpression, TC_Binary, TC_Group, TC_Nullary, T_Condition, T_CoProcBody, T_CoProc, TC_Or, TC_Unary, T_DollarArithmetic, T_DollarBraceCommandExpansion, T_DollarBraced, T_DollarBracket, T_DollarDoubleQuoted, T_DollarExpansion, T_DoubleQuoted, T_Extglob, T_FdRedirect, T_ForArithmetic, T_ForIn, T_Function, T_HereDoc, T_HereString, T_IfExpression, T_Include, T_IndexedElement, T_IoDuplicate, T_IoFile, T_KshCoprocess, T_NormalWord, T_OrIf, T_Pipeline, T_ProcSub, T_Redirecting, T_Script, T_SelectIn, T_SimpleCommand, T_SourceCommand, T_Subshell, T_UntilExpression, T_WhileExpression #-}
+{-# COMPLETE T_AND_IF, T_Bang, T_Case, TC_Empty, T_CLOBBER, T_DGREAT, T_DLESS, T_DLESSDASH, T_Do, T_DollarSingleQuoted, T_Done, T_DSEMI, T_Elif, T_Else, T_EOF, T_Esac, T_Fi, T_For, T_Glob, T_GREATAND, T_Greater, T_If, T_In, T_Lbrace, T_Less, T_LESSAND, T_LESSGREAT, T_Literal, T_Lparen, T_NEWLINE, T_OR_IF, T_ParamSubSpecialChar, T_Pipe, T_Rbrace, T_Rparen, T_Select, T_Semi, T_SingleQuoted, T_Then, T_UnparsedIndex, T_Until, T_While, TA_Assignment, TA_Binary, TA_Expansion, T_AndIf, T_Annotation, T_Arithmetic, T_Array, TA_Sequence, TA_Parenthesis, T_Assignment, TA_Trinary, TA_Unary, TA_Variable, T_AnonymousFunction, T_Backgrounded, T_Backticked, T_Banged, T_BatsTest, T_BraceExpansion, T_BraceGroup, TC_And, T_CaseExpression, TC_Binary, TC_Group, TC_Nullary, T_Condition, T_CoProcBody, T_CoProc, TC_Or, TC_Unary, T_DollarArithmetic, T_DollarBraceCommandExpansion, T_DollarBraced, T_DollarBracket, T_DollarDoubleQuoted, T_DollarExpansion, T_DoubleQuoted, T_Extglob, T_FdRedirect, T_ForArithmetic, T_ForIn, T_Function, T_HereDoc, T_HereString, T_IfExpression, T_Include, T_IndexedElement, T_IoDuplicate, T_IoFile, T_KshCoprocess, T_NormalWord, T_OrIf, T_Pipeline, T_ProcSub, T_Redirecting, T_RepeatExpression, T_Script, T_SelectIn, T_SimpleCommand, T_SourceCommand, T_Subshell, T_TryAlways, T_UntilExpression, T_WhileExpression #-}
 
 instance Eq Token where
     OuterToken _ a == OuterToken _ b = a == b

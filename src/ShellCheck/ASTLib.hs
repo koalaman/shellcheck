@@ -46,6 +46,7 @@ isLoop t = case t of
         T_ForIn {} -> True
         T_ForArithmetic {} -> True
         T_SelectIn {}  -> True
+        T_RepeatExpression {} -> True
         _ -> False
 
 -- Will this split into multiple words when used as an argument?
@@ -597,11 +598,12 @@ isOnlyRedirection t =
 
 isFunction t = case t of T_Function {} -> True; _ -> False
 
--- Bats tests are functions for the purpose of 'local' and such
+-- Bats tests and zsh anonymous functions are functions for the purpose of 'local' and such
 isFunctionLike t =
     case t of
         T_Function {} -> True
         T_BatsTest {} -> True
+        T_AnonymousFunction {} -> True
         _ -> False
 
 
@@ -616,6 +618,7 @@ getCommandSequences t =
         T_BraceGroup _ cmds -> [cmds]
         T_Subshell _ cmds -> [cmds]
         T_WhileExpression _ cond cmds -> [cond, cmds]
+        T_RepeatExpression _ _ cmds -> [cmds]
         T_UntilExpression _ cond cmds -> [cond, cmds]
         T_ForIn _ _ _ cmds -> [cmds]
         T_ForArithmetic _ _ _ _ cmds -> [cmds]

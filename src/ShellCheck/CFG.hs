@@ -85,6 +85,9 @@ data CFNode =
     -- Execute a subshell. These are represented by disjoint graphs just like
     -- functions, but they don't require any form of name resolution
     | CFExecuteSubshell String Node Node
+    -- Call a function given by its entry and exit nodes, without name resolution.
+    -- Used for zsh anonymous functions, which are called where they're defined.
+    | CFExecuteFunction String Node Node
     -- Assignment of $?
     | CFSetExitCode Id
     -- The virtual 'exit' at the natural end of a subshell
@@ -328,6 +331,7 @@ remapNode m (node, label) =
     newLabel = case label of
         CFApplyEffects effects -> CFApplyEffects (map (remapEffect m) effects)
         CFExecuteSubshell s a b -> CFExecuteSubshell s (remapHelper m a) (remapHelper m b)
+        CFExecuteFunction s a b -> CFExecuteFunction s (remapHelper m a) (remapHelper m b)
         _ -> label
 
 remapEffect map old@(IdTagged id effect) =
@@ -755,7 +759,30 @@ build t = do
             exe <- newNodeRange (CFSetExitCode id)
             linkRange definition exe
 
+        -- A zsh anonymous function is defined and called at once: the arguments
+        -- are expanded, then the body runs with its own local scope.
+        T_AnonymousFunction id args body -> do
+            argsRange <- sequentially args
+            (Range entry exit) <- local (\c -> c { cfExitTarget = Nothing }) $ do
+                entry <- newNodeRange $ CFEntryPoint "anonymous function"
+                f <- withFunctionScope $ build body
+                linkRange entry f
+            call <- newNodeRange $ CFExecuteFunction "anonymous function" entry exit
+            status <- newNodeRange $ CFSetExitCode id
+            linkRanges [argsRange, call, status]
+
         T_Glob {} -> none
+
+        -- zsh: the always block also runs when the try block is cut short by
+        -- an error, return, break or continue, so it's reachable either way.
+        T_TryAlways id tryBlock alwaysBlock -> do
+            start <- newStructuralNode
+            tryRange <- build tryBlock
+            alwaysRange <- build alwaysBlock
+            let (Range startNode _) = start
+            let (Range alwaysStart _) = alwaysRange
+            link startNode alwaysStart CFEFlow
+            linkRanges [start, tryRange, alwaysRange]
 
         T_HereString _ t -> build t
         T_HereDoc _ _ _ _ list -> sequentially list
@@ -869,6 +896,16 @@ build t = do
             main <- subshell id "explicit (..) subshell" $ sequentially body
             status <- newNodeRange (CFSetExitCode id)
             linkRange main status
+
+        -- zsh: the count is expanded once, then the body runs that many times
+        T_RepeatExpression id count body -> do
+            countRange <- build count
+            bodyRange <- sequentially body
+            end <- newNodeRange (CFSetExitCode id)
+            linkRange countRange bodyRange
+            linkRange bodyRange bodyRange
+            linkRange bodyRange end
+            linkRange countRange end
 
         T_UntilExpression id cond body -> whileHelper id cond body
         T_WhileExpression id cond body -> whileHelper id cond body
@@ -1264,6 +1301,7 @@ inlineSubshells graph = relinkedGraph
     find (incoming, node, label, outgoing) acc =
         case label of
             CFExecuteSubshell _ start end -> (node, label, start, end, incoming, outgoing):acc
+            CFExecuteFunction _ start end -> (node, label, start, end, incoming, outgoing):acc
             _ -> acc
 
     relinkedGraph = foldl' relink graph subshells
