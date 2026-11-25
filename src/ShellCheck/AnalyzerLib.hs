@@ -638,8 +638,8 @@ getModifiedVariables t =
             [(t, t, name, DataArray SourceInteger)]
 
         --Points to 'for' rather than variable
-        T_ForIn id str [] _ -> [(t, t, str, DataString SourceExternal)]
-        T_ForIn id str words _ -> [(t, t, str, DataString $ SourceFrom words)]
+        T_ForIn id names [] _ -> [(t, t, str, DataString SourceExternal) | str <- names]
+        T_ForIn id names words _ -> [(t, t, str, DataString $ SourceFrom words) | str <- names]
         T_SelectIn id str words _ -> [(t, t, str, DataString $ SourceFrom words)]
         _ -> []
   where

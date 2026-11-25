@@ -746,7 +746,9 @@ build t = do
             linkRange inc cond
             return $ spanRange init end
 
-        T_ForIn id name words body -> forInHelper id name words body
+        T_ForIn id [name] words body -> forInHelper id name words body
+        -- zsh's `for key value in ...` assigns several variables per iteration
+        T_ForIn id names words body -> forInMultipleHelper id names words body
 
         -- For functions we generate an unlinked subgraph, and mention that in its definition node
         T_Function id _ _ name body -> do
@@ -934,6 +936,17 @@ build t = do
         -- Add a join from the fork to warn about variable changes
         linkRangeAs CFEFalseFlow fork pid
         linkRanges [start, pid, status]
+
+    forInMultipleHelper id names words body = do
+        entry <- newStructuralNode
+        expansion <- sequentially words
+        assignments <- newNodeRange $ CFApplyEffects [IdTagged id $ CFWriteVariable name CFValueString | name <- names]
+        body <- sequentially body
+        exit <- newStructuralNode
+        linkRanges [entry, expansion, assignments, body, exit]
+        linkRange expansion exit
+        linkRange body assignments
+        return $ spanRange entry exit
 
     forInHelper id name words body = do
         entry <- newStructuralNode

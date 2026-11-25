@@ -3550,7 +3550,7 @@ checkLoopVariableReassignment params token =
     loopVariable :: Token -> Maybe String
     loopVariable t =
         case t of
-            T_ForIn _ s _ _ -> return s
+            T_ForIn _ (s:_) _ _ -> return s
             T_ForArithmetic _
                 (TA_Sequence _
                     [TA_Assignment _ "="

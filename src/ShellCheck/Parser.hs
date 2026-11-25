@@ -2306,7 +2306,10 @@ readSeparatorOp = do
                     char ';'
                     -- In case statements we might have foo & ;;
                     notFollowedBy2 $ char ';'
-                    parseProblemAt pos ErrorC 1045 "It's not 'foo &; bar', just 'foo & bar'."
+                    -- zsh accepts `foo &; bar`
+                    zsh <- isZsh
+                    unless zsh $
+                        parseProblemAt pos ErrorC 1045 "It's not 'foo &; bar', just 'foo & bar'."
                     return $ Just Ampersand
             ) <|> (Nothing <$ char ';') <|> (Just Ampersand <$ char '&')
     end <- getPosition
@@ -2328,7 +2331,9 @@ zshOnly = isZsh >>= guard
 readZshDisownOp = try $ do
     zshOnly
     char '&'
-    void $ oneOf "!|"
+    oneOf "!|"
+    -- `foo &|; bar` is fine too
+    optional . try $ spacing >> char ';' >> notFollowedBy2 (char ';')
 
 -- In Ksh, |& terminates the preceding and-or list, like &.
 readKshCoprocessOp = do
@@ -2687,6 +2692,9 @@ prop_readZshIf4 = not $ isOk readScript "#!/bin/zsh\nif [[ -n $1 ]] { echo yes }
 prop_readZshIf5 = not $ isOk readScript "#!/bin/zsh\nif [[ -n $1 ]] { echo yes }; else { echo no }"
 prop_readZshIf6 = not $ isOk readScript "#!/bin/bash\nif [[ -n $1 ]] { echo yes; }"
 prop_readZshIf7 = isOk readScript "#!/bin/zsh\nif true; then { echo x } fi"
+prop_readZshEmptyBodies1 = isOk readScript "#!/bin/zsh\nif true; then\n  # nothing yet\nelif false; then; else\nfi\nwhile false; do done\nf() { ; }"
+prop_readZshEmptyBodies2 = isOk readScript "#!/bin/zsh\nsleep 1 &; echo a\nf() { sleep 1 &|; }"
+prop_readZshEmptyBodies3 = not $ isOk readScript "#!/bin/bash\nif true; then\nfi"
 prop_readZshIf8 =
     case debugParse readScript "#!/bin/zsh\nif [[ x ]] { a } else { b }" of
         Right (T_Annotation _ _ (T_Script _ _ [T_Pipeline _ _ [T_Redirecting _ _ (T_IfExpression _ [([_], [_])] [_])]])) -> True
@@ -2696,9 +2704,15 @@ prop_readZshFor1 = isOk readScript "#!/bin/zsh\nfor x (a b c) echo \"$x\""
 prop_readZshFor2 = isOk readScript "#!/bin/zsh\nfor x (\n  a\n  b\n) { echo \"$x\" }\nfor x (a b); do echo \"$x\"; done\nfor x (a b)\n  echo \"$x\""
 prop_readZshFor3 = isOk readScript "#!/bin/zsh\nfor x in a b; echo \"$x\"\nfor x; echo \"$x\"\nfor ((i = 0; i < 3; i++)) echo \"$i\""
 prop_readZshFor4 = not $ isOk readScript "#!/bin/bash\nfor x (a b c) echo \"$x\""
+prop_readZshFor6 = isOk readScript "#!/bin/zsh\nfor k v in a 1 b 2; do echo \"$k=$v\"; done\nfor k v (a 1) echo \"$k=$v\"\nfor 1 2; do echo \"$1\"; done"
+prop_readZshFor7 =
+    case debugParse readScript "#!/bin/zsh\nfor k v in a b; do true; done" of
+        Right (T_Annotation _ _ (T_Script _ _ [T_Pipeline _ _ [T_Redirecting _ _ (T_ForIn _ ["k", "v"] [_, _] [_])]])) -> True
+        _ -> False
+prop_readZshFor8 = not $ isOk readScript "#!/bin/bash\nfor k v in a b; do true; done"
 prop_readZshFor5 =
     case debugParse readScript "#!/bin/zsh\nfor x (a b) a && b; c" of
-        Right (T_Annotation _ _ (T_Script _ _ [T_Pipeline _ _ [T_Redirecting _ _ (T_ForIn _ "x" [_, _] [T_AndIf {}])], _])) -> True
+        Right (T_Annotation _ _ (T_Script _ _ [T_Pipeline _ _ [T_Redirecting _ _ (T_ForIn _ ["x"] [_, _] [T_AndIf {}])], _])) -> True
         _ -> False
 prop_readZshCase1 = isOk readScript "#!/bin/zsh\ncase $1 { a) echo a ;; *) echo other ;; }"
 prop_readZshCase2 = isOk readScript "#!/bin/zsh\ncase $1 in\n  a) echo a ;|\n  *) echo all ;;\nesac"
@@ -2742,6 +2756,14 @@ readIfClause = called "if expression" $ do
     return $ T_IfExpression id ((condition, action):map snd elifs) elses
 
 
+-- zsh allows empty bodies and a ';' right after then, else and do, as in
+-- `if true; then; fi`. Read the ';' and the body, which may be empty.
+readZshPossiblyEmptyBody endings = do
+    optional g_Semi
+    allspacing
+    isEmpty <- isFollowedBy endings
+    if isEmpty then return [] else readTerm
+
 verifyNotEmptyIf s =
     optional (do
                 emptyPos <- getPosition
@@ -2777,11 +2799,14 @@ readThenClause pos condition = do
             parseProblem ErrorC 1050 "Expected 'then'."
             return "Expected 'then'"
 
-        acceptButWarn g_Semi ErrorC 1051 "Semicolons directly after 'then' are not allowed. Just remove it."
-        allspacing
-        verifyNotEmptyIf "then"
-
-        action <- readTerm
+        zsh <- isZsh
+        action <- if zsh
+            then readZshPossiblyEmptyBody (void g_Fi <|> void g_Elif <|> void g_Else)
+            else do
+                acceptButWarn g_Semi ErrorC 1051 "Semicolons directly after 'then' are not allowed. Just remove it."
+                allspacing
+                verifyNotEmptyIf "then"
+                readTerm
         return (False, (condition, action))
 
 readElifPart = called "elif clause" $ do
@@ -2794,10 +2819,14 @@ readElifPart = called "elif clause" $ do
             parseProblemAt pos ErrorC 1049 "Did you forget the 'then' for this 'elif'?"
 
         g_Then
-        acceptButWarn g_Semi ErrorC 1052 "Semicolons directly after 'then' are not allowed. Just remove it."
-        allspacing
-        verifyNotEmptyIf "then"
-        action <- readTerm
+        zsh <- isZsh
+        action <- if zsh
+            then readZshPossiblyEmptyBody (void g_Fi <|> void g_Elif <|> void g_Else)
+            else do
+                acceptButWarn g_Semi ErrorC 1052 "Semicolons directly after 'then' are not allowed. Just remove it."
+                allspacing
+                verifyNotEmptyIf "then"
+                readTerm
         return (False, (condition, action))
 
 -- Returns the commands, and whether this was zsh's braced `else { ..; }`.
@@ -2821,10 +2850,14 @@ readRegularElse pos = do
         try . lookAhead $ g_If
         parseProblemAt pos ErrorC 1075 "Use 'elif' instead of 'else if' (or put 'if' on new line if nesting)."
 
-    acceptButWarn g_Semi ErrorC 1053 "Semicolons directly after 'else' are not allowed. Just remove it."
-    allspacing
-    verifyNotEmptyIf "else"
-    readTerm
+    zsh <- isZsh
+    if zsh
+        then readZshPossiblyEmptyBody (void g_Fi)
+        else do
+            acceptButWarn g_Semi ErrorC 1053 "Semicolons directly after 'else' are not allowed. Just remove it."
+            allspacing
+            verifyNotEmptyIf "else"
+            readTerm
 
 ifNextToken parser action =
     optional $ do
@@ -2854,6 +2887,9 @@ readBraceGroup = called "brace group" $ do
     void allspacingOrFail <|> optional (do
         lookAhead $ noneOf "(" -- {( is legal
         unless zsh $ parseProblem ErrorC 1054 "You need a space after the '{'.")
+    -- zsh also allows `{ ; }`
+    zshEmpty <- isFollowedBy (zshOnly >> many (char ';' >> allspacing) >> char '}')
+    when zshEmpty . void $ many (char ';' >> allspacing)
     isEmpty <- isFollowedBy $ char '}'
     when (isEmpty && not zsh) $ do
         pos <- getPosition
@@ -2917,14 +2953,18 @@ readDoGroup kwId = do
         parseProblem ErrorC 1058 "Expected 'do'."
         return "Expected 'do'"
 
-    acceptButWarn g_Semi ErrorC 1059 "Semicolon is not allowed directly after 'do'. You can just delete it."
-    allspacing
+    zsh <- isZsh
+    commands <- if zsh
+        then readZshPossiblyEmptyBody (void g_Done)
+        else do
+            acceptButWarn g_Semi ErrorC 1059 "Semicolon is not allowed directly after 'do'. You can just delete it."
+            allspacing
 
-    optional (do
-                try . lookAhead $ g_Done
-                parseProblemAtId (getId doKw) ErrorC 1060 "Can't have empty do clauses (use 'true' as a no-op).")
+            optional (do
+                        try . lookAhead $ g_Done
+                        parseProblemAtId (getId doKw) ErrorC 1060 "Can't have empty do clauses (use 'true' as a no-op).")
 
-    commands <- readCompoundList
+            readCompoundList
     g_Done `orFail` do
             parseProblemAtId (getId doKw) ErrorC 1061 "Couldn't find 'done' for this 'do'."
             parseProblem ErrorC 1062 "Expected 'done' matching previously mentioned 'do'."
@@ -2988,10 +3028,22 @@ readForClause = called "for loop" $ do
     readRegular id = do
         acceptButWarn (char '$') ErrorC 1086
             "Don't use $ on the iterator name in for loops."
-        name <- readVariableName `thenSkip` allspacing
+        names <- readZshLoopVariables <|> ((:[]) <$> readVariableName `thenSkip` allspacing)
         values <- readInClause <|> readZshParenthesizedWords <|> (optional readSequentialSep >> return [])
         group <- readBraced <|> readZshSublistBody <|> readDoGroup id
-        return $ T_ForIn id name values group
+        return $ T_ForIn id names values group
+
+-- zsh: several loop variables, as in `for key value in ...`. They can also
+-- be positional parameters, as in `for 1 2; do ..; done`.
+readZshLoopVariables = do
+    zshOnly
+    names <- many1 $ do
+        notFollowedBy2 (void g_In <|> void g_Do)
+        name <- readVariableName <|> many1 digit
+        spacing
+        return name
+    allspacing
+    return names
 
 -- zsh: the `(word ...)` in `for x (a b c) ..`, `foreach x (a b c) ..`.
 -- Afterwards, accept the optional separators before the loop body.
@@ -3020,19 +3072,19 @@ prop_readZshForeach3 = not $ isOk readScript "#!/bin/zsh\nforeach x (a b c)\n  e
 prop_readZshForeach4 = not $ isOk readScript "#!/bin/bash\nforeach x (a b c)\n  echo \"$x\"\nend"
 prop_readZshForeach5 =
     case debugParse readScript "#!/bin/zsh\nforeach x (a b) true; end" of
-        Right (T_Annotation _ _ (T_Script _ _ [T_Pipeline _ _ [T_Redirecting _ _ (T_ForIn _ "x" [_, _] [_])]])) -> True
+        Right (T_Annotation _ _ (T_Script _ _ [T_Pipeline _ _ [T_Redirecting _ _ (T_ForIn _ ["x"] [_, _] [_])]])) -> True
         _ -> False
 -- zsh: `foreach name (word ...) list end`
 readZshForeachClause = called "foreach loop" $ do
     zshOnly
     start <- startSpan
     tryWordToken "foreach" (const ())
-    name <- readVariableName `thenSkip` spacing
+    names <- readZshLoopVariables
     words <- readZshParenthesizedWords
     body <- readTerm
     g_ZshEnd <|> fail "Expected 'end' to close the foreach loop"
     id <- endSpan start
-    return $ T_ForIn id name words body
+    return $ T_ForIn id names words body
 
 prop_readZshRepeat1 = isOk readScript "#!/bin/zsh\nrepeat 3 do echo hi; done\nrepeat 3; do echo hi; done"
 prop_readZshRepeat2 = isOk readScript "#!/bin/zsh\nrepeat $((n - 1)) echo hi\nrepeat 2 { echo hi }"
@@ -3188,7 +3240,7 @@ readFunctionDefinition = called "function" $ do
     return $ functionSignature id group
   where
     readFunctionSignature =
-        readWithFunction <|> readWithoutFunction
+        readWithFunction <|> readWithoutFunction <|> readZshWithoutFunction
       where
         readWithFunction = do
             try $ do
@@ -3197,7 +3249,7 @@ readFunctionDefinition = called "function" $ do
             spacing
             zsh <- isZsh
             name <- if zsh
-                then readZshFunctionName
+                then readZshFunctionNames
                 else (:) <$> extendedFunctionStartChars <*> many extendedFunctionChars
             spaces <- spacing
             hasParens <- wasIncluded readParens
@@ -3216,6 +3268,26 @@ readFunctionDefinition = called "function" $ do
         -- zsh function names can be any word, as in `function $0_error()`
         -- or `function {get,set}_value()`, which defines both functions.
         readZshFunctionName = many1 $ noneOf " \t\r\n;&|()<>"
+
+        -- zsh can define several functions with the same body, as in
+        -- `function mkcd takedir { ..; }`. Only the first name is kept.
+        readZshFunctionNames = do
+            first <- readZshFunctionName
+            many . try $ do
+                spacing
+                notFollowedBy2 $ oneOf "{("
+                readZshFunctionName
+            return first
+
+        -- zsh: a name with expansions, as in `widget_${name}() { ..; }`.
+        -- Names without expansions are read above, and `arr=()` is an assignment.
+        readZshWithoutFunction = try $ do
+            zshOnly
+            name <- many1 $ noneOf " \t\r\n;&|()<>='\"`"
+            guard $ '$' `elem` name
+            spacing
+            string "()"
+            return $ \id -> T_Function id (FunctionKeyword False) (FunctionParentheses True) name
 
         readParens = do
             g_Lparen
@@ -3243,6 +3315,15 @@ prop_readZshFunctionName1 = isOk readScript "#!/bin/zsh\nfunction $0_helper() { 
 prop_readZshFunctionName2 = isOk readScript "#!/bin/zsh\nfunction foo\"${1:-}\"() { true; }"
 prop_readZshFunctionName3 = isOk readScript "#!/bin/zsh\nfunction cfh~() { true; }"
 prop_readZshFunctionName4 = not $ isOk readScript "#!/bin/bash\nfunction $0_helper() { true; }"
+prop_readZshFunctionName5 = isOk readScript "#!/bin/zsh\nwidget_${name}() { :; }\nfunction mkcd takedir() { true; }\nfunction a \\\n  b { true; }"
+prop_readZshFunctionName7 =
+    case debugParse readScript "#!/bin/zsh\narr=()\nx='a() b'" of
+        Right (T_Annotation _ _ (T_Script _ _ [T_Pipeline _ _ [T_Redirecting _ _ (T_SimpleCommand _ [T_Assignment {}] [])], T_Pipeline _ _ [T_Redirecting _ _ (T_SimpleCommand _ [T_Assignment {}] [])]])) -> True
+        _ -> False
+prop_readZshFunctionName6 =
+    case debugParse readScript "#!/bin/zsh\nfunction a b { true; }" of
+        Right (T_Annotation _ _ (T_Script _ _ [T_Pipeline _ _ [T_Redirecting _ _ (T_Function _ _ _ "a" _)]])) -> True
+        _ -> False
 prop_readZshEqualsProcSub1 = isOk readScript "#!/bin/zsh\ndiff =(echo a) =( echo b )"
 prop_readZshEqualsProcSub2 = isOk readScript "#!/bin/zsh\nlocal tmp==(:)\nx==(echo foo)"
 prop_readZshEqualsProcSub3 = isOk readScript "#!/bin/zsh\ncat < =(echo foo)"

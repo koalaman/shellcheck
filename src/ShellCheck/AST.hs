@@ -98,7 +98,9 @@ data InnerToken t =
     | Inner_T_Fi
     | Inner_T_For
     | Inner_T_ForArithmetic t t t [t]
-    | Inner_T_ForIn String [t] [t]
+    -- The loop variables, the words and the body. zsh can assign several
+    -- variables at a time, as in `for key value in ...`.
+    | Inner_T_ForIn [String] [t] [t]
     | Inner_T_Function FunctionKeyword FunctionParentheses String t
     | Inner_T_GREATAND
     | Inner_T_Glob String
