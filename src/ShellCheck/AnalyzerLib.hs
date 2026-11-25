@@ -700,6 +700,7 @@ getModifiedVariableCommand base@(T_SimpleCommand id cmdPrefix (T_NormalWord _ (T
 
         "mapfile" -> maybeToList $ getMapfileArray base rest
         "readarray" -> maybeToList $ getMapfileArray base rest
+        "compgen" -> maybeToList $ getCompgenArray rest
 
         "DEFINE_boolean" -> maybeToList $ getFlagVariable rest
         "DEFINE_float" -> maybeToList $ getFlagVariable rest
@@ -760,6 +761,14 @@ getModifiedVariableCommand base@(T_SimpleCommand id cmdPrefix (T_NormalWord _ (T
 
     getPrintfVariable list = getFlagAssignedVariable "v" (SourceFrom list) $ getBsdOpts "v:" list
     getWaitVariable   list = getFlagAssignedVariable "p" SourceInteger     $ return $ getGenericOpts list
+
+    -- compgen -V arr stores the completions in the array arr rather than printing them
+    getCompgenArray list = do
+        let flags = getGenericOpts list
+        (_, (_, value)) <- find ((== "V") . fst) flags
+        name <- getLiteralString value
+        guard $ isVariableName name
+        return (base, value, name, DataArray SourceExternal)
 
     getFlagAssignedVariable str dataSource maybeFlags = do
         flags <- maybeFlags
