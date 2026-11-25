@@ -294,6 +294,9 @@ prop_containsZshShCompatibility4 = not $ containsZshShCompatibility' "setopt nos
 prop_containsZshShCompatibility5 = not $ containsZshShCompatibility' "emulate -L zsh; unsetopt shwordsplit"
 prop_containsZshShCompatibility6 = not $ containsZshShCompatibility' "f() { (( x )) && setopt ksh_arrays; }"
 prop_containsZshShCompatibility7 = not $ containsZshShCompatibility' "() { emulate -L sh; }"
+prop_containsZshShCompatibility8 = all containsZshShCompatibility' ["emulate bash", "emulate -L ksh93", "unsetopt noshwordsplit", "set -y", "options[shwordsplit]=on", "emulate -L zsh -o shwordsplit"]
+prop_containsZshShCompatibility9 = not $ containsZshShCompatibility' "emulate sh -c 'true'"
+prop_containsZshShCompatibility10 = not $ containsZshShCompatibility' "set -o noshwordsplit; options[shwordsplit]=off; unsetopt shwordsplit"
 containsZshShCompatibility' = containsZshShCompatibility . fromJust . prRoot . pScript . ("#!/bin/zsh\n" ++)
 containsZshShCompatibility root = any turnsOn $ outsideFunctions root
   where
@@ -309,13 +312,31 @@ containsZshShCompatibility root = any turnsOn $ outsideFunctions root
                 let args = mapMaybe getLiteralString $ arguments t
                 return $ case name of
                     "setopt" -> any isCompatibilityOption args
-                    "set" -> any isCompatibilityOption $ afterDashO args
-                    "emulate" -> any (`elem` ["sh", "ksh"]) args
+                    "unsetopt" -> any isCompatibilityOption $ mapMaybe (stripPrefix "no" . normalize) args
+                    "set" -> any isCompatibilityOption (afterDashO args) || any setsShWordSplit args
+                    "emulate" -> emulatesCompatibly args
                     _ -> False
+            -- options[shwordsplit]=on
+            T_Assignment _ _ "options" [index] value -> fromMaybe False $ do
+                option <- getLiteralString index
+                setting <- getLiteralString value
+                return $ isCompatibilityOption option && setting == "on"
             _ -> False
     -- zsh option names ignore case and underscores
-    isCompatibilityOption s =
-        (map toLower . filter (/= '_') $ s) `elem` ["shwordsplit", "globsubst", "ksharrays"]
+    normalize = map toLower . filter (/= '_')
+    isCompatibilityOption s = normalize s `elem` ["shwordsplit", "globsubst", "ksharrays"]
+    -- set -y is SH_WORD_SPLIT
+    setsShWordSplit arg =
+        case arg of
+            '-':flags@(c:_) -> c `notElem` "-o" && 'y' `elem` flags
+            _ -> False
+    -- zsh goes by the first letter, so `emulate bash` and `emulate ksh93`
+    -- count. `emulate sh -c cmd` only applies to that command.
+    emulatesCompatibly args =
+        case dropWhile ("-" `isPrefixOf`) args of
+            mode:flags -> "-c" `notElem` flags &&
+                (take 1 mode `elem` ["s", "b", "k"] || any isCompatibilityOption (afterDashO flags))
+            [] -> False
     afterDashO ("-o":x:rest) = x : afterDashO rest
     afterDashO (_:rest) = afterDashO rest
     afterDashO [] = []

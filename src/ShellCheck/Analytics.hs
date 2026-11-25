@@ -727,6 +727,8 @@ prop_checkForInQuoted5 = verify checkForInQuoted "for f in ls; do true; done"
 prop_checkForInQuoted6 = verifyNot checkForInQuoted "for f in \"${!arr}\"; do true; done"
 prop_checkForInQuotedZsh1 = verifyNot checkForInQuoted "#!/bin/zsh\nfor f in \"${(@k)map}\" \"${(f)lines}\"; do true; done"
 prop_checkForInQuotedZsh2 = verifyNot checkForInQuoted "#!/bin/zsh\nfor k v in \"${(@kv)map}\"; do true; done"
+prop_checkForInQuotedZsh4 = verifyNot checkForInQuoted "#!/bin/zsh\nfor w in \"${=list}\" \"$=list\"; do true; done"
+prop_checkForInQuotedZsh5 = verify checkForInQuoted "#!/bin/zsh\nfor w in \"${(j:@:)arr}\"; do true; done"
 prop_checkForInQuotedZsh3 = verify checkForInQuoted "#!/bin/zsh\nfor f in \"$var\"; do true; done"
 prop_checkForInQuotedBashFlags = verify checkForInQuoted "for f in \"${(@k)map}\"; do true; done"
 prop_checkForInQuoted7 = verify checkForInQuoted "for f in ls, grep, mv; do true; done"
@@ -2246,6 +2248,7 @@ prop_subshellAssignmentCheck35 = verifyNotTree subshellAssignmentCheck "#!/usr/b
 prop_subshellAssignmentCheck40 = verifyNotTree subshellAssignmentCheck "#!/usr/bin/env bats\n@test 'foo' { ( run true; ) & run true; echo $status; }"
 prop_subshellAssignmentCheck41 = verifyTree subshellAssignmentCheck "( run true; ); echo $status"
 prop_subshellAssignmentCheck42 = verifyNotTree subshellAssignmentCheck "#!/usr/bin/env bats\n@test 'foo' { run true | cat; }\n@test 'bar' { true; }"
+prop_subshellAssignmentCheckZsh = verifyNotTree subshellAssignmentCheck "#!/bin/zsh\nread -r line < /etc/hosts && echo got &\nwait\necho \"$line\""
 subshellAssignmentCheck params t =
     let flow = variableFlow params
         check = findSubshelled flow [(InSubshell "oops",[])] Map.empty
@@ -3136,6 +3139,7 @@ prop_checkUnpassedInFunctions15 = verifyNotTree checkUnpassedInFunctions "foo() 
 prop_checkUnpassedInFunctions16 = verifyNotTree checkUnpassedInFunctions "foo() { echo ${1:-x}; }; foo"
 prop_checkUnpassedInFunctions17 = verifyNotTree checkUnpassedInFunctions "foo() { mycommand ${1+--verbose}; }; foo"
 prop_checkUnpassedInFunctions18 = verifyNotTree checkUnpassedInFunctions "foo() { if mycheck; then foo ${1?Missing}; fi; }; foo"
+prop_checkUnpassedInFunctionsZsh = verifyNotTree checkUnpassedInFunctions "#!/bin/zsh\nf() {\n  () { echo \"$1\" } hello\n}\nf"
 checkUnpassedInFunctions params root =
     execWriter $ mapM_ warnForGroup referenceGroups
   where
@@ -3161,6 +3165,8 @@ checkUnpassedInFunctions params root =
     isDirectChildOf child parent = fromMaybe False $ do
         function <- find (\x -> case x of
             T_Function {} -> True
+            -- zsh: an anonymous function has its own $1
+            T_AnonymousFunction {} -> True
             T_Script {} -> True  -- for sourced files
             _ -> False) $
                 getPath (parentMap params) child
@@ -3538,6 +3544,7 @@ prop_checkUncheckedCdInFunction5 = verifyTree checkUncheckedCdPushdPopd "foo() {
 prop_checkUncheckedCdInFunction6 = verifyTree checkUncheckedCdPushdPopd "foo() { cd /abc; return | cat; }"
 prop_checkUncheckedCdInFunction7 = verifyNotTree checkUncheckedCdPushdPopd "foo() { cd /abc; return $?; }"
 prop_checkUncheckedCdInFunction8 = verifyNotTree checkUncheckedCdPushdPopd "foo() { cd /abc; exit $?; }"
+prop_checkUncheckedCdInFunctionZsh = verifyNotTree checkUncheckedCdPushdPopd "#!/bin/zsh\n() { cd /abc }"
 
 checkUncheckedCdPushdPopd params root =
     if hasErrexit params then
@@ -3559,7 +3566,7 @@ checkUncheckedCdPushdPopd params root =
     isLastCommandInFunction t =
         go $ NE.tail $ getPath (parentMap params) t
       where
-        go (child:T_BraceGroup _ commands:T_Function {}:_) =
+        go (child:T_BraceGroup _ commands:function:_) | isFunctionOrAnonymous function =
             case dropWhile ((/= getId child) . getId) commands of
                 [_] -> True
                 [_, T_Pipeline _ [] [T_Redirecting _ [] (T_SimpleCommand _ [] (cmd:args))]] ->
@@ -4202,7 +4209,10 @@ checkUseBeforeDefinition params t = fromMaybe [] $ do
 prop_checkForLoopGlobVariables1 = verify checkForLoopGlobVariables "for i in $var/*.txt; do true; done"
 prop_checkForLoopGlobVariables2 = verifyNot checkForLoopGlobVariables "for i in \"$var\"/*.txt; do true; done"
 prop_checkForLoopGlobVariables3 = verifyNot checkForLoopGlobVariables "for i in $var; do true; done"
-checkForLoopGlobVariables _ t =
+prop_checkForLoopGlobVariablesZsh = verifyNot checkForLoopGlobVariables "#!/bin/zsh\nfor i in $var/*.txt; do true; done"
+prop_checkForLoopGlobVariablesZsh2 = verify checkForLoopGlobVariables "#!/bin/zsh\nsetopt shwordsplit\nfor i in $var/*.txt; do true; done"
+-- In native zsh, $var isn't split
+checkForLoopGlobVariables params t = unless (isNativeZsh params) $
     case t of
         T_ForIn _ _ words _ -> mapM_ check words
         _ -> return ()
@@ -4222,6 +4232,7 @@ prop_checkSubshelledTests5 = verifyNot checkSubshelledTests "( [[ ${var:=x} = y 
 prop_checkSubshelledTests6 = verifyNot checkSubshelledTests "( [[ $((i++)) = 10 ]] )"
 prop_checkSubshelledTests7 = verifyNot checkSubshelledTests "( [[ $((i+=1)) = 10 ]] )"
 prop_checkSubshelledTests8 = verify checkSubshelledTests "# shellcheck disable=SC2234\nf() ( [[ x ]] )"
+prop_checkSubshelledTestsZsh = verify checkSubshelledTests "#!/bin/zsh\n# shellcheck disable=SC2234\n() ( [[ -n $1 ]] ) arg"
 
 checkSubshelledTests params t =
     case t of
@@ -4247,7 +4258,7 @@ checkSubshelledTests params t =
 
     isFunctionBody path =
         case path of
-            (_ NE.:| f:_) -> isFunction f
+            (_ NE.:| f:_) -> isFunctionOrAnonymous f
             _ -> False
 
     isTestStructure t =
@@ -4459,6 +4470,7 @@ prop_checkUselessBang7 = verifyNot checkUselessBang "set -e; x() { ! [ x ]; }"
 prop_checkUselessBang8 = verifyNot checkUselessBang "set -e; if { ! true; }; then true; fi"
 prop_checkUselessBang9 = verifyNot checkUselessBang "set -e; while ! true; do true; done"
 prop_checkUselessBang10 = verify checkUselessBang "set -e\nshellcheck disable=SC0000\n! true\nrest"
+prop_checkUselessBangZsh = verifyNot checkUselessBang "#!/bin/zsh\nset -e\n() { foo; ! true }"
 checkUselessBang params t = when (hasErrexit params) $ mapM_ check (getNonReturningCommands t)
   where
     check t =
@@ -4488,7 +4500,7 @@ checkUselessBang params t = when (hasErrexit params) $ mapM_ check (getNonReturn
 
     isFunctionBody t =
         case getPath (parentMap params) t of
-            _ NE.:| T_Function {}:_-> True
+            _ NE.:| f:_ -> isFunctionOrAnonymous f
             _ -> False
 
     dropLast t =

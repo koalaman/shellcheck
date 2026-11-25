@@ -303,16 +303,43 @@ mayBecomeMultipleArgsIn isZsh t = willBecomeMultipleArgs t || f False t
     f quoted (T_NormalWord _ parts) = any (f quoted) parts
     f _ _ = False
 
--- Does this zsh parameter expansion have a flag that makes several words
--- even when quoted, like the @ in "${(@)array}" or the f in "${(f)lines}"?
+-- Does this zsh parameter expansion make several words even when quoted,
+-- like "${(@)array}", "${(f)lines}" or "${=list}"?
 prop_hasZshSplittingFlag1 = hasZshSplittingFlag "(@kv)map"
 prop_hasZshSplittingFlag2 = hasZshSplittingFlag "(s: :)var"
 prop_hasZshSplittingFlag3 = not $ hasZshSplittingFlag "(j: :)var"
 prop_hasZshSplittingFlag4 = not $ hasZshSplittingFlag "var"
+prop_hasZshSplittingFlag5 = not $ hasZshSplittingFlag "(j:@:)arr"
+prop_hasZshSplittingFlag6 = not $ hasZshSplittingFlag "(l:3::0:)n"
+prop_hasZshSplittingFlag7 = hasZshSplittingFlag "=list"
+prop_hasZshSplittingFlag8 = not $ hasZshSplittingFlag "==list"
+prop_hasZshSplittingFlag9 = hasZshSplittingFlag "(ps.\\n.)x"
 hasZshSplittingFlag string =
     case string of
-        '(':rest -> any (`elem` "@fsz0") $ takeWhile (/= ')') rest
-        _ -> False
+        '(':rest -> any (`elem` "@fsz0") $ zshFlagLetters rest
+        -- ${=x} splits, while ${==x} doesn't
+        _ -> (== 1) . length . filter (== '=') $ takeWhile (`elem` "=~^") string
+
+-- The letters in zsh parameter expansion flags, up to the ), without the
+-- arguments of flags like j and s: "jl" for "j:@:l:3::0:)name"
+prop_zshFlagLetters1 = zshFlagLetters "j:@:l:3::0:)name" == "jl"
+prop_zshFlagLetters2 = zshFlagLetters "s[:]f)x" == "sf"
+zshFlagLetters s =
+    case s of
+        ')':_ -> []
+        c:rest | c `elem` "gjlrsIZ_" -> c : zshFlagLetters (skipArguments (argumentCount c) rest)
+        c:rest -> c : zshFlagLetters rest
+        [] -> []
+  where
+    -- l and r take up to three, as in l:3::0:
+    argumentCount c = if c `elem` "lr" then 3 else 1 :: Int
+    skipArguments n rest =
+        case rest of
+            open:more ->
+                let close = fromMaybe open $ lookup open [('(', ')'), ('[', ']'), ('{', '}'), ('<', '>')]
+                    after = drop 1 $ dropWhile (/= close) more
+                in if n > 1 && take 1 after == [open] then skipArguments (n-1) after else after
+            [] -> []
 
 -- Is it certain that this word will becomes multiple words?
 willBecomeMultipleArgs t = willConcatInAssignment t || f t
@@ -611,6 +638,13 @@ isOnlyRedirection t =
         _ -> False
 
 isFunction t = case t of T_Function {} -> True; _ -> False
+
+-- A function, or a zsh anonymous function
+isFunctionOrAnonymous t =
+    case t of
+        T_Function {} -> True
+        T_AnonymousFunction {} -> True
+        _ -> False
 
 -- Bats tests and zsh anonymous functions are functions for the purpose of 'local' and such
 isFunctionLike t =

@@ -2098,6 +2098,16 @@ prop_readZshFunctionKeywordGlued = isNotOk readScript "#!/bin/zsh\nfunction{ ech
 prop_readZshFunctionKeywordParens = isOk readScript "#!/bin/zsh\nfunction() { echo hi }"
 prop_readZshCaseNoContinue = isNotOk readScript "#!/bin/zsh\ncase $1 in a) echo ;;& esac"
 prop_readBashCaseContinue = isOk readScript "#!/bin/bash\ncase $1 in a) echo ;;& esac"
+prop_readZshBackgroundLast =
+    case debugParse readScript "#!/bin/zsh\nread -r x && echo got &" of
+        Right (T_Annotation _ _ (T_Script _ _ [T_AndIf _ _ (T_Backgrounded _ _)])) -> True
+        _ -> False
+prop_readBashBackgroundList =
+    case debugParse readScript "#!/bin/bash\nread -r x && echo got &" of
+        Right (T_Annotation _ _ (T_Script _ _ [T_Backgrounded _ (T_AndIf {})])) -> True
+        _ -> False
+prop_readZshBracedBodyAfterArithmetic = isOk readScript "#!/bin/zsh\nx=1\nwhile (( x )) {x=0 }\nuntil (( x )) {}\nwhile (( x )) {echo hi}"
+prop_readZshBracedBodyAfterArithmetic2 = isNotOk readScript "#!/bin/zsh\nx=1\nwhile (( x )) {x=0}"
 prop_readZshModifierEnds = isOk readScript "#!/bin/zsh\nx=abc\nprint $x:s/a/b; cd /tmp\n[[ $x:s/a/b == bbc ]] && echo y\necho \"$x:gs/a/b\" $x:s/a/b}c\n{ print $x:s/a/b}"
 prop_readZshReservedBeforeAnon = isOk readScript "#!/bin/zsh\ntime () { sleep 0 } a\ncoproc () { cat }\nnocorrect () { echo x } y\nnoglob () { echo $1 }\nnocorrect mkdir dir"
 prop_readZshReservedBeforeAnon2 =
@@ -2544,7 +2554,8 @@ isZsh = do
 zshOnly :: Monad m => SCParser m ()
 zshOnly = isZsh >>= guard
 
--- In zsh, &! and &| background the preceding and-or list and disown it.
+-- In zsh, &! and &| background the last pipeline of the preceding and-or
+-- list and disown it, like &.
 readZshDisownOp = try $ do
     zshOnly
     char '&'
@@ -2840,17 +2851,26 @@ readTerm = do
             (sep, (start, end)) <- readSeparator
             id <- getNextIdBetween start end
             skipZshEmptyCommands
+            zsh <- isZsh
+            let transform = transformWithSeparator zsh id sep
             more <- option (T_EOF id) readAndOr
-            case more of (T_EOF _) -> return [transformWithSeparator id sep current]
+            case more of (T_EOF _) -> return [transform current]
                          _         -> do
                                     list <- readTerm' more
-                                    return (transformWithSeparator id sep current : list)
+                                    return (transform current : list)
           <|>
             return [current]
       where
-        transformWithSeparator i (Just Ampersand) = T_Backgrounded i
-        transformWithSeparator i (Just Coprocess) = T_KshCoprocess i
-        transformWithSeparator _ Nothing = id
+        -- zsh runs only the last pipeline of `a && b &` in the background
+        transformWithSeparator True i (Just Ampersand) = backgroundLast i
+        transformWithSeparator _ i (Just Ampersand) = T_Backgrounded i
+        transformWithSeparator _ i (Just Coprocess) = T_KshCoprocess i
+        transformWithSeparator _ _ Nothing = id
+        backgroundLast i t =
+            case t of
+                T_AndIf id a b -> T_AndIf id a (backgroundLast i b)
+                T_OrIf id a b -> T_OrIf id a (backgroundLast i b)
+                _ -> T_Backgrounded i t
 
 
 readPipeSequence = do
@@ -3855,7 +3875,8 @@ readCompoundCommand = do
     shortIf <- isInZshIfCondition
     optional . lookAhead $ do
         guard $ not shortIf
-        notFollowedBy2 $ choice [readKeyword, g_Lbrace]
+        -- zsh: `while (( x )) {echo hi}` has a braced body
+        notFollowedBy2 $ choice [void readKeyword, void g_Lbrace, zshOnly >> void (char '{')]
         pos <- getPosition
         many1 readNormalWord
         posEnd <- getPosition
