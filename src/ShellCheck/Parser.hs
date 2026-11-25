@@ -2792,6 +2792,8 @@ prop_readZshIf7 = isOk readScript "#!/bin/zsh\nif true; then { echo x } fi"
 prop_readZshEmptyBodies1 = isOk readScript "#!/bin/zsh\nif true; then\n  # nothing yet\nelif false; then; else\nfi\nwhile false; do done\nf() { ; }"
 prop_readZshEmptyBodies2 = isOk readScript "#!/bin/zsh\nsleep 1 &; echo a\nf() { sleep 1 &|; }"
 prop_readZshEmptyBodies3 = not $ isOk readScript "#!/bin/bash\nif true; then\nfi"
+prop_readZshIf9 = isOk readScript "#!/bin/zsh\nif (( level > 0 )) print \"$@\"\nif [[ -n $1 ]] echo \"$1\" && echo yes\necho after"
+prop_readZshIf10 = not $ isOk readScript "#!/bin/zsh\n[[ -n $1 ]] echo x"
 prop_readZshIf8 =
     case debugParse readScript "#!/bin/zsh\nif [[ x ]] { a } else { b }" of
         Right (T_Annotation _ _ (T_Script _ _ [T_Pipeline _ _ [T_Redirecting _ _ (T_IfExpression _ [([_], [_])] [_])]])) -> True
@@ -2872,7 +2874,7 @@ readIfPart = do
     g_If
     allspacing
     condition <- readTerm
-    readZshBracedClause condition <|> readThenClause pos condition
+    readZshBracedClause condition <|> readZshShortClause condition <|> readThenClause pos condition
 
 -- zsh: `if cond { ..; }` and `elif cond { ..; }`. The condition must end
 -- with a command like [[ .. ]] or (( .. )) for this to work.
@@ -2880,6 +2882,23 @@ readZshBracedClause condition = do
     zshOnly
     list <- readZshBracedList
     return (True, (condition, list))
+
+-- zsh: the short form `if [[ .. ]] cmd` or `if (( .. )) cmd`, with a single
+-- command or && || list as the body, and no fi.
+readZshShortClause condition = do
+    zshOnly
+    notFollowedBy2 g_Then
+    body <- readZshSublistBody
+    return (True, (condition, body))
+
+-- Are we reading the condition of an if or elif in zsh, where the short
+-- form `if [[ .. ]] cmd` lets a command follow the [[ .. ]] or (( .. ))?
+isInZshIfCondition = do
+    zsh <- isZsh
+    contexts <- getCurrentContexts
+    return $ zsh && case [name | ContextName _ name <- contexts] of
+        (name:_) -> name `elem` ["if expression", "elif clause"]
+        [] -> False
 
 -- The contents of a { ..; } used as the body of a zsh alternate form
 readZshBracedList = do
@@ -3550,9 +3569,11 @@ readConditionCommand = do
     -- zsh: `if [[ .. ]] { ..; }` and `while [[ .. ]] { ..; }`.
     -- Check this first, since reading '{' as a word warns that it's literal.
     hasZshBrace <- isFollowedBy (zshOnly >> char '{')
+    -- zsh: `if [[ .. ]] cmd` is a short form of if
+    shortIf <- isInZshIfCondition
     -- If the next word is a keyword, readNormalWord will trigger a warning
     hasKeyword <- isFollowedBy readKeyword
-    hasWord <- if hasZshBrace then return False else isFollowedBy readNormalWord
+    hasWord <- if hasZshBrace || shortIf then return False else isFollowedBy readNormalWord
 
     when (hasWord && not (hasKeyword || hasDashAo || hasZshBrace)) $ do
         -- We have other words following, and no error has been emitted.
@@ -3588,7 +3609,9 @@ readCompoundCommand = do
     cmd <- readZshAlways cmd <|> return cmd
     redirs <- many readIoRedirect
     id <- getNextIdSpanningTokenList (cmd:redirs)
+    shortIf <- isInZshIfCondition
     optional . lookAhead $ do
+        guard $ not shortIf
         notFollowedBy2 $ choice [readKeyword, g_Lbrace]
         pos <- getPosition
         many1 readNormalWord

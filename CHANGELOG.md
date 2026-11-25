@@ -5,6 +5,12 @@
   (bash `require-double-equals`)
 - Add `--files-from` option to read input files from a file
 - Support EditorConfig `shellcheck.*` keys
+- Support zsh: `#!/bin/zsh`, `--shell=zsh`, `.zsh` and zsh startup files,
+  and `#compdef`/`#autoload` functions are checked instead of refused with
+  SC1071. zsh syntax (anonymous functions, alternate forms of loops and
+  `if`, `always`, `repeat`, glob qualifiers and flags, unbraced `$a[1]`
+  and `$x:t`, ...) is parsed, zsh's variables and assigning builtins are
+  known, and checks that don't apply to zsh's expansion rules are off
 
 ### Changed
 - SC3040: Support `pipefail` as specified in POSIX.1-2024

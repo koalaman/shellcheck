@@ -515,9 +515,16 @@ prop_checkReturn4 = verifyNot checkReturn "return $((a|b))"
 prop_checkReturn5 = verify checkReturn "return -1"
 prop_checkReturn6 = verify checkReturn "return 1000"
 prop_checkReturn7 = verify checkReturn "return 'hello world'"
-checkReturn = CommandCheck (Exactly "return") (returnOrExit
+prop_checkReturn8 = verifyNot checkReturn "#!/bin/zsh\nreturn ret"
+prop_checkReturn9 = verify checkReturn "#!/bin/zsh\nreturn 'hello world'"
+checkReturn = CommandCheck (Exactly "return") $ \t -> do
+    shell <- asks shellType
+    -- zsh evaluates the argument as arithmetic, so `return ret` returns $ret
+    let isZshVariable = shell == Zsh && all (maybe False isVariableName . getLiteralString) (arguments t)
+    returnOrExit
         (\c -> err c 2151 "Only one integer 0-255 can be returned. Use stdout for other data.")
-        (\c -> err c 2152 "Can only return 0-255. Other data should be written to stdout."))
+        (\c -> unless isZshVariable $ err c 2152 "Can only return 0-255. Other data should be written to stdout.")
+        t
 
 prop_checkExit1 = verifyNot checkExit "exit"
 prop_checkExit2 = verifyNot checkExit "exit 1"

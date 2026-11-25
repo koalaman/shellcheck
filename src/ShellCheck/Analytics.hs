@@ -1161,6 +1161,8 @@ prop_checkSingleQuotedVariables36 = verifyNot checkSingleQuotedVariables "#!/bin
 prop_checkSingleQuotedVariables37 = verifyNot checkSingleQuotedVariables "#!/bin/zsh\nzstyle -e ':completion:*' max-errors 'reply=($#PREFIX)'"
 prop_checkSingleQuotedVariables38 = verify checkSingleQuotedVariables "#!/bin/zsh\necho '$x'"
 prop_checkSingleQuotedVariables39 = verify checkSingleQuotedVariables "#!/bin/bash\nPROMPT='$x'"
+prop_checkSingleQuotedVariables40 = verifyNot checkSingleQuotedVariables "#!/bin/zsh\nopts+=( '--method=[method]:method:($methods)' '-dev[use $ROOT/lib]' )"
+prop_checkSingleQuotedVariables41 = verifyNot checkSingleQuotedVariables "#!/bin/zsh\n_arguments '1: :->cmds' '*: :($words)'"
 
 
 checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
@@ -1214,8 +1216,17 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
     -- expands them each time, and so are prompt fragments like
     -- '%{$fg[red]%}' and zstyle values that are evaluated later.
     isZshPromptOrStyle = shellType params == Zsh && (
-        commandName == "zstyle"
-        || any (`isInfixOf` s) ["%{", "%F{", "%K{"])
+        commandName `elem` zshDeferredCommands
+        || any (`isInfixOf` s) ["%{", "%F{", "%K{"]
+        || isZshCompletionSpec)
+    -- zsh commands that expand their arguments later, like the ($x) in
+    -- _arguments '--opt[help]:value:($values)'
+    zshDeferredCommands = ["zstyle", "_arguments", "_values", "_alternative", "_regex_arguments", "_describe", "_call_program", "_wanted", "_requested"]
+    -- An _arguments-style spec, '--opt[help]:message:action' or '(-a -b)-c[help]',
+    -- often kept in an array before being passed on
+    isZshCompletionSpec =
+        any (`isInfixOf` s) ["]:", ":("]
+        || take 1 s `elem` ["-", "+", "(", "*", "["] && '[' `elem` s && ']' `elem` s
 
     -- Like `runc exec ctr sh -c 'echo $HOME'`
     isShellScriptArgument = fromMaybe False $ do
@@ -1830,12 +1841,17 @@ prop_checkValidCondOps3 = verifyNot checkValidCondOps "[ 1 = 2 -a 3 -ge 4 ]"
 prop_checkValidCondOps4 = verifyNot checkValidCondOps "[[ ! -v foo ]]"
 prop_checkValidCondOps5 = verifyNot checkValidCondOps "[ \\! -e foo ]"
 prop_checkValidCondOps6 = verifyNot checkValidCondOps "[ '!' -e foo ]"
+prop_checkValidCondOps7 = verifyNot checkValidCondOps "#!/bin/zsh\n[[ -prefix - ]]"
+prop_checkValidCondOps8 = verify checkValidCondOps "[[ -prefix - ]]"
 checkValidCondOps _ (TC_Binary id _ s _ _)
     | s `notElem` binaryTestOps =
         warn id 2057 "Unknown binary operator."
-checkValidCondOps _ (TC_Unary id _ s _)
-    | s `notElem`  unaryTestOps =
+checkValidCondOps params (TC_Unary id _ s _)
+    | s `notElem` unaryTestOps && not (shellType params == Zsh && s `elem` zshCompletionTestOps) =
         warn id 2058 "Unknown unary operator."
+  where
+    -- zsh's conditions for completion widgets, as in [[ -prefix - ]]
+    zshCompletionTestOps = ["-prefix", "-suffix", "-after", "-between"]
 checkValidCondOps _ _ = return ()
 
 prop_checkUuoeVar1 = verify checkUuoeVar "for f in $(echo $tmp); do echo lol; done"
@@ -5031,7 +5047,10 @@ prop_checkUnquotedParameterExpansionPattern1 = verify checkUnquotedParameterExpa
 prop_checkUnquotedParameterExpansionPattern2 = verify checkUnquotedParameterExpansionPattern  "echo \"${var%%$(x)}\""
 prop_checkUnquotedParameterExpansionPattern3 = verifyNot checkUnquotedParameterExpansionPattern  "echo \"${var[#$x]}\""
 prop_checkUnquotedParameterExpansionPattern4 = verifyNot checkUnquotedParameterExpansionPattern  "echo \"${var%\"$x\"}\""
+prop_checkUnquotedParameterExpansionPattern5 = verifyNot checkUnquotedParameterExpansionPattern  "#!/bin/zsh\necho \"${var#$x}\""
 
+-- In zsh, $x in a pattern is matched literally unless written ${~x}
+checkUnquotedParameterExpansionPattern params _ | isNativeZsh params = return ()
 checkUnquotedParameterExpansionPattern params x =
     case x of
         T_DollarBraced _ True word@(T_NormalWord _ (T_Literal _ s : rest@(_:_))) -> do
@@ -5529,6 +5548,8 @@ prop_checkPlusEqualsNumber6 = verifyNot checkPlusEqualsNumber "n=foo; x+=n"
 prop_checkPlusEqualsNumber7 = verify checkPlusEqualsNumber "n=4; x+=n"
 prop_checkPlusEqualsNumber8 = verify checkPlusEqualsNumber "n=4; x+=$n"
 prop_checkPlusEqualsNumber9 = verifyNot checkPlusEqualsNumber "declare -ia var; var[x]+=1"
+prop_checkPlusEqualsNumber10 = verifyNot checkPlusEqualsNumber "#!/bin/zsh\nlocal -a m=(); m+=1"
+prop_checkPlusEqualsNumber11 = verify checkPlusEqualsNumber "#!/bin/zsh\nlocal m=0; m+=1"
 checkPlusEqualsNumber params t =
     case t of
         T_Assignment id Append var _ word -> sequence_ $ do
@@ -5536,6 +5557,8 @@ checkPlusEqualsNumber params t =
             state <- CF.getIncomingState cfga id
             guard $ isNumber state word
             guard . not $ fromMaybe False $ CF.variableMayBeDeclaredInteger state var
+            -- In zsh, array+=1 appends an element, as intended
+            guard . not $ shellType params == Zsh && fromMaybe False (CF.variableMayBeArray state var)
             -- Recommend "typeset" because ksh does not have "declare".
             return $ warn id 2324 "var+=1 will append, not increment. Use (( var += 1 )), typeset -i var, or quote number to silence."
         _ -> return ()

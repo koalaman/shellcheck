@@ -59,6 +59,7 @@ module ShellCheck.CFGAnalysis (
     ,getOutgoingState
     ,doesPostDominate
     ,variableMayBeDeclaredInteger
+    ,variableMayBeArray
     ,variableMayBeAssignedInteger
     ,variableMustBeDeclaredReadonly
     ,ShellCheck.CFGAnalysis.runTests -- STRIP
@@ -169,6 +170,9 @@ variableMustHaveState state var property = do
 
 -- See if any execution path declares the variable an integer (declare -i).
 variableMayBeDeclaredInteger state var = variableMayHaveState state var CFVPInteger
+
+-- Has this variable possibly been declared or assigned as an array?
+variableMayBeArray state var = variableMayHaveState state var CFVPArray
 
 -- See if every execution path declares the variable readonly (readonly, declare -r).
 variableMustBeDeclaredReadonly state var = variableMustHaveState state var CFVPReadonly
