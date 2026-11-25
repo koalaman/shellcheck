@@ -1204,19 +1204,29 @@ prop_checkCatastrophicRm23 = verify checkCatastrophicRm "rm -rf /etc/./"
 prop_checkCatastrophicRm24 = verify checkCatastrophicRm "rm -rf /*/../etc/"
 prop_checkCatastrophicRm25 = verifyNot checkCatastrophicRm "rm -rf /etc/*/../etc"
 prop_checkCatastrophicRm26 = verifyNot checkCatastrophicRm "rm -rf /usr/*/../local/etc"
+prop_checkCatastrophicRm27 = verify checkCatastrophicRm "rm /bin/*"
+prop_checkCatastrophicRm28 = verifyNot checkCatastrophicRm "rm /bin"
+prop_checkCatastrophicRm29 = verifyNot checkCatastrophicRm "rm '/bin/*'"
+prop_checkCatastrophicRm30 = verifyNot checkCatastrophicRm "rm /home/$foo"
 checkCatastrophicRm = CommandCheck (Basename "rm") $ \t ->
-    when (isRecursive t) $
-        mapM_ (mapM_ checkWord . braceExpand) $ arguments t
+    mapM_ (mapM_ (checkWord t) . braceExpand) $ arguments t
   where
     isRecursive = any ((`elem` ["r", "R", "recursive"]) . snd) . getAllFlags
 
-    checkWord token =
+    checkWord command token =
         case getGlobOrLiteralString token of
-            Just str ->
+            Just str | isRecursive command || hasGlob token ->
                 when (fixPath str `elem` importantPaths) $
                     warn (getId token) 2114 "Warning: deletes a system directory."
-            Nothing ->
+            Just _ -> return ()
+            Nothing -> when (isRecursive command) $
                 checkWord' token
+
+    hasGlob (T_Glob {}) = True
+    hasGlob (T_Extglob {}) = True
+    hasGlob (T_NormalWord _ parts) = any hasGlob parts
+    hasGlob (TA_Expansion _ parts) = any hasGlob parts
+    hasGlob _ = False
 
     checkWord' token = sequence_ $ do
         filename <- getPotentialPath token
