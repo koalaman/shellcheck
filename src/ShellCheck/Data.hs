@@ -1,6 +1,10 @@
 module ShellCheck.Data where
 
+import ShellCheck.AST (Annotation(ShellOverride))
 import ShellCheck.Interface
+import ShellCheck.Prelude (headOrDefault)
+import Data.List (isSuffixOf)
+import Data.Maybe (listToMaybe)
 import Data.Version (showVersion)
 
 
@@ -168,6 +172,23 @@ shellForExecutable name =
         "ksh93" -> return Ksh
         "oksh"  -> return Ksh
         _ -> Nothing
+
+shellFromAnnotations :: [Annotation] -> String -> Maybe Shell
+shellFromAnnotations annotations executable =
+    shellForExecutable $ headOrDefault executable [s | ShellOverride s <- annotations]
+
+shellFromFilename :: String -> Maybe Shell
+shellFromFilename filename = listToMaybe candidates
+  where
+    shellExtensions = [(".ksh", Ksh)
+                      ,(".bash", Bash)
+                      ,(".bats", Bash)
+                      ,(".dash", Dash)
+                      ,(".envrc", Bash)]
+                      -- The `.sh` is too generic to determine the shell:
+                      -- We fallback to Bash in this case and emit SC2148 if there is no shebang
+    candidates =
+        [sh | (ext,sh) <- shellExtensions, ext `isSuffixOf` filename]
 
 flagsForRead = "sreu:n:N:i:p:a:t:"
 flagsForMapfile = "d:n:O:s:u:C:c:t"

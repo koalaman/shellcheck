@@ -161,7 +161,6 @@ nodeChecks = [
     ,checkWrongArithmeticAssignment
     ,checkConditionalAndOrs
     ,checkFunctionDeclarations
-    ,checkStderrPipe
     ,checkOverridingPath
     ,checkArrayAsString
     ,checkUnsupported
@@ -3005,17 +3004,6 @@ checkFunctionDeclarations _ _ = return ()
 
 
 
-prop_checkStderrPipe1 = verify checkStderrPipe "#!/bin/ksh\nfoo |& bar"
-prop_checkStderrPipe2 = verifyNot checkStderrPipe "#!/bin/bash\nfoo |& bar"
-checkStderrPipe params =
-    case shellType params of
-        Ksh -> match
-        _ -> const $ return ()
-  where
-    match (T_Pipe id "|&") =
-        err id 2118 "Ksh does not support |&. Use 2>&1 |."
-    match _ = return ()
-
 prop_checkUnpassedInFunctions1 = verifyTree checkUnpassedInFunctions "foo() { echo $1; }; foo"
 prop_checkUnpassedInFunctions2 = verifyNotTree checkUnpassedInFunctions "foo() { echo $1; };"
 prop_checkUnpassedInFunctions3 = verifyNotTree checkUnpassedInFunctions "foo() { echo $lol; }; foo"
@@ -4508,6 +4496,7 @@ checkBlatantRecursion params t =
     checkList name t =
         case t of
             T_Backgrounded _ t -> checkList name t
+            T_KshCoprocess _ t -> checkList name t
             T_AndIf _ lhs _ -> checkList name lhs
             T_OrIf _ lhs _ -> checkList name lhs
             T_Pipeline _ _ cmds -> mapM_ (checkCommand name) cmds
@@ -5260,6 +5249,13 @@ prop_checkCommandIsUnreachable2 = verify checkCommandIsUnreachable "die() { exit
 prop_checkCommandIsUnreachable3 = verifyNot checkCommandIsUnreachable "foo; bar || exit; baz"
 prop_checkCommandIsUnreachable4 = verifyNot checkCommandIsUnreachable "f() { foo; };    # Maybe sourced"
 prop_checkCommandIsUnreachable5 = verify checkCommandIsUnreachable "f() { foo; }; exit  # Not sourced"
+prop_checkCommandIsUnreachable6 = verifyNot checkCommandIsUnreachable "f() { case x in *) : ;;& foo) return;; esac; echo x; }; f"
+prop_checkCommandIsUnreachable7 = verify checkCommandIsUnreachable "f() { case x in *) return;; foo) return;; esac; echo x; }; f"
+prop_checkCommandIsUnreachable8 = verify checkCommandIsUnreachable "f() { case x in foo) : ;;& *) return;; esac; echo x; }; f"
+prop_checkCommandIsUnreachable9 = verifyNot checkCommandIsUnreachable "f() { case x in *) : ;;& foo) return;; bar) return;; esac; echo x; }; f"
+prop_checkCommandIsUnreachable10 = verifyNot checkCommandIsUnreachable "f() { case x in *) : ;& foo) : ;;& bar) return;; esac; echo x; }; f"
+prop_checkCommandIsUnreachable11 = verify checkCommandIsUnreachable "f() { case x in *) : ;& foo) return;; esac; echo x; }; f"
+prop_checkCommandIsUnreachable12 = verifyNot checkCommandIsUnreachable "f() { case x in *) : ;;& foo) return;; *) :;; esac; echo x; }; f"
 checkCommandIsUnreachable params t =
     case t of
         T_Pipeline {} -> sequence_ $ do

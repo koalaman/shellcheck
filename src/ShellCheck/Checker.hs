@@ -22,6 +22,7 @@ module ShellCheck.Checker (checkScript, ShellCheck.Checker.runTests) where
 
 import ShellCheck.Analyzer
 import ShellCheck.ASTLib
+import ShellCheck.Data (shellFromFilename)
 import ShellCheck.EditorConfig
 import ShellCheck.Interface
 import ShellCheck.Parser
@@ -50,18 +51,6 @@ tokenToPosition startMap t = fromMaybe fail $ do
     }
   where
     fail = error "Internal shellcheck error: id doesn't exist. Please report!"
-
-shellFromFilename filename = listToMaybe candidates
-  where
-    shellExtensions = [(".ksh", Ksh)
-                      ,(".bash", Bash)
-                      ,(".bats", Bash)
-                      ,(".dash", Dash)
-                      ,(".envrc", Bash)]
-                      -- The `.sh` is too generic to determine the shell:
-                      -- We fallback to Bash in this case and emit SC2148 if there is no shebang
-    candidates =
-        [sh | (ext,sh) <- shellExtensions, ext `isSuffixOf` filename]
 
 checkScript :: Monad m => SystemInterface m -> CheckSpec -> m CheckResult
 checkScript sys spec = do
@@ -202,6 +191,55 @@ prop_editorConfigNonMatchingSectionIgnored =
         "#!/bin/sh\necho $1"
 
 prop_findsParseIssue = check "echo \"$12\"" == [1037]
+
+prop_kshCoprocessRead =
+    null $ check "#!/bin/ksh\nprintf '%s\\n' data |&\nread -pr record\nprintf '%s\\n' \"$record\""
+
+prop_kshCoprocessReadWithoutSpaces =
+    null $ check "#!/bin/ksh\nprintf '%s\\n' data|&read -r record <&p\nprintf '%s\\n' \"$record\""
+
+prop_kshCoprocessAssignmentScope =
+    [2030, 2031] == check "#!/bin/ksh\nvalue=parent\nvalue=child && : |&\nwait \"$!\"\nprintf '%s\\n' \"$value\""
+
+prop_kshCoprocessEof = null $ check "#!/bin/ksh\ntrue|&"
+
+prop_kshCoprocessFilename =
+    null $ checkWithSpec [] emptyCheckSpec {
+        csFilename = "example.ksh",
+        csScript = "true|&"
+    }
+
+prop_kshCoprocessDirective =
+    null $ check "#!/bin/bash\n#shellcheck shell=ksh\ntrue|&"
+
+prop_kshCoprocessRc =
+    null $ checkWithRc "shell=ksh\n" emptyCheckSpec {
+        csScript = "#!/bin/bash\ntrue|&"
+    }
+
+prop_kshCoprocessDirectiveOverridesRc =
+    null $ checkWithRc "shell=bash\n" emptyCheckSpec {
+        csScript = "#!/bin/bash\n#shellcheck shell=ksh\ntrue|&"
+    }
+
+prop_kshCoprocessOverride =
+    null $ checkWithSpec [] emptyCheckSpec {
+        csShellTypeOverride = Just Ksh,
+        csScript = "#!/bin/bash\ntrue|&"
+    }
+
+prop_kshCoprocessInSourcedCode =
+    null $ checkWithIncludes [("helper", "#!/bin/bash\ntrue |&")] "#!/bin/ksh\n. helper"
+
+prop_bashStderrPipe = null $ check "#!/bin/bash\nprintf '%s\\n' data |&\ncat"
+
+prop_bashOverrideKeepsStderrPipe =
+    [1072] == checkWithSpec [] emptyCheckSpec {
+        csShellTypeOverride = Just Bash,
+        csScript = "#!/bin/ksh\n#shellcheck shell=ksh\ntrue|&"
+    }
+
+prop_shStderrPipe = check "#!/bin/sh\nprintf '%s\\n' data |& cat" == [3029]
 
 prop_commentDisablesParseIssue1 =
     null $ check "#shellcheck disable=SC1037\necho \"$12\""

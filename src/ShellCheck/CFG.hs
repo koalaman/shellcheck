@@ -270,10 +270,10 @@ prop_testRemoveStructural =
             [(Id 0, 3)]
             )
         after = (
-            [(1,s), (2,s), (4,s)],
-            [(1,2,CFEFlow), (2,4,CFEFlow)],
-            [(Id 0, (2,2))],
-            [(Id 0, 2)]
+            [(1,s), (3,s), (4,s)],
+            [(1,3,CFEFlow), (3,4,CFEFlow)],
+            [(Id 0, (3,3))],
+            [(Id 0, 3)]
             )
     in after == removeUnnecessaryStructuralNodes before
 
@@ -293,20 +293,19 @@ removeUnnecessaryStructuralNodes (nodes, edges, mapping, association) =
         )
   where
     regularEdges = filter isRegularEdge edges
-    inDegree = counter $ map (\(from,to,_) -> from) regularEdges
-    outDegree = counter $ map (\(from,to,_) -> to) regularEdges
+    inDegree = counter $ map (\(from,to,_) -> to) regularEdges
+    outDegree = counter $ map (\(from,to,_) -> from) regularEdges
     structuralNodes = S.fromList [node | (node, CFStructuralNode) <- nodes]
     candidateNodes = S.filter isLinear structuralNodes
     edgesToCollapse = S.fromList $ filter filterEdges regularEdges
 
     remapping :: M.Map Node Node
-    remapping = M.fromList $ map orderEdge $ S.toList edgesToCollapse
+    remapping = M.fromList $ map (\(a,b,_) -> (a,b)) $ S.toList edgesToCollapse
     recursiveRemapping = M.mapWithKey (\c _ -> recursiveLookup remapping c) remapping
 
     filterEdges (a,b,_) =
         a `S.member` candidateNodes && b `S.member` candidateNodes
 
-    orderEdge (a,b,_) = if a < b then (b,a) else (a,b)
     counter = M.fromListWith (+) . map (\key -> (key, 1))
     isRegularEdge (_, _, CFEFlow) = True
     isRegularEdge _ = False
@@ -576,16 +575,9 @@ build t = do
 
         T_Assignment {} -> buildAssignment Nothing t
 
-        T_Backgrounded id body -> do
-            start <- newStructuralNode
-            fork <- subshell id "backgrounding '&'" $ build body
-            pid <- newNodeRange $ CFSetBackgroundPid id
-            status <- newNodeRange $ CFSetExitCode id
+        T_Backgrounded id body -> buildBackground id "backgrounding '&'" body
 
-            linkRange start fork
-            -- Add a join from the fork to warn about variable changes
-            linkRangeAs CFEFalseFlow fork pid
-            linkRanges [start, pid, status]
+        T_KshCoprocess id body -> buildBackground id "backgrounding '|&'" body
 
         T_Backticked id body ->
             subshell id "`..` expansion" $ sequentially body
@@ -612,56 +604,52 @@ build t = do
 
         T_CaseExpression id t list@(hd:tl) -> do
             start <- newStructuralNode
-            token <- build t
-            branches <- mapM buildBranch (hd NE.:| tl)
             end <- newStructuralNode
+            token <- build t
+            branches <- mapM (buildBranch end) (hd NE.:| tl)
 
-            let neighbors = zip (NE.toList branches) $ NE.tail branches
-            let (_, firstCond, _) = NE.head branches
-            let (_, lastCond, lastBody) = NE.last branches
+            let neighbors = zip (NE.toList branches) $ (NE.tail branches ++ [(end, end, undefined, undefined)])
+            let (firstCond, _, _, _) = NE.head branches
 
             linkRange start token
             linkRange token firstCond
-            mapM_ (uncurry $ linkBranch end) neighbors
-            linkRange lastBody end
-
-            unless (any hasCatchAll list) $
-                -- There's no *) branch, so assume we can fall through
-                void $ linkRange token end
+            mapM_ (uncurry linkBranch) neighbors
 
             return $ spanRange start end
 
           where
-            -- for a | b | c, evaluate each in turn and allow short circuiting
-            buildCond list = do
-                start <- newStructuralNode
-                conds <- mapM build list
-                end <- newStructuralNode
-                linkRanges (start:conds)
-                mapM_ (`linkRange` end) conds
-                return $ spanRange start end
-
-            buildBranch (typ, cond, body) = do
-                c <- buildCond cond
-                b <- sequentially body
-                linkRange c b
-                return (typ, c, b)
-
-            linkBranch end (typ, cond, body) (_, nextCond, nextBody) = do
-                -- Failure case
-                linkRange cond nextCond
-                -- After body
+            buildBranch end (typ, cond, body) = do
+                bodyNode <- sequentially body
+                condNode <- buildCond bodyNode cond
+                nextCondNode <- newStructuralNode
+                nextBodyNode <- newStructuralNode
                 case typ of
-                    CaseBreak -> linkRange body end
-                    CaseFallThrough -> linkRange body nextBody
-                    CaseContinue -> linkRange body nextCond
+                    CaseBreak -> linkRange bodyNode end
+                    CaseFallThrough -> linkRange bodyNode nextBodyNode
+                    CaseContinue -> linkRange bodyNode nextCondNode
+                linkRange condNode nextCondNode
+                return (condNode, bodyNode, nextCondNode, nextBodyNode)
 
-            -- Find a *) if any
+            -- for a | b | c, evaluate each in turn and allow short circuiting
+            buildCond _ [] = newStructuralNode
+            buildCond body (alt:rest) = do
+                altNode <- build alt
+                linkRange altNode body
 
-            hasCatchAll (_,cond,_) = any isCatchAll cond
-            isCatchAll c = fromMaybe False $ do
-                pg <- wordToExactPseudoGlob c
-                return $ pg `pseudoGlobIsSuperSetof` [PGMany]
+                let isCatchAll = fromMaybe False $ do
+                        pg <- wordToExactPseudoGlob alt
+                        return $ pg `pseudoGlobIsSuperSetof` [PGMany]
+
+                nextNode <- buildCond body rest
+                unless isCatchAll $
+                    void $ linkRange altNode nextNode
+
+                return $ spanRange altNode nextNode
+
+            linkBranch (cond, body, nextCond, nextBody) (cond2, body2, nextCond2, nextBody2) = do
+                linkRange nextCond cond2
+                linkRange nextBody body2
+
 
         T_Condition id _ _ op -> do
             cond <- build op
@@ -899,6 +887,17 @@ build t = do
             none
 
 --  Still in `where` clause
+    buildBackground id reason body = do
+        start <- newStructuralNode
+        fork <- subshell id reason $ build body
+        pid <- newNodeRange $ CFSetBackgroundPid id
+        status <- newNodeRange $ CFSetExitCode id
+
+        linkRange start fork
+        -- Add a join from the fork to warn about variable changes
+        linkRangeAs CFEFalseFlow fork pid
+        linkRanges [start, pid, status]
+
     forInHelper id name words body = do
         entry <- newStructuralNode
         expansion <- sequentially words
