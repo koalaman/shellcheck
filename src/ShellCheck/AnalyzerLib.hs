@@ -764,7 +764,7 @@ getModifiedVariableCommand base@(T_SimpleCommand id cmdPrefix (T_NormalWord _ (T
 
     -- compgen -V arr stores the completions in the array arr rather than printing them
     getCompgenArray list = do
-        flags <- getGnuOpts "abcdefgjksuvo:A:C:F:G:P:S:V:W:X:" list
+        let flags = getGenericOpts list
         (_, (_, value)) <- find ((== "V") . fst) flags
         name <- getLiteralString value
         guard $ isVariableName name
