@@ -319,14 +319,12 @@ prop_determineShell12 = determineShellTest "#!/bin/busybox ash" == BusyboxSh
 determineShellTest = determineShellTest' Nothing
 determineShellTest' fallbackShell = determineShell fallbackShell . fromJust . prRoot . pScript
 determineShell fallbackShell t = fromMaybe Bash $
-    shellForExecutable shellString `mplus` fallbackShell
+    getCandidate t `mplus` fallbackShell
   where
-    shellString = getCandidate t
-    getCandidate :: Token -> String
-    getCandidate t@T_Script {} = fromShebang t
-    getCandidate (T_Annotation _ annotations s) =
-        headOrDefault (fromShebang s) [s | ShellOverride s <- annotations]
-    fromShebang (T_Script _ (T_Literal _ s) _) = executableFromShebang s
+    getCandidate (T_Annotation _ annotations s) = fromScript annotations s
+    getCandidate s = fromScript [] s
+    fromScript annotations (T_Script _ (T_Literal _ s) _) =
+        shellFromAnnotations annotations (executableFromShebang s)
 
 -- Given a root node, make a map from Id to parent Token.
 -- This is used to populate parentMap in Parameters
@@ -519,6 +517,7 @@ leadType params t =
         T_DollarExpansion _ _  -> SubshellScope "$(..) expansion"
         T_Backticked _ _  -> SubshellScope "`..` expansion"
         T_Backgrounded _ _  -> SubshellScope "backgrounding &"
+        T_KshCoprocess _ _  -> SubshellScope "backgrounding |&"
         T_Subshell _ _  -> SubshellScope "(..) group"
         T_BatsTest {} -> SubshellScope "@bats test"
         T_CoProcBody _ _  -> SubshellScope "coproc"

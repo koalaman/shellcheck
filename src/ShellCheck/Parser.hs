@@ -169,14 +169,16 @@ data UserState = UserState {
     positionMap :: Map.Map Id (SourcePos, SourcePos),
     parseNotes :: [ParseNote],
     hereDocMap :: Map.Map Id [Token],
-    pendingHereDocs :: [HereDocContext]
+    pendingHereDocs :: [HereDocContext],
+    parseShellType :: Shell
 }
 initialUserState = UserState {
     lastId = Id $ -1,
     positionMap = Map.empty,
     parseNotes = [],
     hereDocMap = Map.empty,
-    pendingHereDocs = []
+    pendingHereDocs = [],
+    parseShellType = Bash
 }
 
 codeForParseNote (ParseNote _ _ _ code _) = code
@@ -2090,6 +2092,8 @@ readNewlineList =
                     "Unexpected start of line. If breaking lines, |/||/&& should be at the end of the previous one."
 readLineBreak = optional readNewlineList
 
+data BackgroundOperator = Ampersand | Coprocess
+
 prop_readSeparator1 = isWarning readScript "a &; b"
 prop_readSeparator2 = isOk readScript "a & b"
 prop_readSeparator3 = isWarning readScript "a &amp; b"
@@ -2099,7 +2103,7 @@ readSeparatorOp = do
     notFollowedBy2 (void g_AND_IF <|> void readCaseSeparator)
     notFollowedBy2 (string "&>")
     start <- getPosition
-    f <- try (do
+    f <- (Just Coprocess <$ readKshCoprocessOp) <|> try (do
                     pos <- getPosition
                     char '&'
                     optional $ choice [
@@ -2119,11 +2123,17 @@ readSeparatorOp = do
                     -- In case statements we might have foo & ;;
                     notFollowedBy2 $ char ';'
                     parseProblemAt pos ErrorC 1045 "It's not 'foo &; bar', just 'foo & bar'."
-                    return '&'
-            ) <|> char ';' <|> char '&'
+                    return $ Just Ampersand
+            ) <|> (Nothing <$ char ';') <|> (Just Ampersand <$ char '&')
     end <- getPosition
     spacing
     return (f, (start, end))
+
+-- In Ksh, |& terminates the preceding and-or list, like &.
+readKshCoprocessOp = do
+    shell <- parseShellType <$> getState
+    guard $ shell == Ksh
+    void $ try $ string "|&"
 
 readSequentialSep = void (g_Semi >> readLineBreak) <|> void readNewlineList
 readSeparator =
@@ -2136,7 +2146,7 @@ readSeparator =
             start <- getPosition
             readNewlineList
             end <- getPosition
-            return ('\n', (start, end))
+            return (Nothing, (start, end))
 
 prop_readSimpleCommand = isOk readSimpleCommand "echo test > file"
 prop_readSimpleCommand2 = isOk readSimpleCommand "cmd &> file"
@@ -2383,6 +2393,14 @@ readTermOrNone = do
         return []
 
 prop_readTerm = isOk readTerm "time ( foo; bar; )"
+prop_readKshCoprocessAndOr =
+    case debugParse readScript "#!/bin/ksh\ntrue && echo data |& read -r -p record" of
+        Right (T_Annotation _ _ (T_Script _ _ [T_KshCoprocess _ (T_AndIf _ _ _), _])) -> True
+        _ -> False
+
+prop_readKshCoprocessBeforeClosingDelimiter =
+    isOk readScript "#!/bin/ksh\n{ true|& }"
+
 readTerm = do
     allspacing
     m <- readAndOr
@@ -2400,8 +2418,9 @@ readTerm = do
           <|>
             return [current]
       where
-        transformWithSeparator i '&' = T_Backgrounded i
-        transformWithSeparator i _  = id
+        transformWithSeparator i (Just Ampersand) = T_Backgrounded i
+        transformWithSeparator i (Just Coprocess) = T_KshCoprocess i
+        transformWithSeparator _ Nothing = id
 
 
 readPipeSequence = do
@@ -2421,6 +2440,7 @@ readPipeSequence = do
 
 readPipe = do
     notFollowedBy2 g_OR_IF
+    notFollowedBy2 readKshCoprocessOp
     start <- startSpan
     char '|'
     qualifier <- string "&" <|> return ""
@@ -3388,13 +3408,19 @@ readScriptFile sourced = do
             annotationId <- endSpan annotationStart
             let shellAnnotationSpecified =
                     any (\x -> case x of ShellOverride {} -> True; _ -> False) annotations
-            shellFlagSpecified <- isJust <$> Mr.asks shellTypeOverride
-            let ignoreShebang = shellAnnotationSpecified || shellFlagSpecified
+            shellOverride <- Mr.asks shellTypeOverride
+            let ignoreShebang = shellAnnotationSpecified || isJust shellOverride
+            let executable = executableFromShebang shebangString
 
             unless ignoreShebang $
-                verifyShebang pos (executableFromShebang shebangString)
-            if ignoreShebang || isValidShell (executableFromShebang shebangString) /= Just False
+                verifyShebang pos executable
+            if ignoreShebang || isValidShell executable /= Just False
               then do
+                    unless sourced $ do
+                        filename <- Mr.asks currentFilename
+                        let dialect = fromMaybe Bash $ msum
+                                [shellOverride, shellFromAnnotations annotations executable, shellFromFilename filename]
+                        modifyState $ \state -> state { parseShellType = dialect }
                     commands <- readCompoundListOrEmpty
                     id <- endSpan start
                     readPendingHereDocs

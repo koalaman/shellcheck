@@ -575,16 +575,9 @@ build t = do
 
         T_Assignment {} -> buildAssignment Nothing t
 
-        T_Backgrounded id body -> do
-            start <- newStructuralNode
-            fork <- subshell id "backgrounding '&'" $ build body
-            pid <- newNodeRange $ CFSetBackgroundPid id
-            status <- newNodeRange $ CFSetExitCode id
+        T_Backgrounded id body -> buildBackground id "backgrounding '&'" body
 
-            linkRange start fork
-            -- Add a join from the fork to warn about variable changes
-            linkRangeAs CFEFalseFlow fork pid
-            linkRanges [start, pid, status]
+        T_KshCoprocess id body -> buildBackground id "backgrounding '|&'" body
 
         T_Backticked id body ->
             subshell id "`..` expansion" $ sequentially body
@@ -894,6 +887,17 @@ build t = do
             none
 
 --  Still in `where` clause
+    buildBackground id reason body = do
+        start <- newStructuralNode
+        fork <- subshell id reason $ build body
+        pid <- newNodeRange $ CFSetBackgroundPid id
+        status <- newNodeRange $ CFSetExitCode id
+
+        linkRange start fork
+        -- Add a join from the fork to warn about variable changes
+        linkRangeAs CFEFalseFlow fork pid
+        linkRanges [start, pid, status]
+
     forInHelper id name words body = do
         entry <- newStructuralNode
         expansion <- sequentially words
