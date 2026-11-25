@@ -950,6 +950,9 @@ prop_checkDollarStar7 = verify checkDollarStar "ls ${*}"
 prop_checkDollarStar8 = verifyNot checkDollarStar "ls ${#*}"
 prop_checkDollarStar9 = verify checkDollarStar "ls ${arr[*]}"
 prop_checkDollarStar10 = verifyNot checkDollarStar "ls ${#arr[*]}"
+prop_checkDollarStar11 = verifyNot checkDollarStar "#!/bin/zsh\nls $* ${arr[*]}"
+-- zsh expands unquoted $* to the parameters without splitting them
+checkDollarStar p _ | isNativeZsh p = return ()
 checkDollarStar p t@(T_NormalWord _ [T_DollarBraced id _ l])
         | not (isStrictlyQuoteFree (shellType p) (parentMap p) t) = do
       let str = concat (oversimplify l)
@@ -972,6 +975,9 @@ prop_checkUnquotedDollarAt7 = verify checkUnquotedDollarAt "for f in ${var[@]}; 
 prop_checkUnquotedDollarAt8 = verifyNot checkUnquotedDollarAt "echo \"${args[@]:+${args[@]}}\""
 prop_checkUnquotedDollarAt9 = verifyNot checkUnquotedDollarAt "echo ${args[@]:+\"${args[@]}\"}"
 prop_checkUnquotedDollarAt10 = verifyNot checkUnquotedDollarAt "echo ${@+\"$@\"}"
+prop_checkUnquotedDollarAt11 = verifyNot checkUnquotedDollarAt "#!/bin/zsh\nls $@ ${foo[@]}"
+-- zsh doesn't split the elements again
+checkUnquotedDollarAt p _ | isNativeZsh p = return ()
 checkUnquotedDollarAt p word@(T_NormalWord _ parts) | not $ isStrictlyQuoteFree (shellType p) (parentMap p) word =
     forM_ (find isArrayExpansion parts) $ \x ->
         unless (isQuotedAlternativeReference x) $
@@ -1030,11 +1036,15 @@ prop_checkArrayWithoutIndex9 = verifyTree checkArrayWithoutIndex "read -r -a arr
 prop_checkArrayWithoutIndex10 = verifyTree checkArrayWithoutIndex "read -ra arr <<< 'foo bar'; echo \"$arr\""
 prop_checkArrayWithoutIndex11 = verifyNotTree checkArrayWithoutIndex "read -rpfoobar r; r=42"
 prop_checkArrayWithoutIndex12 = verifyNotTree checkArrayWithoutIndex "#!/bin/sh\nPIPESTATUS=foo"
+prop_checkArrayWithoutIndex13 = verifyNotTree checkArrayWithoutIndex "#!/bin/zsh\nfoo=(a b); echo $foo; foo+=c"
+prop_checkArrayWithoutIndex14 = verifyTree checkArrayWithoutIndex "#!/bin/zsh\nsetopt ksharrays\nfoo=(a b); echo $foo"
+prop_checkArrayWithoutIndex15 = verifyTree checkArrayWithoutIndex "#!/bin/zsh\nfoo=(a b); foo=bar"
 checkArrayWithoutIndex params _ =
     doVariableFlowAnalysis readF writeF defaultSet (variableFlow params)
   where
     defaultSet = S.fromList $ if shellType params == Bash then arrayVariables else []
-    readF _ (T_DollarBraced id _ token) _ = do
+    -- In zsh, $array is the whole array
+    readF _ (T_DollarBraced id _ token) _ | not (isNativeZsh params) = do
         s <- get
         return . maybeToList $ do
             name <- getLiteralString token
@@ -1048,6 +1058,8 @@ checkArrayWithoutIndex params _ =
         return $ if not isArray then [] else
             case mode of
                 Assign -> [makeComment WarningC id 2178 "Variable was used as an array but is now assigned a string."]
+                -- In zsh, array+=item appends an item
+                Append | isNativeZsh params -> []
                 Append -> [makeComment WarningC id 2179 "Use array+=(\"item\") to append items to an array."]
 
     writeF _ t name (DataArray _) = do
@@ -1138,6 +1150,11 @@ prop_checkSingleQuotedVariables31 = verify checkSingleQuotedVariables "runc exec
 prop_checkSingleQuotedVariables32 = verify checkSingleQuotedVariables "echo sh --rcfile 'echo $HOME'"
 prop_checkSingleQuotedVariables33 = verifyNot checkSingleQuotedVariables "chroot /mnt /bin/ksh93 -c 'echo $HOME'"
 prop_checkSingleQuotedVariables34 = verifyNot checkSingleQuotedVariables "yq '.a as $x | $x'"
+prop_checkSingleQuotedVariables35 = verifyNot checkSingleQuotedVariables "#!/bin/zsh\nPROMPT='%~ $(git_prompt_info) '\nRPROMPT='$x'"
+prop_checkSingleQuotedVariables36 = verifyNot checkSingleQuotedVariables "#!/bin/zsh\nlocal user='%{$fg[magenta]%}%n'"
+prop_checkSingleQuotedVariables37 = verifyNot checkSingleQuotedVariables "#!/bin/zsh\nzstyle -e ':completion:*' max-errors 'reply=($#PREFIX)'"
+prop_checkSingleQuotedVariables38 = verify checkSingleQuotedVariables "#!/bin/zsh\necho '$x'"
+prop_checkSingleQuotedVariables39 = verify checkSingleQuotedVariables "#!/bin/bash\nPROMPT='$x'"
 
 
 checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
@@ -1185,6 +1202,14 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
             || "awk" `isSuffixOf` commandName
             || "perl" `isPrefixOf` commandName
             || isShellScriptArgument
+            || isZshPromptOrStyle
+
+    -- zsh prompts are often single quoted on purpose, so that PROMPT_SUBST
+    -- expands them each time, and so are prompt fragments like
+    -- '%{$fg[red]%}' and zstyle values that are evaluated later.
+    isZshPromptOrStyle = shellType params == Zsh && (
+        commandName == "zstyle"
+        || any (`isInfixOf` s) ["%{", "%F{", "%K{"])
 
     -- Like `runc exec ctr sh -c 'echo $HOME'`
     isShellScriptArgument = fromMaybe False $ do
@@ -1202,7 +1227,11 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
             flag:rest | take 1 flag `elem` ["-", "+"] -> endsWithDashC rest
             _ -> False
 
-    commonlyQuoted = ["PS1", "PS2", "PS3", "PS4", "PROMPT_COMMAND"]
+    commonlyQuoted = ["PS1", "PS2", "PS3", "PS4", "PROMPT_COMMAND"] ++ zshPrompts
+    zshPrompts =
+        if shellType params == Zsh
+        then ["PROMPT", "PROMPT2", "PROMPT3", "PROMPT4", "RPROMPT", "RPROMPT2", "RPS1", "RPS2", "SPROMPT"]
+        else []
     isOkAssignment t =
         case t of
             T_Assignment _ _ name _ _ -> name `elem` commonlyQuoted
@@ -1621,6 +1650,11 @@ prop_checkComparisonAgainstGlob4 = verifyNot checkComparisonAgainstGlob "[ $cow 
 prop_checkComparisonAgainstGlob5 = verify checkComparisonAgainstGlob "[[ $cow != $bar ]]"
 prop_checkComparisonAgainstGlob6 = verify checkComparisonAgainstGlob "[ $f != /* ]"
 prop_checkComparisonAgainstGlob7 = verify checkComparisonAgainstGlob "#!/bin/busybox sh\n[[ $f == *foo* ]]"
+prop_checkComparisonAgainstGlob8 = verifyNot checkComparisonAgainstGlob "#!/bin/zsh\n[[ $cow == $bar ]]"
+prop_checkComparisonAgainstGlob9 = verify checkComparisonAgainstGlob "#!/bin/zsh\nsetopt globsubst\n[[ $cow == $bar ]]"
+-- In zsh, $bar is compared literally unless written ${~bar}
+checkComparisonAgainstGlob params (TC_Binary _ DoubleBracket _ _ (T_NormalWord _ [T_DollarBraced {}]))
+    | isNativeZsh params = return ()
 checkComparisonAgainstGlob _ (TC_Binary _ DoubleBracket op _ (T_NormalWord id [T_DollarBraced _ _ _]))
     | op `elem` ["=", "==", "!="] =
         warn id 2053 $ "Quote the right-hand side of " ++ op ++ " in [[ ]] to prevent glob matching."
@@ -1628,7 +1662,7 @@ checkComparisonAgainstGlob params (TC_Binary _ SingleBracket op _ word)
         | op `elem` ["=", "==", "!="] && isGlob word =
     err (getId word) 2081 msg
   where
-    msg = if (shellType params) `elem` [Bash, Ksh]  -- Busybox does not support glob matching
+    msg = if (shellType params) `elem` [Bash, Ksh, Zsh]  -- Busybox does not support glob matching
             then "[ .. ] can't match globs. Use [[ .. ]] or case statement."
             else "[ .. ] can't match globs. Use a case statement."
 
@@ -1896,12 +1930,20 @@ prop_checkBadParameterSubstitution9 = verifyNot checkBadParameterSubstitution "$
 prop_checkBadParameterSubstitution10 = verify checkBadParameterSubstitution "${'foo'}"
 prop_checkBadParameterSubstitution11 = verify checkBadParameterSubstitution "${${x%.*}##*/}"
 
-checkBadParameterSubstitution _ t =
+prop_checkBadParameterSubstitution12 = verifyNot checkBadParameterSubstitution "#!/bin/zsh\necho ${(f)x} ${${x%.*}##*/} ${$(cmd):u} ${+x} ${=x} ${~x} ${^x} ${${x}}"
+prop_checkBadParameterSubstitution13 = verify checkBadParameterSubstitution "#!/bin/zsh\necho ${\"x\"}"
+prop_checkBadParameterSubstitution14 = verify checkBadParameterSubstitution "#!/bin/zsh\necho ${{x}"
+prop_checkBadParameterSubstitution15 = verify checkBadParameterSubstitution "#!/bin/zsh\necho ${foo$n}"
+checkBadParameterSubstitution params t =
     case t of
         (T_DollarBraced i _ (T_NormalWord _ contents@(first:_))) ->
-            if isIndirection contents
-            then err i 2082 "To expand via indirection, use arrays, ${!name} or (for sh only) eval."
-            else checkFirst first
+            if isIndirection contents && not (zshNesting contents)
+            then err i 2082 $ if shellType params == Zsh
+                then "To expand via indirection, use ${(P)name}."
+                else "To expand via indirection, use arrays, ${!name} or (for sh only) eval."
+            else if shellType params == Zsh
+                then checkFirstZsh first
+                else checkFirst first
         _ -> return ()
 
   where
@@ -1909,6 +1951,10 @@ checkBadParameterSubstitution _ t =
     isIndirection vars =
         let list = mapMaybe isIndirectionPart vars in
             not (null list) && and list
+
+    -- In zsh, ${${x}} and ${$x} are nested expansions, while ${foo$n} is still invalid
+    zshNesting vars = shellType params == Zsh && not (any isLiteral vars)
+    isLiteral t = case t of T_Literal {} -> True; _ -> False
 
     isIndirectionPart t =
         case t of T_DollarExpansion {} ->  Just True
@@ -1919,6 +1965,17 @@ checkBadParameterSubstitution _ t =
                                     then Nothing
                                     else Just False
                   _ -> Just False
+
+    -- zsh allows flags like ${(f)x} and ${+x}, nested expansions like
+    -- ${${x}} and ${$(cmd)}, but not quotes or braces right after the ${
+    checkFirstZsh t =
+        case t of
+            T_Literal id (c:_) ->
+                unless (isVariableChar c || isSpecialVariableChar c || c `elem` "(+=~^") $
+                    err id 2296 $ "Parameter expansions can't start with " ++ e4m [c] ++ ". Double check syntax."
+            T_DoubleQuoted id [T_Literal _ s] | isVariable s ->
+                err id 2297 "Double quotes must be outside ${}: ${\"invalid\"} vs \"${valid}\"."
+            _ -> return ()
 
     checkFirst t =
         case t of
@@ -2308,11 +2365,16 @@ prop_checkSpacefulnessCfg63 = verify checkSpacefulnessCfg "f && declare -i s; s=
 prop_checkSpacefulnessCfg64 = verifyNot checkSpacefulnessCfg "declare -i s; s='x + y'; x=$s; echo $x"
 prop_checkSpacefulnessCfg65 = verifyNot checkSpacefulnessCfg "f() { s=$?; echo $s; }; f"
 prop_checkSpacefulnessCfg66 = verifyNot checkSpacefulnessCfg "f() { s=$?; echo $s; }"
+prop_checkSpacefulnessCfg67 = verifyNot checkSpacefulnessCfg "#!/bin/zsh\nx='a b *'; ls $x; : ${y:=*}"
+prop_checkSpacefulnessCfg68 = verify checkSpacefulnessCfg "#!/bin/zsh\nsetopt shwordsplit\nx='a b'; ls $x"
+prop_checkSpacefulnessCfg69 = verify checkSpacefulnessCfg "#!/bin/zsh\nemulate -L sh\nx='a b'; ls $x"
 
 checkSpacefulnessCfg = checkSpacefulnessCfg' True
 checkVerboseSpacefulnessCfg = checkSpacefulnessCfg' False
 
 checkSpacefulnessCfg' :: Bool -> (Parameters -> Token -> Writer [TokenComment] ())
+-- zsh doesn't split or glob unquoted parameter expansions
+checkSpacefulnessCfg' _ params _ | isNativeZsh params = return ()
 checkSpacefulnessCfg' dirtyPass params token@(T_DollarBraced id _ list) =
     when (needsQuoting && (dirtyPass == not isClean)) $
         unless (name `elem` specialVariablesWithoutSpaces || quotesMayConflictWithSC2281 params token) $
@@ -3151,12 +3213,19 @@ checkTildeInPath _ _ = return ()
 prop_checkUnsupported3 = verify checkUnsupported "#!/bin/sh\ncase foo in bar) baz ;& esac"
 prop_checkUnsupported4 = verify checkUnsupported "#!/bin/ksh\ncase foo in bar) baz ;;& esac"
 prop_checkUnsupported5 = verifyNot checkUnsupported "#!/bin/bash\necho \"${ ls; }\""
+prop_checkUnsupportedZsh1 = verifyNot checkUnsupported "#!/bin/zsh\ncase foo in bar) baz ;| *) qux ;& esac"
+prop_checkUnsupportedZsh2 = verify checkUnsupported "#!/bin/zsh\necho \"${ ls; }\""
 prop_checkUnsupported6 = verify checkUnsupported "#!/bin/ash\necho \"${ ls; }\""
 checkUnsupported params t =
-    unless (null support || (shellType params `elem` support)) $
+    unless (null support || (shellType params `elem` support) || zshSupports) $
         report name
  where
     (name, support) = shellSupport t
+    -- zsh has ;& and spells ;;& as ;|
+    zshSupports = shellType params == Zsh &&
+        case t of
+            T_CaseExpression {} -> True
+            _ -> False
     report s = err (getId t) 2127 $
         "To use " ++ s ++ ", specify #!/usr/bin/env " ++
             (intercalate " or " . map (map toLower . show) $ support)
@@ -3649,6 +3718,7 @@ prop_checkArrayAssignmentIndices10 = verifyTree checkArrayAssignmentIndices "dec
 prop_checkArrayAssignmentIndices11 = verifyTree checkArrayAssignmentIndices "arr=( 1=value )"
 prop_checkArrayAssignmentIndices12 = verifyTree checkArrayAssignmentIndices "arr=( $a=value )"
 prop_checkArrayAssignmentIndices13 = verifyTree checkArrayAssignmentIndices "arr=( $((1+1))=value )"
+prop_checkArrayAssignmentIndices14 = verifyNotTree checkArrayAssignmentIndices "#!/bin/zsh\ntypeset -A h; h=(k1 v1 k2 v2)"
 checkArrayAssignmentIndices params root =
     runNodeAnalysis check params root
   where
@@ -3674,7 +3744,8 @@ checkArrayAssignmentIndices params root =
                     guard $ all isDigit before && not (null after)
                     return $ warnWithFix id 2191 "The = here is literal. To assign by index, use ( [index]=value ) with no spaces. To keep as literal, quote it." (surroundWith id params "\"")
                 in
-                    if null literalEquals && isAssociative
+                    -- zsh's associative arrays also take key value pairs, h=(k1 v1 k2 v2)
+                    if null literalEquals && isAssociative && shellType params /= Zsh
                     then warn (getId t) 2190 "Elements in associative arrays need index, e.g. array=( [index]=value ) ."
                     else sequence_ literalEquals
 
@@ -3769,6 +3840,8 @@ prop_checkSplittingInArrays5 = verifyNot checkSplittingInArrays "a=( $! $$ $# )"
 prop_checkSplittingInArrays6 = verifyNot checkSplittingInArrays "a=( ${#arr[@]} )"
 prop_checkSplittingInArrays7 = verifyNot checkSplittingInArrays "a=( foo{1,2} )"
 prop_checkSplittingInArrays8 = verifyNot checkSplittingInArrays "a=( * )"
+prop_checkSplittingInArrays9 = verifyNot checkSplittingInArrays "#!/bin/zsh\na=( $var )"
+prop_checkSplittingInArrays10 = verify checkSplittingInArrays "#!/bin/zsh\na=( $(cmd) )"
 checkSplittingInArrays params t =
     case t of
         T_Array _ elements -> mapM_ check elements
@@ -3782,7 +3855,8 @@ checkSplittingInArrays params t =
         T_DollarBraceCommandExpansion id _ _ -> forCommand id
         T_Backticked id _ -> forCommand id
         T_DollarBraced id _ str |
-            not (isCountingReference part)
+            not (isNativeZsh params) -- zsh doesn't split or glob $var
+            && not (isCountingReference part)
             && not (isQuotedAlternativeReference part)
             && getBracedReference (concat $ oversimplify str) `notElem` variablesWithoutSpaces
             -> warn id 2206 $
@@ -3793,9 +3867,10 @@ checkSplittingInArrays params t =
 
     forCommand id =
         warn id 2207 $
-            if shellType params == Ksh
-            then "Prefer read -A or while read to split command output (or quote to avoid splitting)."
-            else "Prefer mapfile or read -a to split command output (or quote to avoid splitting)."
+            case shellType params of
+                Ksh -> "Prefer read -A or while read to split command output (or quote to avoid splitting)."
+                Zsh -> "Prefer ${(f)\"$(cmd)\"} to split command output into lines (or quote to avoid splitting)."
+                _ -> "Prefer mapfile or read -a to split command output (or quote to avoid splitting)."
 
 
 prop_checkRedirectionToNumber1 = verify checkRedirectionToNumber "( 1 > 2 )"
@@ -3857,6 +3932,8 @@ prop_checkPipeToNowhere19 = verifyNot checkPipeToNowhere "find . -print0 | du --
 prop_checkPipeToNowhere20 = verifyNot checkPipeToNowhere "find . | du --exclude-from=/dev/fd/0"
 prop_checkPipeToNowhere21 = verifyNot checkPipeToNowhere "yes | cp -ri foo/* bar"
 prop_checkPipeToNowhere22 = verifyNot checkPipeToNowhere "yes | rm --interactive *"
+prop_checkPipeToNowhere23 = verifyNot checkPipeToNowhere "#!/bin/zsh\nls > file | grep foo\nls > foo > bar"
+prop_checkPipeToNowhere24 = verify checkPipeToNowhere "#!/bin/zsh\nbasename < file.txt"
 
 data PipeType = StdoutPipe | StdoutStderrPipe | NoPipe deriving (Eq)
 checkPipeToNowhere :: Parameters -> Token -> WriterT [TokenComment] Identity ()
@@ -3900,6 +3977,7 @@ checkPipeToNowhere params t =
                     map (\(a,b) -> (a,[b])) fdAndToken
 
             let inputWarning = sequence_ $ do
+                    guard . not $ isNativeZsh params -- zsh's MULTIOS reads both
                     guard $ input /= NoPipe && not hasConsumers
                     (override:_) <- Map.lookup 0 fdMap
                     return $ err (getOpId override) 2259 $
@@ -3909,6 +3987,7 @@ checkPipeToNowhere params t =
             -- way more common, and  `foo > out 2> err |& foo` can still write
             -- to stderr if the files fail to open
             let outputWarning = sequence_ $ do
+                    guard . not $ isNativeZsh params -- zsh's MULTIOS writes to both
                     guard $ output == StdoutPipe && not hasProducers
                     (override:_) <- Map.lookup 1 fdMap
                     return $ err (getOpId override) 2260 $
@@ -3917,7 +3996,7 @@ checkPipeToNowhere params t =
             return $ do
                 inputWarning
                 outputWarning
-                mapM_ warnAboutDupes $ Map.assocs fdMap
+                unless (isNativeZsh params) $ mapM_ warnAboutDupes $ Map.assocs fdMap
 
     commandSpecificException name cmd =
         case name of

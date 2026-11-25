@@ -95,6 +95,9 @@ data Parameters = Parameters {
     hasPipefail        :: Bool,
     -- Whether this script has 'shopt -s execfail' anywhere.
     hasExecfail        :: Bool,
+    -- Whether this zsh script turns on shwordsplit, globsubst or ksharrays,
+    -- or emulates sh or ksh, anywhere.
+    hasZshShCompatibility :: Bool,
     -- A linear (bad) analysis of data flow
     variableFlow       :: [StackData],
     -- A map from Id to Token
@@ -247,6 +250,8 @@ makeParameters spec = params
             case shellType params of
                 Bash -> isOptionSet "execfail" root
                 _ -> False,
+        hasZshShCompatibility =
+            shellType params == Zsh && containsZshShCompatibility root,
         shellTypeSpecified = isJust (asShellType spec) || isJust (asFallbackShell spec),
         idMap = getTokenMap root,
         parentMap = getParentTree root,
@@ -276,6 +281,38 @@ isOptionSet' longOpt shortOpt root = isNothing $ doAnalysis (guard . not . isSet
                         [shortOpt] `elem` map snd (getAllFlags t))
             _ -> False
     re = mkRegex $ "[[:space:]]-[^-]*" ++ [shortOpt]
+
+-- zsh: does the script turn on an option that makes unquoted expansions act
+-- like in sh or ksh, as in `setopt shwordsplit` or `emulate sh`?
+prop_containsZshShCompatibility1 = containsZshShCompatibility' "setopt local_options SH_WORD_SPLIT"
+prop_containsZshShCompatibility2 = containsZshShCompatibility' "emulate -L ksh"
+prop_containsZshShCompatibility3 = containsZshShCompatibility' "set -o globsubst"
+prop_containsZshShCompatibility4 = not $ containsZshShCompatibility' "setopt noshwordsplit no_ksh_arrays"
+prop_containsZshShCompatibility5 = not $ containsZshShCompatibility' "emulate -L zsh; unsetopt shwordsplit"
+containsZshShCompatibility' = containsZshShCompatibility . fromJust . prRoot . pScript . ("#!/bin/zsh\n" ++)
+containsZshShCompatibility root = isNothing $ doAnalysis (guard . not . turnsOn) root
+  where
+    turnsOn t =
+        case t of
+            T_SimpleCommand {} -> fromMaybe False $ do
+                name <- getCommandName t
+                let args = mapMaybe getLiteralString $ arguments t
+                return $ case name of
+                    "setopt" -> any isCompatibilityOption args
+                    "set" -> any isCompatibilityOption $ afterDashO args
+                    "emulate" -> any (`elem` ["sh", "ksh"]) args
+                    _ -> False
+            _ -> False
+    -- zsh option names ignore case and underscores
+    isCompatibilityOption s =
+        (map toLower . filter (/= '_') $ s) `elem` ["shwordsplit", "globsubst", "ksharrays"]
+    afterDashO ("-o":x:rest) = x : afterDashO rest
+    afterDashO (_:rest) = afterDashO rest
+    afterDashO [] = []
+
+-- zsh with its own rules for unquoted expansions: they aren't split or
+-- globbed, and $array is the whole array.
+isNativeZsh params = shellType params == Zsh && not (hasZshShCompatibility params)
 
 containsAllexport = isOptionSet' "allexport" 'a'
 -- Does this script mention 'set -e' anywhere?
