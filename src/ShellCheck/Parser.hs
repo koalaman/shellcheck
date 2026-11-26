@@ -557,9 +557,12 @@ readConditionContents single =
 
     readCondWord = do
         notFollowedBy2 (try (spacing >> string "]"))
+        startPos <- getPosition
+        input <- getInput
         x <- readNormalWord
         pos <- getPosition
-        when (notArrayIndex x && endedWith "]" x && not (x `containsLiteral` "[")) $ do
+        when (notArrayIndex x && endedWith "]" x && not (x `containsLiteral` "[")
+                && not (endsWithEscapedBracket startPos pos input)) $ do
             parseProblemAt pos ErrorC 1020 $
                 "You need a space before the " ++ (if single then "]" else "]]") ++ "."
             fail "Missing space before ]"
@@ -576,6 +579,13 @@ readConditionContents single =
             notArrayIndex (T_NormalWord id s@(_:T_Literal _ t:_)) = t /= "["
             notArrayIndex _ = True
             containsLiteral x s = s `isInfixOf` onlyLiteralString x
+            -- \] is stored as a plain ], so look for the backslash in the source
+            endsWithEscapedBracket start end input =
+                let positions = scanl updatePosChar start input
+                    source = map fst . takeWhile ((< end) . snd) $ zip input positions
+                in case reverse source of
+                    ']':rest -> odd . length $ takeWhile (== '\\') rest
+                    _ -> False
 
     readCondAndOp = readAndOrOp TC_And "&&" False <|> readAndOrOp TC_And "-a" True
 
@@ -950,6 +960,12 @@ prop_readCondition27 = not $ isOk readConditionCommand "[[ x ]] foo"
 prop_readCondition28 = isOk readCondition "[[ x = [\"$1\"] ]]"
 prop_readCondition29 = isOk readCondition "[[ x = [*] ]]"
 prop_readCondition30 = isOk readCondition "[ \\! \\( -e foo -a -e bar \\) ]"
+prop_readCondition31 = isOk readCondition "[[ $x == \\] ]]"
+prop_readCondition32 = isOk readCondition "[[ $x = *\\] || $x = \\] ]]"
+prop_readCondition33 = isOk readCondition "[ \"$x\" = \\] ]"
+prop_readCondition34 = isNotOk readCondition "[[ $x == y]]"
+prop_readCondition35 = isNotOk readCondition "[[ $x == \\\\]]"
+prop_readCondition36 = isNotOk readCondition "[ \"$x\" = \\]]"
 
 readCondition = called "test expression" $ do
     opos <- getPosition
