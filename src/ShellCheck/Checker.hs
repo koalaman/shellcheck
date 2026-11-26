@@ -433,6 +433,20 @@ prop_onlyFirstLineCanTriggerMissingBangWarning = [2148] == result
         csScript = "# shell init file\n# /etc/profile is my name and init is my game\n echo 'Hello World' >&2\n"
     }
 
+prop_bangInLeadingCommentIsNotShebang = [2086] == result
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "file.bash",
+        csScript = "# Notes:\n#  ! python is needed for the helper\necho $1\n"
+    }
+
+prop_stillWarnsAboutSpacedShebangAfterComment = [1115, 1128] == result
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "file.sh",
+        csScript = "# Copyright\n#  !/bin/sh\necho b\n"
+    }
+
 prop_canDisableAllWarnings = result == [2086]
   where
     result = checkWithSpec [] emptyCheckSpec {
