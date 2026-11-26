@@ -2164,6 +2164,10 @@ prop_readSimpleCommand12 = isWarning readSimpleCommand "elsif foo"
 prop_readSimpleCommand13 = isWarning readSimpleCommand "ElseIf foo"
 prop_readSimpleCommand14 = isWarning readSimpleCommand "elseif[$i==2]"
 prop_readSimpleCommand15 = isWarning readSimpleCommand "trap 'foo\"bar' INT"
+prop_readSimpleCommand16 = isOk readSimpleCommand "builtin export foo=(bar baz)"
+prop_readSimpleCommand17 = isOk readSimpleCommand "builtin declare -a foo=(bar baz)"
+prop_readSimpleCommand18 = isNotOk readSimpleCommand "builtin echo foo=(bar baz)"
+prop_readSimpleCommand19 = isNotOk readSimpleCommand "echo export foo=(bar baz)"
 readSimpleCommand = called "simple command" $ do
     prefix <- option [] readCmdPrefix
     skipAnnotationAndWarn
@@ -2179,10 +2183,13 @@ readSimpleCommand = called "simple command" $ do
       Just cmd -> do
             validateCommand cmd
             -- We have to ignore possible parsing problems from the lookAhead parser
-            firstArgument <- ignoreProblemsOf . optionMaybe . try . lookAhead $ readCmdWord
+            -- Only look ahead after `builtin`: parsing every first argument twice doubles the work per nested $(..)
+            firstArgument <- if isCommand ["builtin"] cmd
+                then ignoreProblemsOf . optionMaybe . try . lookAhead $ readCmdWord
+                else return Nothing
             suffix <- option [] $ getParser readCmdSuffix
                     -- If `export` or other modifier commands are called with `builtin` we have to look at the first argument
-                    (if isCommand ["builtin"] cmd then fromMaybe cmd firstArgument else cmd) [
+                    (fromMaybe cmd firstArgument) [
                         (["declare", "export", "local", "readonly", "typeset"], readModifierSuffix),
                         (["time"], readTimeSuffix),
                         (["let"], readLetSuffix),

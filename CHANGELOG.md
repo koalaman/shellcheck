@@ -17,6 +17,8 @@
   `rm -rf /./etc` or `rm -rf /etc/../etc`
 - SC2317 no longer reports commands as unreachable when a `case` catch-all
   is followed by `;;&` and a non-default final clause
+- Nested command substitutions like `echo $(echo $(echo ..))` no longer
+  take exponential time to parse
 
 ### Removed
 - SC3003: removed since ANSI C string is specified in POSIX.1-2024
