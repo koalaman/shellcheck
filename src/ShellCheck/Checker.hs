@@ -559,6 +559,28 @@ prop_shExtensionDoesntMatter = result == [2148]
         csScript = "echo 'hello world'"
     }
 
+-- A zsh file sourced from bash is skipped, as before zsh was supported
+prop_zshFileSourcedFromBash = result == [2154]
+  where
+    result = checkWithSpec [("lib.zsh", "#!/bin/zsh\nfor k v (a b) print $k $v\nx=1")] emptyCheckSpec {
+        csFilename = "main.sh",
+        csScript = "#!/bin/bash\nsource lib.zsh\necho \"$x\""
+    }
+
+prop_zshFileSourcedFromZsh = null result
+  where
+    result = checkWithSpec [("lib.zsh", "#!/bin/zsh\nfor k v (a b) print $k $v\nx=1")] emptyCheckSpec {
+        csFilename = "main.zsh",
+        csScript = "#!/bin/zsh\nsource lib.zsh\necho \"$x\""
+    }
+
+prop_zshBetaShebang = null result
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "file",
+        csScript = "#!/bin/zsh-beta\n(( 3.14 ))"
+    }
+
 prop_sourcedFileUsesOriginalShellExtension = result == [2079]
   where
     result = checkWithSpec [("file.ksh", "(( 3.14 ))")] emptyCheckSpec {

@@ -533,23 +533,35 @@ readConditionContents single =
             else "Trying to do math? Use e.g. [[ $((i/2+7)) -ge 18 ]]."
 
     readCondUnaryExp = do
-      op <- readCondUnaryOp
+      (id, op) <- readCondUnaryOp
       pos <- getPosition
-      liftM op readCondWord `orFail` do
+      arg <- readCondWord `orFail` do
           parseProblemAt pos ErrorC 1019 "Expected this to be an argument to the unary condition."
           return "Expected an argument for the unary operator"
+      -- zsh: a condition from a module can take a second argument, as in
+      -- [[ -prefix 1 pattern ]]
+      zsh <- isZsh
+      second <- if zsh && length op > 2 then optionMaybe readCondWord else return Nothing
+      return $ case second of
+          Just arg2 -> TC_Binary id typ op arg arg2
+          Nothing -> TC_Unary id typ op arg
 
     readCondUnaryOp = try $ do
         start <- startSpan
         s <- readOp
         id <- endSpan start
         spacingOrLf
-        return $ TC_Unary id typ s
+        return (id, s)
 
     readOp = try $ do
         char '-' <|> weirdDash
         s <- many1 letter <|> fail "Expected a test operator"
-        return ('-':s)
+        -- zsh: conditions from modules can have dashes, as in -pcre-match
+        zsh <- isZsh
+        more <- if zsh
+            then concat <$> many (try $ (:) <$> char '-' <*> many1 letter)
+            else return ""
+        return ('-' : s ++ more)
 
     weirdDash = do
         pos <- getPosition
@@ -848,16 +860,24 @@ readArithmeticContents =
         outputBase <|> characterCode <|> mathFunction
     outputBase = do
         start <- startSpan
-        op <- try $ do
+        base <- try $ do
             char '['
-            hashes <- many1 (char '#')
-            base <- many1 (digit <|> char '_')
+            base <- (Left <$> ((++) <$> many1 (char '#') <*> many1 (digit <|> char '_')))
+                <|> (Right <$> baseVariable)
             char ']'
-            return $ "[" ++ hashes ++ base ++ "]"
+            return base
         id <- endSpan start
         spacing
         x <- readArithTerm
-        return $ TA_Unary id op x
+        return $ case base of
+            Left str -> TA_Unary id ("[" ++ str ++ "]") x
+            -- [$fmt], where $fmt holds an output base like #16
+            Right variable -> TA_Binary id "[]" variable x
+    baseVariable = do
+        start <- startSpan
+        pieces <- many1 readNormalDollar
+        id <- endSpan start
+        return $ TA_Expansion id pieces
     characterCode = do
         start <- startSpan
         try $ char '#' >> lookAhead variableStart
@@ -2047,6 +2067,10 @@ prop_readZshNestedBraces2 =
 prop_readZshArrayPatternElement = isOk readScript "#!/bin/zsh\nfiles=( (#i)**/*.(zip|rar)~(*/*|.(_backup|git))/*(-.DN) )"
 prop_readZshArithmeticExtras = isOk readScript "#!/bin/zsh\nbyte=A\nord=$(( [##16] #byte ))\nx=$(( [#8] 64 + [##36]$RANDOM ))\n(( get_columns() == 80 || max(1, x) ))"
 prop_readZshArithmeticExtras2 = not $ isOk readScript "#!/bin/bash\nord=$(( [##16] 255 ))"
+prop_readZshArithmeticBaseVariable = isOk readScript "#!/bin/zsh\nfmt='#16'; base=16; old=ff\nprint $(( [$fmt] \"$base#$old\" + 1 ))"
+prop_readZshArraySemicolon = isOk readScript "#!/bin/zsh\na=(x;y z)\nb=(;x;)\nlocal c=(p;q)"
+prop_readZshArraySemicolon2 = isNotOk readScript "#!/bin/zsh\na=(x;;y)"
+prop_readBashArraySemicolon = isNotOk readScript "#!/bin/bash\na=(x;y)"
 prop_readZshArithmeticSubscriptFlags = isOk readScript "#!/bin/zsh\nlong=(--force)\nif (( long[(I)--force] || ${#long[(r)x*]} )); then echo y; fi"
 prop_readZshEmptyCommands = isOk readScript "#!/bin/zsh\n; echo a\necho b; ; echo c\n;\n( )\n( ; )\n{ echo x } always; { echo y }\nif true; then ; ; fi\nx=$( ; echo hi )"
 prop_readBashEmptyCommand = isNotOk readScript "#!/bin/bash\necho a; ; echo b"
@@ -2088,6 +2112,7 @@ prop_readZshFunctionNames2 =
         Right (T_Annotation _ _ (T_Script _ _ [T_Pipeline _ _ [T_Redirecting _ _ (T_Function _ _ _ "a" _)]])) -> True
         _ -> False
 prop_readZshFunctionNames3 = isNotOk readScript "#!/bin/zsh\nx=1 foo () { echo }"
+prop_readZshFunctionNames4 = isOk readScript "#!/bin/zsh\necho $(echo $(echo $(echo $(echo $(echo $(echo $(echo $(echo $(echo $(echo $(echo $(echo a)))))))))))) () { true }"
 prop_readZshFunctionCommandBody = isOk readScript "#!/bin/zsh\nf() echo hi\ng()\necho hi\nh() if true; then echo y; fi\nfunction k() echo k"
 prop_readZshFunctionCommandBody2 =
     case debugParse readScript "#!/bin/zsh\nf() echo a | tr a b" of
@@ -2102,12 +2127,43 @@ prop_readZshBackgroundLast =
     case debugParse readScript "#!/bin/zsh\nread -r x && echo got &" of
         Right (T_Annotation _ _ (T_Script _ _ [T_AndIf _ _ (T_Backgrounded _ _)])) -> True
         _ -> False
+prop_readZshBackgroundLastAnnotated =
+    case debugParse readScript "#!/bin/zsh\ntrue\n# shellcheck disable=SC2154\nx=1 && sleep 1 &" of
+        Right (T_Annotation _ _ (T_Script _ _ [_, T_Annotation _ _ (T_AndIf _ _ (T_Backgrounded _ _))])) -> True
+        _ -> False
 prop_readBashBackgroundList =
     case debugParse readScript "#!/bin/bash\nread -r x && echo got &" of
         Right (T_Annotation _ _ (T_Script _ _ [T_Backgrounded _ (T_AndIf {})])) -> True
         _ -> False
 prop_readZshBracedBodyAfterArithmetic = isOk readScript "#!/bin/zsh\nx=1\nwhile (( x )) {x=0 }\nuntil (( x )) {}\nwhile (( x )) {echo hi}"
 prop_readZshBracedBodyAfterArithmetic2 = isNotOk readScript "#!/bin/zsh\nx=1\nwhile (( x )) {x=0}"
+prop_readZshParamCount = isOk readScript "#!/bin/zsh\nif (( ! $#* )); then echo none; fi\n(( $#@ == 0 ))\nn=$#*\nprint $#1"
+prop_readZshParamCount2 =
+    case debugParse readScript "#!/bin/zsh\nprint $#1" of
+        Right (T_Annotation _ _ (T_Script _ _ [T_Pipeline _ _ [T_Redirecting _ _ (T_SimpleCommand _ _ [_, T_NormalWord _ [T_DollarBraced _ False (T_NormalWord _ [T_Literal _ "#1"])]])]])) -> True
+        _ -> False
+prop_readZshEmptyCommandsInLoopHeaders = isOk readScript "#!/bin/zsh\nfor x in a b; ; do echo $x; done\nfor x (a b); ; do echo; done\nfor ((i=0;i<1;i++)); ; do echo; done\nselect x in a; ; do break; done\nrepeat 2; ; do echo; done\nfor x; ; do echo; done"
+prop_readZshForeachEmptyBody = isOk readScript "#!/bin/zsh\nforeach x (a b); end\nforeach x (a b)\nend\nforeach x (a b) ; ; end"
+prop_readZshModifierNeedsMiddleDelimiter =
+    case debugParse readScript "#!/bin/zsh\nchown $user:staff file" of
+        Right (T_Annotation _ _ (T_Script _ _ [T_Pipeline _ _ [T_Redirecting _ _ (T_SimpleCommand _ _ [_, T_NormalWord _ (T_DollarBraced {} : _), _])]])) -> True
+        _ -> False
+prop_readZshFunctionArithmeticBody =
+    case debugParse readScript "#!/bin/zsh\nf() (( $1 > 0 ))" of
+        Right (T_Annotation _ _ (T_Script _ _ [T_Pipeline _ _ [T_Redirecting _ _ (T_Function _ _ _ _ (T_Redirecting _ _ (T_Arithmetic {})))]])) -> True
+        _ -> False
+prop_readZshAnonymousCommandBody = isOk readScript "#!/bin/zsh\n() echo hi\n() print -r -- \"arg:$1\" x\n() [[ -n $1 ]] x\n() (( $# )) a b"
+prop_readZshAnonymousCommandBody2 = isNotOk readScript "#!/bin/zsh\n() { [[ -n $1 ]] x }"
+prop_readZshCaseEmptyAlternative = isOk readScript "#!/bin/zsh\ncase $x in |a) echo;; a|) echo;; a||b) echo;; esac"
+prop_readBashCaseEmptyAlternative = isNotOk readScript "#!/bin/bash\ncase $x in |a) echo;; esac"
+prop_readZshNocorrectDash = isOk readScript "#!/bin/zsh\nnocorrect -x\nnocorrect () { echo x } y"
+prop_readZshShortIfNoFi = isNotOk readScript "#!/bin/zsh\nif [[ x ]] (( y )) fi"
+prop_readZshEqualsAssignment = isOk readScript "#!/bin/zsh\nlocal lscmd==ls\nx==ls\ntypeset p4cmd==p4"
+prop_readBashEqualsAssignment = isWarning readScript "#!/bin/bash\nx==ls"
+prop_readZshModuleConditions = isOk readScript "#!/bin/zsh\n[[ foo -pcre-match ^f..$ ]]\n[[ $x -regex-match ^a ]]\nif [[ -prefix 1 (f|ht)tp:// ]]; then echo; fi\n[[ -prefix - ]] && [[ -after -x ]]"
+prop_readBashDashedTestOp = isNotOk readScript "#!/bin/bash\n[[ foo -pcre-match bar ]]"
+prop_readZshCasePatternOnNewLine = isOk readScript "#!/bin/zsh\ncase '' in\n  burble) print No.\n  ;;\n  |burble) print Not quite.\n  ;;\n  ||jurgle) print Ok.\n  ;;\nesac"
+prop_readZshEmptyCommandAfterOperator = isOk readScript "#!/bin/zsh\necho pipe | ; sed s/pipe/PIPE/\ntrue && ; echo and\nfalse || ; echo or"
 prop_readZshModifierEnds = isOk readScript "#!/bin/zsh\nx=abc\nprint $x:s/a/b; cd /tmp\n[[ $x:s/a/b == bbc ]] && echo y\necho \"$x:gs/a/b\" $x:s/a/b}c\n{ print $x:s/a/b}"
 prop_readZshReservedBeforeAnon = isOk readScript "#!/bin/zsh\ntime () { sleep 0 } a\ncoproc () { cat }\nnocorrect () { echo x } y\nnoglob () { echo $1 }\nnocorrect mkdir dir"
 prop_readZshReservedBeforeAnon2 =
@@ -2136,8 +2192,9 @@ readZshUnbracedParameter = try $ do
     start <- startSpan
     pos <- getPosition
     flags <- many (oneOf "+#=~^")
-    -- $10[1], and $@[2,-1] or $*[1] for parts of the positionals
-    name <- readVariableName <|> (guard (null flags) >> (many1 digit <|> (:[]) <$> oneOf "@*"))
+    -- $10[1], $@[2,-1] or $*[1] for parts of the positionals, $#* or $#@ for
+    -- how many there are, and $#1 for the length of $1
+    name <- readVariableName <|> many1 digit <|> ((:[]) <$> oneOf "@*")
     endName <- getPosition
     nameId <- getNextIdBetween pos endName
     subscripts <- many readZshSubscript
@@ -2179,16 +2236,18 @@ readZshModifier = try $ do
   where
     -- :s/old/new/ and :gs/old/new/, with any delimiter. Like the word, the
     -- text ends at a blank or ; & | < > ( ) or a quote, and the last
-    -- delimiters are optional, as in `print $x:s/a/b; next`.
+    -- delimiter is optional, as in `print $x:s/a/b; next`. Without the
+    -- middle one, as in $user:staff, zsh says "bad substitution", and the
+    -- text is read as literal here.
     substitution = do
         global <- option "" (string "g")
         s <- oneOf "sS"
         delim <- noneOf wordEnd
         old <- many $ textChar delim
-        mid <- option "" ((:[]) <$> char delim)
+        char delim
         new <- many $ textChar delim
         end <- option "" ((:[]) <$> char delim)
-        return $ global ++ s : delim : old ++ mid ++ new ++ end
+        return $ global ++ s : delim : old ++ [delim] ++ new ++ end
     wordEnd = " \t\r\n;&|<>()\"'`"
     -- A } that ends the word closes a group, as in `{ print $x:s/a/b}`
     textChar delim = try $ do
@@ -2623,7 +2682,8 @@ readSimpleCommand = called "simple command" $ do
                     -- If `export` or other modifier commands are called with `builtin` we have to look at the first argument
                     (if isCommand ["builtin"] cmd then fromMaybe cmd firstArgument else cmd) [
                         (["declare", "export", "local", "readonly", "typeset"] ++ zshModifiers, readModifierSuffix),
-                        ("time" : zshPrecommands, readTimeSuffix),
+                        (["time"], readTimeSuffix),
+                        (zshPrecommands, (:[]) <$> readPipeline),
                         (["let"], readLetSuffix),
                         (["eval"], readEvalSuffix)
                     ]
@@ -2818,6 +2878,7 @@ readAndOr = do
         chainl1 readPipeline $ do
             op <- g_AND_IF <|> g_OR_IF
             readLineBreak
+            skipZshEmptyCommands
             return $ case op of T_AND_IF id -> T_AndIf id
                                 T_OR_IF  id -> T_OrIf id
 
@@ -2870,13 +2931,14 @@ readTerm = do
             case t of
                 T_AndIf id a b -> T_AndIf id a (backgroundLast i b)
                 T_OrIf id a b -> T_OrIf id a (backgroundLast i b)
+                T_Annotation id annotations a -> T_Annotation id annotations (backgroundLast i a)
                 _ -> T_Backgrounded i t
 
 
 readPipeSequence = do
     start <- startSpan
     (cmds, pipes) <- sepBy1WithSeparators (readBanged readCommand)
-                        (readPipe `thenSkip` (spacing >> readLineBreak))
+                        (readPipe `thenSkip` (spacing >> readLineBreak >> skipZshEmptyCommands))
     id <- endSpan start
     spacing
     return $ T_Pipeline id pipes cmds
@@ -3002,18 +3064,19 @@ prop_readIfClause6 = isWarning readIfClause "if true\nthen\nDo the thing\nfi"
 readIfClause = called "if expression" $ do
     start <- startSpan
     pos <- getPosition
-    (braced, (condition, action)) <- readIfPart
+    (kind, (condition, action)) <- readIfPart
     elifs <- many readElifPart
-    let lastBraced = if null elifs then braced else fst (last elifs)
-    elseBranch <- optionMaybe (readElsePart lastBraced)
+    let lastKind = if null elifs then kind else fst (last elifs)
+    elseBranch <- optionMaybe (readElsePart (lastKind /= ThenBody))
 
     -- zsh's `if cond { ..; } elif cond { ..; } else { ..; }` has no 'fi'
     let needsFi = case elseBranch of
                     Just (_, elseBraced) -> not elseBraced
-                    Nothing -> not lastBraced
+                    Nothing -> lastKind == ThenBody
     -- zsh also accepts a `fi` on the same line right after the braced body
-    -- of an `if cond { ..; }` or `elif`, but not after `else { ..; }`
-    when (lastBraced && isNothing elseBranch) . optional $ g_Fi
+    -- of an `if cond { ..; }` or `elif`, but not after `else { ..; }` or the
+    -- short form `if [[ .. ]] cmd`
+    when (lastKind == BracedBody && isNothing elseBranch) . optional $ g_Fi
     when needsFi . void $
         g_Fi `orFail` do
             parseProblemAt pos ErrorC 1046 "Couldn't find 'fi' for this 'if'."
@@ -3024,6 +3087,10 @@ readIfClause = called "if expression" $ do
     let elses = maybe [] fst elseBranch
     return $ T_IfExpression id ((condition, action):map snd elifs) elses
 
+
+-- How the body of an if or elif is written: `then ..`, or zsh's `{ .. }` or
+-- short form `if [[ .. ]] cmd`
+data IfBody = ThenBody | BracedBody | ShortBody deriving (Eq)
 
 -- zsh allows empty bodies and a ';' right after then, else and do, as in
 -- `if true; then; fi`. Read the ';' and the body, which may be empty.
@@ -3061,7 +3128,7 @@ readIfPart = do
 readZshBracedClause condition = do
     zshOnly
     list <- readZshBracedList
-    return (True, (condition, list))
+    return (BracedBody, (condition, list))
 
 -- zsh: the short form `if [[ .. ]] cmd` or `if (( .. )) cmd`, with a single
 -- command or && || list as the body, and no fi.
@@ -3069,7 +3136,7 @@ readZshShortClause condition = do
     zshOnly
     notFollowedBy2 g_Then
     body <- readZshSublistBody
-    return (True, (condition, body))
+    return (ShortBody, (condition, body))
 
 -- Are we reading the condition of an if or elif in zsh, where the short
 -- form `if [[ .. ]] cmd` lets a command follow the [[ .. ]] or (( .. ))?
@@ -3078,6 +3145,15 @@ isInZshIfCondition = do
     contexts <- getCurrentContexts
     return $ zsh && case [name | ContextName _ name <- contexts] of
         (name:_) -> name `elem` ["if expression", "elif clause"]
+        [] -> False
+
+-- Are we reading the body of a zsh anonymous function, as in `() [[ -n $1 ]] x`,
+-- where the words after the command are the function's arguments?
+isInZshAnonymousFunctionBody = do
+    zsh <- isZsh
+    contexts <- getCurrentContexts
+    return $ zsh && case [name | ContextName _ name <- contexts] of
+        (name:_) -> name == "anonymous function"
         [] -> False
 
 -- The contents of a { ..; } used as the body of a zsh alternate form
@@ -3104,7 +3180,7 @@ readThenClause pos condition = do
                 allspacing
                 verifyNotEmptyIf "then"
                 readTerm
-        return (False, (condition, action))
+        return (ThenBody, (condition, action))
 
 readElifPart = called "elif clause" $ do
     pos <- getPosition
@@ -3124,7 +3200,7 @@ readElifPart = called "elif clause" $ do
                 allspacing
                 verifyNotEmptyIf "then"
                 readTerm
-        return (False, (condition, action))
+        return (ThenBody, (condition, action))
 
 -- Returns the commands, and whether this was zsh's braced `else { ..; }`.
 -- That form is only allowed after a braced `if` or `elif`.
@@ -3307,6 +3383,7 @@ readForClause = called "for loop" $ do
         readArithmeticDelimiter ')' "Missing second ')' to terminate 'for ((;;))' loop condition"
         spacing
         optional $ readSequentialSep >> spacing
+        skipZshEmptyCommands
         group <- readBraced <|> readZshSublistBody <|> readDoGroup id
         return $ T_ForArithmetic id x y z group
 
@@ -3332,7 +3409,7 @@ readForClause = called "for loop" $ do
         names <- readZshLoopVariables <|> ((:[]) <$> readVariableName `thenSkip` allspacing)
         -- zsh's (list) must be on the same line as the names
         values <- readZshParenthesizedWords <|>
-            (allspacing >> (readInClause <|> (optional readSequentialSep >> return [])))
+            (allspacing >> (readInClause <|> (optional readSequentialSep >> skipZshEmptyCommands >> return [])))
         group <- readBraced <|> readZshSublistBody <|> readDoGroup id
         return $ T_ForIn id names values group
 
@@ -3358,6 +3435,7 @@ readZshParenthesizedWords = do
     spacing
     optional readSequentialSep
     allspacing
+    skipZshEmptyCommands
     return words
 
 -- zsh: the short form of a loop body, like the `echo $x` in `for x (a b) echo $x`.
@@ -3394,7 +3472,9 @@ readZshForeachClause = called "foreach loop" $ do
         (T_BraceGroup _ list) <- readBraceGroup
         return list
     readEndBody = do
-        body <- readTerm
+        skipZshEmptyCommands
+        isEmpty <- isFollowedBy g_ZshEnd
+        body <- if isEmpty then return [] else readTerm
         g_ZshEnd <|> fail "Expected 'end' to close the foreach loop"
         return body
 
@@ -3416,6 +3496,7 @@ readZshRepeatClause = called "repeat loop" $ do
     count <- readNormalWord `thenSkip` spacing
     optional readSequentialSep
     allspacing
+    skipZshEmptyCommands
     -- zsh also accepts `repeat 3` with no body at the end of the script
     body <- readZshBracedList <|> readZshSublistBody <|> (eof >> return []) <|> readDoGroup kwId
     id <- endSpan start
@@ -3447,6 +3528,7 @@ readInClause = do
     } <|> do {
         optional g_Semi;
         void allspacing;
+        skipZshEmptyCommands;
     }
 
     return things
@@ -3470,7 +3552,7 @@ readCaseClause = called "case expression" $ do
   where
     readRegularCase = do
         g_In <|> fail "Expected 'in'"
-        readLineBreak
+        readCaseLineBreak
         skipZshEmptyCommands
         list <- readCaseList (void g_Esac)
         g_Esac <|> fail "Expected 'esac' to close the case statement"
@@ -3496,7 +3578,7 @@ readCaseItem caseEnd = called "case item" $ do
     zsh <- isZsh
     pattern' <- readZshGroupedPattern <|> readZshOpenedPattern <|> do
         unless zsh $ optional g_Lparen >> void spacing
-        readPattern
+        if zsh then readZshPattern else readPattern
     void g_Rparen <|> do
         parseProblem ErrorC 1085
             "Did you forget to move the ;; after extending this case item?"
@@ -3509,9 +3591,17 @@ readCaseItem caseEnd = called "case item" $ do
         lookAhead g_Rparen
         parseProblemAt pos ErrorC 1074
             "Did you forget the ;; after the previous case item?"
-    readLineBreak
+    readCaseLineBreak
     skipZshEmptyCommands
     return (separator, pattern', list)
+
+-- zsh: a case pattern can start with a | on its own line, as in `|a) ..`, so
+-- that isn't a line break in the wrong place there
+readCaseLineBreak = do
+    zsh <- isZsh
+    if zsh
+        then void . many $ (linefeed <|> carriageReturn) `thenSkip` spacing
+        else readLineBreak
 
 -- zsh: after the optional (, a pattern can be empty or contain spaces, as in
 -- `(|ftp|http)` or `(*# SKIP*)`. Spaces next to the ( ) and | don't count.
@@ -3577,7 +3667,7 @@ readFunctionDefinition = called "function" $ do
     zsh <- isZsh
     group <- if zsh
         -- zsh also takes any single command as the body, as in `f() echo hi`
-        then readBraceGroup <|> readSubshell <|> readCommand
+        then readBraceGroup <|> (notFollowedBy2 (string "((") >> readSubshell) <|> readCommand
         else do
             void (lookAhead $ oneOf "{(") <|> parseProblem ErrorC 1064 "Expected a { to open the function definition."
             readBraceGroup <|> readSubshell
@@ -3642,7 +3732,8 @@ readFunctionDefinition = called "function" $ do
         -- command passes through here.
         readZshNamesWithoutFunction = do
             zshOnly
-            lookAhead . try $ manyTill (noneOf "\n;&|") (try $ string "()")
+            input <- getInput
+            guard $ hasParensInCommand input
             isDefinition <- quietlyFollowedBy $ readZshNames >> string "()"
             guard isDefinition
             names <- readZshNames
@@ -3666,6 +3757,21 @@ readFunctionDefinition = called "function" $ do
             "!", "{", "}", "[[", "case", "do", "done", "elif", "else", "end",
             "esac", "fi", "for", "foreach", "function", "if", "repeat",
             "select", "then", "until", "while"]
+
+        -- Is there a () in this command, before a newline, ; & | or a ) that
+        -- closes a $( ) or ( ) around it? Parens inside a $( ) don't count. This
+        -- keeps the look ahead above from running again at every level of
+        -- `$(a $(b $(c))) ()`, which took exponential time.
+        hasParensInCommand = go (0 :: Int)
+          where
+            go depth str =
+                case str of
+                    '(':')':_ | depth == 0 -> True
+                    '(':rest -> go (depth + 1) rest
+                    ')':rest -> depth > 0 && go (depth - 1) rest
+                    c:_ | depth == 0 && c `elem` "\n;&|" -> False
+                    _:rest -> go depth rest
+                    [] -> False
 
         -- In zsh, `time () { ..; }` runs an anonymous function. Other words,
         -- like noglob or builtin, define a function with that name.
@@ -3747,7 +3853,9 @@ readAnonymousFunction = called "anonymous function" $ do
     start <- startSpan
     hasKeyword <- try $ (withoutKeyword >> return False) <|> (withKeyword >> return True)
     allspacing
-    body <- readBraceGroup <|> readSubshell
+    -- `() echo hi` has a single command as its body, which takes the words
+    body <- readBraceGroup <|> (notFollowedBy2 (string "((") >> readSubshell)
+        <|> (guard (not hasKeyword) >> readCommand)
     argsAndRedirs <- if hasKeyword
         -- `function { ..; } a > file` takes its arguments before any redirection
         then do
@@ -3816,6 +3924,19 @@ readCoProc = called "coproc" $ do
 
 readPattern = (readPatternWord `thenSkip` spacing) `sepBy1` (char '|' `thenSkip` spacing)
 
+-- zsh: like readPattern, but an alternative can be empty, as in `|a)` or `a|)`
+readZshPattern = do
+    alternatives <- (option Nothing (Just <$> readPatternWord) `thenSkip` spacing)
+                        `sepBy1` (char '|' `thenSkip` spacing)
+    guard $ any isJust alternatives || length alternatives > 1
+    mapM (maybe emptyWord return) alternatives
+  where
+    emptyWord = do
+        start <- startSpan
+        id <- endSpan start
+        literalId <- getNewIdFor id
+        return $ T_NormalWord id [T_Literal literalId ""]
+
 prop_readConditionCommand = isOk readConditionCommand "[[ x ]] > foo 2>&1"
 readConditionCommand = do
     cmd <- readCondition
@@ -3832,8 +3953,9 @@ readConditionCommand = do
     -- zsh: `if [[ .. ]] { ..; }` and `while [[ .. ]] { ..; }`.
     -- Check this first, since reading '{' as a word warns that it's literal.
     hasZshBrace <- isFollowedBy (zshOnly >> char '{')
-    -- zsh: `if [[ .. ]] cmd` is a short form of if
-    shortIf <- isInZshIfCondition
+    -- zsh: `if [[ .. ]] cmd` is a short form of if, and in `() [[ .. ]] arg`
+    -- the words after it are the arguments of the anonymous function
+    shortIf <- (||) <$> isInZshIfCondition <*> isInZshAnonymousFunctionBody
     -- If the next word is a keyword, readNormalWord will trigger a warning
     hasKeyword <- isFollowedBy readKeyword
     hasWord <- if hasZshBrace || shortIf then return False else isFollowedBy readNormalWord
@@ -3872,7 +3994,7 @@ readCompoundCommand = do
     cmd <- readZshAlways cmd <|> return cmd
     redirs <- many readIoRedirect
     id <- getNextIdSpanningTokenList (cmd:redirs)
-    shortIf <- isInZshIfCondition
+    shortIf <- (||) <$> isInZshIfCondition <*> isInZshAnonymousFunctionBody
     optional . lookAhead $ do
         guard $ not shortIf
         -- zsh: `while (( x )) {echo hi}` has a braced body
@@ -4036,8 +4158,9 @@ readAssignmentWordExt lenient = called "variable assignment" $ do
         value <- readEmptyLiteral
         return $ T_Assignment id op variable indices value
       else do
-        zshProcSub <- isFollowedBy (zshOnly >> string "=(")
-        unless zshProcSub $ optional $ do
+        -- zsh: x=(...) runs =(...), and x==cmd assigns the path of cmd
+        zshEquals <- isFollowedBy (zshOnly >> char '=' >> (void (char '(') <|> void (noneOf " \t\r\n;&|<>()='\"")))
+        unless zshEquals $ optional $ do
             lookAhead $ char '='
             parseProblem ErrorC 1097 "Unexpected ==. For assignment, use =. For comparison, use [/[[. Or quote for literal string."
 
@@ -4076,12 +4199,15 @@ readArray = called "array assignment" $ do
         lookAhead $ char '('
         parseProblemAt opening ErrorC 1116 "Missing $ on a $((..)) expression? (or use ( ( for arrays)."
     allspacing
+    skipZshSeparators
     words <- readElement `reluctantlyTill` char ')'
     char ')' <|> fail "Expected ) to close array assignment"
     id <- endSpan start
     return $ T_Array id words
   where
-    readElement = (readIndexed <|> readRegular) `thenSkip` allspacing
+    readElement = (readIndexed <|> readRegular) `thenSkip` (allspacing >> skipZshSeparators)
+    -- zsh: a ; separates elements like a space, as in arr=(a;b)
+    skipZshSeparators = skipZshEmptyCommands
     readIndexed = do
         start <- startSpan
         index <- try $ do
@@ -4386,7 +4512,13 @@ readScriptFile sourced = do
 
             unless ignoreShebang $
                 verifyShebang pos executable
-            if ignoreShebang || isValidShell executable /= Just False
+            -- A bash or sh script can't run a zsh file it sources. Skip that
+            -- file, as before zsh was supported, rather than reading zsh code
+            -- with the rules of the other shell.
+            parentShell <- parseShellType <$> getState
+            let zshFromOtherShell = sourced && not ignoreShebang
+                    && shellForExecutable executable == Just Zsh && parentShell /= Zsh
+            if (ignoreShebang || isValidShell executable /= Just False) && not zshFromOtherShell
               then do
                     unless sourced $ do
                         filename <- Mr.asks currentFilename

@@ -180,11 +180,11 @@ shellForExecutable name =
         _ -> Nothing
   where
     -- zsh5, zsh-5.9, zsh-static
+    -- zsh5, zsh-5.9, and any other zsh-something like zsh-static or zsh-beta
     isVersionedZsh n =
         case stripPrefix "zsh" n of
-            Just rest ->
-                let version = dropWhile (== '-') rest
-                in not (null version) && (all (`elem` "0123456789.") version || version == "static")
+            Just ('-':_:_) -> True
+            Just rest -> not (null rest) && all (`elem` "0123456789.") rest
             Nothing -> False
 
 shellFromAnnotations :: [Annotation] -> String -> Maybe Shell
@@ -301,7 +301,9 @@ zshCompletionVariables = [
     "service", "compcontext", "_comp_caller_options", "_comp_priv_prefix",
     "compprefuncs", "comppostfuncs", "_compskip", "_comp_command", "_comp_command1",
     "_comp_command2", "_comps", "_services", "_patcomps", "_postpatcomps",
-    "_compautos", "_comp_dumpfile", "_comp_options", "_comp_setup", "_lastcomp"
+    "_compautos", "_comp_dumpfile", "_comp_options", "_comp_setup", "_lastcomp",
+    -- set by _main_complete for _options_set and _options_unset
+    "_options_set", "_options_unset"
   ]
 
 -- Globals created by functions shipped with zsh: `autoload -U colors && colors`
