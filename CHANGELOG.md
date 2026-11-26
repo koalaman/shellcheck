@@ -3,6 +3,7 @@
 - SC2337: warn about `grep -q` in pipelines under pipefail
 - SC2338: Optionally suggest `[[ x == y ]]` over `[[ x = y ]]`
   (bash `require-double-equals`)
+- SC2339: Warn about `**` globs when globstar is not enabled
 - Add `--files-from` option to read input files from a file
 - Support EditorConfig `shellcheck.*` keys
 
