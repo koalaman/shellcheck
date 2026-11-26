@@ -727,7 +727,11 @@ prop_checkForInQuoted5 = verify checkForInQuoted "for f in ls; do true; done"
 prop_checkForInQuoted6 = verifyNot checkForInQuoted "for f in \"${!arr}\"; do true; done"
 prop_checkForInQuotedZsh1 = verifyNot checkForInQuoted "#!/bin/zsh\nfor f in \"${(@k)map}\" \"${(f)lines}\"; do true; done"
 prop_checkForInQuotedZsh2 = verifyNot checkForInQuoted "#!/bin/zsh\nfor k v in \"${(@kv)map}\"; do true; done"
-prop_checkForInQuotedZsh4 = verifyNot checkForInQuoted "#!/bin/zsh\nfor w in \"${=list}\" \"$=list\"; do true; done"
+prop_checkForInQuotedZsh4 = verifyNot checkForInQuoted "#!/bin/zsh\nfor w in \"${=list}\"; do true; done"
+prop_checkForInQuotedZsh4b = verifyNot checkForInQuoted "#!/bin/zsh\nfor w in \"$=list\"; do true; done"
+prop_checkForInQuotedZsh4c = verify checkForInQuoted "#!/bin/zsh\nfor w in \"${==list}\"; do true; done"
+prop_checkForInQuotedZsh6 = verifyNot checkForInQuoted "#!/bin/zsh\nfor w in \"${(Z+n+)x}\"; do true; done"
+prop_checkForInQuotedZsh7 = verifyNot checkForInQuoted "#!/bin/zsh\nfor x in \"${(q)@}\"; do true; done"
 prop_checkForInQuotedZsh5 = verify checkForInQuoted "#!/bin/zsh\nfor w in \"${(j:@:)arr}\"; do true; done"
 prop_checkForInQuotedZsh3 = verify checkForInQuoted "#!/bin/zsh\nfor f in \"$var\"; do true; done"
 prop_checkForInQuotedBashFlags = verify checkForInQuoted "for f in \"${(@k)map}\"; do true; done"
@@ -1638,9 +1642,16 @@ prop_checkArithmeticDeref13 = verifyNot checkArithmeticDeref "(( $$ ))"
 prop_checkArithmeticDeref14 = verifyNot checkArithmeticDeref "(( $! ))"
 prop_checkArithmeticDeref15 = verifyNot checkArithmeticDeref "(( ${!var} ))"
 prop_checkArithmeticDeref16 = verifyNot checkArithmeticDeref "(( ${x+1} + ${x=42} ))"
+prop_checkArithmeticDerefZsh = verifyNot checkArithmeticDeref "#!/bin/zsh\nfmt='#16'; echo $(( [$fmt] 255 ))"
+prop_checkArithmeticDerefZsh2 = verify checkArithmeticDeref "#!/bin/zsh\nfmt='#16'; x=1; echo $(( [$fmt] $x ))"
 checkArithmeticDeref params t@(TA_Expansion _ [T_DollarBraced id _ l]) =
-    unless (isException $ concat $ oversimplify l) getWarning
+    unless (isException (concat $ oversimplify l) || isZshOutputBase) getWarning
   where
+    -- zsh: the $fmt in $(( [$fmt] x )) holds an output base like #16
+    isZshOutputBase =
+        case NE.toList $ parents params t of
+            _ : TA_Binary _ "[]" base _ : _ -> getId base == getId t
+            _ -> False
     isException [] = True
     isException s@(h:_) = any (`elem` "/.:#%?*@$-!+=^,") s || isDigit h
     getWarning = fromMaybe noWarning . msum . NE.map warningFor $ parents params t
@@ -1848,16 +1859,22 @@ prop_checkValidCondOps5 = verifyNot checkValidCondOps "[ \\! -e foo ]"
 prop_checkValidCondOps6 = verifyNot checkValidCondOps "[ '!' -e foo ]"
 prop_checkValidCondOps7 = verifyNot checkValidCondOps "#!/bin/zsh\n[[ -prefix - ]]"
 prop_checkValidCondOps8 = verify checkValidCondOps "[[ -prefix - ]]"
-checkValidCondOps _ (TC_Binary id _ s _ _)
-    | s `notElem` binaryTestOps =
+prop_checkValidCondOps9 = verifyNot checkValidCondOps "#!/bin/zsh\n[[ foo -pcre-match ^f ]]\n[[ -prefix 1 pat ]]"
+prop_checkValidCondOps10 = verify checkValidCondOps "#!/bin/zsh\n[[ foo -pcre-matches ^f ]]"
+checkValidCondOps params (TC_Binary id _ s _ _)
+    | s `notElem` binaryTestOps && not (isZshModuleCondition params s) =
         warn id 2057 "Unknown binary operator."
 checkValidCondOps params (TC_Unary id _ s _)
-    | s `notElem` unaryTestOps && not (shellType params == Zsh && s `elem` zshCompletionTestOps) =
+    | s `notElem` unaryTestOps && not (isZshModuleCondition params s) =
         warn id 2058 "Unknown unary operator."
-  where
-    -- zsh's conditions for completion widgets, as in [[ -prefix - ]]
-    zshCompletionTestOps = ["-prefix", "-suffix", "-after", "-between"]
 checkValidCondOps _ _ = return ()
+
+-- zsh's conditions from modules: -pcre-match and -regex-match as in
+-- [[ $x -pcre-match re ]], and the ones for completion widgets, as in
+-- [[ -prefix 1 pattern ]]
+isZshModuleCondition params op =
+    shellType params == Zsh &&
+        op `elem` ["-pcre-match", "-regex-match", "-prefix", "-suffix", "-after", "-between"]
 
 prop_checkUuoeVar1 = verify checkUuoeVar "for f in $(echo $tmp); do echo lol; done"
 prop_checkUuoeVar2 = verify checkUuoeVar "date +`echo \"$format\"`"
@@ -2428,6 +2445,8 @@ checkSpacefulnessCfg' dirtyPass params token@(T_DollarBraced id _ list) =
     parents = parentMap params
     needsQuoting =
               not (isArrayExpansion token) -- There's another warning for this
+              -- zsh: quotes don't stop $=x or ${(s: :)x} from splitting
+              && not (shellType params == Zsh && isZshExplicitSplitOrGlob bracedString)
               && not (isCountingReference token)
               && not (isQuoteFree (shellType params) parents token)
               && not (isQuotedAlternativeReference token)
@@ -3140,6 +3159,7 @@ prop_checkUnpassedInFunctions16 = verifyNotTree checkUnpassedInFunctions "foo() 
 prop_checkUnpassedInFunctions17 = verifyNotTree checkUnpassedInFunctions "foo() { mycommand ${1+--verbose}; }; foo"
 prop_checkUnpassedInFunctions18 = verifyNotTree checkUnpassedInFunctions "foo() { if mycheck; then foo ${1?Missing}; fi; }; foo"
 prop_checkUnpassedInFunctionsZsh = verifyNotTree checkUnpassedInFunctions "#!/bin/zsh\nf() {\n  () { echo \"$1\" } hello\n}\nf"
+prop_checkUnpassedInFunctionsZsh2 = verifyTree checkUnpassedInFunctions "#!/bin/zsh\nf() { () { print -r -- \"$1\" } \"$1\" }\nf"
 checkUnpassedInFunctions params root =
     execWriter $ mapM_ warnForGroup referenceGroups
   where
@@ -3163,14 +3183,18 @@ checkUnpassedInFunctions params root =
             _ -> False
 
     isDirectChildOf child parent = fromMaybe False $ do
-        function <- find (\x -> case x of
-            T_Function {} -> True
-            -- zsh: an anonymous function has its own $1
-            T_AnonymousFunction {} -> True
-            T_Script {} -> True  -- for sourced files
-            _ -> False) $
-                getPath (parentMap params) child
+        let path = NE.toList $ getPath (parentMap params) child
+        function <- listToMaybe [p | (c, p) <- zip path (drop 1 path), owns c p]
         return $ getId parent == getId function
+      where
+        owns c p =
+            case p of
+                T_Function {} -> True
+                -- zsh: an anonymous function has its own $1, but the words of
+                -- its arguments belong to the code around it
+                T_AnonymousFunction _ _ body -> getId body == getId c
+                T_Script {} -> True  -- for sourced files
+                _ -> False
 
     referenceList :: [(String, Bool, Token)]
     referenceList = execWriter $
@@ -3397,9 +3421,14 @@ prop_checkTestArgumentSplitting18 = verify checkTestArgumentSplitting "#!/bin/ks
 prop_checkTestArgumentSplitting19 = verifyNot checkTestArgumentSplitting "[[ var[x] -eq 2*3 ]]"
 prop_checkTestArgumentSplitting20 = verify checkTestArgumentSplitting "[ var[x] -eq 2 ]"
 prop_checkTestArgumentSplitting21 = verify checkTestArgumentSplitting "[ 6 -eq 2*3 ]"
+prop_checkTestArgumentSplittingZsh = verifyNot checkTestArgumentSplitting "#!/bin/zsh\nif [[ -prefix 1 (f|ht)tp:// ]]; then :; fi\n[[ -prefix *.txt ]]"
+prop_checkTestArgumentSplittingZsh2 = verify checkTestArgumentSplitting "#!/bin/zsh\n[[ -e *.txt ]]"
 checkTestArgumentSplitting :: Parameters -> Token -> Writer [TokenComment] ()
 checkTestArgumentSplitting params t =
     case t of
+        -- zsh: the arguments of module conditions like -prefix are patterns
+        TC_Unary _ _ op _ | isZshModuleCondition params op -> return ()
+        TC_Binary _ _ op _ _ | isZshModuleCondition params op -> return ()
         (TC_Unary _ typ op token) | isGlob token ->
             if op == "-v"
             then
@@ -3544,7 +3573,10 @@ prop_checkUncheckedCdInFunction5 = verifyTree checkUncheckedCdPushdPopd "foo() {
 prop_checkUncheckedCdInFunction6 = verifyTree checkUncheckedCdPushdPopd "foo() { cd /abc; return | cat; }"
 prop_checkUncheckedCdInFunction7 = verifyNotTree checkUncheckedCdPushdPopd "foo() { cd /abc; return $?; }"
 prop_checkUncheckedCdInFunction8 = verifyNotTree checkUncheckedCdPushdPopd "foo() { cd /abc; exit $?; }"
-prop_checkUncheckedCdInFunctionZsh = verifyNotTree checkUncheckedCdPushdPopd "#!/bin/zsh\n() { cd /abc }"
+-- An anonymous function's status isn't checked by a caller, unlike a function's
+prop_checkUncheckedCdInFunctionZsh = verifyTree checkUncheckedCdPushdPopd "#!/bin/zsh\n() { cd /abc }"
+prop_checkUncheckedCdInFunctionZsh2 = verifyNotTree checkUncheckedCdPushdPopd "#!/bin/zsh\nf() cd \"$1\"\nf /tmp || exit"
+prop_checkUncheckedCdInFunctionZsh3 = verifyNotTree checkUncheckedCdPushdPopd "#!/bin/zsh\n() { cd /abc } || exit"
 
 checkUncheckedCdPushdPopd params root =
     if hasErrexit params then
@@ -3566,7 +3598,7 @@ checkUncheckedCdPushdPopd params root =
     isLastCommandInFunction t =
         go $ NE.tail $ getPath (parentMap params) t
       where
-        go (child:T_BraceGroup _ commands:function:_) | isFunctionOrAnonymous function =
+        go (child:T_BraceGroup _ commands:T_Function {}:_) =
             case dropWhile ((/= getId child) . getId) commands of
                 [_] -> True
                 [_, T_Pipeline _ [] [T_Redirecting _ [] (T_SimpleCommand _ [] (cmd:args))]] ->
@@ -3575,8 +3607,15 @@ checkUncheckedCdPushdPopd params root =
                         [T_NormalWord _ [T_DollarBraced _ False status]] -> getLiteralString status == Just "?"
                         _ -> False
                 _ -> False
+        -- zsh: `f() cd "$1"`, where the command is the whole body
+        go (child:T_Function _ _ _ _ body:_) | getId body == getId child && isCommandBody body = True
         go (_:rest) = go rest
         go [] = False
+        isCommandBody t =
+            case t of
+                T_BraceGroup {} -> False
+                T_Subshell {} -> False
+                _ -> True
     isSafeDir t = case oversimplify t of
           [_, str] -> str `matches` regex
           _ -> False
@@ -3986,6 +4025,8 @@ prop_checkPipeToNowhere20 = verifyNot checkPipeToNowhere "find . | du --exclude-
 prop_checkPipeToNowhere21 = verifyNot checkPipeToNowhere "yes | cp -ri foo/* bar"
 prop_checkPipeToNowhere22 = verifyNot checkPipeToNowhere "yes | rm --interactive *"
 prop_checkPipeToNowhere23 = verifyNot checkPipeToNowhere "#!/bin/zsh\nls > file | grep foo\nls > foo > bar"
+prop_checkPipeToNowhereZshMultios1 = verifyNot checkPipeToNowhere "#!/bin/zsh\nsetopt ksharrays\nprint hi > out.txt | tr a-z A-Z"
+prop_checkPipeToNowhereZshMultios2 = verify checkPipeToNowhere "#!/bin/zsh\nunsetopt multios\nprint hi > out.txt | tr a-z A-Z"
 prop_checkPipeToNowhere24 = verify checkPipeToNowhere "#!/bin/zsh\nbasename < file.txt"
 
 data PipeType = StdoutPipe | StdoutStderrPipe | NoPipe deriving (Eq)
@@ -4030,7 +4071,7 @@ checkPipeToNowhere params t =
                     map (\(a,b) -> (a,[b])) fdAndToken
 
             let inputWarning = sequence_ $ do
-                    guard . not $ isNativeZsh params -- zsh's MULTIOS reads both
+                    guard . not $ hasZshMultios params -- zsh's MULTIOS reads both
                     guard $ input /= NoPipe && not hasConsumers
                     (override:_) <- Map.lookup 0 fdMap
                     return $ err (getOpId override) 2259 $
@@ -4040,7 +4081,7 @@ checkPipeToNowhere params t =
             -- way more common, and  `foo > out 2> err |& foo` can still write
             -- to stderr if the files fail to open
             let outputWarning = sequence_ $ do
-                    guard . not $ isNativeZsh params -- zsh's MULTIOS writes to both
+                    guard . not $ hasZshMultios params -- zsh's MULTIOS writes to both
                     guard $ output == StdoutPipe && not hasProducers
                     (override:_) <- Map.lookup 1 fdMap
                     return $ err (getOpId override) 2260 $
@@ -4049,7 +4090,7 @@ checkPipeToNowhere params t =
             return $ do
                 inputWarning
                 outputWarning
-                unless (isNativeZsh params) $ mapM_ warnAboutDupes $ Map.assocs fdMap
+                unless (hasZshMultios params) $ mapM_ warnAboutDupes $ Map.assocs fdMap
 
     commandSpecificException name cmd =
         case name of
@@ -4470,7 +4511,8 @@ prop_checkUselessBang7 = verifyNot checkUselessBang "set -e; x() { ! [ x ]; }"
 prop_checkUselessBang8 = verifyNot checkUselessBang "set -e; if { ! true; }; then true; fi"
 prop_checkUselessBang9 = verifyNot checkUselessBang "set -e; while ! true; do true; done"
 prop_checkUselessBang10 = verify checkUselessBang "set -e\nshellcheck disable=SC0000\n! true\nrest"
-prop_checkUselessBangZsh = verifyNot checkUselessBang "#!/bin/zsh\nset -e\n() { foo; ! true }"
+prop_checkUselessBangZsh = verify checkUselessBang "#!/bin/zsh\nset -e\n() { foo; ! true }"
+prop_checkUselessBangZsh2 = verify checkUselessBang "#!/bin/zsh\nset -e\nf() { foo; ! true; }"
 checkUselessBang params t = when (hasErrexit params) $ mapM_ check (getNonReturningCommands t)
   where
     check t =
@@ -4498,10 +4540,12 @@ checkUselessBang params t = when (hasErrexit params) $ mapM_ check (getNonReturn
                 concatMap (dropLast . fst) conds ++ concatMap snd conds ++ elses
             _ -> []
 
+    -- In zsh, a ! at the end of a function skips errexit too
     isFunctionBody t =
-        case getPath (parentMap params) t of
-            _ NE.:| f:_ -> isFunctionOrAnonymous f
-            _ -> False
+        shellType params /= Zsh &&
+            case getPath (parentMap params) t of
+                _ NE.:| T_Function {}:_-> True
+                _ -> False
 
     dropLast t =
         case t of

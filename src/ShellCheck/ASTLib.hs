@@ -314,22 +314,58 @@ prop_hasZshSplittingFlag6 = not $ hasZshSplittingFlag "(l:3::0:)n"
 prop_hasZshSplittingFlag7 = hasZshSplittingFlag "=list"
 prop_hasZshSplittingFlag8 = not $ hasZshSplittingFlag "==list"
 prop_hasZshSplittingFlag9 = hasZshSplittingFlag "(ps.\\n.)x"
+prop_hasZshSplittingFlag10 = all hasZshSplittingFlag ["(Z+n+)x", "(Z:c:)x", "(q)@", "^@", "~@", "(L)=x", "(q)arr[@]", "(@j: :s: :)x"]
+prop_hasZshSplittingFlag11 = not $ any hasZshSplittingFlag ["(q)*", "(L)x", "#@", "(j: :)@", "(@j: :)arr", "${arr[@]}"]
 hasZshSplittingFlag string =
-    case string of
-        '(':rest -> any (`elem` "@fsz0") $ zshFlagLetters rest
-        -- ${=x} splits, while ${==x} doesn't
-        _ -> (== 1) . length . filter (== '=') $ takeWhile (`elem` "=~^") string
+    -- s, f, z, Z, 0 and = split after j has joined, as in "${(j: :s:,:)x}"
+    any (`elem` "fszZ0") letters || splitsWithEquals
+        -- (@) and $@ keep the elements apart, unless j joins them
+        || 'j' `notElem` letters && ('@' `elem` letters || isElementsOf name)
+  where
+    (letters, afterFlags, prefix, name) = zshParameterParts string
+    -- ${=x} splits, while ${==x} doesn't
+    splitsWithEquals = length (filter (== '=') prefix) == 1
+    isElementsOf n =
+        "@" `isPrefixOf` n ||
+            let (base, subscript) = span (\c -> isAlphaNum c || c == '_') n
+            in not (null base) && "[@]" `isPrefixOf` subscript
+
+-- Does this zsh parameter expansion ask for splitting or globbing itself, as
+-- in $=x, ${(s: :)x} or ${~x}, so that quoting it doesn't stop that?
+prop_isZshExplicitSplitOrGlob1 = all isZshExplicitSplitOrGlob ["=x", "~x", "(s: :)x", "(z)x", "(f)x"]
+prop_isZshExplicitSplitOrGlob2 = not $ any isZshExplicitSplitOrGlob ["x", "(L)x", "==x", "#x"]
+isZshExplicitSplitOrGlob string = hasZshSplittingFlag string || '~' `elem` prefix
+  where
+    (_, _, prefix, _) = zshParameterParts string
+
+-- The parts of the inside of a zsh ${..}: the flag letters, the text after
+-- the flags, the =, ~ and ^ in front of the name, and the name onwards.
+zshParameterParts string = (letters, afterFlags, prefix, name)
+  where
+    (letters, afterFlags) =
+        case string of
+            '(':rest -> zshFlags rest
+            _ -> ([], string)
+    (prefix, name) = span (`elem` "=~^") afterFlags
 
 -- The letters in zsh parameter expansion flags, up to the ), without the
 -- arguments of flags like j and s: "jl" for "j:@:l:3::0:)name"
 prop_zshFlagLetters1 = zshFlagLetters "j:@:l:3::0:)name" == "jl"
 prop_zshFlagLetters2 = zshFlagLetters "s[:]f)x" == "sf"
-zshFlagLetters s =
+prop_zshFlags1 = zshFlags "j:@:l:3::0:)name" == ("jl", "name")
+zshFlagLetters = fst . zshFlags
+
+-- The flag letters and the text after the closing )
+zshFlags s =
     case s of
-        ')':_ -> []
-        c:rest | c `elem` "gjlrsIZ_" -> c : zshFlagLetters (skipArguments (argumentCount c) rest)
-        c:rest -> c : zshFlagLetters rest
-        [] -> []
+        ')':rest -> ([], rest)
+        c:rest | c `elem` "gjlrsIZ_" ->
+            let (letters, after) = zshFlags (skipArguments (argumentCount c) rest)
+            in (c : letters, after)
+        c:rest ->
+            let (letters, after) = zshFlags rest
+            in (c : letters, after)
+        [] -> ([], [])
   where
     -- l and r take up to three, as in l:3::0:
     argumentCount c = if c `elem` "lr" then 3 else 1 :: Int

@@ -96,8 +96,11 @@ data Parameters = Parameters {
     -- Whether this script has 'shopt -s execfail' anywhere.
     hasExecfail        :: Bool,
     -- Whether this zsh script turns on shwordsplit, globsubst or ksharrays,
-    -- or emulates sh or ksh, anywhere.
+    -- or emulates sh, ksh or csh, outside functions and subshells.
     hasZshShCompatibility :: Bool,
+    -- Whether this is zsh with MULTIOS on, so that `cmd > file | cmd2`
+    -- writes to both.
+    hasZshMultios :: Bool,
     -- A linear (bad) analysis of data flow
     variableFlow       :: [StackData],
     -- A map from Id to Token
@@ -252,6 +255,8 @@ makeParameters spec = params
                 _ -> False,
         hasZshShCompatibility =
             shellType params == Zsh && containsZshShCompatibility root,
+        hasZshMultios =
+            shellType params == Zsh && not (containsZshMultiosOff root),
         shellTypeSpecified = isJust (asShellType spec) || isJust (asFallbackShell spec),
         idMap = getTokenMap root,
         parentMap = getParentTree root,
@@ -282,11 +287,138 @@ isOptionSet' longOpt shortOpt root = isNothing $ doAnalysis (guard . not . isSet
             _ -> False
     re = mkRegex $ "[[:space:]]-[^-]*" ++ [shortOpt]
 
+-- zsh: an option change that lasts for the rest of the script. Option names
+-- are lowercase, without underscores.
+data ZshOptionChange = ZshSetOption String | ZshUnsetOption String | ZshEmulate String
+    deriving (Eq, Show)
+
+prop_zshOptionChanges1 = zshOptionChanges' "setopt local_options SH_WORD_SPLIT nomatch; unsetopt nomultios"
+    == map ZshSetOption ["localoptions", "shwordsplit", "nomatch", "multios"]
+prop_zshOptionChanges2 = zshOptionChanges' "set -eo pipefail -y; set +o noglobsubst"
+    == [ZshSetOption "pipefail", ZshSetOption "shwordsplit", ZshSetOption "globsubst"]
+prop_zshOptionChanges3 = zshOptionChanges' "emulate -L zsh -o shwordsplit; emulate rksh; emulate bash"
+    == [ZshEmulate "zsh", ZshSetOption "shwordsplit", ZshEmulate "ksh", ZshEmulate "sh"]
+prop_zshOptionChanges4 = null $ zshOptionChanges' "set -- -y \"$@\"; set -A opts -y; set foo -y; emulate -l sh; emulate sh -c 'true'"
+prop_zshOptionChanges5 = null $ zshOptionChanges' "(setopt shwordsplit); x=$(setopt globsubst); setopt ksharrays &; setopt shwordsplit | cat; f() { setopt shwordsplit; }; () { emulate sh; }"
+prop_zshOptionChanges6 = zshOptionChanges' "true | setopt shwordsplit; options[ksh_arrays]=on; options+=(globsubst off multios on)"
+    == [ZshSetOption "shwordsplit", ZshSetOption "ksharrays", ZshUnsetOption "globsubst", ZshSetOption "multios"]
+prop_zshOptionChanges7 = (zshOptionChanges . fromJust . prRoot $ pScript "#!/bin/zsh -y\ntrue")
+    == [ZshSetOption "shwordsplit"]
+zshOptionChanges' = zshOptionChanges . fromJust . prRoot . pScript . ("#!/bin/zsh\n" ++)
+
+-- The option changes outside functions and subshells, where they last for the
+-- rest of the script. Inside functions, options are usually local (`emulate
+-- -L`, `setopt localoptions`) or restore the caller's settings, as in
+-- `(( was_set )) && setopt ksh_arrays`.
+zshOptionChanges root = shebangChanges ++ concatMap changes (topLevel root)
+  where
+    topLevel t =
+        case t of
+            T_Function {} -> []
+            T_AnonymousFunction {} -> []
+            T_Subshell {} -> []
+            T_DollarExpansion {} -> []
+            T_Backticked {} -> []
+            T_ProcSub {} -> []
+            T_Backgrounded {} -> []
+            T_KshCoprocess {} -> []
+            T_CoProc {} -> []
+            -- zsh runs only the last command of a pipeline in this shell
+            T_Pipeline _ _ cmds@(_:_:_) -> t : topLevel (last cmds)
+            OuterToken _ inner -> t : concatMap topLevel (foldr (:) [] inner)
+
+    shebangChanges =
+        case root of
+            T_Annotation _ _ (T_Script _ (T_Literal _ shebang) _) -> fromShebang shebang
+            T_Script _ (T_Literal _ shebang) _ -> fromShebang shebang
+            _ -> []
+    -- #!/bin/zsh -y or #!/usr/bin/env zsh -y
+    fromShebang shebang =
+        case words shebang of
+            _ : rest -> flagChanges True $ dropWhile (\w -> "zsh" `isSuffixOf` w || "-S" == w) rest
+            [] -> []
+
+    changes t =
+        case t of
+            T_SimpleCommand {} -> fromMaybe [] $ do
+                name <- getCommandName t
+                let args = map (fromMaybe "" . getLiteralString) $ arguments t
+                return $ case name of
+                    "setopt" -> setoptChanges True args
+                    "unsetopt" -> setoptChanges False args
+                    "set" -> flagChanges True args
+                    "emulate" -> emulateChanges args
+                    _ -> []
+            -- options[shwordsplit]=on
+            T_Assignment _ _ "options" [index] value -> maybeToList $ do
+                option <- getLiteralString index
+                setting <- getLiteralString value
+                optionSetting option setting
+            -- options+=(shwordsplit on)
+            T_Assignment _ _ "options" [] (T_Array _ elements) ->
+                pairs $ map (fromMaybe "" . getLiteralString) elements
+            _ -> []
+    pairs (option:setting:rest) = maybeToList (optionSetting option setting) ++ pairs rest
+    pairs _ = []
+    optionSetting option setting =
+        case setting of
+            "on" -> optionChange True option
+            "off" -> optionChange False option
+            _ -> Nothing
+
+    -- The leading flag words of set and setopt: -y, +y, -o name, +o name and
+    -- clusters like -eo name. Stops at --, -, -A (an array assignment) or the
+    -- first other word, since set's other words are positional parameters.
+    flagChanges on args =
+        case args of
+            (w@(c:letters@(_:_)):rest) | c `elem` "-+" && w /= "--" ->
+                let turnOn = (c == '-') == on
+                    letterChanges = [change turnOn "shwordsplit" | 'y' <- letters]
+                in case () of
+                    _ | 'A' `elem` letters -> letterChanges
+                    _ | 'o' `elem` letters ->
+                        case rest of
+                            name:more -> letterChanges ++ maybeToList (optionChange turnOn name) ++ flagChanges on more
+                            [] -> letterChanges
+                    _ -> letterChanges ++ flagChanges on rest
+            _ -> []
+    -- setopt and unsetopt: flags, then option names. With -m the names are patterns.
+    setoptChanges on args =
+        let (flags, names) = span (\w -> take 1 w `elem` ["-", "+"]) args
+        in flagChanges on flags ++
+            if any ('m' `elem`) flags then [] else mapMaybe (optionChange on) names
+    -- A name can have "no" in front to mean the opposite, as in noshwordsplit,
+    -- though some options start with no themselves, like nomatch
+    optionChange on rawName =
+        let name = map toLower $ filter (/= '_') rawName in
+        case stripPrefix "no" name of
+            _ | null name -> Nothing
+            _ | name `elem` knownOptions -> Just $ change on name
+            Just rest | rest `elem` knownOptions -> Just $ change (not on) rest
+            _ -> Just $ change on name
+    knownOptions = ["shwordsplit", "globsubst", "ksharrays", "multios"]
+    change on name = if on then ZshSetOption name else ZshUnsetOption name
+
+    -- emulate [-lLR] [mode [flags...]]: zsh goes by the first letter after
+    -- any r, so `emulate bash` and `emulate rksh` count. With -l it only
+    -- lists options, and `emulate sh -c cmd` only applies to that command.
+    emulateChanges args =
+        let (leading, rest) = span (\w -> take 1 w `elem` ["-", "+"]) args
+        in if any ('l' `elem`) leading then [] else
+            case rest of
+                mode:flags | "-c" `notElem` flags ->
+                    maybeToList (emulation mode) ++ flagChanges True flags
+                _ -> []
+    emulation mode =
+        case dropWhile (== 'r') (map toLower mode) of
+            c:_ | c `elem` "sb" -> Just $ ZshEmulate "sh"
+            'k':_ -> Just $ ZshEmulate "ksh"
+            'c':_ -> Just $ ZshEmulate "csh"
+            'z':_ -> Just $ ZshEmulate "zsh"
+            _ -> Nothing
+
 -- zsh: does the script turn on an option that makes unquoted expansions act
--- like in sh or ksh, as in `setopt shwordsplit` or `emulate sh`? Only
--- commands outside functions count: inside functions, options are usually
--- local (`emulate -L`, `setopt localoptions`) or restore the caller's
--- settings, as in `(( was_set )) && setopt ksh_arrays`.
+-- like in sh or ksh, as in `setopt shwordsplit` or `emulate sh`?
 prop_containsZshShCompatibility1 = containsZshShCompatibility' "setopt local_options SH_WORD_SPLIT"
 prop_containsZshShCompatibility2 = containsZshShCompatibility' "emulate -L ksh"
 prop_containsZshShCompatibility3 = containsZshShCompatibility' "set -o globsubst"
@@ -294,52 +426,32 @@ prop_containsZshShCompatibility4 = not $ containsZshShCompatibility' "setopt nos
 prop_containsZshShCompatibility5 = not $ containsZshShCompatibility' "emulate -L zsh; unsetopt shwordsplit"
 prop_containsZshShCompatibility6 = not $ containsZshShCompatibility' "f() { (( x )) && setopt ksh_arrays; }"
 prop_containsZshShCompatibility7 = not $ containsZshShCompatibility' "() { emulate -L sh; }"
-prop_containsZshShCompatibility8 = all containsZshShCompatibility' ["emulate bash", "emulate -L ksh93", "unsetopt noshwordsplit", "set -y", "options[shwordsplit]=on", "emulate -L zsh -o shwordsplit"]
+prop_containsZshShCompatibility8 = all containsZshShCompatibility' ["emulate bash", "emulate -L ksh93", "unsetopt noshwordsplit", "set -y", "options[shwordsplit]=on", "emulate -L zsh -o shwordsplit", "emulate csh", "setopt -y", "set -eo shwordsplit"]
 prop_containsZshShCompatibility9 = not $ containsZshShCompatibility' "emulate sh -c 'true'"
 prop_containsZshShCompatibility10 = not $ containsZshShCompatibility' "set -o noshwordsplit; options[shwordsplit]=off; unsetopt shwordsplit"
+prop_containsZshShCompatibility11 = not $ containsZshShCompatibility' "set -- -y; (setopt shwordsplit); setopt nomultios"
 containsZshShCompatibility' = containsZshShCompatibility . fromJust . prRoot . pScript . ("#!/bin/zsh\n" ++)
-containsZshShCompatibility root = any turnsOn $ outsideFunctions root
+containsZshShCompatibility root = any turnsOn $ zshOptionChanges root
   where
-    outsideFunctions t =
-        case t of
-            T_Function {} -> []
-            T_AnonymousFunction {} -> []
-            OuterToken _ inner -> t : concatMap outsideFunctions (foldr (:) [] inner)
-    turnsOn t =
-        case t of
-            T_SimpleCommand {} -> fromMaybe False $ do
-                name <- getCommandName t
-                let args = mapMaybe getLiteralString $ arguments t
-                return $ case name of
-                    "setopt" -> any isCompatibilityOption args
-                    "unsetopt" -> any isCompatibilityOption $ mapMaybe (stripPrefix "no" . normalize) args
-                    "set" -> any isCompatibilityOption (afterDashO args) || any setsShWordSplit args
-                    "emulate" -> emulatesCompatibly args
-                    _ -> False
-            -- options[shwordsplit]=on
-            T_Assignment _ _ "options" [index] value -> fromMaybe False $ do
-                option <- getLiteralString index
-                setting <- getLiteralString value
-                return $ isCompatibilityOption option && setting == "on"
+    turnsOn c =
+        case c of
+            ZshSetOption o -> o `elem` ["shwordsplit", "globsubst", "ksharrays"]
+            ZshEmulate e -> e `elem` ["sh", "ksh", "csh"]
+            ZshUnsetOption _ -> False
+
+-- zsh's MULTIOS sends output to all the redirections of an fd, and a pipe.
+-- It's on unless the script turns it off or emulates another shell.
+prop_containsZshMultiosOff1 = all (containsZshMultiosOff . root) ["unsetopt multios", "setopt nomultios", "emulate sh"]
+  where root = fromJust . prRoot . pScript . ("#!/bin/zsh\n" ++)
+prop_containsZshMultiosOff2 = not $ any (containsZshMultiosOff . root) ["setopt ksharrays shwordsplit", "(unsetopt multios)"]
+  where root = fromJust . prRoot . pScript . ("#!/bin/zsh\n" ++)
+containsZshMultiosOff root = any turnsOff $ zshOptionChanges root
+  where
+    turnsOff c =
+        case c of
+            ZshUnsetOption "multios" -> True
+            ZshEmulate e -> e `elem` ["sh", "ksh", "csh"]
             _ -> False
-    -- zsh option names ignore case and underscores
-    normalize = map toLower . filter (/= '_')
-    isCompatibilityOption s = normalize s `elem` ["shwordsplit", "globsubst", "ksharrays"]
-    -- set -y is SH_WORD_SPLIT
-    setsShWordSplit arg =
-        case arg of
-            '-':flags@(c:_) -> c `notElem` "-o" && 'y' `elem` flags
-            _ -> False
-    -- zsh goes by the first letter, so `emulate bash` and `emulate ksh93`
-    -- count. `emulate sh -c cmd` only applies to that command.
-    emulatesCompatibly args =
-        case dropWhile ("-" `isPrefixOf`) args of
-            mode:flags -> "-c" `notElem` flags &&
-                (take 1 mode `elem` ["s", "b", "k"] || any isCompatibilityOption (afterDashO flags))
-            [] -> False
-    afterDashO ("-o":x:rest) = x : afterDashO rest
-    afterDashO (_:rest) = afterDashO rest
-    afterDashO [] = []
 
 -- zsh with its own rules for unquoted expansions: they aren't split or
 -- globbed, and $array is the whole array.
@@ -924,7 +1036,76 @@ getZshReferencedVariables t =
         T_Assignment _ _ name _ word
             | name `elem` zshPromptVariables && name `notElem` ["PS1", "PS2", "PS3", "PS4"] ->
                 map (\x -> (t, t, x)) $ getVariablesFromLiteralToken word
+        T_SimpleCommand {} -> map (\x -> (t, t, x)) $ zshCompletionArrayNames t
         _ -> []
+
+-- zsh's completion functions take the names of arrays, as in `_describe
+-- 'command' cmds`, `compadd -a values` or `_wanted tag expl x compadd -k map`
+prop_zshCompletionArrayNames1 = zshReferencedNames "#!/bin/zsh\n_describe -t commands 'command' cmds descs -V x -- more" == ["cmds", "descs", "more"]
+prop_zshCompletionArrayNames2 = zshReferencedNames "#!/bin/zsh\n_wanted tag expl 'value' compadd \"$expl[@]\" -Q -d disp -a values extra" == ["disp", "values", "extra"]
+prop_zshCompletionArrayNames3 = zshReferencedNames "#!/bin/zsh\ncompadd -k assoc; compadd -- words; compadd -X 'x' -- -a; _values -s , -O subopts 'x' a b" == ["assoc", "subopts"]
+prop_zshCompletionArrayNames4 = zshReferencedNames "#!/bin/zsh\ncompadd -Qa - list; compadd -ddisp -- w; _describe -ttag 'd' one -- two three" == ["list", "disp", "one", "two", "three"]
+zshCompletionArrayNames t =
+    case t of
+        T_SimpleCommand _ _ words ->
+            filter isName $
+                case dropWhile (`notElem` ["compadd", "_describe", "_values"]) (map literal words) of
+                    "compadd" : args -> compadd False args
+                    "_describe" : args -> describe args
+                    "_values" : args -> values args
+                    _ -> []
+        _ -> []
+  where
+    -- A word that isn't a literal, like "$expl[@]", is skipped
+    literal = fromMaybe "" . getLiteralString
+    isName n = not (null n) && all isVariableChar n && not (isDigit $ head n)
+
+    -- compadd: with -a the words are names of arrays, with -k names of
+    -- associative arrays, and -d and -F take the name of an array
+    compadd names args =
+        case args of
+            "--" : rest -> if names then rest else []
+            "" : rest -> compadd names rest
+            ('-':cluster@(_:_)) : rest -> compaddOption names cluster rest
+            _ -> if names then args else []
+    compaddOption names cluster rest =
+        case cluster of
+            [] -> compadd names rest
+            c:more
+                | c `elem` "ak" -> compaddOption True more rest
+                | c `elem` "FPSpsiIWdJXxVrRDOAEM" ->
+                    -- the argument is the rest of the word, or the next word
+                    let (argument, rest') = if null more then (take 1 rest, drop 1 rest) else ([more], rest)
+                    in (if c `elem` "dF" then argument else []) ++ compadd names rest'
+                | c == 'o' -> compadd names rest
+                | otherwise -> compaddOption names more rest
+
+    -- _describe [-oO12JVx] [-t tag] descr name1 [name2] [opt...] [-- name1 [name2] [opt...]]...
+    describe args =
+        case args of
+            "-t" : _ : rest -> describe rest
+            ('-':'t':_:_) : rest -> describe rest
+            ('-':flags@(_:_)) : rest | all (`elem` "oO12JVx") flags -> describe rest
+            _ : rest -> describeNames rest
+            [] -> []
+    describeNames args =
+        case args of
+            name1 : rest | isName name1 ->
+                let (name2, rest') =
+                        case rest of
+                            n : more | isName n -> ([n], more)
+                            _ -> ([], rest)
+                in name1 : name2 ++ describeNames (drop 1 $ dropWhile (/= "--") rest')
+            _ -> []
+
+    -- _values -O name: an array of options to pass on to compadd
+    values args =
+        case args of
+            "-O" : name : _ -> [name]
+            ('-':'O':name@(_:_)) : _ -> [name]
+            flag : _ : rest | flag `elem` ["-s", "-S"] -> values rest
+            ('-':_) : rest -> values rest
+            _ -> []
 
 -- The name in a zsh parameter expansion with flags or prefixes, like the x in
 -- ${(f)x}, ${(j:,:)x}, ${=x}, ${~x}, ${^x} and ${+x}
