@@ -1188,9 +1188,9 @@ prop_checkCatastrophicRm10 = verifyNot checkCatastrophicRm "rm -r \"${DIR}\"/{.g
 prop_checkCatastrophicRm11 = verify checkCatastrophicRm "rm -r /{bin,sbin}/$exec"
 prop_checkCatastrophicRm12 = verify checkCatastrophicRm "rm -r /{{usr,},{bin,sbin}}/$exec"
 prop_checkCatastrophicRm13 = verifyNot checkCatastrophicRm "rm -r /{{a,b},{c,d}}/$exec"
-prop_checkCatastrophicRmA = verify checkCatastrophicRm "rm -rf /usr /lib/nvidia-current/xorg/xorg"
-prop_checkCatastrophicRmB = verify checkCatastrophicRm "rm -rf \"$STEAMROOT/\"*"
-prop_checkCatastrophicRmC = verify checkCatastrophicRm "rm -rf /boot/*"
+prop_checkCatastrophicRm13A= verify checkCatastrophicRm "rm -rf /usr /lib/nvidia-current/xorg/xorg"
+prop_checkCatastrophicRm13B= verify checkCatastrophicRm "rm -rf \"$STEAMROOT/\"*"
+prop_checkCatastrophicRm13C= verify checkCatastrophicRm "rm -rf /boot/*"
 prop_checkCatastrophicRm14 = verify checkCatastrophicRm "rm -rf /./etc"
 prop_checkCatastrophicRm15 = verify checkCatastrophicRm "rm -rf /etc/../etc"
 prop_checkCatastrophicRm16 = verifyNot checkCatastrophicRm "rm -rf /usr/local/../etc"
@@ -1204,24 +1204,30 @@ prop_checkCatastrophicRm23 = verify checkCatastrophicRm "rm -rf /etc/./"
 prop_checkCatastrophicRm24 = verify checkCatastrophicRm "rm -rf /*/../etc/"
 prop_checkCatastrophicRm25 = verifyNot checkCatastrophicRm "rm -rf /etc/*/../etc"
 prop_checkCatastrophicRm26 = verifyNot checkCatastrophicRm "rm -rf /usr/*/../local/etc"
-checkCatastrophicRm = CommandCheck (Basename "rm") $ \t ->
-    when (isRecursive t) $
-        mapM_ (mapM_ checkWord . braceExpand) $ arguments t
+prop_checkCatastrophicRm27 = verify checkCatastrophicRm "rm /bin/*"
+prop_checkCatastrophicRm28 = verifyNot checkCatastrophicRm "rm /bin"
+prop_checkCatastrophicRm29 = verifyNot checkCatastrophicRm "rm '/bin/*'"
+prop_checkCatastrophicRm30 = verifyNot checkCatastrophicRm "rm /home/$foo"
+prop_checkCatastrophicRm31 = verify checkCatastrophicRm "rm /home/*$foo*"
+checkCatastrophicRm = CommandCheck (Basename "rm") $ \t -> do
+    let recursive = isRecursive t
+    mapM_ (mapM_ (checkWord recursive) . braceExpand) $ arguments t
   where
     isRecursive = any ((`elem` ["r", "R", "recursive"]) . snd) . getAllFlags
 
-    checkWord token =
+    checkWord recursive token =
+      when (recursive || isGlob token) $
         case getGlobOrLiteralString token of
             Just str ->
                 when (fixPath str `elem` importantPaths) $
                     warn (getId token) 2114 "Warning: deletes a system directory."
-            Nothing ->
-                checkWord' token
+            Just _ -> return ()
+            Nothing -> checkWord' recursive token
 
-    checkWord' token = sequence_ $ do
+    checkWord' recursive token = sequence_ $ do
         filename <- getPotentialPath token
         let path = fixPath filename
-        return . when (path `elem` importantPaths) $
+        return . when (path `elem` importantPaths && (recursive || isGlob token)) $
             warn (getId token) 2115 $ "Use \"${var:?}\" to ensure this never expands to " ++ path ++ " ."
 
     fixPath filename =
