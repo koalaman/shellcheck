@@ -104,7 +104,7 @@ options = [
     Option "e" ["exclude"]
         (ReqArg (Flag "exclude") "CODE1,CODE2..") "Exclude types of warnings",
     Option "" ["extended-analysis"]
-        (ReqArg (Flag "extended-analysis") "bool") "Perform dataflow analysis (default true)",
+        (ReqArg (Flag "extended-analysis") "mode") "Perform dataflow analysis: true|local|false (default true; local treats sourced files as boundaries)",
     Option "f" ["format"]
         (ReqArg (Flag "format") "FORMAT") $
         "Output format (" ++ formatList ++ ")",
@@ -450,7 +450,7 @@ parseOption flag options =
             }
 
         Flag "extended-analysis" str -> do
-            value <- parseBool str
+            value <- parseExtendedAnalysis str
             return options {
                 checkSpec = (checkSpec options) {
                     csExtendedAnalysis = Just value
@@ -483,6 +483,19 @@ parseOption flag options =
             "false" -> return False
             _ -> do
                 printErr $ "Invalid boolean, expected true/false: " ++ str
+                throwError SyntaxFailure
+
+    parseExtendedAnalysis str =
+        case str of
+            -- Legacy values
+            "true" -> return ExtendedAnalysisFull
+            "false" -> return ExtendedAnalysisNone
+            -- New values
+            "full" -> return ExtendedAnalysisFull
+            "local" -> return ExtendedAnalysisLocal
+            "none" -> return ExtendedAnalysisNone
+            _ -> do
+                printErr $ "Invalid extended-analysis value, expected full/local/none (or historical true=full, false=none): " ++ str
                 throwError SyntaxFailure
 
 ioInterface :: Options -> [FilePath] -> IO () -> IO (SystemInterface IO)

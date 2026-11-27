@@ -538,6 +538,20 @@ prop_onlyFirstLineCanTriggerMissingBangWarning = [2148] == result
         csScript = "# shell init file\n# /etc/profile is my name and init is my game\n echo 'Hello World' >&2\n"
     }
 
+prop_bangInLeadingCommentIsNotShebang = [2086] == result
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "file.bash",
+        csScript = "# Notes:\n#  ! python is needed for the helper\necho $1\n"
+    }
+
+prop_stillWarnsAboutSpacedShebangAfterComment = [1115, 1128] == result
+  where
+    result = checkWithSpec [] emptyCheckSpec {
+        csFilename = "file.sh",
+        csScript = "# Copyright\n#  !/bin/sh\necho b\n"
+    }
+
 prop_canDisableAllWarnings = result == [2086]
   where
     result = checkWithSpec [] emptyCheckSpec {
@@ -812,15 +826,48 @@ prop_fileWinsWhenSuppressingDfa2 = result == [2317]
 prop_flagWinsWhenSuppressingDfa1 = result == [2317]
   where
     result = checkWithRc "extended-analysis=false" emptyCheckSpec {
-        csScript = "#!/bin/sh\n# shellcheck extended-analysis=false\nexit; foo;",
-        csExtendedAnalysis = Just True
+        csScript = "#!/bin/sh\n# shellcheck extended-analysis=none\nexit; foo;",
+        csExtendedAnalysis = Just ExtendedAnalysisFull
     }
 
 prop_flagWinsWhenSuppressingDfa2 = null result
   where
     result = checkWithRc "extended-analysis=true" emptyCheckSpec {
-        csScript = "#!/bin/sh\n# shellcheck extended-analysis=true\nexit; foo;",
-        csExtendedAnalysis = Just False
+        csScript = "#!/bin/sh\n# shellcheck extended-analysis=full\nexit; foo;",
+        csExtendedAnalysis = Just ExtendedAnalysisNone
+    }
+
+-- 'local' still does data-flow analysis within a file...
+prop_localKeepsIntraFileDfa = 2317 `elem` result
+  where
+    result = getErrors (mockedSystemInterface []) emptyCheckSpec {
+        csScript = "#!/bin/sh\nexit; foo;",
+        csExtendedAnalysis = Just ExtendedAnalysisLocal
+    }
+
+-- ...but treats sourced files as boundaries, so it does not use data flow
+-- from a sourced file (here: that f() always exits) the way 'full' does.
+prop_localTreatsSourcesAsBoundary = 2317 `notElem` result
+  where
+    result = getErrors (mockedSystemInterface [("lib", "f() { exit 1; }")]) emptyCheckSpec {
+        csScript = "#!/bin/sh\nsource lib\nf\nfoo",
+        csCheckSourced = True,
+        csExtendedAnalysis = Just ExtendedAnalysisLocal
+    }
+
+prop_localDirectiveTreatsSourcesAsBoundary = 2317 `notElem` result
+  where
+    result = getErrors (mockedSystemInterface [("lib", "f() { exit 1; }")]) emptyCheckSpec {
+        csScript = "#!/bin/sh\n# shellcheck extended-analysis=local\nsource lib\nf\nfoo",
+        csCheckSourced = True
+    }
+
+prop_fullFollowsDataFlowIntoSources = 2317 `elem` result
+  where
+    result = getErrors (mockedSystemInterface [("lib", "f() { exit 1; }")]) emptyCheckSpec {
+        csScript = "#!/bin/sh\nsource lib\nf\nfoo",
+        csCheckSourced = True,
+        csExtendedAnalysis = Just ExtendedAnalysisFull
     }
 
 return []
