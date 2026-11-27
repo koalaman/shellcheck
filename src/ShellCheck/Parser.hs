@@ -563,7 +563,7 @@ readConditionContents single =
             parseProblemAt pos ErrorC 1020 $
                 "You need a space before the " ++ (if single then "]" else "]]") ++ "."
             fail "Missing space before ]"
-        when (single && endedWith ")" x) $ do
+        when (single && endedWith ")" x && not (isLoneParen x)) $ do
             parseProblemAt pos ErrorC 1021
                 "You need a space before the \\)"
             fail "Missing space before )"
@@ -573,6 +573,9 @@ readConditionContents single =
                 case last s of T_Literal id s -> str `isSuffixOf` s
                                _ -> False
             endedWith _ _ = False
+            -- A \) on its own is a string, as in [ "$c" = \) ]
+            isLoneParen (T_NormalWord _ [T_Literal _ ")"]) = True
+            isLoneParen _ = False
             notArrayIndex (T_NormalWord id s@(_:T_Literal _ t:_)) = t /= "["
             notArrayIndex _ = True
             containsLiteral x s = s `isInfixOf` onlyLiteralString x
@@ -623,7 +626,11 @@ readConditionContents single =
     readCondGroup = do
         start <- startSpan
         pos <- getPosition
-        lparen <- try $ readRegularOrEscaped (string "(")
+        lparen <- try $ do
+            paren <- readRegularOrEscaped (string "(")
+            -- A quoted or escaped ( can be a string to compare, as in [ '(' = "$c" ]
+            when (paren == "\\(") $ notFollowedBy2 (inSeparateContext comparison)
+            return paren
         when (single && lparen == "(") $
             singleWarning pos
         when (not single && lparen == "\\(") $
@@ -645,6 +652,13 @@ readConditionContents single =
             parseProblemAt pos ErrorC 1028 "In [..] you have to escape \\( \\) or preferably combine [..] expressions."
         doubleWarning pos =
             parseProblemAt pos ErrorC 1029 "In [[..]] you shouldn't escape ( or )."
+        -- Inside [ ], test only does this when the comparison is everything in
+        -- the brackets, so [ '(' = "$c" -a x ] is still a group
+        comparison = do
+            many1 linewhitespace
+            readRegularOrEscaped . choice $ map (try . string) binaryTestOps
+            many1 linewhitespace
+            when single $ readNormalWord >> many linewhitespace >> void (char ']')
 
 
     -- Currently a bit of a hack since parsing rules are obscure
@@ -940,6 +954,16 @@ prop_readCondition16 = isOk readCondition "[ foo \\< bar ]"
 prop_readCondition17 = isOk readCondition "[[ ${file::1} = [-.\\|/\\\\] ]]"
 prop_readCondition18 = isOk readCondition "[ ]"
 prop_readCondition19 = isOk readCondition "[ '(' x \")\" ]"
+prop_readCondition19a = isOk readCondition "[ '(' = ')' ]"
+prop_readCondition19b = isOk readCondition "[ '(' = '(' ]"
+prop_readCondition19c = isOk readCondition "[[ '(' == \"${str:j:1}\" ]]"
+prop_readCondition19d = isOk readCondition "[ \\( = \\) ]"
+prop_readCondition19e = isOk readCondition "[ ! '(' = x ]"
+prop_readCondition19f = isOk readCondition "[ -n \\) ]"
+prop_readCondition19g = isWarning readCondition "[ ( a = b ) ]"
+prop_readCondition19h = isWarning readCondition "[[ \\( a == b \\) ]]"
+prop_readCondition19i = isNotOk readCondition "[ \\( a = b\\) ]"
+prop_readCondition19j = isNotOk readCondition "[ '(' = x -a y ]"
 prop_readCondition20 = isOk readCondition "[[ echo_rc -eq 0 ]]"
 prop_readCondition21 = isOk readCondition "[[ $1 =~ ^(a\\ b)$ ]]"
 prop_readCondition22 = isOk readCondition "[[ $1 =~ \\.a\\.(\\.b\\.)\\.c\\. ]]"
