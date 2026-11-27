@@ -154,8 +154,12 @@ data Annotation =
     | ShellOverride String
     | SourcePath String
     | ExternalSources Bool
-    | ExtendedAnalysis Bool
+    | ExtendedAnalysis ExtendedAnalysisAnnotation
     deriving (Show, Eq)
+
+-- ShellCheck.Interface has an equivalent one used externally, but it would be a circular dependency
+data ExtendedAnalysisAnnotation = EAANone | EAALocal | EAAFull deriving (Show, Eq)
+
 data ConditionType = DoubleBracket | SingleBracket deriving (Show, Eq)
 
 pattern T_AND_IF id = OuterToken id Inner_T_AND_IF

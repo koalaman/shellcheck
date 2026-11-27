@@ -56,12 +56,17 @@ not warn at all, as `ksh` supports decimals in arithmetic contexts.
     options are cumulative, but all the codes can be specified at once,
     comma-separated as a single argument.
 
-**--extended-analysis=true/false**
+**--extended-analysis=full/local/none**
 
-:   Enable/disable Dataflow Analysis to identify more issues (default true). If
+:   Enable/disable Dataflow Analysis to identify more issues (default full). If
     ShellCheck uses too much CPU/RAM when checking scripts with several
-    thousand lines of code, extended analysis can be disabled with this flag
-    or a directive. This flag overrides directives and rc files.
+    thousand lines of code, extended analysis can be either limited or
+    disabled with this flag or a corresponding directive.
+
+    Use `full` for full analysis, `local` to ignore sourced files, or `none` to
+    disable. For compatibility, `true` means `full` while `false` means `none`.
+
+    This flag overrides directives and rc files.
 
 **-f** *FORMAT*, **--format=***FORMAT*
 
@@ -277,10 +282,15 @@ Valid keys are:
     Only file-wide `enable` directives are considered.
 
 **extended-analysis**
-:   Set to true/false to enable/disable dataflow analysis. Specifying
-    `# shellcheck extended-analysis=false` in particularly large (2000+ line)
+:   Set to full/local/none to control dataflow analysis. `full` (default)
+    performs whole-program analysis; `local` performs it per file, treating
+    sourced files as opaque boundaries; `none` disables it. Specifying
+    `# shellcheck extended-analysis=none` in particularly large (2000+ line)
     auto-generated scripts will reduce ShellCheck's resource usage at the
-    expense of certain checks. Extended analysis is enabled by default.
+    expense of certain checks. `local` bounds memory when many checked files
+    source a shared tree of libraries, while keeping per-file dataflow checks.
+
+    For compatibility, `true` and `false` means `full` and `none` respectively.
 
 **external-sources**
 :   Set to `true` in `.shellcheckrc` to always allow ShellCheck to open

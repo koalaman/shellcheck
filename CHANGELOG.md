@@ -1,10 +1,12 @@
 ## Git
 ### Added
+- Add `--files-from` option to read input files from a file
+- Add `extended-analysis=local` directive/flag to run dataflow analysis
+  on the current script only, without considering any `source`d includes.
+- Support EditorConfig `shellcheck.*` keys
 - SC2337: warn about `grep -q` in pipelines under pipefail
 - SC2338: Optionally suggest `[[ x == y ]]` over `[[ x = y ]]`
   (bash `require-double-equals`)
-- Add `--files-from` option to read input files from a file
-- Support EditorConfig `shellcheck.*` keys
 - SC2339/SC2340/SC2341/SC3426: Improved exit/return validation across shells
 
 ### Changed
