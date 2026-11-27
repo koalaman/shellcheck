@@ -234,7 +234,8 @@ makeParameters spec = params
                 Ksh  -> True,
         hasInheritErrexit =
             case shellType params of
-                Bash -> isOptionSet "inherit_errexit" root
+                -- POSIX mode enables inherit_errexit by default in Bash.
+                Bash -> isOptionSet "inherit_errexit" root || isOptionSet "posix" root
                 Dash -> True
                 BusyboxSh -> True
                 Sh   -> True
@@ -296,8 +297,9 @@ containsSetOption opt root = isNothing $ doAnalysis (guard . not . isOptionSet) 
         case t of
             T_SimpleCommand {}  ->
                 t `isUnqualifiedCommand` "set" &&
-                    (opt `elem` oversimplify t ||
-                        "o" `elem` map snd (getAllFlags t))
+                    -- Match the option name; a bare `-o` flag must not be
+                    -- treated as setting every option.
+                    opt `elem` oversimplify t
             _ -> False
 
 containsShopt shopt root =
