@@ -1434,6 +1434,12 @@ prop_checkSudoRedirect4 = verify (checkSudoRedirect "sudo") "sudo cmd &> file"
 prop_checkSudoRedirect5 = verifyNot (checkSudoRedirect "sudo") "sudo cmd 2>&1"
 prop_checkSudoRedirect6 = verifyNot (checkSudoRedirect "doas") "doas cmd 2> log"
 prop_checkSudoRedirect7 = verifyNot (checkSudoRedirect "run0") "run0 cmd > /dev/null 2>&1"
+-- A disable directive covers all ;-separated commands on the same line (#3448)
+prop_checkSudoRedirect8 = verifyNot (checkSudoRedirect "sudo") "log=/tmp/x\n# shellcheck disable=SC2024\nsudo apt update; sudo apt install foo >> \"$log\""
+prop_checkSudoRedirect9 = verifyNot (checkSudoRedirect "sudo") "log=/tmp/x\n# shellcheck disable=SC2024\nsudo apt update && sudo apt install foo >> \"$log\""
+-- ...but not commands on following lines
+prop_checkSudoRedirect10 = runAndGetCodes (getChecker [checkSudoRedirect "sudo"]) "log=/tmp/x\n# shellcheck disable=SC2024\nsudo apt update\nsudo apt install foo >> \"$log\"" == Just [2024]
+prop_checkSudoRedirect11 = runAndGetCodes (getChecker [checkSudoRedirect "sudo"]) "log=/tmp/x\n# shellcheck disable=SC2024\nsudo apt update;\nsudo apt install foo >> \"$log\"" == Just [2024]
 checkSudoRedirect cmd = CommandCheck (Basename cmd) f
   where
     f t = do

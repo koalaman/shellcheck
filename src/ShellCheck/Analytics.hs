@@ -2304,6 +2304,15 @@ prop_checkSpacefulnessCfg64 = verifyNot checkSpacefulnessCfg "declare -i s; s='x
 prop_checkSpacefulnessCfg65 = verifyNot checkSpacefulnessCfg "f() { s=$?; echo $s; }; f"
 prop_checkSpacefulnessCfg66 = verifyNot checkSpacefulnessCfg "f() { s=$?; echo $s; }"
 
+-- A disable directive covers all ;-separated commands on the same line (#3448)
+prop_checkSpacefulnessCfg67 = verifyNot checkSpacefulnessCfg "var=\"a b\"\n# shellcheck disable=SC2086\necho $var; echo $var"
+prop_checkSpacefulnessCfg68 = verifyNot checkSpacefulnessCfg "var=\"a b\"\n# shellcheck disable=SC2086\necho $var & echo $var"
+prop_checkSpacefulnessCfg69 = verifyNot checkSpacefulnessCfg "var=\"a b\"\n# shellcheck disable=SC2086\necho $var && echo $var"
+-- ...but not commands on following lines
+prop_checkSpacefulnessCfg70 = verifyCodes checkSpacefulnessCfg [2086] "var=\"a b\"\n# shellcheck disable=SC2086\necho $var\necho $var"
+prop_checkSpacefulnessCfg71 = verifyCodes checkSpacefulnessCfg [2086] "var=\"a b\"\n# shellcheck disable=SC2086\necho $var;\necho $var"
+prop_checkSpacefulnessCfg72 = verifyCodes checkSpacefulnessCfg [2086] "var=\"a b\"\necho $var\n# shellcheck disable=SC2086\necho $var; echo $var"
+
 checkSpacefulnessCfg = checkSpacefulnessCfg' True
 checkVerboseSpacefulnessCfg = checkSpacefulnessCfg' False
 

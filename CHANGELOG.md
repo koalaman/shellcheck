@@ -20,6 +20,8 @@
   `rm -rf /./etc` or `rm -rf /etc/../etc`
 - SC2317 no longer reports commands as unreachable when a `case` catch-all
   is followed by `;;&` and a non-default final clause
+- `disable` directives now apply to all commands on the same line, so that
+  e.g. `# shellcheck disable=SC2086` followed by `foo; bar` silences both
 
 ### Removed
 - SC3003: removed since ANSI C string is specified in POSIX.1-2024

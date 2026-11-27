@@ -2368,26 +2368,43 @@ readBanged parser = do
 prop_readAndOr = isOk readAndOr "grep -i lol foo || exit 1"
 prop_readAndOr1 = isOk readAndOr "# shellcheck disable=1\nfoo"
 prop_readAndOr2 = isOk readAndOr "# shellcheck disable=1\n# lol\n# shellcheck disable=3\nfoo"
-readAndOr = do
+readAndOr = readAndOrInherited Nothing
+
+-- Like readAndOr, but when this and-or list has no annotations of its own,
+-- apply the annotations inherited from a preceding command if it starts on
+-- the same line, so that e.g. `# shellcheck disable=SC2086` covers all of
+-- `foo; bar` and not just `foo` (#3448).
+readAndOrInherited inherited = do
     start <- startSpan
     apos <- getPosition
     annotations <- readAnnotations
+    commandPos <- getPosition
     aid <- endSpan start
 
     unless (null annotations) $ optional $ do
         try . lookAhead $ readKeyword
         parseProblemAt apos ErrorC 1123 "ShellCheck directives are only valid in front of complete compound commands, like 'if', not e.g. individual 'elif' branches."
 
-    andOr <- withAnnotations annotations $
+    (annotationId, effectiveAnnotations) <-
+        if not (null annotations)
+        then return (aid, annotations)
+        else case inherited of
+            Just (previousPos, previousId, inheritedAnnotations)
+                | sourceLine commandPos == sourceLine previousPos -> do
+                    newId <- getNewIdFor previousId
+                    return (newId, inheritedAnnotations)
+            _ -> return (aid, [])
+
+    andOr <- withAnnotations effectiveAnnotations $
         chainl1 readPipeline $ do
             op <- g_AND_IF <|> g_OR_IF
             readLineBreak
             return $ case op of T_AND_IF id -> T_AndIf id
                                 T_OR_IF  id -> T_OrIf id
 
-    return $ if null annotations
+    return $ if null effectiveAnnotations
                 then andOr
-                else T_Annotation aid annotations andOr
+                else T_Annotation annotationId effectiveAnnotations andOr
 
 readTermOrNone = do
     allspacing
@@ -2404,6 +2421,36 @@ prop_readKshCoprocessAndOr =
 prop_readKshCoprocessBeforeClosingDelimiter =
     isOk readScript "#!/bin/ksh\n{ true|& }"
 
+topLevelAnnotations :: Token -> Int
+topLevelAnnotations t = case t of
+    T_Annotation {} -> 1
+    T_Backgrounded _ inner -> topLevelAnnotations inner
+    T_KshCoprocess _ inner -> topLevelAnnotations inner
+    _ -> 0
+
+scriptAnnotationCount :: String -> Maybe Int
+scriptAnnotationCount s =
+    case debugParse readScript s of
+        Right (T_Annotation _ _ (T_Script _ _ commands)) ->
+            Just $ sum $ map topLevelAnnotations commands
+        _ -> Nothing
+
+-- A directive covers every ;-separated command on the same line (#3448)
+prop_readTermAnnotationsSameLine =
+    scriptAnnotationCount "foo\n# shellcheck disable=SC2086\nbar; baz; quux" == Just 3
+prop_readTermAnnotationsSameLineBackground =
+    scriptAnnotationCount "foo\n# shellcheck disable=SC2086\nbar & baz" == Just 2
+prop_readTermAnnotationsAmpersandAnd =
+    scriptAnnotationCount "foo\n# shellcheck disable=SC2086\nbar && baz; quux" == Just 2
+-- ...but not commands on following lines
+prop_readTermAnnotationsNotAcrossNewline =
+    scriptAnnotationCount "foo\n# shellcheck disable=SC2086\nbar\nbaz" == Just 1
+prop_readTermAnnotationsStopAtNewline =
+    scriptAnnotationCount "foo\n# shellcheck disable=SC2086\nbar; baz\nquux" == Just 2
+-- Carry propagates through a command that has its own directive
+prop_readTermAnnotationsAfterOwnDirective =
+    scriptAnnotationCount "foo\n# shellcheck disable=SC1111\nbar\n# shellcheck disable=SC2222\nbaz; quux" == Just 3
+
 readTerm = do
     allspacing
     m <- readAndOr
@@ -2411,9 +2458,10 @@ readTerm = do
   where
     readTerm' current =
         do
+            previousPos <- getPosition
             (sep, (start, end)) <- readSeparator
             id <- getNextIdBetween start end
-            more <- option (T_EOF id) readAndOr
+            more <- option (T_EOF id) $ readAndOrInherited $ inheritedAnnotations current previousPos
             case more of (T_EOF _) -> return [transformWithSeparator id sep current]
                          _         -> do
                                     list <- readTerm' more
@@ -2421,6 +2469,10 @@ readTerm = do
           <|>
             return [current]
       where
+        inheritedAnnotations current' previousPos =
+            case current' of
+                T_Annotation annotationId anns _ -> Just (previousPos, annotationId, anns)
+                _ -> Nothing
         transformWithSeparator i (Just Ampersand) = T_Backgrounded i
         transformWithSeparator i (Just Coprocess) = T_KshCoprocess i
         transformWithSeparator _ Nothing = id
