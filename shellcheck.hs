@@ -488,11 +488,15 @@ parseOption flag options =
 
     parseExtendedAnalysis str =
         case str of
-            "true" -> return EAFull
-            "local" -> return EALocal
-            "false" -> return EAOff
+            -- Legacy values
+            "true" -> return ExtendedAnalysisFull
+            "false" -> return ExtendedAnalysisNone
+            -- New values
+            "full" -> return ExtendedAnalysisFull
+            "local" -> return ExtendedAnalysisLocal
+            "none" -> return ExtendedAnalysisNone
             _ -> do
-                printErr $ "Invalid extended-analysis value, expected true/local/false: " ++ str
+                printErr $ "Invalid extended-analysis value, expected full/local/none (or historical true=full, false=none): " ++ str
                 throwError SyntaxFailure
 
 ioInterface :: Options -> [FilePath] -> IO () -> IO (SystemInterface IO)

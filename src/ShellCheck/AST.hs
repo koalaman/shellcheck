@@ -154,18 +154,11 @@ data Annotation =
     | ShellOverride String
     | SourcePath String
     | ExternalSources Bool
-    | ExtendedAnalysis ExtendedAnalysisMode
+    | ExtendedAnalysis ExtendedAnalysisAnnotation
     deriving (Show, Eq)
 
--- The scope of the data-flow ("extended") analysis, set via the
--- `extended-analysis` directive/flag. Wire values: true=EAFull (default),
--- false=EAOff, local=EALocal.
-data ExtendedAnalysisMode =
-    EAOff       -- No data-flow analysis.
-    | EALocal   -- Data-flow analysis within each file; sourced files are
-                -- treated as opaque boundaries (not inlined into the CFG).
-    | EAFull    -- Whole-program: data flow is followed into sourced files.
-    deriving (Show, Eq)
+-- ShellCheck.Interface has an equivalent one used externally, but it would be a circular dependency
+data ExtendedAnalysisAnnotation = EAANone | EAALocal | EAAFull deriving (Show, Eq)
 
 data ConditionType = DoubleBracket | SingleBracket deriving (Show, Eq)
 

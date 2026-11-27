@@ -207,10 +207,18 @@ makeCommentWithFix severity id code str fix =
         }
     in force withFix
 
+extendedAnalysisAnnotationToMode :: ExtendedAnalysisAnnotation -> ExtendedAnalysisMode
+extendedAnalysisAnnotationToMode m =
+    case m of
+        EAANone -> ExtendedAnalysisNone
+        EAALocal -> ExtendedAnalysisLocal
+        EAAFull -> ExtendedAnalysisFull
+
 -- makeParameters :: CheckSpec -> Parameters
 makeParameters spec = params
   where
-    extendedAnalysisMode = fromMaybe EAFull $ msum [asExtendedAnalysis spec, getExtendedAnalysisDirective root]
+    extendedAnalysisMode = fromMaybe ExtendedAnalysisFull $
+        msum [asExtendedAnalysis spec, extendedAnalysisAnnotationToMode <$> getExtendedAnalysisDirective root]
     params = Parameters {
         rootNode = root,
         shellType = fromMaybe (determineShell (asFallbackShell spec) root) $ asShellType spec,
@@ -248,7 +256,7 @@ makeParameters spec = params
         variableFlow = getVariableFlow params root,
         tokenPositions = asTokenPositions spec,
         cfgAnalysis = do
-            guard $ extendedAnalysisMode /= EAOff
+            guard $ extendedAnalysisMode /= ExtendedAnalysisNone
             return $ CF.analyzeControlFlow cfParams root
     }
     cfParams = CF.CFGParameters {
@@ -257,7 +265,7 @@ makeParameters spec = params
         -- In 'local' mode, sourced files are data-flow boundaries: their
         -- bodies are not inlined into the CFG (bounds memory on large
         -- mutually-sourcing trees). See CFG.cfSourceAsBoundary.
-        CF.cfSourceAsBoundary = extendedAnalysisMode == EALocal
+        CF.cfSourceAsBoundary = extendedAnalysisMode == ExtendedAnalysisLocal
     }
     root = asScript spec
 

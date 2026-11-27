@@ -21,7 +21,6 @@
 module ShellCheck.Checker (checkScript, ShellCheck.Checker.runTests) where
 
 import ShellCheck.Analyzer
-import ShellCheck.AST (ExtendedAnalysisMode(..))
 import ShellCheck.ASTLib
 import ShellCheck.Data (shellFromFilename)
 import ShellCheck.EditorConfig
@@ -686,15 +685,15 @@ prop_fileWinsWhenSuppressingDfa2 = result == [2317]
 prop_flagWinsWhenSuppressingDfa1 = result == [2317]
   where
     result = checkWithRc "extended-analysis=false" emptyCheckSpec {
-        csScript = "#!/bin/sh\n# shellcheck extended-analysis=false\nexit; foo;",
-        csExtendedAnalysis = Just EAFull
+        csScript = "#!/bin/sh\n# shellcheck extended-analysis=none\nexit; foo;",
+        csExtendedAnalysis = Just ExtendedAnalysisFull
     }
 
 prop_flagWinsWhenSuppressingDfa2 = null result
   where
     result = checkWithRc "extended-analysis=true" emptyCheckSpec {
-        csScript = "#!/bin/sh\n# shellcheck extended-analysis=true\nexit; foo;",
-        csExtendedAnalysis = Just EAOff
+        csScript = "#!/bin/sh\n# shellcheck extended-analysis=full\nexit; foo;",
+        csExtendedAnalysis = Just ExtendedAnalysisNone
     }
 
 -- 'local' still does data-flow analysis within a file...
@@ -702,7 +701,7 @@ prop_localKeepsIntraFileDfa = 2317 `elem` result
   where
     result = getErrors (mockedSystemInterface []) emptyCheckSpec {
         csScript = "#!/bin/sh\nexit; foo;",
-        csExtendedAnalysis = Just EALocal
+        csExtendedAnalysis = Just ExtendedAnalysisLocal
     }
 
 -- ...but treats sourced files as boundaries, so it does not use data flow
@@ -712,7 +711,14 @@ prop_localTreatsSourcesAsBoundary = 2317 `notElem` result
     result = getErrors (mockedSystemInterface [("lib", "f() { exit 1; }")]) emptyCheckSpec {
         csScript = "#!/bin/sh\nsource lib\nf\nfoo",
         csCheckSourced = True,
-        csExtendedAnalysis = Just EALocal
+        csExtendedAnalysis = Just ExtendedAnalysisLocal
+    }
+
+prop_localDirectiveTreatsSourcesAsBoundary = 2317 `notElem` result
+  where
+    result = getErrors (mockedSystemInterface [("lib", "f() { exit 1; }")]) emptyCheckSpec {
+        csScript = "#!/bin/sh\n# shellcheck extended-analysis=local\nsource lib\nf\nfoo",
+        csCheckSourced = True
     }
 
 prop_fullFollowsDataFlowIntoSources = 2317 `elem` result
@@ -720,7 +726,7 @@ prop_fullFollowsDataFlowIntoSources = 2317 `elem` result
     result = getErrors (mockedSystemInterface [("lib", "f() { exit 1; }")]) emptyCheckSpec {
         csScript = "#!/bin/sh\nsource lib\nf\nfoo",
         csCheckSourced = True,
-        csExtendedAnalysis = Just EAFull
+        csExtendedAnalysis = Just ExtendedAnalysisFull
     }
 
 return []

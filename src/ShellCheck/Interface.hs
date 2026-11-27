@@ -37,6 +37,7 @@ module ShellCheck.Interface
     , Comment(cSeverity, cCode, cMessage)
     , PositionedComment(pcStartPos , pcEndPos , pcComment, pcFix)
     , ColorOption(ColorAuto, ColorAlways, ColorNever)
+    , ExtendedAnalysisMode(ExtendedAnalysisNone, ExtendedAnalysisLocal, ExtendedAnalysisFull)
     , TokenComment(tcId, tcComment, tcFix)
     , emptyCheckResult
     , newAnalysisResult
@@ -323,6 +324,13 @@ data ColorOption =
     | ColorAlways
     | ColorNever
   deriving (Ord, Eq, Show)
+
+-- The scope of the data-flow ("extended") analysis
+data ExtendedAnalysisMode =
+    ExtendedAnalysisNone      -- No data-flow analysis.
+    | ExtendedAnalysisLocal   -- Dataflow analysis stops at 'source' boundaries
+    | ExtendedAnalysisFull    -- Whole-program: data flow is followed into sourced files.
+    deriving (Ord, Eq, Show)
 
 -- For testing
 mockedSystemInterface :: [(String, String)] -> SystemInterface Identity

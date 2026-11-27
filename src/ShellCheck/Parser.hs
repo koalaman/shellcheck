@@ -1093,11 +1093,13 @@ readAnnotationWithoutPrefix sandboxed = do
                 pos <- getPosition
                 value <- plainOrQuoted $ many1 letter
                 case value of
-                    "true" -> return [ExtendedAnalysis EAFull]
-                    "local" -> return [ExtendedAnalysis EALocal]
-                    "false" -> return [ExtendedAnalysis EAOff]
+                    "true" -> return [ExtendedAnalysis EAAFull]
+                    "false" -> return [ExtendedAnalysis EAANone]
+                    "full" -> return [ExtendedAnalysis EAAFull]
+                    "local" -> return [ExtendedAnalysis EAALocal]
+                    "none" -> return [ExtendedAnalysis EAANone]
                     _ -> do
-                        parseNoteAt pos ErrorC 1146 "Unknown extended-analysis value. Expected true/local/false."
+                        parseNoteAt pos ErrorC 1146 "Unknown extended-analysis value. Expected full/local/none (or true/false)."
                         return []
 
             "external-sources" -> do
