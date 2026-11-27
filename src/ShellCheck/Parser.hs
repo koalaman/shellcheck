@@ -3245,6 +3245,11 @@ prop_readShebang4 = isWarning readShebang "! /bin/sh"
 prop_readShebang5 = isWarning readShebang "\n#!/bin/sh"
 prop_readShebang6 = isWarning readShebang " # Copyright \n!#/bin/bash"
 prop_readShebang7 = isNotOk readShebang "# Copyright \nfoo\n#!/bin/bash"
+prop_readShebang8 = isWarning readShebang "#  !/bin/bash\n"
+prop_readShebang9 = isNotOk readShebang "#  !   Grave\n"
+prop_readShebang10 = isWarning readShebang "# Copyright\n# ! /bin/bash\n"
+prop_readShebang11 = isNotOk readShebang "# Some of the accent codes:\n#  !   Grave\n"
+prop_readShebang12 = isWarning readShebang "# Some of the accent codes:\n#  !   Grave\n#!/bin/bash\n"
 readShebang = do
     start <- startSpan
     anyShebang <|> try readMissingBang <|> try withHeader
@@ -3278,6 +3283,8 @@ readShebang = do
         middlePos <- getPosition
         middleSpaces <- skipSpaces
         char '!'
+        -- Don't consider a comment like "#  ! Note" a shebang unless a path follows
+        when middleSpaces $ void ensurePathAhead
         when startSpaces $
             parseProblemAt startPos ErrorC 1114
                 "Remove leading spaces before the shebang."
