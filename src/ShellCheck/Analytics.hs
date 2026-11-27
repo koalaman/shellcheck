@@ -2634,6 +2634,13 @@ prop_checkUnusedZsh1 = verifyNotTree checkUnusedAssignments "#!/bin/zsh\nPROMPT=
 prop_checkUnusedZsh2 = verifyNotTree checkUnusedAssignments "#!/bin/zsh\nbranch=x; RPROMPT='$branch'"
 prop_checkUnusedZsh3 = verifyNotTree checkUnusedAssignments "#!/bin/zsh\nlines=x; print -l ${(f)lines}"
 prop_checkUnusedZsh4 = verifyTree checkUnusedAssignments "#!/bin/bash\nBUFFER=x"
+prop_checkUnassignedZshSpec1 = verifyNotTree checkUnassignedReferences "#!/bin/zsh\n_alternative 'a:b:{compadd \"$expl[@]\" $later}'"
+prop_checkUnassignedZshSpec2 = verifyTree checkUnassignedReferences "#!/bin/zsh\n_alternative \"$missing\""
+prop_checkUnusedZshSpec1 = verifyNotTree checkUnusedAssignments "#!/bin/zsh\noutputs='-a'\n_arguments '($outputs)-j[x]'"
+prop_checkUnusedZshFp1 = verifyNotTree checkUnusedAssignments "#!/bin/zsh\nlocal ret=1\ntrue && ret=0\nreturn ret"
+prop_checkUnusedZshFp2 = verifyNotTree checkUnusedAssignments "#!/bin/zsh\nlocal expl\n_wanted tag expl 'd' compadd a"
+prop_checkUnusedZshFp3 = verifyTree checkUnusedAssignments "#!/bin/zsh\nlocal ret=1"
+prop_checkUnusedZshFp4 = verifyTree checkUnusedAssignments "#!/bin/bash\nret=0\nreturn ret"
 prop_checkUnused0 = verifyNotTree checkUnusedAssignments "var=foo; echo $var"
 prop_checkUnused1 = verifyTree checkUnusedAssignments "var=foo; echo $bar"
 prop_checkUnused2 = verifyNotTree checkUnusedAssignments "var=foo; export var;"
@@ -2796,6 +2803,8 @@ checkUnassignedReferences' includeGlobals params t = warnings
 
     tally (Assignment (_, _, name, _))  =
         modify (\(read, written) -> (read, Map.insert name () written))
+    -- zsh completion specs: see zshSpecStringNames
+    tally (Reference (_, T_SingleQuoted {}, _)) | shellType params == Zsh = return ()
     tally (Reference (_, place, name)) =
         modify (\(read, written) -> (Map.insertWith (const id) name place read, written))
     tally _ = return ()
@@ -2879,6 +2888,8 @@ checkUnassignedReferences' includeGlobals params t = warnings
 
 
 prop_checkGlobsAsOptions1 = verify checkGlobsAsOptions "rm *.txt"
+prop_checkGlobsAsOptionsZsh1 = verifyNot checkGlobsAsOptions "#!/bin/zsh\nnoglob rm *"
+prop_checkGlobsAsOptionsZsh2 = verify checkGlobsAsOptions "#!/bin/zsh\nrm *"
 prop_checkGlobsAsOptions2 = verify checkGlobsAsOptions "ls ??.*"
 prop_checkGlobsAsOptions3 = verifyNot checkGlobsAsOptions "rm -- *.txt"
 prop_checkGlobsAsOptions4 = verifyNot checkGlobsAsOptions "*.txt"
@@ -2887,7 +2898,7 @@ prop_checkGlobsAsOptions6 = verifyNot checkGlobsAsOptions "printf '%s\\n' *"
 prop_checkGlobsAsOptions7 = verifyNot checkGlobsAsOptions "set -f; ls *"
 prop_checkGlobsAsOptions8 = verifyNot checkGlobsAsOptions "set -o noglob\nrm *"
 checkGlobsAsOptions params cmd@(T_SimpleCommand _ _ args) =
-    unless (((fromMaybe "" $ getCommandBasename cmd) `elem` ["echo", "printf"]) || hasNoglob params) $
+    unless (((fromMaybe "" $ getCommandBasename cmd) `elem` ["echo", "printf"]) || hasNoglob params || isZshNoglobbed params cmd) $
         mapM_ check $ takeWhile (not . isEndOfArgs) (drop 1 args)
   where
     check v@(T_NormalWord _ (T_Glob id s:_)) | s == "*" || s == "?" =
@@ -3021,8 +3032,10 @@ prop_checkCharRangeGlob6 = verifyNot checkCharRangeGlob "[[ $x == [!!]* ]]"
 prop_checkCharRangeGlob7 = verifyNot checkCharRangeGlob "[[ -v arr[keykey] ]]"
 prop_checkCharRangeGlob8 = verifyNot checkCharRangeGlob "[[ arr[keykey] -gt 1 ]]"
 prop_checkCharRangeGlob9 = verifyNot checkCharRangeGlob "read arr[keykey]" -- tr has 2313
+prop_checkCharRangeGlobZsh1 = verifyNot checkCharRangeGlob "#!/bin/zsh\nnoglob foo -d[noglobal]"
+prop_checkCharRangeGlobZsh2 = verify checkCharRangeGlob "#!/bin/zsh\nfoo -d[noglobal]"
 checkCharRangeGlob p t@(T_Glob id str) |
-  isCharClass str && not isIgnoredCommand && not (isDereferenced t) =
+  isCharClass str && not isIgnoredCommand && not (isDereferenced t) && not (isZshNoglobbed p t) =
     if ":" `isPrefixOf` contents
         && ":" `isSuffixOf` contents
         && contents /= ":"
@@ -3509,16 +3522,21 @@ checkTestArgumentSplitting params t =
 
 
 prop_checkReadWithoutR1 = verify checkReadWithoutR "read -a foo"
+prop_checkReadWithoutRZsh1 = verifyNot checkReadWithoutR "#!/bin/zsh\nread -k 1 key"
+prop_checkReadWithoutRZsh2 = verifyNot checkReadWithoutR "#!/bin/zsh\nread -q yn"
+prop_checkReadWithoutRZsh3 = verify checkReadWithoutR "#!/bin/zsh\nread line"
 prop_checkReadWithoutR2 = verifyNot checkReadWithoutR "read -ar foo"
 prop_checkReadWithoutR3 = verifyNot checkReadWithoutR "read -t 0"
 prop_checkReadWithoutR4 = verifyNot checkReadWithoutR "read -t 0 && read --d '' -r bar"
 prop_checkReadWithoutR5 = verifyNot checkReadWithoutR "read -t 0 foo < file.txt"
 prop_checkReadWithoutR6 = verifyNot checkReadWithoutR "read -u 3 -t 0"
-checkReadWithoutR _ t@T_SimpleCommand {} | t `isUnqualifiedCommand` "read"
-    && "r" `notElem` map snd flags && not has_t0 =
+checkReadWithoutR params t@T_SimpleCommand {} | t `isUnqualifiedCommand` "read"
+    && "r" `notElem` map snd flags && not has_t0 && not readsZshKeys =
         info (getId $ getCommandTokenOrThis t) 2162 "read without -r will mangle backslashes."
   where
     flags = getAllFlags t
+    -- zsh's read -k and -q read keys, without any backslash processing
+    readsZshKeys = shellType params == Zsh && any ((`elem` ["k", "q"]) . snd) flags
     has_t0 = Just "0" == do
         parsed <- getGnuOpts flagsForRead $ arguments t
         (_, t) <- lookup "t" parsed
@@ -3768,6 +3786,9 @@ checkReturnAgainstZero params token =
 
 
 prop_checkRedirectedNowhere1 = verify checkRedirectedNowhere "> file"
+prop_checkRedirectedNowhereZsh1 = verifyNot checkRedirectedNowhere "#!/bin/zsh\n>! file <<< text"
+prop_checkRedirectedNowhereZsh2 = verify checkRedirectedNowhere "#!/bin/zsh\n> file"
+prop_checkRedirectedNowhereZsh3 = verify checkRedirectedNowhere "#!/bin/bash\n> file <<< text"
 prop_checkRedirectedNowhere2 = verify checkRedirectedNowhere "> file | grep foo"
 prop_checkRedirectedNowhere3 = verify checkRedirectedNowhere "grep foo | > bar"
 prop_checkRedirectedNowhere4 = verifyNot checkRedirectedNowhere "grep foo > bar"
@@ -3780,6 +3801,8 @@ checkRedirectedNowhere params token =
         T_Pipeline _ _ [single] -> sequence_ $ do
             redir <- getDanglingRedirect single
             guard . not $ isInExpansion token
+            -- zsh runs $NULLCMD for these, as in `>! file <<< text`
+            guard . not $ shellType params == Zsh && hasInput single
             return $ warn (getId redir) 2188 "This redirection doesn't have a command. Move to its command (or use 'true' as no-op)."
 
         T_Pipeline _ _ list -> forM_ list $ \x -> sequence_ $ do
@@ -3788,6 +3811,15 @@ checkRedirectedNowhere params token =
 
         _ -> return ()
   where
+    hasInput (T_Redirecting _ redirs _) = any isInput redirs
+    hasInput _ = False
+    isInput (T_FdRedirect _ _ op) =
+        case op of
+            T_IoFile _ (T_Less _) _ -> True
+            T_HereString {} -> True
+            T_HereDoc {} -> True
+            _ -> False
+    isInput _ = False
     isInExpansion t =
         case NE.tail $ getPath (parentMap params) t of
             T_DollarExpansion _ [_] : _ -> True

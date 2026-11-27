@@ -580,6 +580,8 @@ prop_checkExit11B = verifyCodes checkExit "#!/bin/bash\nexit 1000" [2340]
 prop_checkExit11C = verifyCodes checkExit "#!/bin/dash\nexit 1000" [2340]
 prop_checkExit11D = verifyCodes checkExit "#!/bin/ksh\nexit 1000" [2340]
 prop_checkExit11E = verifyCodes checkExit "#!/bin/busybox sh\nexit 1000" [2340]
+prop_checkReturnZsh4 = verifyNot checkReturn "#!/bin/zsh\nf() { return ret+1; }; f"
+prop_checkExitZsh2 = verifyNot checkExit "#!/bin/zsh\nexit code"
 -- zsh wraps exit codes like the others: `exit 1000` exits with 232
 prop_checkExitZsh1 = verifyCodes checkExit "#!/bin/zsh\nexit 1000" [2340]
 checkExit = CommandCheck (Exactly "exit") (returnOrExit True)
@@ -605,8 +607,8 @@ returnOrExit isExit cmd =
                         Zsh -> "an integer"
 
             -- zsh evaluates the argument as arithmetic, so `return ret` returns $ret
-            let isZshVariable = shell == Zsh && not isExit
-                    && maybe False isVariableName (getLiteralString arg)
+            let isZshVariable = shell == Zsh
+                    && maybe False (not . null . zshArithmeticNames) (getLiteralString arg)
 
             let (isNegative, isOutOfRange, isNaN) = properties arg
             -- These cases have strong overlap, so order matters.

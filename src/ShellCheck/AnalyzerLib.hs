@@ -1048,20 +1048,30 @@ getZshReferencedVariables t =
         T_Assignment _ _ name _ word
             | name `elem` zshPromptVariables && name `notElem` ["PS1", "PS2", "PS3", "PS4"] ->
                 map (\x -> (t, t, x)) $ getVariablesFromLiteralToken word
-        T_SimpleCommand {} -> map (\x -> (t, t, x)) $ zshCompletionArrayNames t
+        T_SimpleCommand {} ->
+            map (\x -> (t, t, x)) (zshCompletionArrayNames t ++ zshStatusNames t)
+                ++ [(t, quoted, x) | (quoted, x) <- zshSpecStringNames t]
         _ -> []
 
 -- zsh's completion functions take the names of arrays, as in `_describe
 -- 'command' cmds`, `compadd -a values` or `_wanted tag expl x compadd -k map`
 prop_zshCompletionArrayNames1 = zshReferencedNames "#!/bin/zsh\n_describe -t commands 'command' cmds descs -V x -- more" == ["cmds", "descs", "more"]
-prop_zshCompletionArrayNames2 = zshReferencedNames "#!/bin/zsh\n_wanted tag expl 'value' compadd \"$expl[@]\" -Q -d disp -a values extra" == ["disp", "values", "extra"]
+prop_zshCompletionArrayNames2 = zshReferencedNames "#!/bin/zsh\n_wanted tag expl 'value' compadd \"$expl[@]\" -Q -d disp -a values extra" == ["expl", "disp", "values", "extra"]
 prop_zshCompletionArrayNames3 = zshReferencedNames "#!/bin/zsh\ncompadd -k assoc; compadd -- words; compadd -X 'x' -- -a; _values -s , -O subopts 'x' a b" == ["assoc", "subopts"]
 prop_zshCompletionArrayNames4 = zshReferencedNames "#!/bin/zsh\ncompadd -Qa - list; compadd -ddisp -- w; _describe -ttag 'd' one -- two three" == ["list", "disp", "one", "two", "three"]
+prop_zshCompletionArrayNames5 = zshReferencedNames "#!/bin/zsh\n_wanted -C x -V tag expl 'd' compadd a\n_requested tag; _description -J tag out 'd'" == ["expl", "out"]
+prop_zshCompletionArrayNames6 = zshReferencedNames "#!/bin/zsh\nnoglob _arguments '($outputs)-j[x]' '*:a:compadd -k assoc' \"$plain\"" == ["outputs", "assoc"]
+prop_zshCompletionArrayNames7 = zshReferencedNames "#!/bin/zsh\necho '$literal compadd -a nope'" == []
 zshCompletionArrayNames t =
     case t of
-        T_SimpleCommand _ _ words ->
-            filter isName $
-                case dropWhile (`notElem` ["compadd", "_describe", "_values"]) (map literal words) of
+        T_SimpleCommand _ _ ws ->
+            let command = dropWhile (`elem` zshPrecommandModifiers) (map literal ws)
+                fromHelper =
+                    case command of
+                        c : args | c `elem` zshLabelHelpers -> take 1 . drop 1 $ skipZshLabelOptions id args
+                        _ -> []
+            in filter isName $ fromHelper ++
+                case dropWhile (`notElem` ["compadd", "_describe", "_values"]) (map literal ws) of
                     "compadd" : args -> compadd False args
                     "_describe" : args -> describe args
                     "_values" : args -> values args
@@ -1070,27 +1080,8 @@ zshCompletionArrayNames t =
   where
     -- A word that isn't a literal, like "$expl[@]", is skipped
     literal = fromMaybe "" . getLiteralString
-    isName n = not (null n) && all isVariableChar n && not (isDigit $ head n)
-
-    -- compadd: with -a the words are names of arrays, with -k names of
-    -- associative arrays, and -d and -F take the name of an array
-    compadd names args =
-        case args of
-            "--" : rest -> if names then rest else []
-            "" : rest -> compadd names rest
-            ('-':cluster@(_:_)) : rest -> compaddOption names cluster rest
-            _ -> if names then args else []
-    compaddOption names cluster rest =
-        case cluster of
-            [] -> compadd names rest
-            c:more
-                | c `elem` "ak" -> compaddOption True more rest
-                | c `elem` "FPSpsiIWdJXxVrRDOAEM" ->
-                    -- the argument is the rest of the word, or the next word
-                    let (argument, rest') = if null more then (take 1 rest, drop 1 rest) else ([more], rest)
-                    in (if c `elem` "dF" then argument else []) ++ compadd names rest'
-                | c == 'o' -> compadd names rest
-                | otherwise -> compaddOption names more rest
+    isName = isZshName
+    compadd = zshCompaddNames
 
     -- _describe [-oO12JVx] [-t tag] descr name1 [name2] [opt...] [-- name1 [name2] [opt...]]...
     describe args =
@@ -1118,6 +1109,98 @@ zshCompletionArrayNames t =
             flag : _ : rest | flag `elem` ["-s", "-S"] -> values rest
             ('-':_) : rest -> values rest
             _ -> []
+
+zshPrecommandModifiers = ["noglob", "builtin", "nocorrect", "-"]
+
+isZshName n = not (null n) && all isVariableChar n && not (isDigit $ head n)
+
+-- compadd: with -a the words are names of arrays, with -k names of
+-- associative arrays, and -d and -F take the name of an array
+zshCompaddNames :: Bool -> [String] -> [String]
+zshCompaddNames names args =
+    case args of
+        "--" : rest -> if names then rest else []
+        "" : rest -> zshCompaddNames names rest
+        ('-':cluster@(_:_)) : rest -> option names cluster rest
+        _ -> if names then args else []
+  where
+    option names cluster rest =
+        case cluster of
+            [] -> zshCompaddNames names rest
+            c:more
+                | c `elem` "ak" -> option True more rest
+                | c `elem` "FPSpsiIWdJXxVrRDOAEM" ->
+                    -- the argument is the rest of the word, or the next word
+                    let (argument, rest') = if null more then (take 1 rest, drop 1 rest) else ([more], rest)
+                    in (if c `elem` "dF" then argument else []) ++ zshCompaddNames names rest'
+                | c == 'o' -> zshCompaddNames names rest
+                | otherwise -> option names more rest
+
+-- The specs given to _arguments and friends are often quoted and evaluated
+-- later, as in '($outputs)-j' or '*:x:compadd -a values'. The names in them
+-- are read, but may be set by the completion system itself, so they're
+-- reported with the quoted token and never as unassigned.
+zshSpecStringNames t =
+    case t of
+        T_SimpleCommand _ _ ws
+            | any (`elem` specCommands) (take 1 $ command ws) ->
+                [(quoted, name) | (quoted, s) <- concatMap singleQuotedParts ws, name <- specNames s, isZshName name]
+        _ -> []
+  where
+    specCommands = ["_arguments", "_alternative", "_regex_words", "_regex_arguments", "_values"]
+    command = dropWhile (`elem` zshPrecommandModifiers) . map (fromMaybe "" . getLiteralString)
+    singleQuotedParts word =
+        case word of
+            T_NormalWord _ parts -> concatMap singleQuotedParts parts
+            T_SingleQuoted _ s -> [(word, s)]
+            _ -> []
+    specNames s =
+        getVariablesFromLiteral s ++ zshCompaddNames False (drop 1 $ dropWhile (/= "compadd") (specWords s))
+    specWords = words . map (\c -> if c == ':' then ' ' else c)
+
+-- zsh completion helpers whose second argument names the array they set, as in
+-- `_wanted tag expl description compadd "$expl[@]"`
+zshLabelHelpers = ["_wanted", "_requested", "_all_labels", "_next_label", "_description"]
+
+skipZshLabelOptions :: (a -> String) -> [a] -> [a]
+skipZshLabelOptions text args =
+    case args of
+        x : _ : rest | text x == "-C" -> skipZshLabelOptions text rest
+        x : rest | isOption (text x) -> skipZshLabelOptions text rest
+        _ -> args
+  where
+    isOption s =
+        case s of
+            "-" -> True
+            '-' : flags@(_:_) -> all (`elem` "x12VJ") flags
+            _ -> False
+
+-- zsh evaluates the argument of return and exit as arithmetic, so the names in
+-- `return ret` or `exit ret+1` are read
+prop_zshStatusNames1 = zshReferencedNames "#!/bin/zsh\nreturn ret+1; exit code; return 3; return $x" == ["ret", "code"]
+zshStatusNames t =
+    case t of
+        T_SimpleCommand _ _ [cmd, arg]
+            | getLiteralString cmd `elem` [Just "return", Just "exit"] ->
+                maybe [] zshArithmeticNames (getLiteralString arg)
+        _ -> []
+
+zshArithmeticNames :: String -> [String]
+zshArithmeticNames s
+    | all allowed s = filter startsName . words $ map (\c -> if isVariableChar c then c else ' ') s
+    | otherwise = []
+  where
+    allowed c = isVariableChar c || c `elem` "+-*/%!()"
+    startsName = not . all isDigit . take 1
+
+-- Is this token part of a command run with zsh's noglob?
+isZshNoglobbed :: Parameters -> Token -> Bool
+isZshNoglobbed params t =
+    shellType params == Zsh && any noglobbed (NE.toList $ getPath (parentMap params) t)
+  where
+    noglobbed (T_SimpleCommand _ _ ws) =
+        "noglob" `elem` takeWhile (`elem` zshPrecommandModifiers) (map (fromMaybe "" . getLiteralString) ws)
+    noglobbed _ = False
 
 -- The name in a zsh parameter expansion with flags or prefixes, like the x in
 -- ${(f)x}, ${(j:,:)x}, ${=x}, ${~x}, ${^x} and ${+x}
@@ -1147,6 +1230,8 @@ prop_getZshModifiedVariables14 = zshModifiedNames "zformat -f result '%a' a:1" =
 prop_getZshModifiedVariables15 = zshModifiedNames ": ${c::=3}" == ["c"]
 prop_getZshModifiedVariables16 = zshModifiedNames "builtin read -A arr" == ["arr"]
 prop_getZshModifiedVariables17 = zshModifiedNames "zsystem flock -f lockfd file" == ["lockfd"]
+prop_getZshModifiedVariables18 = zshModifiedNames "_wanted -V tag expl 'd' compadd a" == ["expl"]
+prop_getZshModifiedVariables19 = zshModifiedNames "_requested tag" == []
 zshModifiedNames s = [name | (_, _, name, _) <- concatMap getZshModifiedVariables (allTokens s)]
   where
     allTokens s = execWriter $ doAnalysis (tell . (:[])) $ fromJust . prRoot . pScript $ "#!/bin/zsh\n" ++ s
@@ -1188,6 +1273,9 @@ zshCommandAssignments base id prefix name args =
         "zsystem" -> return . maybeToList $ named DataString =<< afterFlag 'f' args
         "zparseopts" -> return zparseoptsNames
         "zstyle" -> return zstyleNames
+        _ | name `elem` zshLabelHelpers ->
+            return . maybeToList $ named DataArray
+                =<< listToMaybe (drop 1 $ skipZshLabelOptions (fromMaybe "" . getLiteralString) args)
         _ -> Nothing
   where
     flags = map snd $ getAllFlags base
