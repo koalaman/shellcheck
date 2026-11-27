@@ -5,6 +5,7 @@
   (bash `require-double-equals`)
 - Add `--files-from` option to read input files from a file
 - Support EditorConfig `shellcheck.*` keys
+- SC2339/SC2340/SC2341/SC3426: Improved exit/return validation across shells
 
 ### Changed
 - SC3040: Support `pipefail` as specified in POSIX.1-2024

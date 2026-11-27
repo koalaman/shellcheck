@@ -62,6 +62,9 @@ verify :: CommandCheck -> String -> Bool
 verify f s = producesComments (getChecker [f]) s == Just True
 verifyNot f s = producesComments (getChecker [f]) s == Just False
 
+verifyCodes :: CommandCheck -> String -> [Integer] -> Bool
+verifyCodes f s c = runAndGetCodes (getChecker [f]) s == Just c
+
 commandChecks :: [CommandCheck]
 commandChecks = [
     checkTr
@@ -515,12 +518,31 @@ prop_checkReturn4 = verifyNot checkReturn "return $((a|b))"
 prop_checkReturn5 = verify checkReturn "return -1"
 prop_checkReturn6 = verify checkReturn "return 1000"
 prop_checkReturn7 = verify checkReturn "return 'hello world'"
-checkReturn = CommandCheck (Exactly "return") (returnOrExit
-        (\c -> err c 2151 "Only one integer 0-255 can be returned. Use stdout for other data.")
-        (\c -> do
-            shell <- asks shellType
-            (if shell `elem` [Bash, Ksh] then warn else err)
-                c 2152 "Can only return 0-255. Other data should be written to stdout."))
+-- Return a safe value.
+prop_checkReturn8A = verifyCodes checkReturn "#!/bin/sh\nf() { return 0; }; f" []
+prop_checkReturn8B = verifyCodes checkReturn "#!/bin/bash\nf() { return 0; }; f" []
+prop_checkReturn8C = verifyCodes checkReturn "#!/bin/dash\nf() { return 0; }; f" []
+prop_checkReturn8D = verifyCodes checkReturn "#!/bin/ksh\nf() { return 0; }; f" []
+prop_checkReturn8E = verifyCodes checkReturn "#!/bin/busybox sh\nf() { return 0; }; f" []
+-- Return not-a-number. Not supported on any shell, but bash treats it as 2, ksh as 0, the rest error.
+prop_checkReturn9A = verifyCodes checkReturn "#!/bin/sh\nf() { return asdf; }; f" [2152]
+prop_checkReturn9B = verifyCodes checkReturn "#!/bin/bash\nf() { return asdf; }; f" [2152]
+prop_checkReturn9C = verifyCodes checkReturn "#!/bin/dash\nf() { return asdf; }; f" [2152]
+prop_checkReturn9D = verifyCodes checkReturn "#!/bin/ksh\nf() { return asdf; }; f" [2152]
+prop_checkReturn9E = verifyCodes checkReturn "#!/bin/busybox sh\nf() { return asdf; }; f" [2152]
+-- Return negative. Dash and Busybox error, bash wraps, ksh allows.
+prop_checkReturn10A = verifyCodes checkReturn "#!/bin/sh\nf() { return -1; }; f" [3426]
+prop_checkReturn10B = verifyCodes checkReturn "#!/bin/bash\nf() { return -1; }; f" [2341]
+prop_checkReturn10C = verifyCodes checkReturn "#!/bin/dash\nf() { return -1; }; f" [2339]
+prop_checkReturn10D = verifyCodes checkReturn "#!/bin/ksh\nf() { return -1; }; f" []
+prop_checkReturn10E = verifyCodes checkReturn "#!/bin/busybox sh\nf() { return -1; }; f" [2339]
+-- Return out-of-bounds. Bash and Busybox error, bash wraps, dash and ksh allows.
+prop_checkReturn11A = verifyCodes checkReturn "#!/bin/sh\nf() { return 1000; }; f" [3426]
+prop_checkReturn11B = verifyCodes checkReturn "#!/bin/bash\nf() { return 1000; }; f" [2341]
+prop_checkReturn11C = verifyCodes checkReturn "#!/bin/dash\nf() { return 1000; }; f" []
+prop_checkReturn11D = verifyCodes checkReturn "#!/bin/ksh\nf() { return 1000; }; f" []
+prop_checkReturn11E = verifyCodes checkReturn "#!/bin/busybox sh\nf() { return 1000; }; f" [2341]
+checkReturn = CommandCheck (Exactly "return") (returnOrExit False)
 
 prop_checkExit1 = verifyNot checkExit "exit"
 prop_checkExit2 = verifyNot checkExit "exit 1"
@@ -529,24 +551,76 @@ prop_checkExit4 = verifyNot checkExit "exit $((a|b))"
 prop_checkExit5 = verify checkExit "exit -1"
 prop_checkExit6 = verify checkExit "exit 1000"
 prop_checkExit7 = verify checkExit "exit 'hello world'"
-checkExit = CommandCheck (Exactly "exit") (returnOrExit
-        (\c -> err c 2241 "The exit status can only be one integer 0-255. Use stdout for other data.")
-        (\c -> do
+-- Exit with a safe value.
+prop_checkExit8A = verifyCodes checkExit "#!/bin/sh\nexit 0" []
+prop_checkExit8B = verifyCodes checkExit "#!/bin/bash\nexit 0" []
+prop_checkExit8C = verifyCodes checkExit "#!/bin/dash\nexit 0" []
+prop_checkExit8D = verifyCodes checkExit "#!/bin/ksh\nexit 0" []
+prop_checkExit8E = verifyCodes checkExit "#!/bin/busybox sh\nexit 0" []
+-- Exit not-a-number. Not supported on any shell, but ksh treats it as 0.
+prop_checkExit9A = verifyCodes checkExit "#!/bin/sh\nexit asdf" [2242]
+prop_checkExit9B = verifyCodes checkExit "#!/bin/bash\nexit asdf" [2242]
+prop_checkExit9C = verifyCodes checkExit "#!/bin/dash\nexit asdf" [2242]
+prop_checkExit9D = verifyCodes checkExit "#!/bin/ksh\nexit adsf" [2242]
+prop_checkExit9E = verifyCodes checkExit "#!/bin/busybox sh\nexit asdf" [2242]
+-- Exit negative. Dash and Busybox error. Bash and Ksh wrap.
+prop_checkExit10A = verifyCodes checkExit "#!/bin/sh\nexit -1" [3426]
+prop_checkExit10B = verifyCodes checkExit "#!/bin/bash\nexit -1" [2340]
+prop_checkExit10C = verifyCodes checkExit "#!/bin/dash\nexit -1" [2339]
+prop_checkExit10D = verifyCodes checkExit "#!/bin/ksh\nexit -1" [2340]
+prop_checkExit10E = verifyCodes checkExit "#!/bin/busybox sh\nexit -1" [2339]
+-- Return out-of-bounds. They all wrap.
+prop_checkExit11A = verifyCodes checkExit "#!/bin/sh\nexit 1000" [3426]
+prop_checkExit11B = verifyCodes checkExit "#!/bin/bash\nexit 1000" [2340]
+prop_checkExit11C = verifyCodes checkExit "#!/bin/dash\nexit 1000" [2340]
+prop_checkExit11D = verifyCodes checkExit "#!/bin/ksh\nexit 1000" [2340]
+prop_checkExit11E = verifyCodes checkExit "#!/bin/busybox sh\nexit 1000" [2340]
+checkExit = CommandCheck (Exactly "exit") (returnOrExit True)
+
+returnOrExit :: Bool -> Token -> Analysis
+returnOrExit isExit cmd =
+    case arguments cmd of
+        (first:second:_) ->
+            if isExit
+            then err (getId first) 2241 "The exit status can only be one integer 0-255. Use stdout for other data."
+            else err (getId first) 2151 "Only one integer 0-255 can be returned. Use stdout for other data."
+        [] -> return ()
+        [arg] -> do
             shell <- asks shellType
-            (if shell `elem` [Bash, Ksh] then warn else err)
-                c 2242 "Can only exit with status 0-255. Other data should be written to stdout/stderr."))
+            let id = getId arg
+            let returnRange =
+                    case shell of
+                        Sh -> "0-255"
+                        Bash -> "0-255"
+                        BusyboxSh -> "0-255"
+                        Ksh -> "an integer"
+                        Dash -> "an integer" -- a positive one, at that
 
-returnOrExit multi invalid = (f . arguments)
+            let (isNegative, isOutOfRange, isNaN) = properties arg
+            -- These cases have strong overlap, so order matters.
+            case shell of
+                _ | isNaN ->
+                    if isExit
+                    then err id 2242 "Can only exit with status 0-255. Other data should be written to stdout/stderr."
+                    else err id 2152 $ "Can only return " ++ returnRange ++ ". Other data should be written to stdout."
+
+                Sh        | isNegative || isOutOfRange -> err id 3426 "Return/exit values outside 0-255 are undefined in POSIX sh."
+                Dash      | isNegative -> err id 2339 "Dash does not wrap negative return/exit values. Use a positive integer."
+                BusyboxSh | isNegative -> err id 2339 "Busybox does not wrap negative return/exit values. Use a positive integer."
+
+                _ | isExit && isOutOfRange -> warn id 2340 "Exit codes wrap to the range of 0-255. Prefer a canonical exit code."
+
+                Bash | isOutOfRange -> warn id 2341 "Bash wraps return codes to the range 0-255. Prefer a canonical return code."
+                BusyboxSh | isOutOfRange -> warn id 2341 "Busybox wraps return codes to the range 0-255. Prefer a canonical return code."
+
+                _ -> return ()
   where
-    f (first:second:_) =
-        multi (getId first)
-    f [value] =
-        when (isInvalid $ literal value) $
-            invalid (getId value)
-    f _ = return ()
-
-    isInvalid s = null s || any (not . isDigit) s || length s > 5
-        || let value = (read s :: Integer) in value > 255
+    properties :: Token -> (Bool, Bool, Bool) -- Return whether token (isNegative, isOutOfRange (0-256), isNaN)
+    properties t =
+        case literal t of
+            '-':s | all isDigit s -> (True, True, False)
+            s | all isDigit s -> (False, (read s :: Integer) >= 256, False)
+            _ -> (False, False, True)
 
     literal token = runIdentity $ getLiteralStringExt lit token
     lit (T_DollarBraced {}) = return "0"
@@ -1227,7 +1301,6 @@ checkCatastrophicRm = CommandCheck (Basename "rm") $ \t -> do
             Just str ->
                 when (fixPath str `elem` importantPaths) $
                     warn (getId token) 2114 "Warning: deletes a system directory."
-            Just _ -> return ()
             Nothing -> checkWord' recursive token
 
     checkWord' recursive token = sequence_ $ do
