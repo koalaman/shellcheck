@@ -517,7 +517,10 @@ prop_checkReturn6 = verify checkReturn "return 1000"
 prop_checkReturn7 = verify checkReturn "return 'hello world'"
 checkReturn = CommandCheck (Exactly "return") (returnOrExit
         (\c -> err c 2151 "Only one integer 0-255 can be returned. Use stdout for other data.")
-        (\c -> err c 2152 "Can only return 0-255. Other data should be written to stdout."))
+        (\c -> do
+            shell <- asks shellType
+            (if shell `elem` [Bash, Ksh] then warn else err)
+                c 2152 "Can only return 0-255. Other data should be written to stdout."))
 
 prop_checkExit1 = verifyNot checkExit "exit"
 prop_checkExit2 = verifyNot checkExit "exit 1"
@@ -528,7 +531,10 @@ prop_checkExit6 = verify checkExit "exit 1000"
 prop_checkExit7 = verify checkExit "exit 'hello world'"
 checkExit = CommandCheck (Exactly "exit") (returnOrExit
         (\c -> err c 2241 "The exit status can only be one integer 0-255. Use stdout for other data.")
-        (\c -> err c 2242 "Can only exit with status 0-255. Other data should be written to stdout/stderr."))
+        (\c -> do
+            shell <- asks shellType
+            (if shell `elem` [Bash, Ksh] then warn else err)
+                c 2242 "Can only exit with status 0-255. Other data should be written to stdout/stderr."))
 
 returnOrExit multi invalid = (f . arguments)
   where
