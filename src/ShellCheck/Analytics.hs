@@ -1138,6 +1138,8 @@ prop_checkSingleQuotedVariables31 = verify checkSingleQuotedVariables "runc exec
 prop_checkSingleQuotedVariables32 = verify checkSingleQuotedVariables "echo sh --rcfile 'echo $HOME'"
 prop_checkSingleQuotedVariables33 = verifyNot checkSingleQuotedVariables "chroot /mnt /bin/ksh93 -c 'echo $HOME'"
 prop_checkSingleQuotedVariables34 = verifyNot checkSingleQuotedVariables "yq '.a as $x | $x'"
+prop_checkSingleQuotedVariables35 = verifyNot checkSingleQuotedVariables "gojq --arg foo bar '$foo'"
+prop_checkSingleQuotedVariables36 = verifyNot checkSingleQuotedVariables "command /usr/local/bin/gojq '.a as $x | $x'"
 
 
 checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
@@ -1174,6 +1176,7 @@ checkSingleQuotedVariables params t@(T_SingleQuoted id s) =
                 ,"oc"
                 ,"dpkg-query"
                 ,"jq"  -- could also check that user provides --arg
+                ,"gojq"
                 ,"yq"
                 ,"rename"
                 ,"rg"
