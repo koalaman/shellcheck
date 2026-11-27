@@ -18,7 +18,6 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -}
 import qualified ShellCheck.Analyzer
-import           ShellCheck.AST (ExtendedAnalysisMode(..))
 import           ShellCheck.Checker
 import           ShellCheck.Data
 import           ShellCheck.EditorConfig
