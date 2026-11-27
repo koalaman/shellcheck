@@ -1502,15 +1502,29 @@ prop_checkLiteralBreakingTest6 = verify checkLiteralBreakingTest "[ -z $(true)z 
 prop_checkLiteralBreakingTest7 = verifyNot checkLiteralBreakingTest "[ -z $(true) ]"
 prop_checkLiteralBreakingTest8 = verifyNot checkLiteralBreakingTest "[ $(true)$(true) ]"
 prop_checkLiteralBreakingTest10 = verify checkLiteralBreakingTest "[ -z foo ]"
+prop_checkLiteralBreakingTest11 = verify checkLiteralBreakingTest "[ -n \"${foo:-fallback}\" ]"
+prop_checkLiteralBreakingTest12 = verify checkLiteralBreakingTest "[ -z \"${bar:=fallback}\" ]"
+prop_checkLiteralBreakingTest13 = verify checkLiteralBreakingTest "[[ -n ${foo:-fallback} ]]"
+prop_checkLiteralBreakingTest14 = verifyNot checkLiteralBreakingTest "[ -n \"${foo-fallback}\" ]"
+prop_checkLiteralBreakingTest15 = verifyNot checkLiteralBreakingTest "[ -z \"${foo=fallback}\" ]"
+prop_checkLiteralBreakingTest16 = verifyNot checkLiteralBreakingTest "[ -n \"${foo:-$bar}\" ]"
+prop_checkLiteralBreakingTest17 = verifyNot checkLiteralBreakingTest "[ -n \"${foo:-}\" ]"
+prop_checkLiteralBreakingTest18 = verifyNot checkLiteralBreakingTest "[ -z ${foo:-fallback} ]"
+prop_checkLiteralBreakingTest19 = verifyNot checkLiteralBreakingTest "[ -n \"${foo[@]:-fallback}\" ]"
+prop_checkLiteralBreakingTest20 = verifyNot checkLiteralBreakingTest "[ -n \"${foo:-fallback}\"$(echo x y) ]"
+prop_checkLiteralBreakingTest21 = verifyNot checkLiteralBreakingTest "[[ -n ${foo:-$'\\0'} ]]"
+prop_checkLiteralBreakingTest22 = verifyNot checkLiteralBreakingTest "[[ -n ${foo:-$'\\c@'} ]]"
+prop_checkLiteralBreakingTest23 = verifyNot checkLiteralBreakingTest "[[ -n ${foo:-~} ]]"
+prop_checkLiteralBreakingTest24 = verifyNot checkLiteralBreakingTest "[[ -n ${foo:-$\"fallback\"} ]]"
 checkLiteralBreakingTest _ t = sequence_ $
         case t of
             (TC_Nullary _ _ w@(T_NormalWord _ l)) -> do
                 guard . not $ isConstant w -- Covered by SC2078
                 comparisonWarning l `mplus` tautologyWarning w "Argument to implicit -n is always true due to literal strings."
-            (TC_Unary _ _ op w@(T_NormalWord _ l)) ->
+            (TC_Unary _ typ op w@(T_NormalWord _ _)) ->
                 case op of
-                    "-n" -> tautologyWarning w "Argument to -n is always true due to literal strings."
-                    "-z" -> tautologyWarning w "Argument to -z is always false due to literal strings."
+                    "-n" -> unaryTautologyWarning typ w "Argument to -n is always true"
+                    "-z" -> unaryTautologyWarning typ w "Argument to -z is always false"
                     _ -> fail "not relevant"
             _ -> fail "not my problem"
   where
@@ -1524,6 +1538,36 @@ checkLiteralBreakingTest _ t = sequence_ $
     tautologyWarning t s = do
         token <- find isNonEmpty $ getWordParts t
         return $ err (getId token) 2157 s
+
+    unaryTautologyWarning typ t s =
+        tautologyWarning t (s ++ " due to literal strings.") `mplus` do
+            guard $ isSingleTestWord typ t
+            token <- find hasNonEmptyDefault $ getWordParts t
+            return $ err (getId token) 2157 (s ++ " due to a non-empty default.")
+
+    -- In [ ], the whole operand must be quoted to prevent word splitting.
+    isSingleTestWord DoubleBracket _ = True
+    isSingleTestWord SingleBracket t@(T_NormalWord _ [T_DoubleQuoted _ _]) =
+        not $ mayBecomeMultipleArgs t
+    isSingleTestWord _ _ = False
+
+    hasNonEmptyDefault (T_DollarBraced _ True word)
+        -- The literal decoder cannot guarantee a value for these shell quotes.
+        | not (any isSpecialQuote $ getWordParts word) =
+            maybe False checkDefault $ getLiteralString word
+    hasNonEmptyDefault _ = False
+
+    isSpecialQuote T_DollarSingleQuoted {} = True
+    isSpecialQuote T_DollarDoubleQuoted {} = True
+    isSpecialQuote _ = False
+
+    checkDefault value =
+        case span isVariableChar value of
+            (name, ':':op:fallback) ->
+                isVariableName name && op `elem` "-="
+                    && not (null fallback) && '\0' `notElem` fallback
+                    && not ("~" `isPrefixOf` fallback)
+            _ -> False
 
 prop_checkConstantNullary = verify checkConstantNullary "[[ '$(foo)' ]]"
 prop_checkConstantNullary2 = verify checkConstantNullary "[ \"-f lol\" ]"
