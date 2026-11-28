@@ -36,16 +36,13 @@ format = return Formatter {
 
 outputError file error = hPutStrLn stderr $ file ++ ": " ++ error
 
-outputAll cr sys = mapM_ f groups
+outputAll cr sys = mapM_ f (commentsByFile comments)
   where
     comments = crComments cr
-    groups = NE.groupWith sourceFile comments
     f :: NE.NonEmpty PositionedComment -> IO ()
     f group = do
-        let filename = sourceFile (NE.head group)
-        result <- siReadFile sys (Just True) filename
-        let contents = either (const "") id result
-        outputResult filename contents (NE.toList group)
+        (filename, fileComments, contents) <- readCommentsForFile sys group
+        outputResult filename contents fileComments
 
 outputResult filename contents warnings = do
     let comments = makeNonVirtual warnings contents
